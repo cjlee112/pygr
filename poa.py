@@ -179,10 +179,11 @@ class SeqPath(object):
             ori='-'
         else:
             ori=''
-        if isinstance(self.path,types.StringType):
-            return '%s%s[%s:%s]' % (ori,self.path,repr(self.start),repr(self.end))
-        else:
-            return '%s%s[%s:%s]' % (ori,self.path,repr(self.start),repr(self.end))
+        try: # USE id CONVENTION TO GET A NAME FOR THIS SEQUENCE
+            id=self.path.id
+        except AttributeError: # OTHERWISE JUST USE A DEFAULT, SHOWING THERE'S NO id
+            id='@NONAME'
+        return '%s%s[%s:%s]' % (ori,id,repr(self.start),repr(self.end))
 
     def repr_dict(self):
         "Return compact dictionary representing this interval"
