@@ -197,7 +197,7 @@ class NamedSequenceBase(SeqPath):
     def __init__(self):
         self.path=self
         try: # USE ATTRIBUTE TO GET SEQ LENGTH DIRECTLY
-            self.end=getattr(self,getattr(self,'_seq_length'))
+            self.end=getattr(self,getattr(self,'_seq_len_attr'))
         except AttributeError:
             self.end=len(self.seq) # COMPUTE IT FROM THE SEQUENCE
 
