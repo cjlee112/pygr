@@ -193,3 +193,43 @@ class BlastDB(dict):
         if ofile.close()!=None:
             raise OSError('command %s failed' % cmd)
         return al
+
+
+class StoredPathMapping(PathMapping):
+    _edgeClass=BlastHitInfo
+    def __init__(self,table,srcSet,destSet,edgeClass=None):
+        PathMapping.__init__(self)
+        self.table=table
+        self.srcSet=srcSet
+        self.destSet=destSet
+        if edgeClass!=None:
+            self._edgeClass=edgeClass
+
+    def __getitem__(self,p):
+        "Get mapping of a path, using stored table if necessary"
+        try: # RETURN STORED MAPPING
+            return PathMapping.__getitem__(self,p)
+        except KeyError: # TRY TO GET IT FROM THE STORED TABLE
+            self += p # ADD PathDict FOR THIS SEQUENCE
+            edgeAttr=None # DEFAULT: NO EDGE INFORMATION
+            if self._edgeClass!=None:
+                for edgeAttr in self._edgeClass._attrcol: break
+            for ival in self.table[p.id]:
+                srcPath=p[ival.src_start:ival.src_end]
+                destPath=self.destSet[ival.dest_id][ival.dest_start:ival.dest_end]
+                if edgeAttr!=None and hasattr(ival,edgeAttr):
+                    ei=len(self._edgeClass._attrcol)*[None] # RIGHT LENGTH LIST
+                    for a,i in self._edgeClass._attrcol.items():
+                        ei[i]=getattr(ival,a) # CONSTRUCT ATTRS IN RIGHT ORDER
+                    self[srcPath][destPath]=self._edgeClass(ei) # SAVE EDGE
+                else:
+                    self[srcPath]=destPath # SAVE ALIGNMENT W/O EDGE INFO
+            return PathMapping.__getitem__(self,p)
+
+    def all_paths(self):
+        "Get all source sequences in this mapping"
+        for id in self.table:
+            p=self.srcSet[id]
+            yield p
+
+    # NEED TO ADD APPROPRIATE HOOKS FOR __iter__, items(), ETC.
