@@ -300,6 +300,57 @@ class IntervalTransform(object):
         else: out.update(e) # SAVE EDGE INFO DATA
         return out
 
+    def nidentity(self):
+        "calculate total #identity matches between srcPath and destPath"
+        nid=0
+        src=str(self.srcPath).upper()
+        dest=str(self.destPath).upper()
+        slen=len(src)
+        i=0
+        while i<slen:
+            if src[i]==dest[i]:
+                nid+=1
+            i+=1
+        return nid
+        
+class AlignmentSummary(object):
+    "combine one or more interval alignments for a pair of sequences, to calc %id etc."
+    def __init__(self,e):
+        #print 'creating AlignmentSummary for %s:%s' % (e.srcPath.path.id,e.destPath.path.id)
+        self.srcMin=e.srcPath.start
+        self.srcMax=e.srcPath.end
+        self.destMin=e.destPath.start
+        self.destMax=e.destPath.end
+        self.edges=[e]
+        self.srcPath=e.srcPath.path
+        self.destPath=e.destPath.path
+    def __iadd__(self,e):
+        "add another alignment interval edge"
+        if e.srcPath.start<self.srcMin:
+            self.srcMin=e.srcPath.start
+        if e.srcPath.end>self.srcMax:
+            self.srcMax=e.srcPath.end
+        if e.destPath.start<self.destMin:
+            self.destMin=e.destPath.start
+        if e.destPath.end>self.destMax:
+            self.destMax=e.destPath.end
+        self.edges.append(e)
+        return self
+
+    def percent_id(self):
+        "calculate fractional identity for this pairwise alignment"
+        nid=0
+        for e in self.edges:
+            nid+=e.nidentity()
+        srcLen=self.srcMax-self.srcMin
+        destLen=self.destMax-self.destMin
+        if srcLen>destLen:
+            return nid/float(srcLen)
+        else:
+            return nid/float(destLen)
+
+
+
 def clipUnalignedRegions(p):
     """p[-1] is the intersection of all alignment constraints,
        so reverse map it to find the actual aligned regions."""
@@ -737,6 +788,21 @@ class PathMapping(object):
         "Generate compact dict representation of this mapping"
         for e in self.edges():
             yield e.repr_dict()
+
+    def seq_dict(self):
+        "make a 2-level dict of {seq:{seq:AlignmentSummary}}"
+        d={}
+        for e in self.edges():
+            if e.srcPath.path not in d:
+                d[e.srcPath.path]={}
+            try:
+                d[e.srcPath.path][e.destPath.path]+=e
+            except KeyError:
+                as=AlignmentSummary(e)
+                #print 'assigning to seq_dict:',e.srcPath.path.id,e.destPath.path.id,as
+                d[e.srcPath.path][e.destPath.path]=as
+        #print 'seq_dict is',d
+        return d
 
 class PathMapping2(PathMapping): # STORES BIDIRECTIONAL INDEX
     def __setitem__(self,p,val):
