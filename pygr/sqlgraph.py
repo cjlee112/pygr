@@ -22,7 +22,18 @@ class SQLRow(object):
         self.table=table
         self.id=id
 
-    def __getattr__(self,attr):
+    def _select(self,what):
+        "Get SQL select expression for this row"
+        kstr=self.table.keystr(self.id)
+        self.table.cursor.execute('select %s from %s where %s=%s'
+                                  % (what,self.table.name,self.table.primary_key,kstr))
+        l=self.table.cursor.fetchall()
+        if len(l)!=1:
+            raise KeyError('%s %s not found in %s, or not unique' %(kstr,what,self.name))
+        return l[0][0] # RETURN THE SINGLE FIELD WE REQUESTED
+
+    def _attrSQL(self,attr):
+        "Translate python attribute name to appropriate SQL expression"
         if attr=='id':
             attr=self.table.primary_key
         else: # MAKE SURE THIS ATTRIBUTE CAN BE MAPPED TO DATABASE EXPRESSION
@@ -32,14 +43,10 @@ class SQLRow(object):
                 raise AttributeError('%s not a valid column in %s' % (attr,self.table.name))
             if isinstance(field,types.StringType):
                 attr=field # USE ALIASED EXPRESSION FOR DATABASE SELECT INSTEAD OF attr
-        kstr=self.table.keystr(self.id)
-        self.table.cursor.execute('select %s from %s where %s=%s'
-                                  % (attr,self.table.name,self.table.primary_key,kstr))
-        l=self.table.cursor.fetchall()
-        if len(l)!=1:
-            raise KeyError('%s %s not found in %s, or not unique' %(kstr,attr,self.name))
-        return l[0][0] # RETURN THE SINGLE FIELD WE REQUESTED
+        return attr
 
+    def __getattr__(self,attr):
+        return self._select(self._attrSQL(attr))
 
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
