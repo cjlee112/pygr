@@ -3,7 +3,7 @@
 class GraphQueryIterator(object):
     """iterator for a single node in graph query.  Subclasses provide different
        flavors of generator methods: graph w/ edges; container; attr; function etc."""
-    def __init__(self,fromNode,queryNode,dataGraph,queryGraph,dataMatch,queryMatch):
+    def __init__(self,fromNode,queryNode,dataGraph,queryGraph,dataMatch,queryMatch,attrDict={}):
         self.fromNode=fromNode
         self.queryNode=queryNode
         self.dataGraph=dataGraph
@@ -11,9 +11,8 @@ class GraphQueryIterator(object):
         self.dataMatch=dataMatch
         self.queryMatch=queryMatch
         self.dataNode=None
-        if fromNode!=None and queryNode!=None and queryGraph[fromNode][queryNode]!=None:
-            for attr,val in queryGraph[fromNode][queryNode].items(): # SAVE OUR EDGE INFO
-                setattr(self,attr,val)  # JUST ATTACH EDGE INFO AS ATTRIBUTES OF THIS OBJ
+        for attr,val in attrDict.items(): # SAVE OUR EDGE INFO
+            setattr(self,attr,val)  # JUST ATTACH EDGE INFO AS ATTRIBUTES OF THIS OBJ
 ##         try:
 ##             self.nq=len(self.queryGraph[self.queryNode])
 ##         except KeyError:
@@ -46,8 +45,7 @@ class GraphQueryIterator(object):
             pass
         else:
             for i,e in it.items():
-                if i not in self.dataMatch:
-                    yield i,e
+                yield i,e
 
     def next(self):
         "returns the next node from iterator that passes all tests"
@@ -55,6 +53,8 @@ class GraphQueryIterator(object):
             i=self.queryMatch[self.queryNode] # ERASE OLD NODE ASSIGNMENT
             del self.dataMatch[i]
             del self.queryMatch[self.queryNode]
+        try: del self.queryMatch[(self.fromNode,self.queryNode)] #ERASE OLD EDGE
+        except KeyError: pass
 
         for i,e in self.iterator: # RETURN THE FIRST ACCEPTABLE ITEM
 ##             try: # THIS EDGE COUNT CHECK WON'T WORK IF MULTIPLE GRAPHS BEING QUERIED!!
@@ -62,12 +62,16 @@ class GraphQueryIterator(object):
 ##             except KeyError:
 ##                 nd=0
 ##             if nd>=self.nq and
+            if self.mustMark and i in self.dataMatch:
+                continue # THIS NODE ALREADY ASSIGNED. CAN'T REUSE IT!
             if (not hasattr(self,'filter') # APPLY EDGE / NODE TESTS HERE
-                or self.filter(i,self.dataNode,e,self.dataMatch,
-                               self.dataGraph,self)):
+                or self.filter(toNode=i,fromNode=self.dataNode,edge=e,
+                               queryMatch=self.queryMatch,gqi=self)):
                 if self.mustMark:
                     self.dataMatch[i]=self.queryNode  # SAVE THIS NODE ASSIGNMENT
                     self.queryMatch[self.queryNode]=i
+                if e is not None: # SAVE EDGE INFO, IF ANY
+                    self.queryMatch[(self.fromNode,self.queryNode)]=e
                 return i  # THIS ITEM PASSES ALL TESTS.  RETURN IT
         return None # NO MORE ITEMS FROM THE ITERATOR
 
@@ -76,55 +80,71 @@ class ContainerGQI(GraphQueryIterator):
     "Iterate over all nodes in self.dataGraph"
     def generate(self):
         for i in self.dataGraph:
-            if i not in self.dataMatch:
-                yield i,None
+            yield i,None
 
 class AttributeGQI(GraphQueryIterator):
     "Iterate over all nodes in attribute called self.attr of self.dataNode"
     def generate(self):
         for i,e in getattr(self.dataNode,self.attr).items():
-            if i not in self.dataMatch:
-                yield i,e
+            yield i,e
 
 class AttrContainerGQI(GraphQueryIterator):
-    "Iterate over all nodes in attribute called self.attr of self.dataNode (no edge info)"
+    "Iterate over all nodes in attribute called self.attrN of self.dataNode (no edge info)"
     def generate(self):
-        for i in getattr(self.dataNode,self.attr):
-            if i not in self.dataMatch:
-                yield i,None
+        for i in getattr(self.dataNode,self.attrN):
+            yield i,None
 
 class CallableGQI(GraphQueryIterator):
     "Call the specified function self.f as iterator"
     def generate(self):
         for i,e in self.f(self.dataNode,self.dataGraph,self):
-            if i not in self.dataMatch:
-                yield i,e
+            yield i,e
 
 class CallableContainerGQI(GraphQueryIterator):
-    "Call the specified function self.f as iterator (no edge info)"
+    "Call the specified function self.fN as iterator (no edge info)"
     def generate(self):
-        for i in self.f(self.dataNode,self.dataGraph,self):
-            if i not in self.dataMatch:
-                yield i,None
+        for i in self.fN(self.dataNode,self.dataGraph,self):
+            yield i,None
+
+# DEFAULT MAPPING OF ATTRIBUTE NAMES TO GQI CLASSES TO USE WITH THEM
+defaultGQIDict={'attr':AttributeGQI,
+                'attrN':AttrContainerGQI,
+                'f':CallableGQI,
+                'fN':CallableContainerGQI}
+
+
+
+def newGQI(oclass,fromNode,toNode,dataGraph,queryGraph,dataMatch,queryMatch,
+           gqiDict=defaultGQIDict):
+    """figure out a default GQI class to use, based on an attribute dictionary,
+       then return a new object of that class initialized with the input data."""
+    if fromNode is not None and toNode is not None and \
+           queryGraph[fromNode][toNode] is not None:
+        kwargs=queryGraph[fromNode][toNode]
+        for attr in kwargs:
+            try: oclass=gqiDict[attr] # USE ATTRIBUTE NAME TO DETERMINE DEFAULT CLASS
+            except KeyError: pass
+    else:
+        kwargs={}
+    try: oclass=kwargs['__class__'] # LET USER SET CLASS TO USE
+    except KeyError: pass
+    return oclass(fromNode,toNode,dataGraph,queryGraph,dataMatch,queryMatch,kwargs)
 
 
 
 def bfsEnumerate(dataGraph,queryGraph,dataMatch,queryMatch):
     'Enumerate nodes in queryGraph in BFS order, constructing iterator stack'
-
     # 1ST NEED TO FIND START NODES, PROCESS THEM 1ST, MARK THEM AS GENERATE ALL...
-    isHead={}
+    isFollower={}
     for node in queryGraph:
-        if node not in isHead:
-            isHead[node]=True
         for node2 in queryGraph[node]:
-            isHead[node2]=False # node2 HAS INCOMING EDGE, SO NOT A START NODE!
+            isFollower[node2]=True # node2 HAS INCOMING EDGE, SO NOT A START NODE!
     q=[]
     n=0
     for node in queryGraph: # PLACE START NODES AT HEAD OF QUEUE
-        if isHead[node]:
-            q.append(ContainerGQI(None,node,dataGraph,queryGraph,
-                                  dataMatch,queryMatch))
+        if node not in isFollower:
+            q.append(newGQI(ContainerGQI,None,node,dataGraph,queryGraph,
+                            dataMatch,queryMatch))
             n += 1
 
     visited={}
@@ -134,8 +154,8 @@ def bfsEnumerate(dataGraph,queryGraph,dataMatch,queryMatch):
             visited[q[i].queryNode]=None # MARK AS VISITED
             for node in queryGraph[q[i].queryNode]: # GET ALL ITS NEIGHBORS
                 #print 'QUEUE:',n,node
-                q.append(GraphQueryIterator(q[i].queryNode,node,dataGraph,queryGraph,
-                                            dataMatch,queryMatch))
+                q.append(newGQI(GraphQueryIterator,q[i].queryNode,node,dataGraph,queryGraph,
+                                dataMatch,queryMatch))
                 n+=1
         i+=1
     return q
