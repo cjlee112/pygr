@@ -1,6 +1,5 @@
 import time
 from MySQLdb import *
-from pathquery import *
 from splicegraph import *
 
 db=Connection('lldb','reader','hedgehog')
@@ -12,7 +11,7 @@ jun03=suffixSubset(tables,'JUN03') # SET OF TABLES ENDING IN JUN03
 idDict=indexIDs(jun03) # CREATE AN INDEX OF THEIR PRIMARY KEYS
 
 # LOAD DATA & BUILD THE SPLICE GRAPH
-(clusters,exons,splices,spliceGraph,alt5Graph,
+(clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,
  alt3Graph,mrna,protein,mrna_protein)=loadSpliceGraph(jun03,
                                        'HUMAN_SPLICE_03.cluster_JUN03',
                                        'HUMAN_SPLICE_03.exon_formJUN03',
@@ -116,20 +115,27 @@ print 'Found:%d\t%.2f sec\n' % (len(intronRetentions),time.time()-startTime)
 
 
 
-# NEW STYLE QUERIES USING PathGraphs
-# NEW STYLE MEANS TODAY...
+# path query examples: to make this work, let's force spliceGraph to use path query wrapper interface
+from pathquery import *
+spliceGraph.__class__=PathQueryDictGraph
+alt5Graph.__class__=PathQueryDictGraph
+
 # example exon skip query
 l=[o for o in spliceGraph.next.next.filter(lambda p:p[2] in p[0].next)]
+print len(l)
 
 # same thing, but using graph join syntax
 l=[o for o in (spliceGraph>>spliceGraph>>spliceGraph).filter(lambda p:p[2] in spliceGraph[p[0]])]
+print len(l)
 
 
 # example U11/U12 alt5 skip
 l=[o for o in alt5Graph.alt5.next.next.filter(lambda p: p[3] in p[0].next
                                          and p.edge[2].type=='U11/U12')]
+print len(l)
 
 # example U11/U12 alt3 skip
 l=[o for o in spliceGraph.next.next.filter(lambda p: p.edge[2].type=='U11/U12'
                                            and hasattr(p[2],'alt3'))
    .alt3.filter(lambda p:p[4] in p[0].next)]
+print len(l)
