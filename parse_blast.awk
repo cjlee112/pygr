@@ -125,9 +125,9 @@ function print_hit()
     if (mode=="summary") {
 	printf("%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",hit_id,SEQ_ID,SUBJ_ID,BLAST_SCORE,E_VALUE,IDENTITY_PERCENT,BLAST_FRAME,QUERY_START,QUERY_END,SUBJ_START,SUBJ_END);
     }
-    QUERY_START=9999999;
+    QUERY_START=9999999999;
     QUERY_END= -1;
-    SUBJ_START=9999999;
+    SUBJ_START=9999999999;
     SUBJ_END= -1;
 }
 
@@ -136,7 +136,7 @@ function print_hit()
 /^Query=/ {
     SEQ_ID=$2;
     TITLE=substr($0,index($0,$3));
-    QUERY_START=9999999;
+    QUERY_START=9999999999;
     QUERY_END= -1;
 }
 
@@ -173,7 +173,7 @@ function print_hit()
     }
     QUERY_SEQ="";
     SUBJ_SEQ="";
-    SUBJ_START=9999999;
+    SUBJ_START=9999999999;
     SUBJ_END= -1;
 }
 
