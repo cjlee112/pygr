@@ -124,7 +124,10 @@ class BlastSequence(NamedSequenceBase):
     def __init__(self,db,id):
         self.db=db
         self.id=id
-        NamedSequenceBase.__init__(self)
+        self._seq_len_attr='__len__'
+        self.end=self.__len__()
+        self.path=self
+##        NamedSequenceBase.__init__(self)
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
         return self.db.seqLenDict[self.id]
@@ -172,7 +175,9 @@ def read_interval_alignment(ofile,container1,container2,al=None):
                 hitInfo=BlastHitInfo((ival.blast_score,ival.e_value,ival.percent_id))
                 hit_id=ival.hit_id
             query=container1[ival.query_id]
+            print " i know you will be here"
             subject=container2[ival.subject_id]
+            print " i know you can't go beyong this..."
             q_ival=query[ival.query_start:ival.query_start+ival.length]
             s_ival=subject[ival.subject_start:ival.subject_start+ival.length]
             if ival.orientation<0: # SWITCH IT TO REVERSE ORIENTATION
@@ -183,12 +188,14 @@ def read_interval_alignment(ofile,container1,container2,al=None):
 
 def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
+    print cmd
     ifile,ofile=os.popen2(cmd+'|parse_blast.awk -v mode=all')
     if seqString is None:
         seqString=seq
     write_fasta(ifile,seqString,id=seq.id)
     ifile.close()
     al=read_interval_alignment(ofile,{seq.id:seq},seqDB,al)
+    print ofile.readline()
     if ofile.close() is not None:
         raise OSError('command %s failed' % cmd)
     return al
