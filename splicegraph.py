@@ -31,6 +31,7 @@ def buildClusterSpliceGraph(c,alt5,alt3):
         for e1 in exons1:
             for e2 in exons2:
                 e1.next[e2]=s # SAVE SPLICE AS EDGE INFO...
+                s.exons=(e1,e2) # SAVE EXONS DIRECTLY ON THE SPLICE OBJECT
     for exons in start.values():
         for e1 in exons:
             for e2 in exons:
