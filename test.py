@@ -11,10 +11,14 @@ jun03=suffixSubset(tables,'JUN03') # SET OF TABLES ENDING IN JUN03
 idDict=indexIDs(jun03) # CREATE AN INDEX OF THEIR PRIMARY KEYS
 
 # LOAD DATA & BUILD THE SPLICE GRAPH
-clusters,exons,splices,spliceGraph,alt5Graph,alt3Graph=loadSpliceGraph(jun03,
+(clusters,exons,splices,spliceGraph,alt5Graph,
+ alt3Graph,mrna,protein,mrna_protein)=loadSpliceGraph(jun03,
                                        'HUMAN_SPLICE_03.cluster_JUN03',
                                        'HUMAN_SPLICE_03.exon_formJUN03',
-                                       'HUMAN_SPLICE_03.splice_verification_JUN03')
+                                       'HUMAN_SPLICE_03.splice_verification_JUN03',
+                                       'HUMAN_SPLICE_03.genomic_cluster_JUN03',
+                                       'HUMAN_SPLICE_03.mrna_seqJUN03',
+                                       'HUMAN_SPLICE_03.protein_seqJUN03')
 
 
 # OLD STYLE QUERIES
