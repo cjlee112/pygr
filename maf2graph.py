@@ -129,25 +129,28 @@ class MafParser:
             elif(la[0]=='a'):
 ##                print "reading alignment"
                 self.readalign(la[1:],filehandle)
-                if(not stored):
-                    createTableFromRepr(self.mAlign.repr_dict(),alignTab, cursor,
-                                        {'src_id':'varchar(30)','dest_id':'varchar(30)'})
-                    if(sequenceTab):
-                        known=[]
-                        for key in self.sequences:
-                            for entry in self.sequences[key].known_int():
-                                known+=[entry]
-                        createTableFromRepr(iter(known),sequenceTab,cursor,
-                                            {'src_id':'varchar(30)','seq':'longtext'})
-                        del known;
-                    stored=True
-                else:
-                    for row in self.mAlign.repr_dict():
-                         storeRow(cursor, alignTab, row)
-                    if(sequenceTab):
-                        for key in self.sequences:
-                            for row in self.sequences[key].known_int():
-                                storeRow(cursor,sequenceTab,row)
+
+                for row in self.mAlign.repr_dict():
+                    if(not stored):
+                        try:
+                            createTableFromRow(cursor,alignTab,row,
+                                               {'src_id':'varchar(30)','dest_id':'varchar(30)'})
+                        except:
+                            pass
+                        if(not sequenceTab):
+                            stored=True
+                    storeRow(cursor, alignTab, row)
+                if(sequenceTab):
+                    for key in self.sequences:
+                        for row in self.sequences[key].known_int():
+                            if(not stored):
+                                try:
+                                    createTableFromRow(cursor,sequenceTab,row,
+                                                       {'src_id':'varchar(30)','seq':'longtext'})
+                                except:
+                                    pass
+                                stored=True
+                            storeRow(cursor,sequenceTab,row)
                 del self.mAlign
                 del self.sequences
                 self.mAlign=PathMapping()
