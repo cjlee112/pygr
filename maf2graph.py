@@ -14,14 +14,20 @@ class Align2:
             
     def intervals(self):
         begin=0
+        gaps1=0
+        gaps2=0
         for end in range(len(self.s1)):
             if(self.s1[end]=='-' or self.s2[end]=='-'):
                 if(begin<end):
-                    yield (begin,end)
+                    yield ((begin-gaps1,end-gaps1),(begin-gaps2,end-gaps2))
                 begin=end+1
+                if(self.s1[end]=='-'):
+                    gaps1=gaps1+1
+                if(self.s2[end]=='-'):
+                    gaps2=gaps2+1
         end=end+1
         if(begin<end):
-            yield (begin,end)
+            yield ((begin-gaps1,end-gaps1),(begin-gaps2,end-gaps2))
 
 def reverse_complement(s):
     compl={'a':'t', 'c':'g', 'g':'c', 't':'a', 'u':'a', 'n':'n',
@@ -70,9 +76,9 @@ class MafParser:
             
         for i in range(len(newnodes)):
             for j in range(i+1, len(newnodes)):
-                for inter in Align2(newnodes[i][1],newnodes[j][1]).intervals():            
-                    self.mAlign[newnodes[i][0][inter[0]:inter[1]]][newnodes[j][0][inter[0]:inter[1]]]=(edgeInfo,newnodes[i][1][inter[0]:inter[1]],newnodes[j][1][inter[0]:inter[1]])
-                    self.mAlign[newnodes[j][0][inter[0]:inter[1]]][newnodes[i][0][inter[0]:inter[1]]]=(edgeInfo,newnodes[j][1][inter[0]:inter[1]],newnodes[i][1][inter[0]:inter[1]])
+                for inter in Align2(newnodes[i][1],newnodes[j][1]).intervals():
+                    self.mAlign[newnodes[i][0][inter[0][0]:inter[0][1]]][newnodes[j][0][inter[1][0]:inter[1][1]]]=(edgeInfo,newnodes[i][1][inter[0][0]:inter[0][1]],newnodes[j][1][inter[1][0]:inter[1][1]])
+                    self.mAlign[newnodes[j][0][inter[1][0]:inter[1][1]]][newnodes[i][0][inter[0][0]:inter[0][1]]]=(edgeInfo,newnodes[j][1][inter[1][0]:inter[1][1]],newnodes[i][1][inter[0][0]:inter[0][1]])                    
                
     def parse(self,filehandle):
         """parses the .maf filehandle """
