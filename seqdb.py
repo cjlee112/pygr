@@ -114,12 +114,43 @@ def fastacmd_seq(filepath,id,start=None,end=None):
 
 
 class FastacmdIntervalCache(object):
-    def __init__(self,start,end):
+    """caches a single interval of sequence:
+       expandable by self+=slice
+       get sequence strslice by self[slice]"""
+    maxlen=20000 # DEFAULT MAXIMUM WIDTH
+    def __init__(self,start,end,strslice,path):
+        "strslice must be callable as strslice(i,j) to get seq[i:j]"
         self.start=start
         self.end=end
+        self.strslice=strslice # SAVE METHOD FOR GETTING SUBSEQUENCE
+        self.path=path
+
+    def delseq(self):
+        "drop our cached sequence"
+        try:
+            del self.seq
+        except AttributeError:
+            pass
+
+    def __iadd__(self,k):
+        "expand our interval by merging with slice k"
+        if k.stop-self.start>self.maxlen or self.end-k.start>self.maxlen:
+            raise ValueError('interval is beyond max extension radius')
+        if k.start<self.start:
+            self.start=k.start
+            self.delseq() # IF INTERVAL CHANGED, BETTER REFRESH CACHED SEQ
+        if k.stop>self.end:
+            self.end=k.stop
+            self.delseq() # IF INTERVAL CHANGED, BETTER REFRESH CACHED SEQ
+        return self # iadd METHOD MUST ALWAYS RETURN self!!!
 
     def __getitem__(self,k):
-        pass # THIS NEEDS MORE WORK...
+        "return seq slice corresponding to slice given by argument k"
+        if k.start<self.start or k.stop>self.end:
+            self+=k # TRY EXTENDING OUR INTERVAL TO CONTAIN k
+        if not hasattr(self,'seq'):
+            self.seq=self.strslice(self.start,self.end) # USE SAVED METHOD
+        return self.seq[k.start-self.start:k.stop-self.start]
 
 
 class BlastSeqDescriptor(object):
@@ -143,6 +174,38 @@ class BlastSequence(BlastSequenceBase):
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
         return self.db.seqLenDict[self.id]
+
+class BlastSequenceCache(BlastSequence):
+    """represents a sequence, with interval caching
+    slicing operations are recorded, and merged into one or more cache intervals
+    Subsequent requests for subsequence will use these cached intervals."""
+    def __init__(self,db,id):
+        super(BlastSequenceCache,self).__init__(db,id)
+        self.cache=[]
+    def __getitem__(self,k):
+        "record all slices taken of this sequence, constructing a cache for fast access"
+        ival=super(BlastSequenceCache,self).__getitem__(k) # GET THE INTERVAL OBJECT AS USUAL
+        s=slice(ival.start,ival.end)
+        for i in self.cache:
+            try:
+                i+=s # TRY TO EXTEND THIS INTERVAL CACHE TO CONTAIN ival
+                return ival # SUCCESS.  JUST RETURN ival AS USUAL
+            except ValueError:
+                pass
+        # HAVE TO ADD ival AS A NEW INTERVAL CACHE OBJECT
+        self.cache.append(FastacmdIntervalCache(ival.start,ival.end,
+                                                super(BlastSequenceCache,self).strslice,self))
+        return ival
+    def strslice(self,start,end):
+        "get sequence from our interval cache"
+        s=slice(start,end)
+        for i in self.cache:
+            try:
+                return i[s] # TRY TO GET SEQUENCE FROM INTERVAL CACHE
+            except ValueError: # NOT IN THIS CACHE ITEM, SO KEEP TRYING
+                pass
+        return str(self[s]) # FORCE __getitem__ TO LOAD s INTO THE CACHE
+
 
 def blast_program(query_type,db_type):
     progs= {DNA_SEQTYPE:{DNA_SEQTYPE:'blastn', PROTEIN_SEQTYPE:'blastx'},
