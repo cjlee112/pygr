@@ -11,6 +11,7 @@ def buildClusterSpliceGraph(c,alt5,alt3):
     """
     start={}
     end={}
+    none=[]
     for e in c.exons:
         if e.genomic_start not in start:
             start[e.genomic_start]=[]
@@ -156,7 +157,6 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,mrna_seq_t,pro
                 c.splices+=s
 
         print 'Building splice graph...'
-        none=[]
         for c in clusters.values():
             buildClusterSpliceGraph(c,alt5,alt3)
 
