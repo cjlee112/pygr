@@ -45,7 +45,7 @@ class SeqPath(object):
     #next=PathNextDescr()
     def __init__(self,s,start=0,end=None,step=1,orientation=1):
         self.path=s
-        if start and end and start>end: # DETECT REVERSED ORIENTATION
+        if start and end!=None and start>end: # DETECT REVERSED ORIENTATION
             self.orientation= -orientation
             t=start
             start=end+1 # ALWAYS STORE INTERVAL AS start <= end
@@ -65,7 +65,10 @@ class SeqPath(object):
         elif isinstance(k,types.IntType):
             start=k
             stop=k+1
+            if(k==-1):
+                stop=None
             step=1
+            return self[start:stop:step]
         else:
             raise KeyError('requires a slice object or integer key')
         if self.step==1 and not hasattr(self,'_next') and self.orientation>0:
