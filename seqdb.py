@@ -173,9 +173,7 @@ def read_interval_alignment(ofile,container1,container2,al=None):
                 hitInfo=BlastHitInfo((ival.blast_score,ival.e_value,ival.percent_id))
                 hit_id=ival.hit_id
             query=container1[ival.query_id]
-            print " i know you will be here"
             subject=container2[ival.subject_id]
-            print " i know you can't go beyong this..."
             q_ival=query[ival.query_start:ival.query_start+ival.length]
             s_ival=subject[ival.subject_start:ival.subject_start+ival.length]
             if ival.orientation<0: # SWITCH IT TO REVERSE ORIENTATION
@@ -186,7 +184,6 @@ def read_interval_alignment(ofile,container1,container2,al=None):
 
 def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
-    print cmd
     ifile,ofile=os.popen2(cmd+'|parse_blast.awk -v mode=all')
     if seqString is None:
         seqString=seq
@@ -295,8 +292,7 @@ class BlastDB(dict):
                   maxseq=None,minIdentity=None,maskOpts='-U T -F m'):
         "Run megablast search with repeat masking."
         masked_seq=repeat_mask(seq)  # MASK REPEATS TO lowercase
-        cmd='%s %s -d %s -D 2 -e %e' % (blastpath,maskOpts,self.filepath,
-                                   float(expmax))
+        cmd='%s %s -d %s -D 2 -e %e -i stdin' % (blastpath,maskOpts,self.filepath,float(expmax))
         if maxseq is not None:
             cmd+=' -v %d' % maxseq
         if minIdentity is not None:
