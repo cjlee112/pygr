@@ -151,7 +151,7 @@ def read_interval_alignment(ofile,container1,container2,al=None):
             al[q_ival][s_ival]= hitInfo # SAVE THE ALIGNMENT AND EDGE INFO
     return al
 
-def process_blast(self,cmd,seq,al=None,seqString=None):
+def process_blast(cmd,seq,al=None,seqString=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
     ifile,ofile=os.popen2(cmd+'|parse_blast.awk -v mode=all')
     if seqString==None:
