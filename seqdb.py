@@ -335,6 +335,8 @@ class BlastDB(dict):
             blastprog=blast_program(seq.seqtype(),self._seqtype)
         cmd='%s -d %s -p %s -e %e'  %(blastpath,self.filepath,
                                       blastprog,float(expmax))
+        if maxseq is not None: # ONLY TAKE TOP maxseq HITS
+            cmd+=' -b %d -v %d' % (maxseq,maxseq)
         return process_blast(cmd,seq,self,al)
 
     def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
@@ -342,8 +344,8 @@ class BlastDB(dict):
         "Run megablast search with repeat masking."
         masked_seq=repeat_mask(seq,opts=rmOpts)  # MASK REPEATS TO lowercase
         cmd='%s %s -d %s -D 2 -e %e -i stdin' % (blastpath,maskOpts,self.filepath,float(expmax))
-        if maxseq is not None:
-            cmd+=' -v %d' % maxseq
+        if maxseq is not None: # ONLY TAKE TOP maxseq HITS
+            cmd+=' -b %d -v %d' % (maxseq,maxseq)
         if minIdentity is not None:
             cmd+=' -p %f' % float(minIdentity)
         return process_blast(cmd,seq,self,al,seqString=masked_seq)
