@@ -103,6 +103,11 @@ class BlastSequence(NamedSequenceBase):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return fastacmd_seq(self.db.filepath,self.id,start,end)
 
+# FOR LONG SEQUENCES, NEED TO CREATE A FLAVOR OF BlastSequence THAT
+# HAS A _seq_len_attr INDICATING AN ATTR TO READ LENGTH OF SEQUENCE FROM,
+# WITHOUT HAVING TO GET THE ACTUAL SEQUENCE!
+# MAY WANT TO RETHINK _seq_len_attr, USE THE __len__ METHOD TO BE MORE GENERAL!!
+
 def blast_program(query_type,db_type):
     progs= {DNA_SEQTYPE:{DNA_SEQTYPE:'blastn', PROTEIN_SEQTYPE:'blastx'},
             PROTEIN_SEQTYPE:{DNA_SEQTYPE:'tblastn', PROTEIN_SEQTYPE:'blastp'}}
@@ -184,6 +189,7 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall'):
 
 class BlastDB(dict):
     "Container representing Blast database"
+    seqClass=BlastSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     def __init__(self,filepath):
         "format database and build indexes if needed"
         self.filepath=filepath
@@ -209,7 +215,7 @@ class BlastDB(dict):
         try:
             return dict.__getitem__(self,id)
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
-            s=BlastSequence(self,id)
+            s=self.seqClass(self,id)
             dict.__setitem__(self,id,s) # CACHE IT
             return s
 
@@ -226,7 +232,7 @@ class BlastDB(dict):
                   maxseq=None,minIdentity=None,maskOpts='-U T -F m'):
         "Run megablast search with repeat masking."
         masked_seq=repeat_mask(seq)  # MASK REPEATS TO lowercase
-        cmd='%s %s -d %s -e %e' % (blastpath,maskOpts,self.filepath,
+        cmd='%s %s -d %s -D 2 -e %e' % (blastpath,maskOpts,self.filepath,
                                    float(expmax))
         if maxseq!=None:
             cmd+=' -v %d' % maxseq
