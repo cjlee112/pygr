@@ -518,7 +518,7 @@ class MAFStoredPathMapping(PathMapping):
             ival=self.ival
         for e in PathMapping.__getitem__(self,ival).edges():
             for e2 in PathMapping.__getitem__(self,e.destPath).edges():
-                if ival!=e2.destPath: # IGNORE SELF-MATCH
+                if e2.destPath in ival: # IGNORE SELF-MATCH
                     yield IntervalTransform(e.reverse(e2.srcPath),e2.destPath)
 
 
