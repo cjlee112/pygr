@@ -138,7 +138,7 @@ class MafParser:
                             for entry in self.sequences[key].known_int():
                                 known+=[entry]
                         createTableFromRepr(iter(known),sequenceTab,cursor,
-                                            {'src_id':'varchar(30)'})
+                                            {'src_id':'varchar(30)','seq':'longtext'})
                         del known;
                     stored=True
                 else:
