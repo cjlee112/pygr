@@ -150,8 +150,12 @@ class MafParser:
         self.mAlign=PathMapping()
         self.sequences={}
                 
-    def parseIntoDB(self,filehandle,cursor,alignTab,sequenceTab=None):
+    def parseIntoDB(self,filehandle,cursor,alignTab,sequenceTab=None, update=None):
         """parses the .maf filehandle into database using cursors"""
+        c=filehandle.tell()
+        filehandle.seek(0,2)
+        filesize=filehandle.tell()
+        filehandle.seek(c)
         l=filehandle.readline();
         if l.split()[0]!='##maf':
             return
@@ -173,6 +177,8 @@ class MafParser:
                 del self.sequences
                 self.mAlign=PathMapping()
                 self.sequences={}
+                if(update):
+                    cursor.execute(update %(int(filehandle.tell()*100./filesize)))
             else:
 ##                print "end of records"
                 return
