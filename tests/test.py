@@ -1,37 +1,13 @@
 import time
-from splicegraph import *
+from leelabdb import *
 from pathquery import *
 from graphquery import *
 
-def getSpliceGraphFromDB(host,user,password,dbName,subsetSuffix,loadAll,*tableNames):
-    """load data from MySQL using the designated database, optional table subset.
-    If loadAll true, then load the entire splice graph into memory."""
-    import MySQLdb
-    db=MySQLdb.Connection(host,user,password)
-    cursor=db.cursor()
-    print 'Reading database schema...'
-    idDict={}
-    tables=describeDBTables(dbName,cursor,idDict)
-    if subsetSuffix is not None:
-        tables=suffixSubset(tables,subsetSuffix) # SET OF TABLES ENDING IN JUN03
-        idDict=indexIDs(tables) # CREATE AN INDEX OF THEIR PRIMARY KEYS
-
-    # LOAD DATA & BUILD THE SPLICE GRAPH
-    return loadSpliceGraph(tables,dbName+'.'+tableNames[0],dbName+'.'+tableNames[1],
-                           dbName+'.'+tableNames[2],dbName+'.'+tableNames[3],
-                           dbName+'.'+tableNames[4],dbName+'.'+tableNames[5],loadAll)
 
 
 def loadTestJUN03(loadAll=False):
     "Test loading the JUN03 splice graph data"
-    return getSpliceGraphFromDB('lldb','reader','hedgehog',
-                                'HUMAN_SPLICE_03','JUN03',loadAll,
-                                'cluster_JUN03',
-                                'exon_formJUN03',
-                                'splice_verification_JUN03',
-                                'genomic_cluster_JUN03',
-                                'mrna_seqJUN03',
-                                'protein_seqJUN03')
+    return getSpliceGraphFromDB(spliceCalcs['HUMAN_SPLICE_03'],loadAll)
 
 
 def forLoopTests(spliceGraph,alt5Graph):
