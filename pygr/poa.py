@@ -390,9 +390,6 @@ class TempIntervalDict(object):
             s+='%s ' % repr(i)
         return s
 
-    filter=newFilterPath
-    __rshift__=newJoinPath
-
 
 
 class PathDict(object):
@@ -645,13 +642,6 @@ class PathDict(object):
 
 
 
-class AlignPathGraph(GraphPathGraph):
-    def __iter__(self):
-        "Wrapper around GraphPathGraph iterator, designed for alignments"
-        for i in GraphPathGraph.__iter__(self):
-            clipUnalignedRegions(i) # RESTRICT TO ACTUAL REGION OF ALIGNMENT
-            yield i
-
 GET_EDGE_INFO= 2 # CONSTANT FOR PASSING TO VARIOUS getItems ARGUMENTS
 # MEANS: GET EDGE INFORMATION AS TRANSFORM FROM ONE INTERVAL TO ANOTHER
 
@@ -736,10 +726,6 @@ class PathMapping(object):
     keys=walk
     values=itervalues
     items=iteritems
-    filter=newFilterPath
-    def __rshift__(self,graph):
-        q=AlignPathGraph(self,self)
-        return q >> graph
 
     def repr_dict(self):
         "Generate compact dict representation of this mapping"

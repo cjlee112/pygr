@@ -1,5 +1,4 @@
 
-from mapping import *
 
 class PathList(list):
     """Internal representation for storing both nodes and edges as list
@@ -231,6 +230,7 @@ def newJoinPath(self,attr):
 
 # ADD WRAPPER FUNCTIONS TO dictEdge and dictGraph SO THEY PROVIDE ACCESS TO
 # PATH QUERY INTERFACE
+from mapping import *
 dictEdge.__getattr__=newAttrPath
 dictEdge.filter=newFilterPath
 dictEdge.__rshift__=newJoinPath
@@ -238,3 +238,21 @@ dictEdge.__rshift__=newJoinPath
 dictGraph.__getattr__=newAttrPath
 dictGraph.filter=newFilterPath
 dictGraph.__rshift__=newJoinPath
+
+from poa import *
+TempIntervalDict.filter=newFilterPath
+TempIntervalDict.__rshift__=newJoinPath
+
+class AlignPathGraph(GraphPathGraph):
+    def __iter__(self):
+        "Wrapper around GraphPathGraph iterator, designed for alignments"
+        for i in GraphPathGraph.__iter__(self):
+            clipUnalignedRegions(i) # RESTRICT TO ACTUAL REGION OF ALIGNMENT
+            yield i
+
+def newAlignJoinPath(self,graph):
+    q=AlignPathGraph(self,self)
+    return q >> graph
+
+PathMapping.filter=newFilterPath
+PathMapping.__rshift__=newAlignJoinPath
