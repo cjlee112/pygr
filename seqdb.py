@@ -24,6 +24,7 @@ class ProteinSQLSequence(SQLSequence):
 
 seq_id_counter=0
 def new_seq_id():
+    global seq_id_counter
     seq_id_counter += 1
     return seq_id_counter-1
 
