@@ -121,9 +121,10 @@ class BlastIval(TupleO):
 class BlastHitInfo(TupleO):
     _attrcol={'blast_score':0,'e_value':1,'percent_id':2}
 
-def read_interval_alignment(ofile,container1,container2):
+def read_interval_alignment(ofile,container1,container2,al=None):
     "Read tab-delimited interval mapping between seqs from the 2 containers"
-    m=PathMapping()
+    if al==None:
+        al=PathMapping()
     hit_id = -1
     for line in ofile:
         t=line.split('\t')
@@ -138,9 +139,9 @@ def read_interval_alignment(ofile,container1,container2):
             s_ival=subject[ival.subject_start:ival.subject_start+ival.length]
             if ival.orientation<0: # SWITCH IT TO REVERSE ORIENTATION
                 s_ival = -s_ival
-            m += q_ival # MAKE SURE query IS IN THE TOP LEVEL INDEX
-            m[q_ival][s_ival]= hitInfo # SAVE THE ALIGNMENT AND EDGE INFO
-    return m
+            al += q_ival # MAKE SURE query IS IN THE TOP LEVEL INDEX
+            al[q_ival][s_ival]= hitInfo # SAVE THE ALIGNMENT AND EDGE INFO
+    return al
 
 
 class BlastDB(dict):
@@ -175,17 +176,17 @@ class BlastDB(dict):
             dict.__setitem__(self,id,s) # CACHE IT
             return s
 
-    def __mul__(self,seq):
+    def blast(self,seq,al=None,blastpath='blastall',
+              blastprog=None,expmax=0.001):
         "Run blast search for seq in database, return aligned intervals"
-        blastpath='blastall'
-        blastprog=blast_program(seq.seqtype(),self._seqtype)
-        expmax=0.001
+        if blastprog==None:
+            blastprog=blast_program(seq.seqtype(),self._seqtype)
         cmd='%s -d %s -p %s -e %f|parse_blast.awk -v mode=all' \
                               %(blastpath,self.filepath,blastprog,expmax)
         ifile,ofile=os.popen2(cmd)
         write_fasta(ifile,seq)
         ifile.close()
-        m=read_interval_alignment(ofile,{seq.id:seq},self)
+        al=read_interval_alignment(ofile,{seq.id:seq},self,al)
         if ofile.close()!=None:
             raise OSError('command %s failed' % cmd)
-        return m
+        return al
