@@ -1,4 +1,5 @@
 from seqref import *
+from seqdb import *
 
 class Align2:
     s1=''
@@ -45,8 +46,10 @@ class MafParser:
     """
     
     options={}
-    mAlign=PathMapping()
-    sequences={}
+    def __init__(self):
+        self.mAlign=PathMapping()
+        self.sequences={}
+        
     def setpar(self, arry):
         """internal function """
         for p in arry:
@@ -102,6 +105,53 @@ class MafParser:
             elif(la[0]=='a'):
 ##                print "reading alignment"
                 self.readalign(la[1:],filehandle)
+            else:
+##                print "end of records"
+                return
+            l=filehandle.readline()
+
+    def parseIntoDB(self,filehandle,cursor,alignTab,sequenceTab=None):
+        """parses the .maf filehandle into database using cursors"""
+        stored=False
+        l=filehandle.readline();
+        if l.split()[0]!='##maf':
+            return
+        else:
+            self.setpar(l.split()[1:])
+
+        l=filehandle.readline()
+        while l:
+            la = l.split();
+##            print la
+            if(len(la)==0 or la[0]=='#'):
+##                print "skipping"
+                1
+            elif(la[0]=='a'):
+##                print "reading alignment"
+                self.readalign(la[1:],filehandle)
+                if(not stored):
+                    createTableFromRepr(self.mAlign.repr_dict(),alignTab, cursor,
+                                        {'src_id':'varchar(30)','dest_id':'varchar(30)'})
+                    if(sequenceTab):
+                        known=[]
+                        for key in self.sequences:
+                            for entry in self.sequences[key].known_int():
+                                known+=[entry]
+                        createTableFromRepr(iter(known),sequenceTab,cursor,
+                                            {'src_id':'varchar(30)'})
+                        del known;
+                    stored=True
+                else:
+                    for row in self.mAlign.repr_dict():
+                         storeRow(cursor, alignTab, row)
+                    if(sequenceTab):
+                        for key in self.sequences:
+                            for row in self.sequences[key].known_int():
+                                storeRow(cursor,sequenceTab,row)
+                del self.mAlign
+                del self.sequences
+                self.mAlign=PathMapping()
+                self.sequences={}
             else:
 ##                print "end of records"
                 return
