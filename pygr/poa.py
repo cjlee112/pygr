@@ -222,7 +222,8 @@ def firstItem(aList):
 
 class IntervalTransform(object):
     "Represents coordinate transformation from one interval to another"
-    def __init__(self,srcPath,destPath,edgeInfo=None):
+    def __init__(self,srcPath,destPath,edgeInfo=None,
+                 edgeAttr=None,edgeIndex=None):
         "MAP FROM srcPath -> destPath"
         ori=srcPath.orientation * destPath.orientation
         self.scale= ori * len(destPath)/float(len(srcPath))
@@ -230,9 +231,16 @@ class IntervalTransform(object):
             self.offset=destPath.start-self.scale*srcPath.start
         else: # REVERSE ORI: MAP srcPath.start -> destPath.end-1
             self.offset=destPath.end-1-self.scale*srcPath.start
-        self.srcPath=srcPath.path
-        self.destPath=destPath.path
+        self.srcPath=srcPath
+        self.destPath=destPath
+        if edgeInfo!=None and edgeAttr!=None:
+            try: # GET EDGE INFO IF PRESENT
+                edgeInfo=getattr(edgeInfo,edgeAttr)
+            except AttributeError:
+                edgeInfo=None
         if edgeInfo!=None:
+            if edgeIndex!=None:
+                edgeInfo=edgeInfo[edgeIndex]
             self.edgeInfo=edgeInfo
 
     def xform(self,i):
@@ -240,7 +248,7 @@ class IntervalTransform(object):
         return int(self.scale*i+self.offset)
     def __call__(self,srcPath):
         "Apply this transformation to an interval"
-        return SeqPath(self.destPath,self.xform(srcPath.start),\
+        return SeqPath(self.destPath.path,self.xform(srcPath.start),\
                        self.xform(srcPath.end))
     def xformBack(self,i):
         "reverse transform a single integer value"
@@ -249,7 +257,7 @@ class IntervalTransform(object):
         return int(scale*i+offset)
     def reverse(self,destPath):
         "reverse transform an interval"
-        return SeqPath(self.srcPath,self.xformBack(destPath.start),
+        return SeqPath(self.srcPath.path,self.xformBack(destPath.start),
                        self.xformBack(destPath.end))
     def __getitem__(self,srcPath): # PROVIDE DICT-LIKE INTERFACE
         return self(srcPath)
@@ -299,10 +307,7 @@ class TempIntervalList(object):
             for destPath in destList:
                 d=self.targetPath*destPath
                 if d!=None: # PASSES TARGET CONSTRAINT
-                    if hasattr(destList,'edge'): # USE THE EDGE INFORMATION
-                        xform=IntervalTransform(srcPath,destPath,destList.edge[i])
-                    else: # NO EDGE INFORMATION TO BIND
-                        xform=IntervalTransform(srcPath,destPath)
+                    xform=IntervalTransform(srcPath,destPath,destList,'edge',i)
                     d2=d*xform(self.p * srcPath)
                     if d2!=None: # PASSES BOTH SOURCE AND TARGET CONSTRAINTS
                         s2=xform.reverse(d2)
@@ -442,10 +447,10 @@ class PathDict(object):
         for (p,p_contains,p_map) in ivals:
             if getItems==None: # iterkeys
                 yield p
-            elif getItems==True: # iteritems
-                yield (p,p_map) # FIRST RETURN THIS INTERVAL
-            else: # itervalues
+            elif getItems==False: # itervalues
                 yield p_map
+            else: # iteritems
+                yield (p,p_map) # FIRST RETURN THIS INTERVAL
             if p_contains!=None and len(p_contains)>0:
                 for p2 in self.walk(p_contains,getItems):
                     yield p2 # ALSO RETURN ALL INTERVALS CONTAINED IN IT
@@ -620,6 +625,9 @@ class AlignPathGraph(GraphPathGraph):
             clipUnalignedRegions(i) # RESTRICT TO ACTUAL REGION OF ALIGNMENT
             yield i
 
+GET_EDGE_INFO= 2 # CONSTANT FOR PASSING TO VARIOUS getItems ARGUMENTS
+# MEANS: GET EDGE INFORMATION AS TRANSFORM FROM ONE INTERVAL TO ANOTHER
+
 
 # REPRESENTS A SET OF PATHS OR AN ALIGNMENT OF PATHS
 # NEED TO ADD SUPPORT FOR INTERNAL PATH THAT ACTS AS HUB FOR MSA
@@ -672,14 +680,31 @@ class PathMapping(object):
             for ival in s.walk(getItems=getItems):
                 yield ival
 
-    def __iter__(self):
-        return self.walk()
-    def iterkeys(self):
-        return self.walk()
-    def itervalues(self):
-        return self.walk(getItems=False)
+    def itervalues(self,getItems=False):
+        "Get all values, items or edgeInfo for this mapping"
+        for s in self.pathDict.values():
+            s.update()
+            for ivals in s.walk(getItems=getItems):
+                if getItems:
+                    j=0
+                    for i in ivals[1]:
+                        if getItems==GET_EDGE_INFO: #RETURN XFORM
+                            yield IntervalTransform(ivals[0],i,
+                                                    ivals[1],'edge',j)
+                            j += 1
+                        else: # RETURN PAIR OF ALIGNED INTERVALS
+                            yield ivals[0],i
+                else: # JUST RETURN TARGET INTERVAL
+                    for i in ivals:
+                        yield i
+
     def iteritems(self):
-        return self.walk(getItems=True)
+        return self.itervalues(getItems=True)
+    __iter__=walk
+    iterkeys=walk
+    keys=walk
+    values=itervalues
+    items=iteritems
     filter=newFilterPath
     def __rshift__(self,graph):
         q=AlignPathGraph(self,self)
