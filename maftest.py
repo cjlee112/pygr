@@ -14,6 +14,8 @@ pt1=BlastDB(localCopy('/usr/tmp/ucsc_msa/pt1','unzip -p /data/yxing/databases/uc
 genomes={'hg17':hg17,'mm5':mm5, 'rn3':rn3, 'canFam1':cf1, 'danRer1':dr1, 'fr1':fr1,
          'galGal2':gg2, 'panTro1':pt1} # PREFIX DICTIONARY FOR THE UNION OF ALL OUR GENOMES
 genomeUnion=PrefixUnionDict(genomes) # GIVES ACCESS TO ID FORMAT 'panTro1.chr7'
+for db in genomes.values(): # FORCE ALL OUR DATABASES TO USE INTERVAL CACHING
+    db.seqClass=BlastSequenceCache
 
 (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna,protein,
  clusterExons,clusterSplices)=loadTestJUN03() # GET OUR USUAL SPLICE GRAPH
@@ -26,6 +28,13 @@ alTable.objclass() # USE STANDARD TupleO OBJECT FOR EACH ROW
 
 c=clusters['Hs.10267'] # GET DATA FOR THIS CLUSTER ON chr22
 loadCluster(c,exons,splices,clusterExons,clusterSplices,spliceGraph,alt5Graph,alt3Graph)
+# THE FOLLOWING CODE IS A TEST OF LOADING ALIGNMENT OF WHOLE GENOMIC CLUSTER...
+# MAKES THE BlastSequenceCache MUCH FASTER, BECAUSE IT KNOWS THE WHOLE REGION TO PRE-LOAD...
+#for as in cm[genomic_seq[c.cluster_id]].seq_dict().values():
+#    g=as.destPath[as.destMin:as.destMax] # GET MERGED INTERVAL
+#    maf=MAFStoredPathMapping(g,alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
+#    break
+#maf=MAFStoredPathMapping(cm[cg],alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
 for e in c.exons:
     for g in cm[e]: # GET A GENOMIC INTERVAL ALIGNED TO OUR EXON
         print 'exon interval:',repr(g)
