@@ -179,6 +179,15 @@ class SeqPath(object):
         else:
             return '%s%s[%d:%d]' % (ori,self.path.id,self.start,self.end)
 
+    def repr_dict(self):
+        "Return compact dictionary representing this interval"
+        try:
+            id=self.path.id
+        except AttributeError:
+            id=self.id
+        return {'id':id,'start':self.start,'end':self.end,'ori':self.orientation}
+
+
 
 class LengthDescriptor(object):
     def __init__(self,attr):
@@ -272,6 +281,18 @@ class IntervalTransform(object):
         except (KeyError,AttributeError):
             raise AttributeError('%s does not have attribute %s'
                                  %(str(self),attr))
+
+    def repr_dict(self):
+        s=self.srcPath.repr_dict() # GET REPR OF BOTH INTERVALS
+        d=self.destPath.repr_dict()
+        out={}
+        for k,val in s.items(): # ADD PREFIX TO EACH ATTR
+            out['src_'+k]=val
+            out['dest_'+k]=d[k]
+        try: e=self.edgeInfo.repr_dict() # GET EDGE INFO IF PRESENT
+        except AttributeError: pass
+        else: out.update(e) # SAVE EDGE INFO DATA
+        return out
 
 def clipUnalignedRegions(p):
     """p[-1] is the intersection of all alignment constraints,
@@ -413,8 +434,7 @@ class PathDict(object):
         l=len(leftSort)
         while j<l:
             if leftSort[i][0]==leftSort[j][0]: # IDENTICAL INTERVALS, SO MERGE
-                for k in leftSort[j][1]: # COPY j'S CONTENTS TO i
-                    leftSort[i][1].append(k)
+                leftSort[i][1].extend(leftSort[j][1]) # COPY j'S CONTENTS TO i
             else:
                 i+=1
                 if i<j:
@@ -720,6 +740,11 @@ class PathMapping(object):
     def __rshift__(self,graph):
         q=AlignPathGraph(self,self)
         return q >> graph
+
+    def repr_dict(self):
+        "Generate compact dict representation of this mapping"
+        for e in self.edges():
+            yield e.repr_dict()
 
 class PathMapping2(PathMapping): # STORES BIDIRECTIONAL INDEX
     def __setitem__(self,p,val):
