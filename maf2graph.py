@@ -16,6 +16,7 @@ class Align2:
         begin=0
         gaps1=0
         gaps2=0
+        end=0
         for end in range(len(self.s1)):
             if(self.s1[end]=='-' or self.s2[end]=='-'):
                 if(begin<end):
@@ -25,6 +26,8 @@ class Align2:
                     gaps1=gaps1+1
                 if(self.s2[end]=='-'):
                     gaps2=gaps2+1
+        if end==0:
+            return
         end=end+1
         if(begin<end):
             yield ((begin-gaps1,end-gaps1,self.s1[begin:end]),(begin-gaps2,end-gaps2,self.s2[begin:end]))
