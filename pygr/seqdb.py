@@ -1,6 +1,8 @@
 import os
+import shelve
 from sqlgraph import *
 from poa import *
+
 
 class SQLSequence(SQLRow,NamedSequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
@@ -31,7 +33,7 @@ def new_seq_id():
 
 def write_fasta(ofile,s,chunk=60,id=None):
     "Trivial FASTA output"
-    if id==None:
+    if id is None:
         try:
             id=s.id
         except AttributeError:
@@ -49,7 +51,7 @@ def write_fasta(ofile,s,chunk=60,id=None):
     return id # IN CASE CALLER WANTS TEMP ID WE MAY HAVE ASSIGNED
 
 def read_fasta(ifile,onlyReadOneLine=False):
-    "Get one sequence at a time from stream ofile"
+    "Get one sequence at a time from stream ifile"
     id=None
     title=''
     seq=''
@@ -67,12 +69,34 @@ def read_fasta(ifile,onlyReadOneLine=False):
     if id!=None and len(seq)>0:
         yield id,title,seq
 
+def read_fasta_lengths(ifile):
+    "Generate sequence ID,length from stream ifile"
+    id=None
+    seqLength=0
+    for line in ifile:
+        if '>'==line[0]:
+            if id is not None and seqLength>0:
+                yield id,seqLength
+            id=line[1:].split()[0]
+            seqLength=0
+        elif id is not None: # READ SEQUENCE
+            for word in line.split(): # GET RID OF WHITESPACE
+                seqLength += len(word)
+    if id is not None and seqLength>0:
+        yield id,seqLength
 
 
+def store_seqlen_dict(d,ifile,idFilter=None):
+    "store sequence lengths in a dictionary"
+    for id,seqLength in read_fasta_lengths(ifile):
+        if idFilter is not None:
+            id=idFilter(id) # HAVE TO CLEAN UP BLAST'S MESSY IDs
+        d[id]=seqLength # SAVE TO DICTIONARY
+        
 
 def fastacmd_seq(filepath,id,start=None,end=None):
     "Get complete sequence or slice from a BLAST formatted database"
-    if start!=None: # USE ABILITY TO GRAB A SLICE OF THE SEQUENCE
+    if start is not None: # USE ABILITY TO GRAB A SLICE OF THE SEQUENCE
         cmd='fastacmd -d %s -s %s -L %d,%d' % (filepath,id,start+1,end)
     else:
         cmd='fastacmd -d %s -s %s' % (filepath,id)
@@ -82,7 +106,7 @@ def fastacmd_seq(filepath,id,start=None,end=None):
     for line in ofile:
         for word in line.split(): # GET RID OF WHITESPACE...
             s += word
-    if ofile.close()!=None:
+    if ofile.close() is not None:
         raise OSError('command %s failed' % cmd)
     return s
 
@@ -99,14 +123,13 @@ class BlastSequence(NamedSequenceBase):
         self.db=db
         self.id=id
         NamedSequenceBase.__init__(self)
+    def __len__(self):
+        "Use persistent storage of sequence lengths to avoid reading whole sequence"
+        return self.db.seqLenDict[self.id]
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return fastacmd_seq(self.db.filepath,self.id,start,end)
 
-# FOR LONG SEQUENCES, NEED TO CREATE A FLAVOR OF BlastSequence THAT
-# HAS A _seq_len_attr INDICATING AN ATTR TO READ LENGTH OF SEQUENCE FROM,
-# WITHOUT HAVING TO GET THE ACTUAL SEQUENCE!
-# MAY WANT TO RETHINK _seq_len_attr, USE THE __len__ METHOD TO BE MORE GENERAL!!
 
 def blast_program(query_type,db_type):
     progs= {DNA_SEQTYPE:{DNA_SEQTYPE:'blastn', PROTEIN_SEQTYPE:'blastx'},
@@ -136,7 +159,7 @@ class BlastHitInfo(TupleO):
 
 def read_interval_alignment(ofile,container1,container2,al=None):
     "Read tab-delimited interval mapping between seqs from the 2 containers"
-    if al==None:
+    if al is None:
         al=PathMapping()
     hit_id = -1
     for line in ofile:
@@ -159,12 +182,12 @@ def read_interval_alignment(ofile,container1,container2,al=None):
 def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
     ifile,ofile=os.popen2(cmd+'|parse_blast.awk -v mode=all')
-    if seqString==None:
+    if seqString is None:
         seqString=seq
     write_fasta(ifile,seqString,id=seq.id)
     ifile.close()
     al=read_interval_alignment(ofile,{seq.id:seq},seqDB,al)
-    if ofile.close()!=None:
+    if ofile.close() is not None:
         raise OSError('command %s failed' % cmd)
     return al
 
@@ -187,6 +210,7 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall'):
         raise OSError('command '+cmd+' failed')
     return seq_masked
 
+
 class BlastDB(dict):
     "Container representing Blast database"
     seqClass=BlastSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
@@ -194,18 +218,14 @@ class BlastDB(dict):
         "format database and build indexes if needed"
         self.filepath=filepath
         dict.__init__(self)
-        if(os.path.isfile(filepath+'.psd')):
-            self._seqtype=PROTEIN_SEQTYPE
-            return
-        elif(os.path.isfile(filepath+'.nsd')):
-            self._seqtype=DNA_SEQTYPE
-            return
-        ofile=file(filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
-        for id,title,seq in read_fasta(ofile,onlyReadOneLine=True):
-            self._seqtype=guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
-            break # JUST READ ONE SEQUENCE
-        ofile.close()
-         # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
+        self.set_seqtype()
+        self.seqLenDict=shelve.open(filepath+'.seqlen')
+        if len(self.seqLenDict)==0: # READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+            ifile,idFilter=self.raw_fasta_stream()
+            print 'Building sequence length index...'
+            store_seqlen_dict(self.seqLenDict,ifile,idFilter)
+            ifile.close()
+        # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
         if not os.access(filepath+'.nsd',os.R_OK) \
                and not os.access(filepath+'.psd',os.R_OK):
             # ATTEMPT TO BUILD BLAST DATABASE & INDEXES
@@ -215,7 +235,37 @@ class BlastDB(dict):
             print 'Building index:',cmd
             if os.system(cmd)!=0: # BAD EXIT CODE, SO COMMAND FAILED
                 raise OSError('command %s failed' % cmd)
-        
+
+    def set_seqtype(self):
+        "Determine whether this database is DNA or protein"
+        if os.path.isfile(self.filepath+'.psd'):
+            self._seqtype=PROTEIN_SEQTYPE
+        elif os.path.isfile(self.filepath+'.nsd'):
+            self._seqtype=DNA_SEQTYPE
+        else:
+            ofile=file(self.filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
+            for id,title,seq in read_fasta(ofile,onlyReadOneLine=True):
+                self._seqtype=guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
+                break # JUST READ ONE SEQUENCE
+            ofile.close()
+
+    def raw_fasta_stream(self):
+        'return a stream of fasta-formatted sequences, and ID filter function if needed'
+        try: # DEFAULT: JUST READ THE FASTA FILE, IF IT EXISTS
+            return file(self.filepath),None
+        except IOError: # TRY READING FROM FORMATTED BLAST DATABASE
+            cmd='fastacmd -D -d '+self.filepath
+            return os.popen(cmd),lambda id:id.split('|')[1] #BLAST ADDS lcl| TO id
+
+    def __iter__(self):
+        'generate all IDs in this database'
+        for id in self.seqLenDict:
+            yield id
+
+    def __len__(self):
+        "number of total entries in this database"
+        return len(self.seqLenDict)
+
     def __getitem__(self,id):
         "Get sequence matching this ID, using dict as local cache"
         try:
@@ -228,7 +278,7 @@ class BlastDB(dict):
     def blast(self,seq,al=None,blastpath='blastall',
               blastprog=None,expmax=0.001,maxseq=None):
         "Run blast search for seq in database, return aligned intervals"
-        if blastprog==None:
+        if blastprog is None:
             blastprog=blast_program(seq.seqtype(),self._seqtype)
         cmd='%s -d %s -p %s -e %e'  %(blastpath,self.filepath,
                                       blastprog,float(expmax))
@@ -240,9 +290,9 @@ class BlastDB(dict):
         masked_seq=repeat_mask(seq)  # MASK REPEATS TO lowercase
         cmd='%s %s -d %s -D 2 -e %e' % (blastpath,maskOpts,self.filepath,
                                    float(expmax))
-        if maxseq!=None:
+        if maxseq is not None:
             cmd+=' -v %d' % maxseq
-        if minIdentity!=None:
+        if minIdentity is not None:
             cmd+=' -p %f' % float(minIdentity)
         return process_blast(cmd,seq,self,al,seqString=masked_seq)
 
@@ -253,7 +303,7 @@ class StoredPathMapping(PathMapping):
         self.table=table
         self.srcSet=srcSet
         self.destSet=destSet
-        if edgeClass!=None:
+        if edgeClass is not None:
             self._edgeClass=edgeClass
 
     def __getitem__(self,p):
@@ -263,12 +313,12 @@ class StoredPathMapping(PathMapping):
         except KeyError: # TRY TO GET IT FROM THE STORED TABLE
             self += p # ADD PathDict FOR THIS SEQUENCE
             edgeAttr=None # DEFAULT: NO EDGE INFORMATION
-            if self._edgeClass!=None:
+            if self._edgeClass is not None:
                 for edgeAttr in self._edgeClass._attrcol: break
             for ival in self.table[p.id]:
                 srcPath=p[ival.src_start:ival.src_end]
                 destPath=self.destSet[ival.dest_id][ival.dest_start:ival.dest_end]
-                if edgeAttr!=None and hasattr(ival,edgeAttr):
+                if edgeAttr is not None and hasattr(ival,edgeAttr):
                     ei=len(self._edgeClass._attrcol)*[None] # RIGHT LENGTH LIST
                     for a,i in self._edgeClass._attrcol.items():
                         ei[i]=getattr(ival,a) # CONSTRUCT ATTRS IN RIGHT ORDER
