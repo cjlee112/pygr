@@ -210,10 +210,10 @@ class NamedSequenceBase(SeqPath):
     orientation=1
     def __init__(self):
         self.path=self
-        try: # USE ATTRIBUTE TO GET SEQ LENGTH DIRECTLY
-            self.end=getattr(self,getattr(self,'_seq_len_attr'))
-        except AttributeError:
-            self.end=len(self.seq) # COMPUTE IT FROM THE SEQUENCE
+        self.end=len(self)
+
+    def __len__(self):
+        return len(self.seq) # COMPUTE IT FROM THE SEQUENCE
 
     def strslice(self,start,end):
         return self.seq[start:end]
