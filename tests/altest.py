@@ -10,32 +10,42 @@ orf=s3[0:15:3]  # EXTENDED SLICE NOTATION MEANS start:stop:stepsize
 print orf,orf.start,orf.end
 for codon in orf[1:3]: # PRINT 1ST THREE CODONS OF orf
     print codon.start,str(codon)
-codon=orf[0] # GET THE 1ST CODON IN orf
-while True: # LOOP OVER ALL CODONS IN orf
-    print codon.start,codon.end,codon.step,str(codon)
-    codon=firstItem(codon.next) # next IS DICTIONARY OF NODES WE ARE LINKED TO
-    if codon==None: # REACHED END OF THE PATH...
-        break
+## codon=orf[0] # GET THE 1ST CODON IN orf
+## while True: # LOOP OVER ALL CODONS IN orf
+##     print codon.start,codon.end,codon.step,str(codon)
+##     codon=firstItem(codon.next) # next IS DICTIONARY OF NODES WE ARE LINKED TO
+##     if codon==None: # REACHED END OF THE PATH...
+##         break
+
+
+al=PathMapping() # CONSTRUCT A FUNKY LITTLE PAIR OF ALIGNMENTS
+al[s[:13]]=s2[:13]
+al[s[18:25]]=s2[13:20]
+al2=PathMapping()
+al2[s2[0:5]]=s3[0:5]
+al2[s2[5:10]]=s3[7:12]
+al2[s2[10:15]]=s3[14:19]
+al2[s2[15:20]]=s3[21:26]
+
+print 'Now trying path-based join...'
+for i in al>>al2:
+    print repr(i[0]),repr(i[1]),repr(i[2])
+
+class foo(object):
+    pass
+edge=foo()
+edge.blastScore=27
+
+al=PathMapping()
+al += s # PREPARE FOR ADDING EDGES FROM s
+al[s[:10]][s2[10:20]]=edge
+for i in al[s][s2]: # get all the edges from s -> s2
+    print 'blastScore:',repr(i.srcPath),repr(i.destPath),i.blastScore
 
 iv=s[0:10] # SLICE OF SEQUENCE IS PATH
 iv2=s2[7:17]
 iv2b=s2[10:20]
 iv3=s3[1:11]
-
-al=PathMapping()
-al[iv]=iv2
-al2=PathMapping() # TRY ALIGNMENT WITH REVERSED ORIENTATION
-al2[iv2b]= iv3 
-print 'Now trying path-based join...'
-for i in al>>al2: # EXAMPLE OF USING EDGE INFO: STORES INTERVAL MAPPING TRANSFORM
-    j=i.edge[-1].reverse(i[-1]) # MAP LAST INTERVAL BACK TO PREVIOUS INTERVALS
-    k=i.edge[-2].reverse(j)
-    print repr(k),repr(j),repr(i[-1]) # THESE ARE THE ALIGNED INTERVALS!
-
-for i in al>>al2:
-    clipUnalignedRegions(i) # THIS DOES EXACTLY THE SAME THING...
-    print repr(i[0]),repr(i[1]),repr(i[2])
-
 iva=s[7:20]
 
 # FIND INTERSECTION OF TWO PATH SETS
@@ -106,20 +116,13 @@ for i in pd.iterkeys():
 
 
 
-def lineIter(fp): # ITERATOR FOR READING FILE ONE LINE AT A TIME
-    while 1:
-        l=fp.readline()
-        if l=='':
-            break # EXITING FROM GENERATOR AUTOMATICALLY RAISES StopIteration
-        else:
-            yield l
 
 # DO A TEST ON ALISSA'S ISOFORM TO SWISSPROT FEATURES DATASET
 fp=open('best_hits_B.tmp','r') # READ ALIGNMENT OF ISOFORMS TO SWISSPROT
 mRNA_swiss=PathMapping()
 swiss_mRNA=PathMapping()
 n1=0
-for line in lineIter(fp):
+for line in fp:
     l=line.split()
     i1=SeqPath(l[0],int(l[2]),int(l[3])+1)
     i2=SeqPath(l[1],int(l[4]),int(l[5])+1)
@@ -131,7 +134,7 @@ fp.close()
 fp=open('annotations_B.tmp','r') # READ ALIGNMENT OF SWISSPROT TO FEATURES
 swiss_features=PathMapping()
 n2=0
-for line in lineIter(fp):
+for line in fp:
     l=line.split()
     i1=SeqPath(l[1],int(l[2])-1,int(l[3]))
     i2=SeqPath(l[5],0,int(l[3])-int(l[2])+1)
