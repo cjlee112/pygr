@@ -88,10 +88,14 @@ class SeqPath(object):
     def __cmp__(self,other):
         if not isinstance(other,SeqPath):
             return -1
-        if id(self.path)!=id(other.path):
+        if id(self.path)==id(other.path) or \
+               (isinstance(self.path,types.StringType) and
+                isinstance(other.path,types.StringType) and
+                self.path==other.path):
+            return cmp((self.start,self.end),(other.start,other.end))
+        else:
             raise TypeError('SeqPath not comparable, not on same path: %s,%s'
                             % (self.path,other.path))
-        return cmp((self.start,self.end),(other.start,other.end))
     
     def __contains__(self,k):
         # PUT OTHER LOGIC HERE FOR CHECKING WHETHER INTERVAL IS CONTAINED...
@@ -635,6 +639,17 @@ class PathMapping(object):
 
     def __setitem__(self,p,val):
         self.savePath(p,val)
+
+    def __iadd__(self,p):
+        """Make sure sequence p has an entry in this top level dict, so
+           second-layer setitem will work..."""
+        if isinstance(p,SeqPath):
+            if p.path not in self.pathDict: # CREATE A NEW PATH DICT IF NEEDED
+                self.pathDict[p.path]=self._pathDictClass(self,p.path)
+            return self
+        else:
+            raise TypeError('Cannot add object of this type')
+            
 
     def __mul__(self,other): # PERFORMS INTERSECTION OF PATHS
         if isinstance(other,SeqPath):
