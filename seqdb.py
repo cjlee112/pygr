@@ -203,8 +203,6 @@ class BlastDB(dict):
             print 'Building index:',cmd
             if os.system(cmd)!=0: # BAD EXIT CODE, SO COMMAND FAILED
                 raise OSError('command %s failed' % cmd)
-        else:
-            fp.close()
         
     def __getitem__(self,id):
         "Get sequence matching this ID, using dict as local cache"
