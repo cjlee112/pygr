@@ -229,6 +229,8 @@ class BlastDB(dict):
             print 'Building sequence length index...'
             store_seqlen_dict(self.seqLenDict,ifile,idFilter)
             ifile.close()
+            self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
+            self.seqLenDict=shelve.open(filepath+'.seqlen') # REOPEN IT FOR USE
         # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
         if not os.access(filepath+'.nsd',os.R_OK) \
                and not os.access(filepath+'.psd',os.R_OK):
