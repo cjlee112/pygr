@@ -7,6 +7,10 @@ class SQLSequence(SQLRow,NamedSequenceBase):
     def __init__(self,table,id):
         SQLRow.__init__(self,table,id)
         NamedSequenceBase.__init__(self)
+    def strslice(self,start,end):
+        "Efficient access to slice of a sequence, useful for huge contigs"
+        return self._select('substring(%s FROM %d FOR %d)'
+                            %(self._attrSQL('seq'),start+1,end-start))
 
 class DNASQLSequence(SQLSequence):
     _seqtype=DNA_SEQTYPE
@@ -54,20 +58,28 @@ class BlastIval(TupleO):
 
 
 
+
+def fastacmd_seq(filepath,id,start=None,end=None):
+    "Get complete sequence or slice from a BLAST formatted database"
+    if start!=None: # USE ABILITY TO GRAB A SLICE OF THE SEQUENCE
+        cmd='fastacmd -d %s -s %s -L %d,%d' % (filepath,id,start+1,end)
+    else:
+        cmd='fastacmd -d %s -s %s' % (filepath,id)
+    ofile=os.popen(cmd)
+    ofile.readline() # SKIP TITLE LINE
+    s=''
+    for line in ofile:
+        for word in line.split(): # GET RID OF WHITESPACE...
+            s += word
+    if ofile.close()!=None:
+        raise OSError('command %s failed' % cmd)
+    return s
+
+
 class BlastSeqDescriptor(object):
     "Get sequence from a blast formatted database for obj.id"
     def __get__(self,obj,objtype):
-        cmd='fastacmd -d %s -s %s' % (obj.db.filepath,obj.id)
-        ofile=os.popen(cmd)
-        ofile.readline() # SKIP TITLE LINE
-        s=''
-        for line in ofile:
-            for word in line.split(): # GET RID OF WHITESPACE...
-                s += word
-        if ofile.close()!=None:
-            raise OSError('command %s failed' % cmd)
-        return s
-
+        return fastacmd_seq(obj.db.filepath,obj.id)
 
 class BlastSequence(NamedSequenceBase):
     "Represents a sequence in a blast database, w/o keeping seq in memory"
@@ -76,6 +88,9 @@ class BlastSequence(NamedSequenceBase):
         self.db=db
         self.id=id
         NamedSequenceBase.__init__(self)
+    def strslice(self,start,end):
+        "Efficient access to slice of a sequence, useful for huge contigs"
+        return fastacmd_seq(self.db.filepath,self.id,start,end)
 
 class BlastDB(dict):
     "Container representing Blast database"
