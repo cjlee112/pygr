@@ -43,7 +43,7 @@ def getSpliceGraphFromDB(dbgroup,loadAll=False):
         tables=suffixSubset(tables,dbgroup.suffix) # SET OF TABLES ENDING IN JUN03
         idDict=indexIDs(tables) # CREATE AN INDEX OF THEIR PRIMARY KEYS
     for t in dbgroup.values():
-        if '.' in t and t not in tables: # THIS TABLE COMES FROM ANOTHER DATABASE...
+        if t is not None and '.' in t and t not in tables: # THIS TABLE COMES FROM ANOTHER DATABASE...
             tables[t]=SQLTable(t,cursor) # SO GET IT FROM OTHER DATABASE
 
     # LOAD DATA & BUILD THE SPLICE GRAPH
