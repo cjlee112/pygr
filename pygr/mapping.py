@@ -2,6 +2,32 @@
 
 from schema import *
 
+class PathList(list):
+    """Internal representation for storing both nodes and edges as list
+    So filter functions can see both nodes and edges"""
+    def __init__(self,nodes=None,edges=None):
+        if nodes!=None:
+            list.__init__(self,nodes)
+        else:
+            list.__init__(self)
+        if edges!=None:
+            self.edge=list(edges)
+        else:
+            self.edge=[]
+
+    def append(self,val):
+        list.append(self,val)
+        self.edge.append(val)
+
+    def extend(self,l):
+        list.extend(self,l) # EXTEND TOP-LEVEL LIST AS USUAL
+        try: # EXTEND OUR EDGE LIST AS WELL
+            self.edge.extend(l.edge)
+        except AttributeError: #IF l HAS NO EDGES, PAD OUR EDGE LIST WITH Nones
+            self.edge.extend(len(l)*[None])
+
+
+
 class Edge(list):
     "Interface to edge information."
     isDirected=False
