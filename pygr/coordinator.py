@@ -24,7 +24,8 @@ def get_server(host,port):
 
 
 def safe_dispatch(self,name,args):
-    "restrict calls to selected methods, and trap all exceptions to keep server alive!"
+    """restrict calls to selected methods, and trap all exceptions to
+    keep server alive!"""
     import datetime
     if name in self.xmlrpc_methods: # MAKE SURE THIS METHOD IS EXPLICITLY ALLOWED
         try: # TRAP ALL ERRORS TO PREVENT OUR SERVER FROM DYING
@@ -39,7 +40,7 @@ def safe_dispatch(self,name,args):
         except: # METHOD RAISED AN EXCEPTION, SO PRINT TRACEBACK TO STDERR
             traceback.print_exc(self.max_tb,sys.stderr)
     else:
-        print >>sys.stderr,"safe_dispatch: attempt to call unregistered method %s" % name
+        print >>sys.stderr,"safe_dispatch: blocked unregistered method %s" % name
     return False # THIS RETURN VALUE IS CONFORMABLE BY XMLRPC...
     
 
@@ -367,7 +368,7 @@ class Coordinator(object):
                     'get_status':0,'set_max_clients':0,'stop_client':0}
     _dispatch=safe_dispatch # RESTRICT XMLRPC TO JUST THE METHODS LISTED ABOVE
     max_tb=10 # MAXIMUM #STACK LEVELS TO PRINT IN TRACEBACKS
-    max_ssh_errors=10 #MAXIMUM #ERRORS TO PERMIT IN A ROW BEFORE QUITTING
+    max_ssh_errors=5 #MAXIMUM #ERRORS TO PERMIT IN A ROW BEFORE QUITTING
     python='python' # DEFAULT EXECUTABLE FOR RUNNING OUR CLIENTS
     def __init__(self,name,script,it,resources,port=8888,priority=1.0,rc_url=None,
                  errlog=False):
@@ -379,6 +380,10 @@ class Coordinator(object):
         self.errlog=errlog
         self.host=os.uname()[1]
         self.user=os.environ['USER']
+        try: # MAKE SURE ssh-agent IS AVAILABLE TO US BEFORE LAUNCHING LOTS OF PROCS
+            a=os.environ['SSH_AGENT_PID']
+        except KeyError:
+            raise OSError(1,'SSH_AGENT_PID not found.  No ssh-agent running?')
         self.dir=os.getcwd()
         self.n=0
         self.nsuccess=0
@@ -397,6 +402,7 @@ class Coordinator(object):
         self.already_done={}
         self.stop_clients={}
         self.logfile={}
+        self.clients_starting={}
         try: # LOAD LIST OF IDs ALREADY SUCCESSFULLY PROCESSED, IF ANY
             f=file(name+'.success','r')
             for line in f:
@@ -427,24 +433,28 @@ class Coordinator(object):
             print >>sys.stderr,'start_client: blocked, too many already', \
                   len(self.clients),self.max_clients
             return # DON'T START ANOTHER PROCESS, TOO MANY ALREADY
+        try:
+            if len(self.clients_starting[host])>self.max_ssh_errors:
+                print >>sys.stderr,\
+                      'start_client: blocked, too many unstarted jobs:',\
+                      host,self.clients_starting[host]
+                return # DON'T START ANOTHER PROCESS, host MAY BE DEAD...
+        except KeyError: # NO clients_starting ON host, GOOD!
+            pass
         logfile='/usr/tmp/%s_%d.log' % (self.name,self.iclient)
         cmd='cd %s;%s %s --url=http://%s:%d --rc_url=%s --logfile=%s %s' \
              % (self.dir,self.python,self.script,self.host,self.port,
                 self.rc_url,logfile,self.name)
-        ssh_cmd="ssh %s '(%s) </dev/null >&%s &'" % (host,cmd,logfile)
+        ssh_cmd="ssh %s '(%s) </dev/null >&%s &' &" % (host,cmd,logfile)
         print >>sys.stderr,'SSH: '+ssh_cmd
-        self.logfile[logfile]=(host,False) # TEMPORARY ENTRY FOR THIS LOGFILE
-        self.iclient += 1
-        try: # RUN OUR PYTHON SCRIPT,  BACKGROUND IT!!!
-            os.system(ssh_cmd) # LAUNCH THE SSH PROCESS, SHOULD RETURN IMMEDIATELY
-        except:
-            print >>sys.stderr,"unable to ssh to host %s. Failed command:\n%s" \
-                  % (host,ssh_cmd)
-            self.nssh_errors+=1
-            if self.nssh_errors>self.max_ssh_errors:
-                self.unregister('too many SSH errors in a row')
-        else:
-            self.nssh_errors=0
+        self.logfile[logfile]=[host,False,self.iclient] # NO PID YET
+        try: # RECORD THIS CLIENT AS STARTING UP
+            self.clients_starting[host][self.iclient]=time.time()
+        except KeyError: # CREATE A NEW HOST ENTRY
+            self.clients_starting[host]={self.iclient:time.time()}
+        # RUN SSH IN BACKGROUND TO AVOID WAITING FOR IT TO TIMEOUT!!!
+        os.system(ssh_cmd) # LAUNCH THE SSH PROCESS, SHOULD RETURN IMMEDIATELY
+        self.iclient += 1 # ADVANCE OUR CLIENT COUNTER
 
     def start_processors(self,hosts):
         "start processors on the list of hosts using SSH transport"
@@ -465,10 +475,14 @@ class Coordinator(object):
 
     def register_client(self,host,pid,logfile):
         'XMLRPC call to register client hostname and PID as starting_up'
-        self.clients[(host,pid)]=0
-        if logfile is not False: # RECORD THE PROVENANCE OF THIS LOGFILE
-            self.logfile[logfile]=(host,pid)
         print >>sys.stderr,'register_client: %s:%d' %(host,pid)
+        self.clients[(host,pid)]=0
+        try:
+            self.logfile[logfile][1]=pid # SAVE OUR PID
+            iclient=self.logfile[logfile][2] # GET ITS CLIENT ID
+            del self.clients_starting[host][iclient] #REMOVE FROM STARTUP LIST
+        except KeyError:
+            print >>sys.stderr,'no client logfile?',host,pid,logfile
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
 
     def unregister_client(self,host,pid,message):
@@ -592,22 +606,27 @@ class Processor(object):
     max_errors_in_a_row=10 # LOOKS LIKE NOTHING WORKS HERE, SO QUIT!
     max_tb=10 # DON'T SHOW MORE THAN 10 STACK LEVELS FOR A TRACEBACK
     report_frequency=600
-    def __init__(self,url="http://localhost:8888",rc_url='http://localhost:5000',
-                 logfile=False):
+    overload_max=5 # MAXIMUM NUMBER OF OVERLOAD EVENTS IN A ROW BEFORE WE EXIT
+    def __init__(self,url="http://localhost:8888",
+                 rc_url='http://localhost:5000',logfile=False):
         self.url=url
         self.logfile=logfile
         self.server=xmlrpclib.ServerProxy(url)
+        self.rc_url=rc_url
         self.rc_server=xmlrpclib.ServerProxy(rc_url)
         self.host=os.uname()[1]
         self.pid=os.getpid()
         self.user=os.environ['USER']
         self.success_id=False
         self.pending_id=False
-
+        self.exit_message='MYSTERY-EXIT please debug'
+        self.overload_count=0
+        
     def register(self):
         "add ourselves to list of processors for this server"
         self.server.register_client(self.host,self.pid,self.logfile)
         self.rc_server.register_processor(self.host,self.pid,self.url)
+        print >>sys.stderr,'REGISTERED:',self.url,self.rc_url
 
     def unregister(self,message):
         "remove ourselves from list of processors for this server"
@@ -615,6 +634,7 @@ class Processor(object):
             self.report_success(self.success_id)
         self.server.unregister_client(self.host,self.pid,message)    
         self.rc_server.unregister_processor(self.host,self.pid,self.url)
+        print >>sys.stderr,'UNREGISTERED:',self.url,self.rc_url,message
 
     def __iter__(self):
         return self
@@ -643,7 +663,8 @@ class Processor(object):
         "report an error using traceback.print_exc()"
         import StringIO
         err_report=StringIO.StringIO()
-        traceback.print_exc(self.max_tb,err_report)
+        traceback.print_exc(self.max_tb,sys.stderr) #REPORT TB TO OUR LOG
+        traceback.print_exc(self.max_tb,err_report) #REPORT TB TO SERVER
         self.server.report_error(self.host,self.pid,id,err_report.getvalue())
         err_report.close()
 
@@ -654,8 +675,11 @@ class Processor(object):
         ofile.close()
         load=float(line.split()[-3][:-1]) # GET RID OF THE TERMINAL ,
         if self.rc_server.report_load(self.host,self.pid,load) is False:
-            self.unregister('load too high')
-            sys.exit()
+            self.overload_count+=1 # ARE WE CONSISTENTLY OVERLOADED FOR EXTENDED PERIOD?
+            if self.overload_count>self.overload_max: # IF EXCEEDED LIMIT, EXIT
+                self.exit('load too high')
+        else:
+            self.overload_count=0
 
     def open_resource(self,resource,mode):
         "get a file object for the requested resource, opened in mode"
@@ -676,13 +700,17 @@ class Processor(object):
         "lock the specified resource rule for this host, so it's safe to build it"
         rule=self.rc_server.acquire_rule(self.host,self.pid,resource)
         if rule is False: # NO SUCH RESOURCE?!?
-            self.unregister('invalid resource: '+resource)
-            sys.exit()
+            self.exit('invalid resource: '+resource)
         return rule
 
     def release_rule(self,resource):
         "release our lock on this resource rule, so others can use it"
         self.rc_server.release_rule(self.host,self.pid,resource)
+
+    def exit(self,message):
+        "save message for self.unregister() and force exit"
+        self.exit_message=message
+        raise SystemExit
         
     def run_all(self,resultGenerator,**kwargs):
         "run until all task IDs completed, trap & report all errors"
@@ -690,25 +718,32 @@ class Processor(object):
         it=resultGenerator(self,**kwargs) # GET ITERATOR FROM GENERATOR
         report_time=time.time()
         self.register() # REGISTER WITH RESOURCE CONTROLLER & COORDINATOR
-        while 1:
-            try: # TRAP AND REPORT ALL ERRORS IN USER CODE
-                id=it.next() # THIS RUNS USER CODE FOR ONE ITERATION
-                self.success_id=id  # MARK THIS AS A SUCCESS...
-                errors_in_a_row=0
-            except StopIteration: # NO MORE TASKS FOR US...
-                break
-            except SystemExit: # sys.exit() CALLED
-                raise  # WE REALLY DO WANT TO EXIT.
-            except: # MUST HAVE BEEN AN ERROR IN THE USER CODE
-                self.report_error(self.pending_id) # REPORT THE PROBLEM
-                errors_in_a_row +=1
-                if errors_in_a_row>=self.max_errors_in_a_row:
-                    self.unregister('too many errors')
-                    return
-            if time.time()-report_time>self.report_frequency:
-                self.report_load() # SEND A ROUTINE LOAD REPORT
-                report_time=time.time()
-        self.unregister('run_all exit')
+        try: # TRAP ERRORS BOTH IN USER CODE AND coordinator CODE
+            while 1:
+                try: # TRAP AND REPORT ALL ERRORS IN USER CODE
+                    id=it.next() # THIS RUNS USER CODE FOR ONE ITERATION
+                    self.success_id=id  # MARK THIS AS A SUCCESS...
+                    errors_in_a_row=0
+                except StopIteration: # NO MORE TASKS FOR US...
+                    self.exit_message='done'
+                    break
+                except SystemExit: # sys.exit() CALLED
+                    raise  # WE REALLY DO WANT TO EXIT.
+                except: # MUST HAVE BEEN AN ERROR IN THE USER CODE
+                    self.report_error(self.pending_id) # REPORT THE PROBLEM
+                    errors_in_a_row +=1
+                    if errors_in_a_row>=self.max_errors_in_a_row:
+                        self.exit_message='too many errors'
+                        break
+                if time.time()-report_time>self.report_frequency:
+                    self.report_load() # SEND A ROUTINE LOAD REPORT
+                    report_time=time.time()
+        except SystemExit: # sys.exit() CALLED
+            pass  # WE REALLY DO WANT TO EXIT.
+        except: # IMPORTANT TO TRAP ALL ERRORS SO THAT WE UNREGISTER!!
+            traceback.print_exc(self.max_tb,sys.stderr) #REPORT TB TO OUR LOG
+            self.exit_message='error trap'
+        self.unregister('run_all '+self.exit_message) # MUST UNREGISTER!!
 
     def run_interactive(self,it,n=1,**kwargs):
         "run n task IDs, with no error trapping"
@@ -716,11 +751,15 @@ class Processor(object):
             it=it(self,**kwargs) # ASSUME it IS GENERATOR, USE IT TO GET ITERATOR
         i=0
         self.register() # REGISTER WITH RESOURCE CONTROLLER & COORDINATOR
-        for id in it:
-            self.success_id=id
-            i+=1
-            if i>=n:
-                break
+        try: # EVEN IF ERROR OCCURS, WE MUST UNREGISTER!!
+            for id in it:
+                self.success_id=id
+                i+=1
+                if i>=n:
+                    break
+        except:
+            self.unregister('run_interactive error') # MUST UNREGISTER!!!
+            raise # SHOW THE ERROR INTERACTIVELY
         self.unregister('run_interactive exit')
         return it # HAND BACK ITERATOR IN CASE USER WANTS TO RUN MORE...
 
