@@ -699,7 +699,11 @@ class PathMapping(object):
                         yield i
 
     def iteritems(self):
+        "Get all pairs of aligned intervals for this mapping"
         return self.itervalues(getItems=True)
+    def edges(self):
+        "Get all edges representing aligned intervals in this mapping"
+        return self.itervalues(getItems=GET_EDGE_INFO)
     __iter__=walk
     iterkeys=walk
     keys=walk
