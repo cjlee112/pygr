@@ -54,14 +54,31 @@ class FileDict(dict):
             self[key]=val
         f.close()
 
+def try_fork():
+    "standard UNIX technique c/o Jurgen Hermann's Python Cookbook recipe"
+    try:
+        pid=os.fork()
+        if pid>0: # MAKE PARENT EXIT SILENTLY
+            sys.exit(0)
+    except OSError,e:
+        print >>sys.stderr, "fork failed: %d (%s)" %(e.errno,e.strerror)
+        sys.exit(1)
+
+def detach_as_demon_process(self):
+    "standard UNIX technique c/o Jurgen Hermann's Python Cookbook recipe"
+    if self.errlog is False: # CREATE AN APPROPRIATE ERRORLOG FILEPATH
+        self.errlog=os.getcwd()+'/'+self.name+'.log'
+    try_fork() # DISCONNECT FROM PARENT PROCESS
+    #os.chdir("/")
+    os.setsid() # CREATE A NEW SESSION WITH NO CONTROLLING TERMINAL
+    os.umask(0) # IS THIS ABSOLUTELY NECESSARY?
+    try_fork() # DISCONNECT FROM PARENT PROCESS
+    sys.stdout=file(self.errlog,'a') # DEMONIZE BY REDIRECTING ALL OUTPUT TO LOG
+    sys.stderr=sys.stdout
+
 def serve_forever(self,demonize=True):
     'start the service -- this will run forever'
     import datetime
-    if demonize:
-        if self.errlog is False: # CREATE AN APPROPRIATE ERRORLOG FILEPATH
-            self.errlog=os.getcwd()+'/'+self.name+'.log'
-        sys.stdout=file(self.errlog,'a') # DEMONIZE BY REDIRECTING ALL OUTPUT TO LOG
-        sys.stderr=sys.stdout
     print >>sys.stderr,"START_SERVER:%s %s" %(self.name,datetime.datetime.
                                                    now().isoformat(' '))
     sys.stderr.flush()
@@ -72,17 +89,21 @@ class CoordinatorInfo(object):
     """stores information about individual coordinators for the controller
     and provides interface to Coordinator that protects against possibility of
     deadlock."""
-    def __init__(self,name,url,user,priority,resources):
+    min_startup_time=60.0
+    def __init__(self,name,url,user,priority,resources,job_id=0,immediate=False):
         self.name=name
         self.url=url
         self.user=user
         self.priority=priority
+        self.job_id=job_id
+        self.immediate=immediate
         self.server=xmlrpclib.ServerProxy(url)
         self.processors={}
         self.resources=resources
         self.start_time=time.time()
         self.allocated_ncpu=0
         self.new_cpus=[]
+        self.last_start_proc_time=0.0
 
     def __iadd__(self,newproc):
         "add a processor to this coordinator's list"
@@ -109,8 +130,10 @@ class CoordinatorInfo(object):
         and to launch processors on the list of new_cpus.
         Run this in a separate thread to prevent deadlock."""
         self.server.set_max_clients(ncpu)
-        if len(new_cpus)>0:
+        if len(new_cpus)>0 and \
+               time.time()-self.last_start_proc_time>self.min_startup_time:
             self.server.start_processors(new_cpus) # SEND OUR LIST
+            self.last_start_proc_time=time.time()
         
 
 
@@ -124,15 +147,16 @@ class ResourceController(object):
                     'register_processor':0,'unregister_processor':0,
                     'get_resource':0,'acquire_rule':0,'release_rule':0,
                     'request_cpus':0,'setload':0,'retry_unused_hosts':0,
-                    'get_status':0}
+                    'get_status':0,'setthrottle':0,'del_lock':0}
     _dispatch=safe_dispatch # RESTRICT XMLRPC TO JUST THE METHODS LISTED ABOVE
     max_tb=10
     def __init__(self,rc='controller',port=5000,overload_margin=0.6,
-                 rebalance_frequency=1200,errlog=False):
+                 rebalance_frequency=1200,errlog=False,throttle=1.0):
         self.name=rc
         self.overload_margin=overload_margin
         self.rebalance_frequency=rebalance_frequency
         self.errlog=errlog
+        self.throttle=throttle
         self.rebalance_time=time.time()
         self.must_rebalance=False
         self.host=os.uname()[1]
@@ -142,6 +166,7 @@ class ResourceController(object):
         self.server,self.port = get_server(self.host,port)
         self.server.register_instance(self)
         self.coordinators={}
+        self.njob=0
         self.locks={}
         self.systemLoad={}
         for host in self.hosts: # 1ST ASSUME HOST EMPTY, THEN GET LOAD REPORTS
@@ -154,26 +179,50 @@ class ResourceController(object):
         "calculate the latest balanced loads"
         maxload=0.
         total=0.
+        l=[c.job_id for c in self.coordinators.values()]
+        l.sort() # SORT job_id IN ASCENDING ORDER
         for c in self.coordinators.values():
-            total+=c.priority
+            if c.job_id==l[0] or c.immediate:
+                c.run=True # YES, RUN THIS JOB
+                total+=c.priority
+            else:
+                c.run=False
         for v in self.hosts.values():
             maxload+=v
+        maxload*=self.throttle
         if total>0.:
             maxload /= float(total)
         for c in self.coordinators.values():
-            c.allocated_ncpu=int(maxload * c.priority)
+            if c.run:
+                c.allocated_ncpu=int(maxload * c.priority)
+            else:
+                c.allocated_ncpu=0
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
 
     def assign_processors(self):
         "hand out available processors to coordinators in order of need"
         margin=self.overload_margin-1.0
         free_cpus=[]
+        nproc={}
+        for c in self.coordinators.values(): # COUNT NUMBER OF PROCS
+            for host,pid in c.processors: # RUNNING ON EACH HOST
+                try:
+                    nproc[host]+=1.0 # INCREMENT AN EXISTING COUNT
+                except KeyError:
+                    nproc[host]=1.0 # NEW, SO SET INITIAL COUNT
         for host in self.hosts: # BUILD LIST OF HOST CPUS TO BE ASSIGNED
             if host not in self.systemLoad: # ADDING A NEW HOST
                 self.systemLoad[host]=0.0 # DEFAULT LOAD: ASSUME HOST EMPTY
-            if self.systemLoad[host]<self.hosts[host]+margin:
+            try: # host MAY NOT BE IN nproc, SO CATCH THAT ERROR
+                if self.systemLoad[host]>nproc[host]:
+                    raise KeyError # USE self.systemLoad[host]
+            except KeyError:
+                load=self.systemLoad[host] # MAXIMUM VALUE
+            else:
+                load=nproc[host] # MAXIMUM VALUE
+            if load<self.hosts[host]+margin:
                 free_cpus+=int(self.hosts[host]+self.overload_margin
-                               -self.systemLoad[host])*[host]
+                               -load)*[host]
         if len(free_cpus)==0: # WE DON'T HAVE ANY CPUS TO GIVE OUT
             return False
         l=[] # BUILD A LIST OF HOW MANY CPUS EACH COORDINATOR NEEDS
@@ -230,6 +279,11 @@ class ResourceController(object):
         self.hosts[host]=float(maxload)
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
 
+    def setthrottle(self,throttle):
+        "set the total level of usage of available CPUs, usually 1.0"
+        self.throttle=float(throttle)
+        return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
+
     def report_load(self,host,pid,load):
         "save a reported load from one of our processors"
         self.systemLoad[host]=load
@@ -242,17 +296,20 @@ class ResourceController(object):
         else:
             return False # THIS SYSTEM OVERLOADED, TELL PROCESSOR TO EXIT
 
-    def register_coordinator(self,name,url,user,priority,resources):
+    def register_coordinator(self,name,url,user,priority,resources,immediate):
         "save a coordinator's registration info"
         try:
             print >>sys.stderr,'change_priority: %s (%s,%s): %f -> %f' \
                   % (name,user,url,self.coordinators[url].priority,priority)
             self.coordinators[url].priority=priority
+            self.coordinators[url].immediate=immediate
         except KeyError:
             print >>sys.stderr,'register_coordinator: %s (%s,%s): %f' \
                   % (name,user,url,priority)
-            self.coordinators[url]=CoordinatorInfo(name,url,user,priority,resources)
-            self.must_rebalance=True # FORCE REBALANCING ON NEXT OPPORTUNITY
+            self.coordinators[url]=CoordinatorInfo(name,url,user,priority,
+                                                   resources,self.njob,immediate)
+            self.njob+=1 # INCREMENT COUNT OF JOBS WE'VE REGISTERED
+        self.must_rebalance=True # FORCE REBALANCING ON NEXT OPPORTUNITY
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
 
     def unregister_coordinator(self,name,url,message):
@@ -292,7 +349,13 @@ class ResourceController(object):
         "processor shutting down, so remove it from the list"
         try:
             self.coordinators[url]-= (host,pid)
-            self.systemLoad[host] -= 1.0 # THIS PROBABLY INCREASES LOAD BY 1
+            self.systemLoad[host] -= 1.0 # THIS PROBABLY DECREASES LOAD BY 1
+            if self.systemLoad[host]<0.0:
+                self.systemLoad[host]=0.0
+            for k,v in self.locks.items(): # MAKE SURE THIS PROC HAS NO LOCKS...
+                h=k.split(':')[0]
+                if h==host and v==pid:
+                    del self.locks[k] # REMOVE ALL ITS PENDING LOCKS
         except KeyError:
             pass
         self.load_balance() # FREEING A PROCESSOR, SO REBALANCE TO USE THIS
@@ -323,15 +386,22 @@ class ResourceController(object):
     def release_rule(self,host,pid,rsrc):
         "client is done applying this rule, so now safe to give out the resource"
         key=host+':'+rsrc
-        try:
-            del self.locks[key] # rsrc CONSTRUCTED, SO REMOVE THE LOCK
-        except KeyError:
-            print >>sys.stderr,"attempt to release non-existent lock %s,%s:%d" \
-                  %(host,rule,pid)
+        self.del_lock(host,rsrc)
         self.resources[key]=self.rules[rsrc][0] # ADD THE FILE NAME TO RESOURCE LIST
         self.resources.close() # THIS IS THE ONLY WAY I KNOW TO FLUSH THIS...
         self.getresources()
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
+
+    def del_lock(self,host,rsrc):
+        "delete a lock on a pending resource construction process"
+        key=host+':'+rsrc
+        try:
+            del self.locks[key] # REMOVE THE LOCK
+        except KeyError:
+            print >>sys.stderr,"attempt to release non-existent lock %s,%s:%d" \
+                  %(host,rule,pid)
+        return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
+            
 
     def retry_unused_hosts(self):
         "reset systemLoad for hosts that have no jobs running"
@@ -371,13 +441,15 @@ class Coordinator(object):
     max_ssh_errors=5 #MAXIMUM #ERRORS TO PERMIT IN A ROW BEFORE QUITTING
     python='python' # DEFAULT EXECUTABLE FOR RUNNING OUR CLIENTS
     def __init__(self,name,script,it,resources,port=8888,priority=1.0,rc_url=None,
-                 errlog=False):
+                 errlog=False,immediate=False,ncpu_limit=999999):
         self.name=name
         self.script=script
         self.it=iter(it) # MAKE SURE it IS AN ITERATOR; IF IT'S NOT, MAKE IT SO
         self.resources=resources
         self.priority=priority
         self.errlog=errlog
+        self.immediate=immediate
+        self.ncpu_limit=ncpu_limit
         self.host=os.uname()[1]
         self.user=os.environ['USER']
         try: # MAKE SURE ssh-agent IS AVAILABLE TO US BEFORE LAUNCHING LOTS OF PROCS
@@ -429,6 +501,10 @@ class Coordinator(object):
 
     def start_client(self,host):
         "start a processor on a client node"
+        if len(self.clients)>=self.ncpu_limit:
+            print >>sys.stderr,'start_client: blocked, CPU limit', \
+                  len(self.clients),self.ncpu_limit
+            return # DON'T START ANOTHER PROCESS, TOO MANY ALREADY
         if len(self.clients)>=self.max_clients:
             print >>sys.stderr,'start_client: blocked, too many already', \
                   len(self.clients),self.max_clients
@@ -445,7 +521,9 @@ class Coordinator(object):
         cmd='cd %s;%s %s --url=http://%s:%d --rc_url=%s --logfile=%s %s' \
              % (self.dir,self.python,self.script,self.host,self.port,
                 self.rc_url,logfile,self.name)
-        ssh_cmd="ssh %s '(%s) </dev/null >&%s &' &" % (host,cmd,logfile)
+        # UGH, HAVE TO MIX CSH REDIRECTION (REMOTE) WITH SH REDIRECTION (LOCAL)
+        ssh_cmd="ssh %s '(%s) </dev/null >&%s &' </dev/null >>%s 2>&1 &" \
+                 % (host,cmd,logfile,self.errlog)
         print >>sys.stderr,'SSH: '+ssh_cmd
         self.logfile[logfile]=[host,False,self.iclient] # NO PID YET
         try: # RECORD THIS CLIENT AS STARTING UP
@@ -466,7 +544,8 @@ class Coordinator(object):
         "register our existence with the resource controller"
         url='http://%s:%d' % (self.host,self.port)
         self.rc_server.register_coordinator(self.name,url,self.user,
-                                            self.priority,self.resources)
+                                            self.priority,self.resources,
+                                            self.immediate)
 
     def unregister(self,message):
         "tell the resource controller we're exiting"
@@ -672,10 +751,9 @@ class Processor(object):
 
     def report_load(self):
         "report system load"
-        ofile=os.popen('uptime')
-        line=ofile.readline() # SKIP TITLE LINE
-        ofile.close()
-        load=float(line.split()[-3][:-1]) # GET RID OF THE TERMINAL ,
+        l=list(os.getloadavg()) # GET 1, 5 AND 15 MINUTE LOAD AVERAGES
+        l.sort()
+        load=l[0] # TAKE THE LOWEST OF THE THREE LOAD TIMEFRAMES
         if self.rc_server.report_load(self.host,self.pid,load) is False:
             self.overload_count+=1 # ARE WE CONSISTENTLY OVERLOADED FOR EXTENDED PERIOD?
             if self.overload_count>self.overload_max: # IF EXCEEDED LIMIT, EXIT
@@ -821,9 +899,11 @@ def start_client_or_server(clientGenerator,serverGenerator,resources,script):
         client.run_all(clientGenerator,**d)
     elif 'rc' in d: # WE ARE THE RESOURCE CONTROLLER
         rc_server=ResourceController(**d) # NAME FOR THIS CONTROLLER...
+        detach_as_demon_process(rc_server)
         rc_server() # START THE SERVER
     else: # WE ARE A SERVER
         server=Coordinator(l[0],script,serverGenerator(),resources,**d)
+        detach_as_demon_process(server)
         server() # START THE SERVER
 
 
