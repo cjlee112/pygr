@@ -261,6 +261,14 @@ def createTableFromRepr(rows,tableName,cursor,typeTranslation=None,
        names).
     """
     row=rows.next() # GET 1ST ROW TO EXTRACT COLUMN INFO
+    createTableFromRow(cursor, tableName,row,typeTranslation,
+                       optionalDict,indexDict)
+    storeRow(cursor,tableName,row) # SAVE OUR FIRST ROW
+    for row in rows: # NOW SAVE ALL THE ROWS
+        storeRow(cursor,tableName,row)
+
+def createTableFromRow(cursor, tableName, row,typeTranslation=None,
+                        optionalDict=None,indexDict=()):
     create_defs=[]
     for col,val in row.items(): # PREPARE SQL TYPES FOR COLUMNS
         coltype=None
@@ -284,10 +292,10 @@ def createTableFromRepr(rows,tableName,cursor,typeTranslation=None,
             create_defs.append('index(%s)' % col)
     cmd='create table %s (%s)' % (tableName,','.join(create_defs))
     cursor.execute(cmd) # CREATE THE TABLE IN THE DATABASE
-    
+
+
+def storeRow(cursor, tableName, row):
     row_format=len(row)*'%s,'
     cmd='insert into %s values (%s)' % (tableName,row_format[:-1])
-    cursor.execute(cmd,tuple(row.values())) # SAVE OUR FIRST ROW
-    for row in rows: # NOW SAVE ALL THE ROWS
-        cursor.execute(cmd,tuple(row.values()))
+    cursor.execute(cmd,tuple(row.values()))
 
