@@ -120,6 +120,9 @@ class BlastIval(TupleO):
 
 class BlastHitInfo(TupleO):
     _attrcol={'blast_score':0,'e_value':1,'percent_id':2}
+    def repr_dict(self):
+        return {'blast_score':self.data[0],'e_value':self.data[1],
+                'percent_id':self.data[2]}
 
 def read_interval_alignment(ofile,container1,container2,al=None):
     "Read tab-delimited interval mapping between seqs from the 2 containers"
