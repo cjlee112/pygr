@@ -9,6 +9,13 @@ class AnonSequence(NamedSequence):
         s=len*'?'
         NamedSequence.__init__(self,s,id)
 
+    def seqsplice(self,s,start,end):
+        if(start>end):
+            self.s=self.s[:end]+s[::-1][:start-end]+self.s[start:]
+        else:
+            self.s=self.s[:start]+s[:end-start]+self.s[end:]
+        return 
+
 class ReferenceSequence(NamedSequence):
     """Defines a reference sequence class that is subscriptable
     by other sequences. If sequence ids match the resulting sequnce
