@@ -1,10 +1,8 @@
 import time
-from MySQLdb import *
-from splicegraph import *
+from leelabdb import *
 from poa import *
 
-db=Connection('lldb','reader','hedgehog')
-cursor=db.cursor()
+cursor=getUserCursor('HUMAN_SPLICE_03')
 print 'Reading database schema...'
 idDict={}
 tables=describeDBTables('HUMAN_SPLICE_03',cursor,idDict)
