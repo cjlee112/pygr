@@ -279,8 +279,11 @@ def createTableFromRepr(rows,tableName,cursor,typeTranslation=None,
        names).
     """
     row=rows.next() # GET 1ST ROW TO EXTRACT COLUMN INFO
-    createTableFromRow(cursor, tableName,row,typeTranslation,
-                       optionalDict,indexDict)
+    try:
+        createTableFromRow(cursor, tableName,row,typeTranslation,
+                           optionalDict,indexDict)
+    except:
+        pass
     storeRow(cursor,tableName,row) # SAVE OUR FIRST ROW
     for row in rows: # NOW SAVE ALL THE ROWS
         storeRow(cursor,tableName,row)
@@ -317,3 +320,7 @@ def storeRow(cursor, tableName, row):
     cmd='insert into %s values (%s)' % (tableName,row_format[:-1])
     cursor.execute(cmd,tuple(row.values()))
 
+def storeRowDelayed(cursor, tableName, row):
+    row_format=len(row)*'%s,'
+    cmd='insert delayed into %s values (%s)' % (tableName,row_format[:-1])
+    cursor.execute(cmd,tuple(row.values()))
