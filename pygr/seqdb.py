@@ -195,7 +195,6 @@ def save_interval_alignment(m,ival,srcSet,destSet=None,edgeClass=BlastHitInfo,
         m[srcPath][destPath]=edgeClass(ival) # SAVE ALIGNMENT WITH EDGE INFO
     else:
         m[srcPath]=destPath # JUST SAVE ALIGNMENT, NO EDGE INFO
-    print 'saved alignment:',repr(srcPath),'=',repr(destPath)
 
 
 def read_interval_alignment(ofile,srcSet,destSet,al=None):
@@ -421,7 +420,6 @@ class MAFStoredPathMapping(PathMapping):
         for i in table.select('where src_id=%s and src_start<%s and src_end>%s',
                               (id,ival.end,ival.start)):  # SAVE MAPPING TO vdbset
             save_interval_alignment(self,i,dbset,vdbset,None,MAF_get_interval)
-            print 'saving layer 1:',repr(i)
             vseqs[i.dest_id]=None # KEEP TRACK OF ALL OUR VIRTUAL SEQUENCES...
         for vseqID in vseqs: # GET EVERYTHING THAT OUR vseqs MAP TO...
             for i in table.select('where src_id=%s',(vseqID,)): # SAVE MAPPING TO dbset
