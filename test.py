@@ -116,6 +116,9 @@ print 'Found:%d\t%.2f sec\n' % (len(intronRetentions),time.time()-startTime)
 # example exon skip query
 l=[o for o in spliceGraph.next.next.filter(lambda p:p[2] in p[0].next)]
 
+# same thing, but using graph join syntax
+l=[o for o in (spliceGraph>>spliceGraph>>spliceGraph).filter(lambda p:p[2] in spliceGraph[p[0]])]
+
 
 # example U11/U12 alt5 skip
 l=[o for o in alt5Graph.alt5.next.next.filter(lambda p: p[3] in p[0].next
