@@ -29,12 +29,13 @@ def new_seq_id():
     return seq_id_counter-1
 
 
-def write_fasta(ofile,s,chunk=60):
+def write_fasta(ofile,s,chunk=60,id=None):
     "Trivial FASTA output"
-    try:
-        id=s.id
-    except AttributeError:
-        id=new_seq_id()
+    if id==None:
+        try:
+            id=s.id
+        except AttributeError:
+            id=new_seq_id()
 
     ofile.write('>'+str(id)+'\n')
     seq=str(s)
@@ -148,10 +149,12 @@ def read_interval_alignment(ofile,container1,container2,al=None):
             al[q_ival][s_ival]= hitInfo # SAVE THE ALIGNMENT AND EDGE INFO
     return al
 
-def process_blast(self,cmd,seq,al=None):
+def process_blast(self,cmd,seq,al=None,seqString=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
-    ifile,ofile=os.popen2(cmd)
-    write_fasta(ifile,seq)
+    ifile,ofile=os.popen2(cmd+'|parse_blast.awk -v mode=all')
+    if seqString==None:
+        seqString=seq
+    write_fasta(ifile,seqString,id=seq.id)
     ifile.close()
     al=read_interval_alignment(ofile,{seq.id:seq},self,al)
     if ofile.close()!=None:
@@ -160,6 +163,7 @@ def process_blast(self,cmd,seq,al=None):
 
 
 def repeat_mask(seq,progname='RepeatMasker -xsmall'):
+    'Run RepeatMasker on a sequence, return lowercase-masked string'
     temppath=os.tempnam()
     ofile=file(temppath,'w')
     write_fasta(ofile,seq)
@@ -187,9 +191,10 @@ class BlastDB(dict):
             self._seqtype=guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
             break # JUST READ ONE SEQUENCE
         ofile.close()
-        try: # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
-            fp=file(filepath+'.psd')
-        except IOError: # ATTEMPT TO BUILD BLAST DATABASE & INDEXES
+         # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
+        if not os.access(filepath+'.nsd',os.R_OK) \
+               and not os.access(filepath+'.psd',os.R_OK):
+            # ATTEMPT TO BUILD BLAST DATABASE & INDEXES
             cmd='formatdb -i %s -o T' % filepath
             if self._seqtype!=PROTEIN_SEQTYPE:
                 cmd += ' -p F' # SPECIAL FLAG REQUIRED FOR NUCLEOTIDE SEQS
@@ -213,11 +218,20 @@ class BlastDB(dict):
         "Run blast search for seq in database, return aligned intervals"
         if blastprog==None:
             blastprog=blast_program(seq.seqtype(),self._seqtype)
-        cmd='%s -d %s -p %s -e %f|parse_blast.awk -v mode=all' \
+        cmd='%s -d %s -p %s -e %f' \
                               %(blastpath,self.filepath,blastprog,expmax)
         return process_blast(cmd,seq,al)
 
-    #def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
+    def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
+                  maxseq=None,minIdentity=None,maskOpts='-U T -F m'):
+        "Run megablast search with repeat masking."
+        masked_seq=repeat_mask(seq)  # MASK REPEATS TO lowercase
+        cmd='%s %s -d %s -e %f' % (blastpath,maskOpts,self.filepath,expmax)
+        if maxseq!=None:
+            cmd+=' -v %d' % maxseq
+        if minIdentity!=None:
+            cmd+=' -p %f' % float(minIdentity)
+        return process_blast(cmd,seq,al,seqString=masked_seq)
 
 class StoredPathMapping(PathMapping):
     _edgeClass=BlastHitInfo
