@@ -52,9 +52,15 @@ class DirectedEdge(Edge):
 class PathList(list):
     """Internal representation for storing both nodes and edges as list
     So filter functions can see both nodes and edges"""
-    def __init__(self):
-        list.__init__(self)
-        self.edge=[]
+    def __init__(self,nodes=None,edges=None):
+        if nodes!=None:
+            list.__init__(self,nodes)
+        else:
+            list.__init__(self)
+        if edges!=None:
+            self.edge=list(edges)
+        else:
+            self.edge=[]
 
     def append(self,val):
         list.append(self,val)
@@ -72,7 +78,7 @@ def newfilter(self,filter,filterClass):
 class AttrPathGraph(object):
     "Interface for building query graphs using attributes"
     def __init__(self,attr,graph=None,path=None,depth=0):
-        #print 'creating instance of %s' % self.__class__
+        #print 'creating instance of %s:%s' % (self.__class__,attr)
         self._graph=graph
         self._attr=attr
         self._last=self
@@ -110,6 +116,7 @@ class AttrPathGraph(object):
                     self._next._graph=getattr(o,self._attr) # PASS ATTR TO NEXT LAYER
                     for n in self._next:
                         n.insert(0,o)
+                        n.edge.insert(0,e)
                         yield n
             else: # FOR NON-DICT CONTAINER, NO EDGE INFO!
                 self._path.edge[self._depth]=None
@@ -118,11 +125,27 @@ class AttrPathGraph(object):
                     self._next._graph=getattr(o,self._attr)
                     for n in self._next: # GET RESULTS FROM THE NEXT LAYER
                         n.insert(0,o) # ADD OUR OBJECT AT HEAD OF LIST
+                        n.edge.insert(0,None)
                         yield n
         else: # LAST LAYER, SO JUST RETURN OUR ITEMS
-            for o in self._graph:
-                for n in getattr(o,self._attr):
-                    yield [o,n]
+            if hasattr(self._graph,'items'): # FOR DICT CONTAINER, GET VALUES AS EDGES
+                for o,e in self._graph.items(): # ITERATE OVER ALL OBJECTS IN THIS LAYER
+                    g=getattr(o,self._attr)
+                    if hasattr(g,'items'):
+                        for n,e2 in g.items():
+                            yield PathList((o,n),(e,e2))
+                    else:
+                        for n in g:
+                            yield PathList((o,n),(e,None))
+            else:
+                for o in self._graph:
+                    g=getattr(o,self._attr)
+                    if hasattr(g,'items'):
+                        for n,e2 in g.items():
+                            yield PathList((o,n),(None,e2))
+                    else:
+                        for n in g:
+                            yield PathList((o,n))
 
     def __contains__(self,item):
         "try to speed up multiple membership tests on the same PathGraph"
@@ -143,6 +166,7 @@ class FilterPathGraph(AttrPathGraph):
                         self._temp[0]=o
                         for n in self._next:
                             n.insert(0,o)
+                            n.edge.insert(0,e)
                             yield n
             else:
                 self._path.edge[self._depth]=None
@@ -152,12 +176,20 @@ class FilterPathGraph(AttrPathGraph):
                         self._temp[0]=o
                         for n in self._next:
                             n.insert(0,o)
+                            n.edge.insert(0,None)
                             yield n
         else:
-            for o in self._graph:
-                self._path[self._depth]=o
-                if self._attr(self._path):
-                    yield [o]
+            if hasattr(self._graph,'items'): # FOR DICT CONTAINER, GET VALUES AS EDGES
+                for o,e in self._graph.items(): # ITERATE OVER ALL OBJECTS IN THIS LAYER
+                    self._path[self._depth]=o
+                    self._path.edge[self._depth]=e
+                    if self._attr(self._path):
+                        yield PathList((o,),(e,))
+            else:
+                for o in self._graph:
+                    self._path[self._depth]=o
+                    if self._attr(self._path):
+                        yield PathList((o,))
 
 
 AttrPathGraph.filterClass=FilterPathGraph # SOLUTION TO REFERENCE ORDER CATCH-22
@@ -173,22 +205,55 @@ class GraphPathGraph(AttrPathGraph):
                 for o,e in self._graph.items(): # ITERATE OVER ALL OBJECTS IN THIS LAYER
                     self._path[self._depth]=o # SAVE IT IN CURRENT PATH
                     self._path.edge[self._depth]=e # SAVE EDGE INFO TOO!
-                    self._next._graph=self._attr[o] # USE GRAPH TO GET NEXT LAYER
-                    for n in self._next:
-                        n.insert(0,o)
-                        yield n
+                    try:
+                        self._next._graph=self._attr[o] # USE GRAPH TO GET NEXT LAYER
+                    except KeyError:
+                        pass # OUR NODE MAY JUST NOT BE IN TARGET GRAPH, NEED TO HANDLE THAT
+                    else:
+                        for n in self._next:
+                            n.insert(0,o)
+                            n.edge.insert(0,e)
+                            yield n
             else: # FOR NON-DICT CONTAINER, NO EDGE INFO!
                 self._path.edge[self._depth]=None
                 for o in self._graph: # ITERATE OVER ALL OBJECTS IN THIS LAYER
                     self._path[self._depth]=o # SAVE IT IN CURRENT PATH
-                    self._next._graph=self._attr[o] # USE GRAPH TO GET NEXT LAYER
-                    for n in self._next: # GET RESULTS FROM THE NEXT LAYER
-                        n.insert(0,o) # ADD OUR OBJECT AT HEAD OF LIST
-                        yield n
+                    try:
+                        self._next._graph=self._attr[o] # USE GRAPH TO GET NEXT LAYER
+                    except KeyError:
+                        pass # OUR NODE MAY JUST NOT BE IN TARGET GRAPH, NEED TO HANDLE THAT
+                    else:
+                        for n in self._next: # GET RESULTS FROM THE NEXT LAYER
+                            n.insert(0,o) # ADD OUR OBJECT AT HEAD OF LIST
+                            n.edge.insert(0,None)
+                            yield n
         else: # LAST LAYER, SO JUST RETURN OUR ITEMS
-            for o in self._graph:
-                for n in self._attr[o]:
-                    yield [o,n]
+            if hasattr(self._graph,'items'): # FOR DICT CONTAINER, GET VALUES AS EDGES
+                for o,e in self._graph.items():
+                    try:
+                        g=self._attr[o]
+                    except KeyError:
+                        pass # OUR NODE MAY JUST NOT BE IN TARGET GRAPH, NEED TO HANDLE THAT
+                    else:
+                        if hasattr(g,'items'):
+                            for n,e2 in g.items():
+                                yield PathList((o,n),(e,e2))
+                        else:
+                            for n in g:
+                                yield PathList((o,n),(e,None))
+            else:
+                for o in self._graph:
+                    try:
+                        g=self._attr[o]
+                    except KeyError:
+                        pass # OUR NODE MAY JUST NOT BE IN TARGET GRAPH, NEED TO HANDLE THAT
+                    else:
+                        if hasattr(g,'items'):
+                            for n,e2 in g.items():
+                                yield PathList((o,n),(None,e2))
+                        else:
+                            for n in g:
+                                yield PathList((o,n))
 
 AttrPathGraph.joinClass=GraphPathGraph # SOLUTION TO REFERENCE ORDER CATCH-22
 
