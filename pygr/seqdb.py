@@ -127,7 +127,6 @@ class BlastSequence(NamedSequenceBase):
         NamedSequenceBase.__init__(self)
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
-        print 'called BlastSequence.__len__() on',self.id,self.db.seqLenDict[self.id]
         return self.db.seqLenDict[self.id]
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
@@ -145,41 +144,68 @@ def blast_program(query_type,db_type):
 
 
 class BlastIval(TupleO):
-    "Wrap a tuple with sensible attribute names for accessing the data"
-    _attrcol={'hit_id':0, 'query_id':1, 'subject_id':2, 'blast_score':3, 'e_value':4,
-              'percent_id':5, 'orientation':6, 'query_start':7, 'length':8, 'subject_start':9}
+    "Wrap a tuple with same attribute names as poa.IntervalTransform.repr_dict"
+    _attrcol={'hit_id':0, 'src_id':1, 'dest_id':2, 'blast_score':3, 'e_value':4,
+              'percent_id':5, 'dest_ori':6, 'src_start':7, 'length':8, 'dest_start':9}
     def __init__(self,t):
         "Convert strings into appropriate types; adjust to zero-based indexes"
         u=(int(t[0]),t[1],t[2],int(t[3]),float(t[4]),
            int(t[5]),int(t[6]),int(t[7])-1,int(t[8]),int(t[9])-1)
         TupleO.__init__(self,u)
+    def __getattr__(self,k):
+        'provide a few attributes to give same interface as poa.IntervalTransform.repr_dict'
+        if k=='src_ori': return 1
+        if k=='src_end': return self.src_start+self.length
+        if k=='dest_end': return self.dest_start+self.length
+        else: return TupleO.__getattr__(self,k)
 
 class BlastHitInfo(TupleO):
     _attrcol={'blast_score':0,'e_value':1,'percent_id':2}
+    def __init__(self,ival):
+        "save edge info from ival onto our TupleO"
+        ei=len(self._attrcol)*[None] # RIGHT LENGTH LIST
+        for a,i in self._attrcol.items():
+            try:
+                ei[i]=getattr(ival,a) # CONSTRUCT ATTRS IN RIGHT ORDER
+            except AttributeError:
+                pass # OK FOR ival TO LACK SOME ATTRIBUTES...
+        TupleO.__init__(self,ei)
+        
     def repr_dict(self):
         return {'blast_score':self.data[0],'e_value':self.data[1],
                 'percent_id':self.data[2]}
 
-def read_interval_alignment(ofile,container1,container2,al=None):
-    "Read tab-delimited interval mapping between seqs from the 2 containers"
+def get_interval(seq,start,end,ori):
+    "trivial function to get the interval seq[start:end] with requested ori"
+    ival=seq[start:end]
+    if ori== -1:
+        ival= -ival
+    return ival
+
+def save_interval_alignment(m,ival,srcSet,destSet=None,edgeClass=BlastHitInfo,
+                            ivalXform=get_interval):
+    "Add ival to alignment m, with edge info if requested"
+    if destSet is None:
+        destSet=srcSet
+    srcSeq=srcSet[ival.src_id]
+    srcPath=ivalXform(srcSeq,ival.src_start,ival.src_end,ival.src_ori)
+    destPath=ivalXform(destSet[ival.dest_id],ival.dest_start,ival.dest_end,ival.dest_ori)
+    if edgeClass is not None:
+        m+=srcSeq # MAKE SURE THIS SEQUENCE IS IN THE MAPPING TOP-LEVEL INDEX
+        m[srcPath][destPath]=edgeClass(ival) # SAVE ALIGNMENT WITH EDGE INFO
+    else:
+        m[srcPath]=destPath # JUST SAVE ALIGNMENT, NO EDGE INFO
+    print 'saved alignment:',repr(srcPath),'=',repr(destPath)
+
+
+def read_interval_alignment(ofile,srcSet,destSet,al=None):
+    "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
     if al is None:
         al=PathMapping()
-    hit_id = -1
     for line in ofile:
         t=line.split('\t')
         if t[0]=='MATCH_INTERVAL':
-            ival=BlastIval(t[1:]) # WRAP TUPLE WITH SENSIBLE ATTRIBUTE NAMES
-            if hit_id!=ival.hit_id:
-                hitInfo=BlastHitInfo((ival.blast_score,ival.e_value,ival.percent_id))
-                hit_id=ival.hit_id
-            query=container1[ival.query_id]
-            subject=container2[ival.subject_id]
-            q_ival=query[ival.query_start:ival.query_start+ival.length]
-            s_ival=subject[ival.subject_start:ival.subject_start+ival.length]
-            if ival.orientation<0: # SWITCH IT TO REVERSE ORIENTATION
-                s_ival = -s_ival
-            al += q_ival # MAKE SURE query IS IN THE TOP LEVEL INDEX
-            al[q_ival][s_ival]= hitInfo # SAVE THE ALIGNMENT AND EDGE INFO
+            save_interval_alignment(al,BlastIval(t[1:]),srcSet,destSet)
     return al
 
 def process_blast(cmd,seq,seqDB,al=None,seqString=None):
@@ -196,13 +222,13 @@ def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     return al
 
 
-def repeat_mask(seq,progname='RepeatMasker -xsmall'):
+def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
     'Run RepeatMasker on a sequence, return lowercase-masked string'
     temppath=os.tempnam()
     ofile=file(temppath,'w')
     write_fasta(ofile,seq)
     ofile.close()
-    cmd=progname+' '+temppath
+    cmd=progname+' '+opts+' '+temppath
     if os.system(cmd)!=0:
         raise OSError('command %s failed' % cmd)
     ofile=file(temppath+'.masked')
@@ -272,12 +298,16 @@ class BlastDB(dict):
         "number of total entries in this database"
         return len(self.seqLenDict)
 
+    def __hash__(self): # TO ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...
+        return id(self)
+
     def __getitem__(self,id):
         "Get sequence matching this ID, using dict as local cache"
         try:
             return dict.__getitem__(self,id)
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
             s=self.seqClass(self,id)
+            s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
             dict.__setitem__(self,id,s) # CACHE IT
             return s
 
@@ -291,9 +321,9 @@ class BlastDB(dict):
         return process_blast(cmd,seq,self,al)
 
     def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
-                  maxseq=None,minIdentity=None,maskOpts='-U T -F m'):
+                  maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts=''):
         "Run megablast search with repeat masking."
-        masked_seq=repeat_mask(seq)  # MASK REPEATS TO lowercase
+        masked_seq=repeat_mask(seq,opts=rmOpts)  # MASK REPEATS TO lowercase
         cmd='%s %s -d %s -D 2 -e %e -i stdin' % (blastpath,maskOpts,self.filepath,float(expmax))
         if maxseq is not None:
             cmd+=' -v %d' % maxseq
@@ -316,21 +346,10 @@ class StoredPathMapping(PathMapping):
         try: # RETURN STORED MAPPING
             return PathMapping.__getitem__(self,p)
         except KeyError: # TRY TO GET IT FROM THE STORED TABLE
-            self += p # ADD PathDict FOR THIS SEQUENCE
-            edgeAttr=None # DEFAULT: NO EDGE INFORMATION
-            if self._edgeClass is not None:
-                for edgeAttr in self._edgeClass._attrcol: break
-            for ival in self.table[p.id]:
-                srcPath=p[ival.src_start:ival.src_end]
-                destPath=self.destSet[ival.dest_id][ival.dest_start:ival.dest_end]
-                if edgeAttr is not None and hasattr(ival,edgeAttr):
-                    ei=len(self._edgeClass._attrcol)*[None] # RIGHT LENGTH LIST
-                    for a,i in self._edgeClass._attrcol.items():
-                        ei[i]=getattr(ival,a) # CONSTRUCT ATTRS IN RIGHT ORDER
-                    self[srcPath][destPath]=self._edgeClass(ei) # SAVE EDGE
-                else:
-                    self[srcPath]=destPath # SAVE ALIGNMENT W/O EDGE INFO
-            return PathMapping.__getitem__(self,p)
+            for ival in self.table[p.id]: # READ INTERVAL MAPPINGS ONE BY ONE
+                save_interval_alignment(self,ival,self.srcSet,self.destSet,
+                                        self._edgeClass) # SAVE IT
+            return PathMapping.__getitem__(self,p) # RETURN TOTAL RESULT
 
     def all_paths(self):
         "Get all source sequences in this mapping"
@@ -339,3 +358,110 @@ class StoredPathMapping(PathMapping):
             yield p
 
     # NEED TO ADD APPROPRIATE HOOKS FOR __iter__, items(), ETC.
+
+
+
+class VirtualSeq(SeqPath):
+    """Empty sequence object acts purely as a reference system.
+    Automatically elongates if slice extends beyond current end."""
+    def __init__(self,id,length=1):
+        SeqPath.__init__(self,self,0,length)
+        self.id=id
+    def __getitem__(self,k):
+        "Elongate if slice extends beyond current self.end"
+        if isinstance(k,types.SliceType):
+            if k.stop>self.end:
+                self.end=k.stop
+        return SeqPath.__getitem__(self,k)
+    def strslice(self,start,end):
+        "NO sequence access!  Raise an exception."
+        raise ValueError('VirtualSeq has no actual sequence')
+
+class VirtualSeqDB(dict):
+    "return a VirtualSeq for any ID requested"
+    def __getitem__(self,k):
+        try: # IF WE ALREADY CREATED A SEQUENCE FOR THIS ID, RETURN IT
+            return dict.__getitem__(self,k)
+        except KeyError: # CREATE A VirtualSeq FOR THIS NEW ID
+            s=VirtualSeq(k)
+            self[k]=s
+            return s
+
+
+class TempMAFIntervalDict(object):
+    "placeholder for generating edges that map a given interval to its targets"
+    def __init__(self,map,ival):
+        self.map=map
+        self.ival=ival
+    def edges(self):
+        "get all mappings of this interval"
+        return self.map.edges(self.ival)
+
+def MAF_get_interval(seq,start,end,ori):
+    "Alex's reverse intervals are shifted by one, so correct them..."
+    if ori== -1:
+        return get_interval(seq,start-1,end-1,ori)
+    else:
+        return get_interval(seq,start,end,ori)
+
+class MAFStoredPathMapping(PathMapping):
+    def __init__(self,ival,table,dbset,vdbset=None):
+        """Load all alignments that overlap ival, from the database table,
+        using dbset as the interface to all of the sequences.
+        """
+        if vdbset is None: # CREATE A VIRTUAL SEQ DB FOR REFERENCE SEQUENCES
+            vdbset=VirtualSeqDB()
+        PathMapping.__init__(self)
+        self.ival=ival
+        self.table=table
+        self.dbset=dbset
+        vseqs={}
+        self.vseqs=vseqs
+        id=dbset.getName(ival.path)
+        for i in table.select('where src_id=%s and src_start<%s and src_end>%s',
+                              (id,ival.end,ival.start)):  # SAVE MAPPING TO vdbset
+            save_interval_alignment(self,i,dbset,vdbset,None,MAF_get_interval)
+            print 'saving layer 1:',repr(i)
+            vseqs[i.dest_id]=None # KEEP TRACK OF ALL OUR VIRTUAL SEQUENCES...
+        for vseqID in vseqs: # GET EVERYTHING THAT OUR vseqs MAP TO...
+            for i in table.select('where src_id=%s',(vseqID,)): # SAVE MAPPING TO dbset
+                save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
+
+    def __getitem__(self,k):
+        return TempMAFIntervalDict(self,k)
+
+    def edges(self,ival=None):
+        "get all mappings of self.ival, as edges"
+        if ival is None:
+            ival=self.ival
+        for e in PathMapping.__getitem__(self,ival).edges():
+            for e2 in PathMapping.__getitem__(self,e.destPath).edges():
+                if ival!=e2.destPath: # IGNORE SELF-MATCH
+                    yield IntervalTransform(e.reverse(e2.srcPath),e2.destPath)
+
+
+class PrefixUnionDict(object):
+    """union interface to a series of dicts, each assigned a unique prefix
+       ID 'foo.bar' --> ID 'bar' in dict f asociated with prefix 'foo'."""
+    def __init__(self,prefixDict,separator='.'):
+        self.separator=separator
+        self.prefixDict=prefixDict
+        d={}
+        for k,v in prefixDict.items():
+            d[v]=k # CREATE A REVERSE MAPPING
+        self.dicts=d
+
+    def __getitem__(self,k):
+        "for ID 'foo.bar', return item 'bar' in dict f associated with prefix 'foo'"
+        (prefix,id) =k.split(self.separator)
+        return self.prefixDict[prefix][id]
+
+    def __iter__(self):
+        "generate union of all dicts items, each with appropriate prefix."
+        for p,d in self.prefixDict.items():
+            for id in d:
+                yield p+self.separator+id
+
+    def getName(self,path):
+        "return fully qualified ID i.e. 'foo.bar'"
+        return self.dicts[path.db]+self.separator+path.id
