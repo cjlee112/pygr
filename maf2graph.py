@@ -19,7 +19,7 @@ class Align2:
         for end in range(len(self.s1)):
             if(self.s1[end]=='-' or self.s2[end]=='-'):
                 if(begin<end):
-                    yield ((begin-gaps1,end-gaps1),(begin-gaps2,end-gaps2))
+                    yield ((begin-gaps1,end-gaps1,self.s1[begin:end]),(begin-gaps2,end-gaps2,self.s2[begin:end]))
                 begin=end+1
                 if(self.s1[end]=='-'):
                     gaps1=gaps1+1
@@ -27,7 +27,7 @@ class Align2:
                     gaps2=gaps2+1
         end=end+1
         if(begin<end):
-            yield ((begin-gaps1,end-gaps1),(begin-gaps2,end-gaps2))
+            yield ((begin-gaps1,end-gaps1,self.s1[begin:end]),(begin-gaps2,end-gaps2,self.s2[begin:end]))
 
 def reverse_complement(s):
     compl={'a':'t', 'c':'g', 'g':'c', 't':'a', 'u':'a', 'n':'n',
@@ -66,19 +66,20 @@ class MafParser:
                 self.sequences[s[1]]=AnonSequence(int(s[5]),s[1])
                 self.mAlign+=self.sequences[s[1]]
             if(s[4]=='-'):
-                node=(self.sequences[s[1]][-int(s[2]):-int(s[2])-int(s[3])],reverse_complement(s[6]))
+                node=(self.sequences[s[1]][-int(s[2]):-int(s[2])-int(s[3])],s[6])
+                self.sequences[s[1]].seqsplice(reverse_complement(node[1].replace('-','')),node[0].start,node[0].end)
             else:
                 node=(self.sequences[s[1]][ int(s[2]): int(s[2])+int(s[3])],s[6])
+                self.sequences[s[1]].seqsplice(node[1].replace('-',''),node[0].start,node[0].end)
             newnodes+=[node]
-            self.sequences[s[1]].seqsplice(node[1].replace('-',''),node[0].start,node[0].end)    
 
             s=fh.readline().split()
             
         for i in range(len(newnodes)):
             for j in range(i+1, len(newnodes)):
                 for inter in Align2(newnodes[i][1],newnodes[j][1]).intervals():
-                    self.mAlign[newnodes[i][0][inter[0][0]:inter[0][1]]][newnodes[j][0][inter[1][0]:inter[1][1]]]=(edgeInfo,newnodes[i][1][inter[0][0]:inter[0][1]],newnodes[j][1][inter[1][0]:inter[1][1]])
-                    self.mAlign[newnodes[j][0][inter[1][0]:inter[1][1]]][newnodes[i][0][inter[0][0]:inter[0][1]]]=(edgeInfo,newnodes[j][1][inter[1][0]:inter[1][1]],newnodes[i][1][inter[0][0]:inter[0][1]])                    
+                    self.mAlign[newnodes[i][0][inter[0][0]:inter[0][1]]][newnodes[j][0][inter[1][0]:inter[1][1]]]=(edgeInfo,inter[0][2],inter[1][2])
+                    self.mAlign[newnodes[j][0][inter[1][0]:inter[1][1]]][newnodes[i][0][inter[0][0]:inter[0][1]]]=(edgeInfo,inter[1][2],inter[0][2])
                
     def parse(self,filehandle):
         """parses the .maf filehandle """
