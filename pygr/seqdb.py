@@ -35,7 +35,7 @@ def write_fasta(ofile,s,chunk=60):
         id=s.id
     except AttributeError:
         id=new_seq_id()
-        s.id=id
+
     ofile.write('>'+str(id)+'\n')
     seq=str(s)
     end=len(seq)
@@ -45,6 +45,7 @@ def write_fasta(ofile,s,chunk=60):
         pos += chunk
         if pos>=end:
             break
+    return id # IN CASE CALLER WANTS TEMP ID WE MAY HAVE ASSIGNED
 
 def read_fasta(ifile):
     "Get one sequence at a time from stream ofile"
