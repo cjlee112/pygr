@@ -1,7 +1,8 @@
 from blasttest import *
 import MySQLdb
+import os
 
-db=MySQLdb.Connection('localhost','test','hedgehog')
+db=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf')
 cursor=db.cursor()
 
 # SAVE ALIGNMENT m TO DATABASE TABLE test.mytable USING cursor
