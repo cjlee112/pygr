@@ -223,3 +223,51 @@ def graphDBTables(tables,idDict):
             g.setEdge(f,t,edgeInfo)
             g.setEdge(t,f,edgeInfo)
     return g
+
+SQLTypeTranslation= {types.StringType:'varchar(32)',
+                     types.IntType:'int',
+                     types.FloatType:'float'}
+
+def createTableFromRepr(rows,tableName,cursor,typeTranslation=None,
+                        optionalDict=None,indexDict=()):
+    """Save rows into SQL tableName using cursor, with optional
+       translations of columns to specific SQL types (specified
+       by typeTranslation dict).
+       - optionDict can specify columns that are allowed to be NULL.
+       - indexDict can specify columns that must be indexed; columns
+       whose names end in _id will be indexed by default.
+       - rows must be an iterator which in turn returns dictionaries,
+       each representing a tuple of values (indexed by their column
+       names).
+    """
+    row=rows.next() # GET 1ST ROW TO EXTRACT COLUMN INFO
+    create_defs=[]
+    for col,val in row.items(): # PREPARE SQL TYPES FOR COLUMNS
+        coltype=None
+        if typeTranslation!=None and col in typeTranslation:
+            coltype=typeTranslation[col] # USER-SUPPLIED TRANSLATION
+        elif type(val) in SQLTypeTranslation:
+            coltype=SQLTypeTranslation[type(val)]
+        else: # SEARCH FOR A COMPATIBLE TYPE
+            for t in SQLTypeTranslation:
+                if isinstance(val,t):
+                    coltype=SQLTypeTranslation[t]
+                    break
+        if coltype==None:
+            raise TypeError("Don't know SQL type to use for %s" % col)
+        create_def='%s %s' %(col,coltype)
+        if optionalDict==None or col not in optionalDict:
+            create_def+=' not null'
+        create_defs.append(create_def)
+    for col in row: # CREATE INDEXES FOR ID COLUMNS
+        if col[-3:]=='_id' or col in indexDict:
+            create_defs.append('index(%s)' % col)
+    cmd='create table %s (%s)' % (tableName,','.join(create_defs))
+    cursor.execute(cmd) # CREATE THE TABLE IN THE DATABASE
+    
+    row_format=len(row)*'%s,'
+    cmd='insert into %s values (%s)' % (tableName,row_format[:-1])
+    cursor.execute(cmd,tuple(row.values())) # SAVE OUR FIRST ROW
+    for row in rows: # NOW SAVE ALL THE ROWS
+        cursor.execute(cmd,tuple(row.values()))
+
