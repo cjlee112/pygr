@@ -329,17 +329,24 @@ class TempIntervalDict(object):
             for destPath in destList:
                 yield self.pathDict.xform(self.p,srcPath,destPath)
 
-    def items(self):
+    def items(self,getItems=True):
         "Get both target intervals and edge information (transforms)"
         for (srcPath,destList) in self.pathDict.findIntervals(self.p):
             i=0
             for destPath in destList:
-                if hasattr(destList,'edge'): # USE THE EDGE INFORMATION
-                    xform=IntervalTransform(srcPath,destPath,destList.edge[i])
-                else: # NO EDGE INFORMATION TO BIND
-                    xform=IntervalTransform(srcPath,destPath)
+                xform=IntervalTransform(srcPath,destPath,destList,'edge',i)
                 i += 1
-                yield xform(self.p * srcPath),xform
+                s=self.p * srcPath # FIND ALIGNED PART OF OUR INTERVAL
+                d=xform(s) # MAP TO THE TARGET SEQUENCE
+                xform.srcPath=s # SAVE THE INTERVAL INFO
+                xform.destPath=d
+                if getItems==True: # RETURN TARGET INTERVAL AND EDGE INFO
+                    yield d,xform
+                else: # JUST RETURN EDGE INFO
+                    yield xform
+    def edges(self):
+        "Get edges for this source interval to all its target intervals"
+        return self.items(False)
 
     def __contains__(self,k):
         if not hasattr(self,'_map'): # TRY TO SPEED UP MULTIPLE MEMBERSHIP TESTS
