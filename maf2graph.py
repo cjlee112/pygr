@@ -110,9 +110,48 @@ class MafParser:
                 return
             l=filehandle.readline()
 
+    def _dump(self,cursor,alignTab,sequenceTab=None):
+        create=False
+        try:
+            cursor.execute('lock tables '+alignTab+' write')
+        except:
+            create=True
+            pass
+        
+        for row in self.mAlign.repr_dict():
+            if(create):
+                createTableFromRow(cursor,alignTab,row,
+                                   {'src_id':'varchar(30)','dest_id':'varchar(30)'})
+                create=False
+                cursor.execute('lock tables '+alignTab+' write')
+            storeRow(cursor, alignTab, row)
+        cursor.execute('unlock tables')    
+
+        if(sequenceTab):
+            create=False
+            try:
+                cursor.execute('lock tables '+sequenceTab+' write')
+            except:
+                create=True
+                pass
+                
+            for key in self.sequences:
+                for row in self.sequences[key].known_int():
+                    if(create):
+                        createTableFromRow(cursor,sequenceTab,row,
+                                           {'src_id':'varchar(30)','seq':'longtext'})
+                        create=False
+                        cursor.execute('lock tables '+sequenceTab+' write')
+                    storeRow(cursor,sequenceTab,row)
+            cursor.execute('unlock tables') 
+
+        del self.mAlign
+        del self.sequences
+        self.mAlign=PathMapping()
+        self.sequences={}
+                
     def parseIntoDB(self,filehandle,cursor,alignTab,sequenceTab=None):
         """parses the .maf filehandle into database using cursors"""
-        stored=False
         l=filehandle.readline();
         if l.split()[0]!='##maf':
             return
@@ -129,28 +168,7 @@ class MafParser:
             elif(la[0]=='a'):
 ##                print "reading alignment"
                 self.readalign(la[1:],filehandle)
-
-                for row in self.mAlign.repr_dict():
-                    if(not stored):
-                        try:
-                            createTableFromRow(cursor,alignTab,row,
-                                               {'src_id':'varchar(30)','dest_id':'varchar(30)'})
-                        except:
-                            pass
-                        if(not sequenceTab):
-                            stored=True
-                    storeRow(cursor, alignTab, row)
-                if(sequenceTab):
-                    for key in self.sequences:
-                        for row in self.sequences[key].known_int():
-                            if(not stored):
-                                try:
-                                    createTableFromRow(cursor,sequenceTab,row,
-                                                       {'src_id':'varchar(30)','seq':'longtext'})
-                                except:
-                                    pass
-                                stored=True
-                            storeRow(cursor,sequenceTab,row)
+                self._dump(cursor,alignTab,sequenceTab)
                 del self.mAlign
                 del self.sequences
                 self.mAlign=PathMapping()
