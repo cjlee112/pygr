@@ -337,17 +337,18 @@ class AlignmentSummary(object):
         self.edges.append(e)
         return self
 
-    def percent_id(self):
+    def percent_id(self,minLength=0):
         "calculate fractional identity for this pairwise alignment"
         nid=0
         for e in self.edges:
             nid+=e.nidentity()
         srcLen=self.srcMax-self.srcMin
         destLen=self.destMax-self.destMin
-        if srcLen>destLen:
-            return nid/float(srcLen)
-        else:
-            return nid/float(destLen)
+        if srcLen>minLength:
+            minLength=srcLen
+        if destLen>minLength:
+            minLength=destLen
+        return nid/float(minLength)
 
 
 
