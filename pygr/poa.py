@@ -427,6 +427,16 @@ class TempIntervalDict(object):
         "Get edges for this source interval to all its target intervals"
         return self.items(False)
 
+    def seq_dict(self):
+        "make a dict of {seq:AlignmentSummary}"
+        d={}
+        for e in self.edges():
+            try:
+                d[e.destPath.path]+=e
+            except KeyError:
+                d[e.destPath.path]=AlignmentSummary(e)
+        return d
+
     def __contains__(self,k):
         if not hasattr(self,'_map'): # TRY TO SPEED UP MULTIPLE MEMBERSHIP TESTS
             self._map={} # FIRST TIME, BUILD AN INDEX OF TARGET INTERVALS
