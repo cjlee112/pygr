@@ -335,7 +335,7 @@ class TableGroup(dict):
         if suffix is not None:
             self.suffix=suffix
         for k,v in kw.items():
-            if '.' not in v:
+            if v is not None and '.' not in v:
                 v=self.db+'.'+v  # ADD DATABASE NAME AS PREFIX
             self[k]=v
     def __getattr__(self,k):
