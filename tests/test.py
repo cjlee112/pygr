@@ -1,5 +1,6 @@
 import time
 from MySQLdb import *
+from pathquery import *
 from splicegraph import *
 
 db=Connection('lldb','reader','hedgehog')
