@@ -161,6 +161,15 @@ for k in join:
 join=mRNA_swiss >> swiss_features # JOIN THE TWO ALIGNMENTS
 t=time.time()
 l=[i for i in join]
-print 'graph join time=',time.time()-t
+print 'pathquery join time=',time.time()-t
 print 'join has %d elements' % len(l)
+
+from graphquery import *
+myjoin={1:{2:None},2:{3:DD(dataGraph=swiss_features)},3:{}}
+t=time.time()
+i=0
+for d in graphquery(mRNA_swiss,myjoin):
+    i+=1
+print 'graphquery join time=',time.time()-t
+print 'join has %d elements' % i
 
