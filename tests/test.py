@@ -1,5 +1,7 @@
 import time
 from splicegraph import *
+from pathquery import *
+from graphquery import *
 
 def getSpliceGraphFromDB(host,user,password,dbName,subsetSuffix,loadAll,*tableNames):
     """load data from MySQL using the designated database, optional table subset.
@@ -129,7 +131,6 @@ def pathQueryTests(spliceGraph,alt5Graph):
     "run some path query example tests"
     # path query examples: to make this work, let's force
     # spliceGraph to use path query wrapper interface
-    from pathquery import *
     spliceGraph.__class__=PathQueryDictGraph
     alt5Graph.__class__=PathQueryDictGraph
 
@@ -157,7 +158,6 @@ def pathQueryTests(spliceGraph,alt5Graph):
 
 def graphQueryTests(spliceGraph,alt5Graph):
     "example u11/12 alt5 graph query"
-    from graphquery import *
     queryGraph={0:{2:DD(filter=lambda toNode,fromNode,edge,*l:edge.type=="U11/U12"),
                    1:DD(dataGraph=alt5Graph)}, 1:{3:None}, 2:{3:None},3:{}}
 
