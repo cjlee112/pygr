@@ -88,7 +88,7 @@ class SeqPath(object):
     def __cmp__(self,other):
         if not isinstance(other,SeqPath):
             return -1
-        if self.path!=other.path:
+        if id(self.path)!=id(other.path):
             raise TypeError('SeqPath not comparable, not on same path: %s,%s'
                             % (self.path,other.path))
         return cmp((self.start,self.end),(other.start,other.end))
@@ -215,7 +215,9 @@ def firstItem(aList):
 
 
 class IntervalTransform(object):
-    def __init__(self,srcPath,destPath): # MAP FROM srcPath -> destPath
+    "Represents coordinate transformation from one interval to another"
+    def __init__(self,srcPath,destPath,edgeInfo=None):
+        "MAP FROM srcPath -> destPath"
         ori=srcPath.orientation * destPath.orientation
         self.scale= ori * len(destPath)/float(len(srcPath))
         if ori>0: # MAP srcPath.start -> destPath.start
@@ -224,17 +226,23 @@ class IntervalTransform(object):
             self.offset=destPath.end-1-self.scale*srcPath.start
         self.srcPath=srcPath.path
         self.destPath=destPath.path
+        if edgeInfo!=None:
+            self.edgeInfo=edgeInfo
 
-    def xform(self,i): # TRANSFORM A SINGLE VALUE
+    def xform(self,i):
+        "transform a single integer value"
         return int(self.scale*i+self.offset)
-    def __call__(self,srcPath): # APPLY THE TRANSFORMATION TO AN INTERVAL
+    def __call__(self,srcPath):
+        "Apply this transformation to an interval"
         return SeqPath(self.destPath,self.xform(srcPath.start),\
                        self.xform(srcPath.end))
     def xformBack(self,i):
+        "reverse transform a single integer value"
         scale=1.0/self.scale
         offset= -1.0*self.offset/self.scale
         return int(scale*i+offset)
     def reverse(self,destPath):
+        "reverse transform an interval"
         return SeqPath(self.srcPath,self.xformBack(destPath.start),
                        self.xformBack(destPath.end))
     def __getitem__(self,srcPath): # PROVIDE DICT-LIKE INTERFACE
@@ -243,36 +251,83 @@ class IntervalTransform(object):
         yield self.srcPath
     def items(self):
         yield self.srcPath,self.destPath
+    def __getattr__(self,attr):
+        "provide transparent wrapper for edgeInfo attributes"
+        try:
+            return getattr(self.__dict__['edgeInfo'],attr)
+        except (KeyError,AttributeError):
+            raise AttributeError('%s does not have attribute %s'
+                                 %(str(self),attr))
 
 def clipUnalignedRegions(p):
-    r=range(len(p)).__iter__()
-    r.next()
-    for i in r:
+    """p[-1] is the intersection of all alignment constraints,
+       so reverse map it to find the actual aligned regions."""
+    l=len(p)
+    i=1
+    while i<l:
         p[-i-1]=p.edge[-i].reverse(p[-i])
+        i += 1
 
 
 class ContainsList(list):
     def saveNode(self,p,p_contains,val):
         self.append((p,p_contains,val))
-    def newItem(self,p,val):
-        # SAVE AS TUPLE: interval,contains,mapped-to-interval
+    def newNode(self,p,val):
+        "SAVE AS TUPLE: interval,contains,mapped-to-interval"
         self.saveNode(p,None,[val])
+    def newEdge(self,p,node,edge):
+        "Store both a new node in graph, and edge information for it"
+        self.saveNode(p,None,PathList((node,),(edge,)))
 
+
+class TempIntervalList(object):
+    "Temporary object provides iterator for TempIntervalDict.__getattr__"
+    def __init__(self,pathDict,p,targetPath):
+        self.pathDict=pathDict
+        self.p=p
+        self.targetPath=targetPath
+
+    def __iter__(self):
+        for (srcPath,destList) in self.pathDict.findIntervals(self.p):
+            i=0
+            for destPath in destList:
+                d=self.targetPath*destPath
+                if d!=None: # PASSES TARGET CONSTRAINT
+                    if hasattr(destList,'edge'): # USE THE EDGE INFORMATION
+                        xform=IntervalTransform(srcPath,destPath,destList.edge[i])
+                    else: # NO EDGE INFORMATION TO BIND
+                        xform=IntervalTransform(srcPath,destPath)
+                    d2=d*xform(self.p * srcPath)
+                    if d2!=None: # PASSES BOTH SOURCE AND TARGET CONSTRAINTS
+                        s2=xform.reverse(d2)
+                        xform.srcPath=s2 # SAVE ALIGNED INTERVALS
+                        xform.destPath=d2
+                        yield xform # RETURN XFORM AS EDGE-INFORMATION
+                i += 1
+        
 
 class TempIntervalDict(object):
+    "Temporary object acts as second layer dictionary for graph interface"
     def __init__(self,pathDict,p):
         self.pathDict=pathDict
         self.p=p
 
-    def __iter__(self): # RETURN ALIGNED INTERVALS
+    def __iter__(self):
+        "Get all intervals aligned with self.p"
         for (srcPath,destList) in self.pathDict.findIntervals(self.p):
             for destPath in destList:
                 yield self.pathDict.xform(self.p,srcPath,destPath)
 
-    def items(self): # RETURN ALIGNED INTERVALS AND TRANSFORM FROM OUR INTERVAL
+    def items(self):
+        "Get both target intervals and edge information (transforms)"
         for (srcPath,destList) in self.pathDict.findIntervals(self.p):
+            i=0
             for destPath in destList:
-                xform=IntervalTransform(srcPath,destPath)
+                if hasattr(destList,'edge'): # USE THE EDGE INFORMATION
+                    xform=IntervalTransform(srcPath,destPath,destList.edge[i])
+                else: # NO EDGE INFORMATION TO BIND
+                    xform=IntervalTransform(srcPath,destPath)
+                i += 1
                 yield xform(self.p * srcPath),xform
 
     def __contains__(self,k):
@@ -283,24 +338,13 @@ class TempIntervalDict(object):
         return k in self._map
 
     def __getitem__(self,targetPath):
-        """Get interval mapping(s) to a given target interval, as coord xforms
-           Warning: this returns an iterator, which can only be used once!
-           This should probably be pulled out into a temporary object class
-           that recodes this as __iter__() method.
-           """
-        for (srcPath,destList) in self.pathDict.findIntervals(self.p):
-            for destPath in destList:
-                d=targetPath*destPath
-                if d!=None: # PASSES TARGET CONSTRAINT
-                    xform=IntervalTransform(srcPath,destPath)
-                    d2=d*xform(self.p * srcPath)
-                    if d2!=None: # PASSES BOTH SOURCE AND TARGET CONSTRAINTS
-                        s2=xform.reverse(d2)
-                        xform.srcPath=s2 # SAVE ALIGNED INTERVALS
-                        xform.destPath=d2
-                        yield xform # RETURN XFORM AS EDGE-INFORMATION
+        "Get interval mapping(s) to a given target interval, as coord xforms"
+        return TempIntervalList(self.pathDict,self.p,targetPath)
+    
+    def __setitem__(self,k,val):
+        "Save both an aligned interval and edge information"
+        self.pathDict.ivals.newEdge(self.p,k,val)
         
-
     def __repr__(self):
         s=''
         for i in self:
@@ -482,7 +526,7 @@ class PathDict(object):
         # IF val IS AN INTERVAL, SAVE THIS AS A MAPPING.
         # OTHERWISE JUST SAVE THE INTERVAL p TO OUR LIST
         # APPEND A COPY OF p TO OUR ivals, AND MARK ready AS FALSE.
-        self.ivals.newItem(p,val)
+        self.ivals.newNode(p,val)
         self.ready=False # FORCE AN UPDATE NEXT TIME LIST IS READ
 
     def append(self,p): # CONVENIENCE METHOD FOR LIST-LIKE INTERFACE
@@ -563,7 +607,12 @@ class PathDict(object):
 
 
 
-
+class AlignPathGraph(GraphPathGraph):
+    def __iter__(self):
+        "Wrapper around GraphPathGraph iterator, designed for alignments"
+        for i in GraphPathGraph.__iter__(self):
+            clipUnalignedRegions(i) # RESTRICT TO ACTUAL REGION OF ALIGNMENT
+            yield i
 
 
 # REPRESENTS A SET OF PATHS OR AN ALIGNMENT OF PATHS
@@ -616,7 +665,7 @@ class PathMapping(object):
         return self.walk(getItems=True)
     filter=newFilterPath
     def __rshift__(self,graph):
-        q=newJoinPath(self,self)
+        q=AlignPathGraph(self,self)
         return q >> graph
 
 class PathMapping2(PathMapping): # STORES BIDIRECTIONAL INDEX
