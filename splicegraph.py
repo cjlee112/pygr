@@ -1,22 +1,8 @@
 
 from sqlgraph import *
 
-class ExonForm(TupleO): # ADD ATTRIBUTES TO THESE ONCE WE HAVE SCHEMA INFO
-    pass
-class Cluster(TupleO):
-    pass
-class Splice(TupleO):
-    pass
 
-# CREATE OUR GRAPHS
-clusterExons=dictGraph()
-clusterSplices=dictGraph()
-spliceGraph=dictGraph()
-alt5Graph=dictGraph()
-alt3Graph=dictGraph()
-
-def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,spliceGraph=spliceGraph,alt5=alt5Graph,
-                    alt3=alt3Graph,clusterExons=clusterExons,clusterSplices=clusterSplices):
+def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t):
     """
     Build a splice graph from the specified SQL tables representing gene clusters,
     exon forms, and splices.  Each table must be specified as a DB.TABLENAME string.
@@ -24,21 +10,34 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,spliceGraph=spliceGraph,alt5
     The splice graph is built based on exact match of exon ends and splice ends.
     In addition, also builds alt5Graph (exons that match at start, but differ at end)
     and alt3Graph (exons that match at end, but differ at start).
+
+    Returns tuple: clusters,exons,splices,spliceGraph,alt5Graph,alt3Graph
     """
+
+    # CREATE OUR GRAPHS
+    clusterExons=dictGraph()
+    clusterSplices=dictGraph()
+    spliceGraph=dictGraph()
+    alt5=dictGraph()
+    alt3=dictGraph()
+
     exon_forms=jun03[exon_t]
-    ExonForm._attrcol=exon_forms.data # NOW BIND THE SCHEMA INFORMATION
-    ExonForm.__class_schema__=SchemaDict(((spliceGraph,'next'),(alt5,'alt5'),(alt3,'alt3')))
+    class ExonForm(TupleO): # ADD ATTRIBUTES STORING SCHEMA INFO
+        _attrcol=exon_forms.data # BIND THE SCHEMA INFORMATION
+        __class_schema__=SchemaDict(((spliceGraph,'next'),(alt5,'alt5'),(alt3,'alt3')))
     print 'Loading %s...' % exon_forms
     exon_forms.load(ExonForm)
 
     clusters=jun03[cluster_t]
-    Cluster._attrcol=clusters.data
-    Cluster.__class_schema__=SchemaDict(((clusterExons,'exons'),(clusterSplices,'splices')))
+    class Cluster(TupleO):
+        _attrcol=clusters.data
+        __class_schema__=SchemaDict(((clusterExons,'exons'),(clusterSplices,'splices')))
     print 'Loading %s...' % clusters
     clusters.load(Cluster)
 
     splices=jun03[splice_t]
-    Splice._attrcol=splices.data
+    class Splice(TupleO):
+        _attrcol=splices.data
     print 'Loading %s...' % splices
     splices.load(Splice)
 
@@ -103,5 +102,5 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,spliceGraph=spliceGraph,alt5
                         e1.alt3+=e2
                         e2.alt3+=e1
 
-    return clusters,exons,splices
+    return clusters,exons,splices,spliceGraph,alt5,alt3
 
