@@ -161,6 +161,26 @@ class SQLTableNoCache(SQLTableBase):
 SQLRow._tableclass=SQLTableNoCache  # SQLRow IS FOR NON-CACHING TABLE INTERFACE
 
 
+class SQLTableMultiNoCache(SQLTableBase):
+    "Trivial on-the-fly access for table with key that returns multiple rows"
+    _distinct_key='id' # DEFAULT COLUMN TO USE AS KEY
+    def __iter__(self):
+        self.cursor.execute('select distinct(%s) from %s'
+                            %(self._distinct_key,self.name))
+        l=self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
+        for row in l:
+            yield row[0]
+
+    def __getitem__(self,id):
+        self.cursor.execute('select * from %s where %s=%%s'
+                            %(self.name,self._distinct_key),(id,))
+        l=self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
+        if not hasattr(self,'oclass'):
+            self.objclass() # GENERATE DEFAULT OBJECT CLASS BASED ON TupleO
+        for row in l:
+            yield self.oclass(row)
+
+
 def describeDBTables(name,cursor,idDict):
     """
     Get table info about database <name> via <cursor>, and store primary keys
