@@ -11,7 +11,8 @@ jun03=suffixSubset(tables,'JUN03') # SET OF TABLES ENDING IN JUN03
 idDict=indexIDs(jun03) # CREATE AN INDEX OF THEIR PRIMARY KEYS
 
 # LOAD DATA & BUILD THE SPLICE GRAPH
-clusters,exons,splices=loadSpliceGraph(jun03,'HUMAN_SPLICE_03.cluster_JUN03',
+clusters,exons,splices,spliceGraph,alt5Graph,alt3Graph=loadSpliceGraph(jun03,
+                                       'HUMAN_SPLICE_03.cluster_JUN03',
                                        'HUMAN_SPLICE_03.exon_formJUN03',
                                        'HUMAN_SPLICE_03.splice_verification_JUN03')
 
