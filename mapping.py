@@ -66,6 +66,13 @@ class PathList(list):
         list.append(self,val)
         self.edge.append(val)
 
+    def extend(self,l):
+        list.extend(self,l) # EXTEND TOP-LEVEL LIST AS USUAL
+        try: # EXTEND OUR EDGE LIST AS WELL
+            self.edge.extend(l.edge)
+        except AttributeError: #IF l HAS NO EDGES, PAD OUR EDGE LIST WITH Nones
+            self.edge.extend(len(l)*[None])
+
 
 def newfilter(self,filter,filterClass):
     "internal function for spawning another layer of Attr/FilterPathGraph"
