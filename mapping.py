@@ -94,6 +94,10 @@ class AttrPathGraph(object):
         "add a filter to this path"
         return newfilter(self,filter,self.filterClass)
 
+    def __rshift__(self,graph):
+        "add a join step to this path"
+        return newfilter(self,graph,self.joinClass)
+
     def __iter__(self):
         """iterate over all paths that satisfy this PathGraph,
         returning each path as a list of nodes.
@@ -158,7 +162,35 @@ class FilterPathGraph(AttrPathGraph):
 
 AttrPathGraph.filterClass=FilterPathGraph # SOLUTION TO REFERENCE ORDER CATCH-22
 
+class GraphPathGraph(AttrPathGraph):
+    "Adds a graph join step to a PathGraph"
+    def __iter__(self):
+        """iterate over all paths that satisfy this PathGraph,
+        returning each path as a list of nodes.
+        This method specifically implements join with graph stored as _attr."""
+        if self._next!=None: # WE HAVE MORE LAYERS BELOW US, SO NEED TO PASS INFO...
+            if hasattr(self._graph,'items'): # FOR DICT CONTAINER, GET VALUES AS EDGES
+                for o,e in self._graph.items(): # ITERATE OVER ALL OBJECTS IN THIS LAYER
+                    self._path[self._depth]=o # SAVE IT IN CURRENT PATH
+                    self._path.edge[self._depth]=e # SAVE EDGE INFO TOO!
+                    self._next._graph=self._attr[o] # USE GRAPH TO GET NEXT LAYER
+                    for n in self._next:
+                        n.insert(0,o)
+                        yield n
+            else: # FOR NON-DICT CONTAINER, NO EDGE INFO!
+                self._path.edge[self._depth]=None
+                for o in self._graph: # ITERATE OVER ALL OBJECTS IN THIS LAYER
+                    self._path[self._depth]=o # SAVE IT IN CURRENT PATH
+                    self._next._graph=self._attr[o] # USE GRAPH TO GET NEXT LAYER
+                    for n in self._next: # GET RESULTS FROM THE NEXT LAYER
+                        n.insert(0,o) # ADD OUR OBJECT AT HEAD OF LIST
+                        yield n
+        else: # LAST LAYER, SO JUST RETURN OUR ITEMS
+            for o in self._graph:
+                for n in self._attr[o]:
+                    yield [o,n]
 
+AttrPathGraph.joinClass=GraphPathGraph # SOLUTION TO REFERENCE ORDER CATCH-22
 
 
 
@@ -169,6 +201,8 @@ def newAttrPath(self,attr):
     return AttrPathGraph(attr,graph=self)
 def newFilterPath(self,attr):
     return FilterPathGraph(attr,graph=self)
+def newJoinPath(self,attr):
+    return GraphPathGraph(attr,graph=self)
 
 
 class dictEdge(dict):
@@ -221,6 +255,7 @@ class dictEdge(dict):
 
     __getattr__=newAttrPath
     filter=newFilterPath
+    __rshift__=newJoinPath
                 
 
 class dictGraph(dict):
@@ -284,3 +319,4 @@ class dictGraph(dict):
 
     __getattr__=newAttrPath
     filter=newFilterPath
+    __rshift__=newJoinPath
