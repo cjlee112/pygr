@@ -63,14 +63,14 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,mrna_seq_t,pro
     print 'Loading %s...' % splices
     splices.load(Splice)
 
-    print 'Saving alignment of protein to mrna isoforms...'
-    mrna_protein=PathMapping2()
-    for form_id in protein:
-        p=protein[form_id]
-        m=mrna[form_id]
-        start=3*(p.mRNA_start-1)+int(p.reading_frame)
-        end=start+3*p.protein_length
-        mrna_protein[p]=m[start:end]
+##     print 'Saving alignment of protein to mrna isoforms...'
+##     mrna_protein=PathMapping2()
+##     for form_id in protein:
+##         p=protein[form_id]
+##         m=mrna[form_id]
+##         start=3*(p.mRNA_start-1)+int(p.reading_frame)
+##         end=start+3*p.protein_length
+##         mrna_protein[p]=m[start:end]
 
     print 'Adding clusters to graph...'
     for c in clusters.values(): # ADD CLUSTERS AS NODES TO GRAPH
@@ -133,5 +133,5 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,mrna_seq_t,pro
                         e1.alt3+=e2
                         e2.alt3+=e1
 
-    return clusters,exon_forms,splices,g,spliceGraph,alt5,alt3,mrna,protein,mrna_protein
+    return clusters,exon_forms,splices,g,spliceGraph,alt5,alt3,mrna,protein
 
