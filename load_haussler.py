@@ -13,11 +13,13 @@ DBINFO=db_info_load('db_info.def')
 filelist=open(DBINFO['TODO'])
 
 
-file=filelist.readline()
+file=filelist.readline().strip()
 
 while file:
     p=MafParser()
-    os.system(DBINFO['GUNZIP']+' '+file+' >load.tmp')
+    s=DBINFO['GUNZIP']+' '+file+' >load.tmp'
+##    print s;
+    os.system(s)
     ofile=open('load.tmp')
     try:
         p.parseIntoDB(ofile,cursor,DBINFO['ALIGN_TABLE'],DBINFO['INTERVAL_TABLE'])
@@ -28,5 +30,5 @@ while file:
         print inst.args
     ofile.close()
     os.system('rm load.tmp')
-    file=filelist.readline()
+    file=filelist.readline().strip()
     
