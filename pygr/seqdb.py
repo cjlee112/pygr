@@ -194,6 +194,12 @@ class BlastDB(dict):
         "format database and build indexes if needed"
         self.filepath=filepath
         dict.__init__(self)
+        if(os.path.isfile(filepath+'.psd')):
+            self._seqtype=PROTEIN_SEQTYPE
+            return
+        elif(os.path.isfile(filepath+'.nsd')):
+            self._seqtype=DNA_SEQTYPE
+            return
         ofile=file(filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
         for id,title,seq in read_fasta(ofile,onlyReadOneLine=True):
             self._seqtype=guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
