@@ -5,6 +5,13 @@ import xmlrpclib
 import traceback
 
 
+def get_hostname(host=None):
+    'get FQDN for host, or current host if not specified'
+    import socket
+    if host is None:
+        host=socket.gethostname()
+    return socket.gethostbyaddr(host)[0]
+
 def get_server(host,port):
     "start xmlrpc server on requested host:port"
     import SimpleXMLRPCServer
@@ -44,14 +51,54 @@ def safe_dispatch(self,name,args):
     return False # THIS RETURN VALUE IS CONFORMABLE BY XMLRPC...
     
 
+class ObjectFromString(list):
+    """convenience class for initialization from string of format:
+    val1,val2,foo=12,bar=39,sshopts=-1 -p 1234
+    Args of format name=val are saved on the object as attributes;
+    otherwise each arg is saved as a list.
+    Argument type conversion is performed automatically if attrtype
+    mapping provided either to constructor or by the class itself.
+    Numeric keys in this mapping are applied to the corresponding
+    list arguments; string keys in this mapping are applied to
+    the corresponding attribute arguments.
+    Both the argument separator and assignment separator can be
+    customized."""
+    _separator=','
+    _eq_separator='='
+    def __init__(self,s,separator=None,eq_separator=None):
+        list.__init__(self)
+        if separator is None:
+            separator=self._separator
+        if eq_separator is None:
+            eq_separator=self._eq_separator
+        args=s.split(separator)
+        i=0
+        for arg in args:
+            try: # PROCESS attr=val ARGUMENT FORMAT
+                k,v=arg.split(eq_separator)
+                try: # SEE IF WE HAVE A TYPE FOR THIS ATTRIBUTE
+                    v=self._attrtype[k](v)
+                except (AttributeError,KeyError):
+                    pass # IF NO CONVERSION, JUST USE THE ORIGINAL STRING
+                setattr(self,k,v) # SAVE VALUE AS ATTRIBUTE
+            except ValueError: # JUST A SIMPLE ARGUMENT, SO SAVE AS ARG LIST
+                try: # SEE IF WE HAVE A TYPE FOR THIS LIST ITEM
+                    arg=self._attrtype[i](arg)
+                except (AttributeError,KeyError):
+                    pass # IF NO CONVERSION, JUST USE THE ORIGINAL STRING
+                self.append(arg)
+                i+=1 # ADVANCE OUR ARGUMENT COUNT
+
+
 class FileDict(dict):
-    "read key,value pairs as tab separated lines"
-    def __init__(self,filename):
+    "read key,value pairs as WS-separated lines, with objclass(value) conversion"
+    def __init__(self,filename,objclass=str):
         dict.__init__(self)
         f=file(filename)
         for line in f:
-            key,val=line.split()
-            self[key]=val
+            key=line.split()[0] # GET THE 1ST ARGUMENT
+            val=line[len(key):].lstrip().rstrip() # GET THE REST, STRIP OUTER WS
+            self[key]=objclass(val) # APPLY THE DESIRED TYPE CONVERSION
         f.close()
 
 def try_fork():
@@ -90,7 +137,8 @@ class CoordinatorInfo(object):
     and provides interface to Coordinator that protects against possibility of
     deadlock."""
     min_startup_time=60.0
-    def __init__(self,name,url,user,priority,resources,job_id=0,immediate=False):
+    def __init__(self,name,url,user,priority,resources,job_id=0,immediate=False,
+                 demand_ncpu=0):
         self.name=name
         self.url=url
         self.user=user
@@ -101,6 +149,7 @@ class CoordinatorInfo(object):
         self.processors={}
         self.resources=resources
         self.start_time=time.time()
+        self.demand_ncpu=demand_ncpu # SET TO NON-ZERO IF YOU WANT FIXED #CPUS
         self.allocated_ncpu=0
         self.new_cpus=[]
         self.last_start_proc_time=0.0
@@ -136,6 +185,8 @@ class CoordinatorInfo(object):
             self.last_start_proc_time=time.time()
         
 
+class HostInfo(ObjectFromString):
+    _attrtype={'maxload':float}
 
 
 class ResourceController(object):
@@ -146,8 +197,9 @@ class ResourceController(object):
                     'register_coordinator':0,'unregister_coordinator':0,
                     'register_processor':0,'unregister_processor':0,
                     'get_resource':0,'acquire_rule':0,'release_rule':0,
-                    'request_cpus':0,'setload':0,'retry_unused_hosts':0,
-                    'get_status':0,'setthrottle':0,'del_lock':0}
+                    'request_cpus':0,'retry_unused_hosts':0,
+                    'get_status':0,'setthrottle':0,'del_lock':0,
+                    'get_hostinfo':0,'set_hostinfo':0}
     _dispatch=safe_dispatch # RESTRICT XMLRPC TO JUST THE METHODS LISTED ABOVE
     max_tb=10
     def __init__(self,rc='controller',port=5000,overload_margin=0.6,
@@ -159,8 +211,8 @@ class ResourceController(object):
         self.throttle=throttle
         self.rebalance_time=time.time()
         self.must_rebalance=False
-        self.host=os.uname()[1]
-        self.hosts=FileDict(self.name+'.hosts')
+        self.host=get_hostname()
+        self.hosts=FileDict(self.name+'.hosts',HostInfo)
         self.getrules()
         self.getresources()
         self.server,self.port = get_server(self.host,port)
@@ -169,9 +221,13 @@ class ResourceController(object):
         self.njob=0
         self.locks={}
         self.systemLoad={}
-        for host in self.hosts: # 1ST ASSUME HOST EMPTY, THEN GET LOAD REPORTS
-            self.hosts[host]=float(self.hosts[host])
-            self.systemLoad[host]=0.0
+        hostlist=[host for host in self.hosts]
+        for host in hostlist: # 1ST ASSUME HOST EMPTY, THEN GET LOAD REPORTS
+            hostFQDN=get_hostname(host) # CONVERT ALL HOSTNAMES TO FQDNs
+            if hostFQDN!=host: # USE FQDN FOR ALL SUBSEQUENT REFS!
+                self.hosts[hostFQDN]=self.hosts[host]
+                del self.hosts[host]
+            self.systemLoad[hostFQDN]=0.0
 
     __call__=serve_forever
 
@@ -179,23 +235,34 @@ class ResourceController(object):
         "calculate the latest balanced loads"
         maxload=0.
         total=0.
-        l=[c.job_id for c in self.coordinators.values()]
-        l.sort() # SORT job_id IN ASCENDING ORDER
+        current_job=99999999
         for c in self.coordinators.values():
-            if c.job_id==l[0] or c.immediate:
+            if c.priority>0.0 and c.job_id<current_job:
+                current_job=c.job_id # FIND 1ST NON-ZER0 PRIORITY JOB
+        for c in self.coordinators.values():
+            if c.demand_ncpu: # DEMANDS A FIXED #CPUS, NO LOAD BALANCING
+                c.run=True
+            elif c.job_id==current_job or c.immediate:
                 c.run=True # YES, RUN THIS JOB
                 total+=c.priority
             else:
                 c.run=False
-        for v in self.hosts.values():
-            maxload+=v
-        maxload*=self.throttle
-        if total>0.:
+        for v in self.hosts.values(): # SUM UP TOTAL CPUS
+            maxload+=v.maxload
+        maxload*=self.throttle # APPLY OUR THROTTLE CONTROL
+        for c in self.coordinators.values(): #REMOVE DEMANDED CPUS
+            if c.demand_ncpu:
+                maxload-=c.demand_ncpu
+        if maxload<0.: # DON'T ALLOW NEGATIVE VALUES
+            maxload=0.
+        if total>0.: # DON'T DIVIDE BY ZERO...
             maxload /= float(total)
-        for c in self.coordinators.values():
-            if c.run:
+        for c in self.coordinators.values(): # ALLOCATE SHARE OF TOTAL CPUS...
+            if c.demand_ncpu: # ALLOCATE EXACTLY THE NUMBER REQUESTED
+                c.allocated_ncpu=int(c.demand_ncpu)
+            elif c.run: # COMPUTE BASED ON PRIORITY SHARE
                 c.allocated_ncpu=int(maxload * c.priority)
-            else:
+            else: # NOT RUNNING
                 c.allocated_ncpu=0
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
 
@@ -220,8 +287,8 @@ class ResourceController(object):
                 load=self.systemLoad[host] # MAXIMUM VALUE
             else:
                 load=nproc[host] # MAXIMUM VALUE
-            if load<self.hosts[host]+margin:
-                free_cpus+=int(self.hosts[host]+self.overload_margin
+            if load<self.hosts[host].maxload+margin:
+                free_cpus+=int(self.hosts[host].maxload+self.overload_margin
                                -load)*[host]
         if len(free_cpus)==0: # WE DON'T HAVE ANY CPUS TO GIVE OUT
             return False
@@ -246,6 +313,18 @@ class ResourceController(object):
         self.assign_processors() # ASSIGN FREE CPUS TO COORDINATORS THAT NEED THEM
         for c in self.coordinators.values():
             c.update_load() # INFORM THE COORDINATOR
+        return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
+
+    def get_hostinfo(self,host,attr):
+        "get a host attribute"
+        return getattr(self.hosts[host],attr)
+
+    def set_hostinfo(self,host,attr,val):
+        "increase or decrease the maximum load allowed on a given host"
+        try:
+            setattr(self.hosts[host],attr,val)
+        except KeyError:
+            self.hosts[host]=HostInfo('%s=%s' %(attr,str(val)))
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
 
     def getrules(self):
@@ -274,11 +353,6 @@ class ResourceController(object):
             self.getrules()
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
 
-    def setload(self,host,maxload):
-        "increase or decrease the maximum load allowed on a given host"
-        self.hosts[host]=float(maxload)
-        return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
-
     def setthrottle(self,throttle):
         "set the total level of usage of available CPUs, usually 1.0"
         self.throttle=float(throttle)
@@ -291,23 +365,26 @@ class ResourceController(object):
         if self.must_rebalance or \
                time.time()-self.rebalance_time>self.rebalance_frequency:
             self.load_balance()
-        if load<self.hosts[host]+self.overload_margin:
+        if load<self.hosts[host].maxload+self.overload_margin:
             return True  # OK TO CONTINUE
         else:
             return False # THIS SYSTEM OVERLOADED, TELL PROCESSOR TO EXIT
 
-    def register_coordinator(self,name,url,user,priority,resources,immediate):
+    def register_coordinator(self,name,url,user,priority,resources,immediate,
+                             demand_ncpu):
         "save a coordinator's registration info"
         try:
             print >>sys.stderr,'change_priority: %s (%s,%s): %f -> %f' \
                   % (name,user,url,self.coordinators[url].priority,priority)
             self.coordinators[url].priority=priority
             self.coordinators[url].immediate=immediate
+            self.coordinators[url].demand_ncpu=demand_ncpu
         except KeyError:
             print >>sys.stderr,'register_coordinator: %s (%s,%s): %f' \
                   % (name,user,url,priority)
             self.coordinators[url]=CoordinatorInfo(name,url,user,priority,
-                                                   resources,self.njob,immediate)
+                                                   resources,self.njob,immediate,
+                                                   demand_ncpu)
             self.njob+=1 # INCREMENT COUNT OF JOBS WE'VE REGISTERED
         self.must_rebalance=True # FORCE REBALANCING ON NEXT OPPORTUNITY
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
@@ -318,6 +395,7 @@ class ResourceController(object):
             del self.coordinators[url]
             print >>sys.stderr,'unregister_coordinator: %s (%s): %s' \
                   % (name,url,message)
+            self.load_balance() # FORCE IT TO REBALANCE THE LOAD TO NEW JOBS...
         except KeyError:
             print >>sys.stderr,'unregister_coordinator: %s unknown:%s (%s)' \
                   % (name,url,message)
@@ -417,13 +495,37 @@ class ResourceController(object):
     def get_status(self):
         """get report of system loads, max loads, coordinators, rules,
         resources, locks"""
-        return self.name,self.errlog,self.systemLoad,dict(self.hosts),\
+        l=[(name,host.maxload) for name,host in self.hosts.items()]
+        l.sort()
+        return self.name,self.errlog,self.systemLoad,l,\
                [(c.name,c.url,c.priority,c.allocated_ncpu,len(c.processors),\
                  c.start_time) for c in self.coordinators.values()], \
                  dict(self.rules),dict(self.resources),self.locks
 
 
+class AttrProxy(object):
+    def __init__(self,getattr_proxy,k):
+        self.getattr_proxy=getattr_proxy
+        self.k=k
+    def __getattr__(self,attr):
+        try:
+            val=self.getattr_proxy(self.k,attr) # GET IT FROM OUR PROXY
+        except:
+            raise AttributeError('unable to get proxy attr '+attr)
+        setattr(self,attr,val) # CACHE THIS ATTRIBUTE RIGHT HERE!
+        return val
 
+class DictAttrProxy(dict):
+    def __init__(self,getattr_proxy):
+        dict.__init__(self)
+        self.getattr_proxy=getattr_proxy
+    def __getitem__(self,k):
+        try:
+            return dict.__getitem__(self,k)
+        except KeyError:
+            val=AttrProxy(self.getattr_proxy,k)
+            self[k]=val
+            return val
 
 class Coordinator(object):
     """Run our script as Processor on one or more client nodes, using
@@ -441,7 +543,8 @@ class Coordinator(object):
     max_ssh_errors=5 #MAXIMUM #ERRORS TO PERMIT IN A ROW BEFORE QUITTING
     python='python' # DEFAULT EXECUTABLE FOR RUNNING OUR CLIENTS
     def __init__(self,name,script,it,resources,port=8888,priority=1.0,rc_url=None,
-                 errlog=False,immediate=False,ncpu_limit=999999):
+                 errlog=False,immediate=False,ncpu_limit=999999,
+                 demand_ncpu=0,**kwargs):
         self.name=name
         self.script=script
         self.it=iter(it) # MAKE SURE it IS AN ITERATOR; IF IT'S NOT, MAKE IT SO
@@ -450,7 +553,9 @@ class Coordinator(object):
         self.errlog=errlog
         self.immediate=immediate
         self.ncpu_limit=ncpu_limit
-        self.host=os.uname()[1]
+        self.demand_ncpu=demand_ncpu
+        self.kwargs=kwargs
+        self.host=get_hostname()
         self.user=os.environ['USER']
         try: # MAKE SURE ssh-agent IS AVAILABLE TO US BEFORE LAUNCHING LOTS OF PROCS
             a=os.environ['SSH_AGENT_PID']
@@ -485,6 +590,7 @@ class Coordinator(object):
         self.successfile=file(name+'.success','a') # success FILE IS CUMMULATIVE
         self.errorfile=file(name+'.error','w') # OVERWRITE THE ERROR FILE
         self.done=False
+        self.hosts=DictAttrProxy(self.rc_server.get_hostinfo)
         self.register()
 
     def __call__(self,*l,**kwargs):
@@ -517,13 +623,19 @@ class Coordinator(object):
                 return # DON'T START ANOTHER PROCESS, host MAY BE DEAD...
         except KeyError: # NO clients_starting ON host, GOOD!
             pass
+        try:
+            sshopts=self.hosts[host].sshopts # GET sshopts VIA XMLRPC
+        except AttributeError:
+            sshopts=''
         logfile='/usr/tmp/%s_%d.log' % (self.name,self.iclient)
-        cmd='cd %s;%s %s --url=http://%s:%d --rc_url=%s --logfile=%s %s' \
+        # PASS OUR KWARGS ON TO THE CLIENT PROCESSOR
+        kwargs=' '.join(['--%s=%s'%(k,v) for k,v in self.kwargs.items()])
+        cmd='cd %s;%s %s --url=http://%s:%d --rc_url=%s --logfile=%s %s %s' \
              % (self.dir,self.python,self.script,self.host,self.port,
-                self.rc_url,logfile,self.name)
+                self.rc_url,logfile,self.name,kwargs)
         # UGH, HAVE TO MIX CSH REDIRECTION (REMOTE) WITH SH REDIRECTION (LOCAL)
-        ssh_cmd="ssh %s '(%s) </dev/null >&%s &' </dev/null >>%s 2>&1 &" \
-                 % (host,cmd,logfile,self.errlog)
+        ssh_cmd="ssh %s %s '(%s) </dev/null >&%s &' </dev/null >>%s 2>&1 &" \
+                 % (sshopts,host,cmd,logfile,self.errlog)
         print >>sys.stderr,'SSH: '+ssh_cmd
         self.logfile[logfile]=[host,False,self.iclient] # NO PID YET
         try: # RECORD THIS CLIENT AS STARTING UP
@@ -545,7 +657,7 @@ class Coordinator(object):
         url='http://%s:%d' % (self.host,self.port)
         self.rc_server.register_coordinator(self.name,url,self.user,
                                             self.priority,self.resources,
-                                            self.immediate)
+                                            self.immediate,self.demand_ncpu)
 
     def unregister(self,message):
         "tell the resource controller we're exiting"
@@ -689,13 +801,13 @@ class Processor(object):
     report_frequency=600
     overload_max=5 # MAXIMUM NUMBER OF OVERLOAD EVENTS IN A ROW BEFORE WE EXIT
     def __init__(self,url="http://localhost:8888",
-                 rc_url='http://localhost:5000',logfile=False):
+                 rc_url='http://localhost:5000',logfile=False,**kwargs):
         self.url=url
         self.logfile=logfile
         self.server=xmlrpclib.ServerProxy(url)
         self.rc_url=rc_url
         self.rc_server=xmlrpclib.ServerProxy(rc_url)
-        self.host=os.uname()[1]
+        self.host=get_hostname()
         self.pid=os.getpid()
         self.user=os.environ['USER']
         self.success_id=False
@@ -751,9 +863,7 @@ class Processor(object):
 
     def report_load(self):
         "report system load"
-        l=list(os.getloadavg()) # GET 1, 5 AND 15 MINUTE LOAD AVERAGES
-        l.sort()
-        load=l[0] # TAKE THE LOWEST OF THE THREE LOAD TIMEFRAMES
+        load=os.getloadavg()[0] # GET 1 MINUTE LOAD AVERAGE
         if self.rc_server.report_load(self.host,self.pid,load) is False:
             self.overload_count+=1 # ARE WE CONSISTENTLY OVERLOADED FOR EXTENDED PERIOD?
             if self.overload_count>self.overload_max: # IF EXCEEDED LIMIT, EXIT
@@ -902,7 +1012,11 @@ def start_client_or_server(clientGenerator,serverGenerator,resources,script):
         detach_as_demon_process(rc_server)
         rc_server() # START THE SERVER
     else: # WE ARE A SERVER
-        server=Coordinator(l[0],script,serverGenerator(),resources,**d)
+        try: # PASS OUR KWARGS TO THE SERVER FUNCTION
+            it=serverGenerator(**d)
+        except TypeError: # DOESN'T WANT ANY ARGS?
+            it=serverGenerator()
+        server=Coordinator(l[0],script,it,resources,**d)
         detach_as_demon_process(server)
         server() # START THE SERVER
 
@@ -932,8 +1046,7 @@ class RCMonitor(object):
     retry_unused_hosts()
     Documented in ResourceController docstrings."""
     def __init__(self,host=None,port=5000):
-        if host is None:
-            host=os.uname()[1]
+        host=get_hostname(host) # GET FQDN
         self.rc_url='http://%s:%d' %(host,port)
         self.rc_server=xmlrpclib.ServerProxy(self.rc_url)
         self.get_status()
@@ -950,5 +1063,14 @@ class RCMonitor(object):
         "just pass on method requests to our rc_server"
         return getattr(self.rc_server,attr)
 
+def test_client(server,**kwargs):
+    for id in server:
+        print 'ID',id
+        yield id
+        time.sleep(1)
+
+def test_server():
+    return range(1000)
+
 if __name__=='__main__':
-    start_client_or_server(None,None,[],'no.script')
+    start_client_or_server(test_client,test_server,[],__file__)
