@@ -146,6 +146,33 @@ def read_interval_alignment(ofile,container1,container2,al=None):
             al[q_ival][s_ival]= hitInfo # SAVE THE ALIGNMENT AND EDGE INFO
     return al
 
+def process_blast(self,cmd,seq,al=None):
+    "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
+    ifile,ofile=os.popen2(cmd)
+    write_fasta(ifile,seq)
+    ifile.close()
+    al=read_interval_alignment(ofile,{seq.id:seq},self,al)
+    if ofile.close()!=None:
+        raise OSError('command %s failed' % cmd)
+    return al
+
+
+def repeat_mask(seq,progname='RepeatMasker -xsmall'):
+    temppath=os.tempnam()
+    ofile=file(temppath,'w')
+    write_fasta(ofile,seq)
+    ofile.close()
+    cmd=progname+' '+temppath
+    if os.system(cmd)!=0:
+        raise OSError('command %s failed' % cmd)
+    ofile=file(temppath+'.masked')
+    for id,title,seq_masked in read_fasta(ofile):
+        break # JUST READ ONE SEQUENCE
+    ofile.close()
+    cmd='rm -f %s %s.*' % (temppath,temppath)
+    if os.system(cmd)!=0:
+        raise OSError('command '+cmd+' failed')
+    return seq_masked
 
 class BlastDB(dict):
     "Container representing Blast database"
@@ -161,7 +188,7 @@ class BlastDB(dict):
         try: # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
             fp=file(filepath+'.psd')
         except IOError: # ATTEMPT TO BUILD BLAST DATABASE & INDEXES
-            cmd='formatdb -i %s -o' % filepath
+            cmd='formatdb -i %s -o T' % filepath
             if self._seqtype!=PROTEIN_SEQTYPE:
                 cmd += ' -p F' # SPECIAL FLAG REQUIRED FOR NUCLEOTIDE SEQS
             print 'Building index:',cmd
@@ -180,20 +207,15 @@ class BlastDB(dict):
             return s
 
     def blast(self,seq,al=None,blastpath='blastall',
-              blastprog=None,expmax=0.001):
+              blastprog=None,expmax=0.001,maxseq=None):
         "Run blast search for seq in database, return aligned intervals"
         if blastprog==None:
             blastprog=blast_program(seq.seqtype(),self._seqtype)
         cmd='%s -d %s -p %s -e %f|parse_blast.awk -v mode=all' \
                               %(blastpath,self.filepath,blastprog,expmax)
-        ifile,ofile=os.popen2(cmd)
-        write_fasta(ifile,seq)
-        ifile.close()
-        al=read_interval_alignment(ofile,{seq.id:seq},self,al)
-        if ofile.close()!=None:
-            raise OSError('command %s failed' % cmd)
-        return al
+        return process_blast(cmd,seq,al)
 
+    def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
 
 class StoredPathMapping(PathMapping):
     _edgeClass=BlastHitInfo
