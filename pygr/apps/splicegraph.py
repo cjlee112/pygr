@@ -24,18 +24,19 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,mrna_seq_t,pro
     alt3=dictGraph()
 
 
-
+    class YiGenomicSequence(DNASQLSequence):
+        _seq_len_attr='seq_length' # USE SEQ LENGTH FROM DATABASE
     g=jun03[genomic_seq_t]
-    g.objclass(SQLSequence) # FORCE GENOMIC SEQ TABLE TO USE TRANSPARENT ACCESS
+    g.objclass(YiGenomicSequence) # FORCE GENOMIC SEQ TABLE TO USE TRANSPARENT ACCESS
+    g.addAttrAlias(seq_length='length(seq)') # HAVE IT CALCULATE SEQUENCE LENGTH FOR US
 
     mrna=jun03[mrna_seq_t]
     mrna.objclass(SQLSequence) # FORCE mRNA SEQ TABLE TO USE TRANSPARENT ACCESS
 
-    class YiProteinSQLTable(SQLTableNoCache):
-        _seq_length='protein_length'
+    class YiProteinSQLSequence(ProteinSQLSequence):
+        _seq_len_attr='protein_length' # USE SEQ LENGTH FROM DATABASE
     protein=jun03[protein_seq_t]
-    protein.__class__=YiProteinSQLTable # MAKE USE SEQ LENGTH INFORMATION
-    protein.objclass(ProteinSQLSequence) # FORCE PROTEIN SEQ TABLE TO USE TRANSPARENT ACCESS
+    protein.objclass(YiProteinSQLSequence) # FORCE PROTEIN SEQ TABLE TO USE TRANSPARENT ACCESS
     protein.addAttrAlias(seq='protein_seq') # ALIAS protein_seq TO APPEAR AS seq
 
     exon_forms=jun03[exon_t]
