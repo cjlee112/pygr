@@ -151,14 +151,14 @@ def read_interval_alignment(ofile,container1,container2,al=None):
             al[q_ival][s_ival]= hitInfo # SAVE THE ALIGNMENT AND EDGE INFO
     return al
 
-def process_blast(cmd,seq,al=None,seqString=None):
+def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
     ifile,ofile=os.popen2(cmd+'|parse_blast.awk -v mode=all')
     if seqString==None:
         seqString=seq
     write_fasta(ifile,seqString,id=seq.id)
     ifile.close()
-    al=read_interval_alignment(ofile,{seq.id:seq},self,al)
+    al=read_interval_alignment(ofile,{seq.id:seq},seqDB,al)
     if ofile.close()!=None:
         raise OSError('command %s failed' % cmd)
     return al
@@ -220,7 +220,7 @@ class BlastDB(dict):
             blastprog=blast_program(seq.seqtype(),self._seqtype)
         cmd='%s -d %s -p %s -e %e'  %(blastpath,self.filepath,
                                       blastprog,float(expmax))
-        return process_blast(cmd,seq,al)
+        return process_blast(cmd,seq,self,al)
 
     def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
                   maxseq=None,minIdentity=None,maskOpts='-U T -F m'):
@@ -232,7 +232,7 @@ class BlastDB(dict):
             cmd+=' -v %d' % maxseq
         if minIdentity!=None:
             cmd+=' -p %f' % float(minIdentity)
-        return process_blast(cmd,seq,al,seqString=masked_seq)
+        return process_blast(cmd,seq,self,al,seqString=masked_seq)
 
 class StoredPathMapping(PathMapping):
     _edgeClass=BlastHitInfo
