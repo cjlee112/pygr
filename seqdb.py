@@ -218,15 +218,16 @@ class BlastDB(dict):
         "Run blast search for seq in database, return aligned intervals"
         if blastprog==None:
             blastprog=blast_program(seq.seqtype(),self._seqtype)
-        cmd='%s -d %s -p %s -e %f' \
-                              %(blastpath,self.filepath,blastprog,expmax)
+        cmd='%s -d %s -p %s -e %e'  %(blastpath,self.filepath,
+                                      blastprog,float(expmax))
         return process_blast(cmd,seq,al)
 
     def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
                   maxseq=None,minIdentity=None,maskOpts='-U T -F m'):
         "Run megablast search with repeat masking."
         masked_seq=repeat_mask(seq)  # MASK REPEATS TO lowercase
-        cmd='%s %s -d %s -e %f' % (blastpath,maskOpts,self.filepath,expmax)
+        cmd='%s %s -d %s -e %e' % (blastpath,maskOpts,self.filepath,
+                                   float(expmax))
         if maxseq!=None:
             cmd+=' -v %d' % maxseq
         if minIdentity!=None:
