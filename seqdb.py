@@ -48,7 +48,7 @@ def write_fasta(ofile,s,chunk=60,id=None):
             break
     return id # IN CASE CALLER WANTS TEMP ID WE MAY HAVE ASSIGNED
 
-def read_fasta(ifile):
+def read_fasta(ifile,onlyReadOneLine=False):
     "Get one sequence at a time from stream ofile"
     id=None
     title=''
@@ -62,6 +62,8 @@ def read_fasta(ifile):
         elif id!=None: # READ SEQUENCE
             for word in line.split(): # GET RID OF WHITESPACE
                 seq += word
+            if onlyReadOneLine and len(seq)>0:
+                yield id,title,seq
     if id!=None and len(seq)>0:
         yield id,title,seq
 
@@ -187,7 +189,7 @@ class BlastDB(dict):
         self.filepath=filepath
         dict.__init__(self)
         ofile=file(filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
-        for id,title,seq in read_fasta(ofile):
+        for id,title,seq in read_fasta(ofile,onlyReadOneLine=True):
             self._seqtype=guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
             break # JUST READ ONE SEQUENCE
         ofile.close()
