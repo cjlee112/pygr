@@ -139,3 +139,19 @@ l=[o for o in spliceGraph.next.next.filter(lambda p: p.edge[2].type=='U11/U12'
                                            and hasattr(p[2],'alt3'))
    .alt3.filter(lambda p:p[4] in p[0].next)]
 print len(l)
+
+#example u11/12 alt5 graph query
+from graphquery import *
+queryGraph={0:{2:DD(filter=lambda toNode,fromNode,edge,*l:edge.type=="U11/U12"), 1:DD(dataGraph=alt5Graph)}, 1:{3:None}, 2:{3:None},3:{}}
+
+#DD is a convenience function creating a dictionary.
+
+#To print for e.g., exon_form_id's that correspond to e0
+for d in graphquery(spliceGraph, queryGraph):
+    print d[0].exon_form_id
+
+#How do I get associated splice id?  Please add support for accessing edges.  
+
+## Note that d is a dictionary with keys being nodes of the querygraph and values
+## being nodes of the dataGraph, which in this case is specified to be spliceGraph.
+## Here d[0] is the first node, or exon 0, d[1] is the second node or exon 1, etc.  
