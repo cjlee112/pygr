@@ -14,6 +14,21 @@ class AnonSequence(NamedSequence):
             self.seq=self.seq[:end]+s[:start-end]+self.seq[start:]
         else:
             self.seq=self.seq[:start]+s[:end-start]+self.seq[end:]
+
+    def known_int(self):
+        begin=0
+        end=0
+        for end in range(len(self.seq)):
+            if(self.seq[end]=='?'):
+                if(begin<end):
+                    yield {'src_id':self.id,'start':begin,'end':end,'seq':self.seq[begin:end]}
+                begin=end+1
+        if(end==0):
+            return
+        end=end+1
+        if(begin<end):
+            yield {'src_id':self.id,'start':begin,'end':end,'seq':self.seq[begin:end]}
+                
  
 class ReferenceSequence(NamedSequence):
     """Defines a reference sequence class that is subscriptable
