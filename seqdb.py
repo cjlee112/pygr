@@ -88,10 +88,12 @@ def read_fasta_lengths(ifile):
 
 def store_seqlen_dict(d,ifile,idFilter=None):
     "store sequence lengths in a dictionary"
-    for id,seqLength in read_fasta_lengths(ifile):
-        if idFilter is not None:
-            id=idFilter(id) # HAVE TO CLEAN UP BLAST'S MESSY IDs
-        d[id]=seqLength # SAVE TO DICTIONARY
+    if idFilter is not None: # HAVE TO CLEAN UP BLAST'S MESSY IDs
+        for id,seqLength in read_fasta_lengths(ifile):
+            d[idFilter(id)]=seqLength # SAVE TO DICTIONARY
+    else: # JUST USE id AS-IS
+        for id,seqLength in read_fasta_lengths(ifile):
+            d[id]=seqLength # SAVE TO DICTIONARY
         
 
 def fastacmd_seq(filepath,id,start=None,end=None):
