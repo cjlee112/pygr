@@ -14,10 +14,10 @@ class GraphQueryIterator(object):
         if fromNode!=None and queryNode!=None and queryGraph[fromNode][queryNode]!=None:
             for attr,val in queryGraph[fromNode][queryNode].items(): # SAVE OUR EDGE INFO
                 setattr(self,attr,val)  # JUST ATTACH EDGE INFO AS ATTRIBUTES OF THIS OBJ
-        try:
-            self.nq=len(self.queryGraph[self.queryNode])
-        except KeyError:
-            self.nq=0
+##         try:
+##             self.nq=len(self.queryGraph[self.queryNode])
+##         except KeyError:
+##             self.nq=0
 
     def restart(self):
         "reset the iterator to its beginning"
@@ -40,9 +40,14 @@ class GraphQueryIterator(object):
 
     def generate(self):
         "generate all neighbors of data node matched to fromNode"
-        for i,e in self.dataGraph[self.dataNode].items():
-            if i not in self.dataMatch:
-                yield i,e
+        try:
+            it=self.dataGraph[self.dataNode]
+        except KeyError:
+            pass
+        else:
+            for i,e in it.items():
+                if i not in self.dataMatch:
+                    yield i,e
 
     def next(self):
         "returns the next node from iterator that passes all tests"
@@ -52,13 +57,14 @@ class GraphQueryIterator(object):
             del self.queryMatch[self.queryNode]
 
         for i,e in self.iterator: # RETURN THE FIRST ACCEPTABLE ITEM
-            try: # THIS EDGE COUNT CHECK WON'T WORK IF MULTIPLE GRAPHS BEING QUERIED!!
-                nd=len(self.dataGraph[i]) # CHECK # OF OUTGOING EDGES
-            except KeyError:
-                nd=0
-            if nd>=self.nq and (not hasattr(self,'filter') # APPLY EDGE / NODE TESTS HERE
-                                or self.filter(i,self.dataNode,e,self.dataMatch,
-                                               self.dataGraph,self)):
+##             try: # THIS EDGE COUNT CHECK WON'T WORK IF MULTIPLE GRAPHS BEING QUERIED!!
+##                 nd=len(self.dataGraph[i]) # CHECK # OF OUTGOING EDGES
+##             except KeyError:
+##                 nd=0
+##             if nd>=self.nq and
+            if (not hasattr(self,'filter') # APPLY EDGE / NODE TESTS HERE
+                or self.filter(i,self.dataNode,e,self.dataMatch,
+                               self.dataGraph,self)):
                 if self.mustMark:
                     self.dataMatch[i]=self.queryNode  # SAVE THIS NODE ASSIGNMENT
                     self.queryMatch[self.queryNode]=i
