@@ -94,6 +94,8 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,
     if mrna_seq_t is not None: # ONLY PROCESS THIS IF USER PASSED US AN MRNA TABLE
         mrna=jun03[mrna_seq_t]
         mrna.objclass(SQLSequence) # FORCE mRNA SEQ TABLE TO USE TRANSPARENT ACCESS
+    else:
+        mrna=None
 
     if protein_seq_t is not None: # ONLY PROCESS THIS IF USER PASSED US A PROTEIN TABLE
         class YiProteinSQLSequence(ProteinSQLSequence):
@@ -101,6 +103,8 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,
         protein=jun03[protein_seq_t]
         protein.objclass(YiProteinSQLSequence) # FORCE PROTEIN SEQ TABLE TO USE TRANSPARENT ACCESS
         protein.addAttrAlias(seq='protein_seq') # ALIAS protein_seq TO APPEAR AS seq
+    else:
+        protein=None
 
     exon_forms=jun03[exon_t]
     class ExonForm(TupleO,SeqPath): # ADD ATTRIBUTES STORING SCHEMA INFO
