@@ -1,8 +1,10 @@
 
 from sqlgraph import *
+from poa import *
+from seqdb import *
 
 
-def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t):
+def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,mrna_seq_t,protein_seq_t):
     """
     Build a splice graph from the specified SQL tables representing gene clusters,
     exon forms, and splices.  Each table must be specified as a DB.TABLENAME string.
@@ -21,10 +23,29 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t):
     alt5=dictGraph()
     alt3=dictGraph()
 
+
+
+    g=jun03[genomic_seq_t]
+    g.objclass(SQLSequence) # FORCE GENOMIC SEQ TABLE TO USE TRANSPARENT ACCESS
+
+    mrna=jun03[mrna_seq_t]
+    mrna.objclass(SQLSequence) # FORCE mRNA SEQ TABLE TO USE TRANSPARENT ACCESS
+
+    class YiProteinSQLTable(SQLTableNoCache):
+        _seq_length='protein_length'
+    protein=jun03[protein_seq_t]
+    protein.__class__=YiProteinSQLTable # MAKE USE SEQ LENGTH INFORMATION
+    protein.objclass(ProteinSQLSequence) # FORCE PROTEIN SEQ TABLE TO USE TRANSPARENT ACCESS
+    protein.addAttrAlias(seq='protein_seq') # ALIAS protein_seq TO APPEAR AS seq
+
     exon_forms=jun03[exon_t]
-    class ExonForm(TupleO): # ADD ATTRIBUTES STORING SCHEMA INFO
+    class ExonForm(TupleO,SeqPath): # ADD ATTRIBUTES STORING SCHEMA INFO
         _attrcol=exon_forms.data # BIND THE SCHEMA INFORMATION
         __class_schema__=SchemaDict(((spliceGraph,'next'),(alt5,'alt5'),(alt3,'alt3')))
+        def __init__(self,t):
+            TupleO.__init__(self,t) # 1ST INITIALIZE ATTRIBUTE ACCESS
+            SeqPath.__init__(self,g[self.cluster_id], # INITIALIZE AS SEQ INTERVAL
+                             self.genomic_start-1,self.genomic_end)
     print 'Loading %s...' % exon_forms
     exon_forms.load(ExonForm)
 
@@ -40,6 +61,15 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t):
         _attrcol=splices.data
     print 'Loading %s...' % splices
     splices.load(Splice)
+
+    print 'Saving alignment of protein to mrna isoforms...'
+    mrna_protein=PathMapping2()
+    for form_id in protein:
+        p=protein[form_id]
+        m=mrna[form_id]
+        start=3*(p.mRNA_start-1)+int(p.reading_frame)
+        end=start+3*p.protein_length
+        mrna_protein[p]=m[start:end]
 
     print 'Adding clusters to graph...'
     for c in clusters.values(): # ADD CLUSTERS AS NODES TO GRAPH
@@ -102,5 +132,5 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t):
                         e1.alt3+=e2
                         e2.alt3+=e1
 
-    return clusters,exons,splices,spliceGraph,alt5,alt3
+    return clusters,exon_forms,splices,spliceGraph,alt5,alt3,mrna,protein,mrna_protein
 
