@@ -534,6 +534,8 @@ class Coordinator(object):
         'return next ID from iterator to the XMLRPC caller'
         if success_id is not False:
             self.report_success(host,pid,success_id)
+        if self.done: # EXHAUSTED OUR ITERATOR, SO SHUT DOWN THIS CLIENT
+            return False # HAND BACK "NO MORE FOR YOU TO DO" SIGNAL
         try:  # CHECK LIST FOR COMMAND TO SHUT DOWN THIS CLIENT
             del self.stop_clients[(host,pid)] # IS IT IN stop_clients?
             return False # IF SO, HAND BACK "NO MORE FOR YOU TO DO" SIGNAL
