@@ -133,5 +133,5 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,mrna_seq_t,pro
                         e1.alt3+=e2
                         e2.alt3+=e1
 
-    return clusters,exon_forms,splices,spliceGraph,alt5,alt3,mrna,protein,mrna_protein
+    return clusters,exon_forms,splices,g,spliceGraph,alt5,alt3,mrna,protein,mrna_protein
 
