@@ -17,7 +17,12 @@ spliceCalcs={'HUMAN_SPLICE_03':
              TableGroup(db='MOUSE_SPLICE',suffix='jan02',clusters='cluster_jan02',
                         exons='MOUSE_ISOFORMS.exon_form_2',splices='splice_verification_jan02',
                         genomic='genomic_cluster_jan02',mrna='MOUSE_ISOFORMS.mrna_seq_2',
-                        protein='MOUSE_ISOFORMS.protein_seq_2')
+                        protein='MOUSE_ISOFORMS.protein_seq_2'),
+             'MOUSE_SPLICE_03':
+             TableGroup(db='MOUSE_SPLICE_03',suffix='JUN03',clusters='cluster_JUN03',
+                        exons='ver_exon_JUN03',splices='splice_verification_JUN03',
+                        genomic='genomic_cluster_JUN03',mrna=None,
+                        protein=None)
              }
 
 
