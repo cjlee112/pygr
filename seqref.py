@@ -4,30 +4,23 @@ from pathquery import *
 class AnonSequence(NamedSequence):
     """Defines a sequence class with unknown sequence, but
     known length"""
-    
     def __init__(self, len, id):
-        s=len*'?'
+        s=''
+        self.known=list()
         NamedSequence.__init__(self,s,id)
+        self.end=len
 
     def seqsplice(self,s,start,end):
-        if(start>end):
-            self.seq=self.seq[:end]+s[:start-end]+self.seq[start:]
-        else:
-            self.seq=self.seq[:start]+s[:end-start]+self.seq[end:]
+        (begin,stop,step)=slice(start,end).indices(self.end)
+        
+        if(start<end):
+            self.known+=[(s,start,stop)]
+        elif start>end:
+            self.known+=[(s[::-1],start,stop)]
 
     def known_int(self):
-        begin=0
-        end=0
-        for end in range(len(self.seq)):
-            if(self.seq[end]=='?'):
-                if(begin<end):
-                    yield {'src_id':self.id,'start':begin,'end':end,'seq':self.seq[begin:end]}
-                begin=end+1
-        if(end==0):
-            return
-        end=end+1
-        if(begin<end):
-            yield {'src_id':self.id,'start':begin,'end':end,'seq':self.seq[begin:end]}
+        for u in self.known:
+            yield {'src_id':self.id,'start':u[1],'end':u[2],'seq':u[0]}
                 
  
 class ReferenceSequence(NamedSequence):
