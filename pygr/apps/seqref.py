@@ -11,7 +11,7 @@ class AnonSequence(NamedSequence):
 
     def seqsplice(self,s,start,end):
         if(start>end):
-            self.seq=self.seq[:end]+s[::-1][:start-end]+self.seq[start:]
+            self.seq=self.seq[:end]+s[:start-end]+self.seq[start:]
         else:
             self.seq=self.seq[:start]+s[:end-start]+self.seq[end:]
  
