@@ -11,11 +11,10 @@ class AnonSequence(NamedSequence):
 
     def seqsplice(self,s,start,end):
         if(start>end):
-            self.s=self.s[:end]+s[::-1][:start-end]+self.s[start:]
+            self.seq=self.seq[:end]+s[::-1][:start-end]+self.seq[start:]
         else:
-            self.s=self.s[:start]+s[:end-start]+self.s[end:]
-        return 
-
+            self.seq=self.seq[:start]+s[:end-start]+self.seq[end:]
+ 
 class ReferenceSequence(NamedSequence):
     """Defines a reference sequence class that is subscriptable
     by other sequences. If sequence ids match the resulting sequnce
