@@ -53,10 +53,10 @@ def loadCluster(c,exon_forms,splices,clusterExons,clusterSplices,spliceGraph,alt
     """Loads data for a single cluster, and builds it into a splice graph."""    
     clusterExons+=c
     clusterSplices+=c
-    for e in exon_forms.select('where cluster_id="%s"' %c.id):
+    for e in exon_forms.select('where cluster_id=%s',(c.id,)):
         c.exons+=e
         spliceGraph+=e
-    for s in splices.select('where cluster_id="%s"' %c.id):
+    for s in splices.select('where cluster_id=%s',(c.id,)):
         c.splices+=s
     buildClusterSpliceGraph(c,alt5,alt3)
 
