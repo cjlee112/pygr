@@ -3,23 +3,27 @@
 from maf2graph import *
 from seqdb import *
 import MySQLdb
+from db_info import *
 
-db=MySQLdb.Connection('localhost','test')
+db=MySQLdb.Connection(read_default_file='~/.my.cnf')
 cursor=db.cursor()
 
-## p=MafParser()
-## p.parse(open('test.txt','r'))
+DBINFO=db_info_load('db_info.def')
+filelist=open(DBINFO['TODO'])
 
-## createTableFromRepr(p.mAlign.repr_dict(),'test.test1_align',cursor,
-##                     {'src_id':'varchar(30)','dest_id':'varchar(30)'})
 
-## known=[]
-## for key in p.sequences:
-##     for entry in p.sequences[key].known_int():
-##         known+=[entry]
+file=filelist.readline()
 
-## createTableFromRepr(iter(known),'test.test1_int',cursor,
-##                     {'src_id':'varchar(30)'})
-
-p=MafParser()
-p.parseIntoDB(open('chrY.maf','r'),cursor,'test.chrY_align','test.chrY_int')
+while file:
+    p=MafParser()
+    ofile=os.popen(DBINFO['GUNZIP']+' '+file)
+    try:
+        p.parseIntoDB(ofile,cursor,DBINFO['ALIGN_TABLE'],DBINFO['INTERVAL_TABLE'])
+    except Exception, inst:
+        print "Error while parsing:",file
+        print "Debug information follows:"
+        print type(inst)
+        print inst.args
+    ofile.close()
+    file=filelist.readline()
+    
