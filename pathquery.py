@@ -1,28 +1,5 @@
 
-
-class PathList(list):
-    """Internal representation for storing both nodes and edges as list
-    So filter functions can see both nodes and edges"""
-    def __init__(self,nodes=None,edges=None):
-        if nodes!=None:
-            list.__init__(self,nodes)
-        else:
-            list.__init__(self)
-        if edges!=None:
-            self.edge=list(edges)
-        else:
-            self.edge=[]
-
-    def append(self,val):
-        list.append(self,val)
-        self.edge.append(val)
-
-    def extend(self,l):
-        list.extend(self,l) # EXTEND TOP-LEVEL LIST AS USUAL
-        try: # EXTEND OUR EDGE LIST AS WELL
-            self.edge.extend(l.edge)
-        except AttributeError: #IF l HAS NO EDGES, PAD OUR EDGE LIST WITH Nones
-            self.edge.extend(len(l)*[None])
+from mapping import *
 
 
 def newfilter(self,filter,filterClass):
@@ -230,18 +207,34 @@ def newJoinPath(self,attr):
 
 # ADD WRAPPER FUNCTIONS TO dictEdge and dictGraph SO THEY PROVIDE ACCESS TO
 # PATH QUERY INTERFACE
-from mapping import *
-dictEdge.__getattr__=newAttrPath
-dictEdge.filter=newFilterPath
-dictEdge.__rshift__=newJoinPath
+class PathQueryDictEdge(dictEdge):
+    """Uses __getattr__ to pass requests for unknown attributes
+    down to the nodes that it contains, using the PathGraph interface.
+    This means you should be VERY careful about accessing nonexistent
+    attributes of this class.  Specifically, never use hasattr(),
+    since it will ALWAYS succeed.  I guess __getattr__ ought to check
+    if the attribute is actually present on the nodes before firing
+    up the PathGraph interface..."""
+    __getattr__=newAttrPath
+    filter=newFilterPath
+    __rshift__=newJoinPath
 
-dictGraph.__getattr__=newAttrPath
-dictGraph.filter=newFilterPath
-dictGraph.__rshift__=newJoinPath
+class PathQueryDictGraph(dictGraph):
+    """Uses __getattr__ to pass requests for unknown attributes
+    down to the nodes that it contains, using the PathGraph interface.
+    This means you should be VERY careful about accessing nonexistent
+    attributes of this class.  Specifically, never use hasattr(),
+    since it will ALWAYS succeed.  I guess __getattr__ ought to check
+    if the attribute is actually present on the nodes before firing
+    up the PathGraph interface..."""
+    __getattr__=newAttrPath
+    filter=newFilterPath
+    __rshift__=newJoinPath
 
 from poa import *
-TempIntervalDict.filter=newFilterPath
-TempIntervalDict.__rshift__=newJoinPath
+class PathQueryTempIntervalDict(TempIntervalDict):
+    filter=newFilterPath
+    __rshift__=newJoinPath
 
 class AlignPathGraph(GraphPathGraph):
     def __iter__(self):
@@ -254,5 +247,6 @@ def newAlignJoinPath(self,graph):
     q=AlignPathGraph(self,self)
     return q >> graph
 
-PathMapping.filter=newFilterPath
-PathMapping.__rshift__=newAlignJoinPath
+class PathQueryPathMapping(PathMapping):
+    filter=newFilterPath
+    __rshift__=newAlignJoinPath
