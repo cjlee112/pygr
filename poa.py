@@ -213,6 +213,7 @@ class NamedSequenceBase(SeqPath):
         self.end=len(self)
 
     def __len__(self):
+        print 'called NamedSequenceBase.__len__() on',self.id
         return len(self.seq) # COMPUTE IT FROM THE SEQUENCE
 
     def strslice(self,start,end):
