@@ -99,9 +99,9 @@ def store_seqlen_dict(d,ifile,idFilter=None):
 def fastacmd_seq(filepath,id,start=None,end=None):
     "Get complete sequence or slice from a BLAST formatted database"
     if start is not None: # USE ABILITY TO GRAB A SLICE OF THE SEQUENCE
-        cmd='fastacmd -d %s -s %s -L %d,%d' % (filepath,id,start+1,end)
+        cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end)
     else:
-        cmd='fastacmd -d %s -s %s' % (filepath,id)
+        cmd='fastacmd -d %s -s "%s"' % (filepath,id)
     ofile=os.popen(cmd)
     ofile.readline() # SKIP TITLE LINE
     s=''
@@ -113,25 +113,36 @@ def fastacmd_seq(filepath,id,start=None,end=None):
     return s
 
 
+class FastacmdIntervalCache(object):
+    def __init__(self,start,end):
+        self.start=start
+        self.end=end
+
+    def __getitem__(self,k):
+        pass # THIS NEEDS MORE WORK...
+
+
 class BlastSeqDescriptor(object):
     "Get sequence from a blast formatted database for obj.id"
     def __get__(self,obj,objtype):
         return fastacmd_seq(obj.db.filepath,obj.id)
 
-class BlastSequence(NamedSequenceBase):
+class BlastSequenceBase(NamedSequenceBase):
     "Represents a sequence in a blast database, w/o keeping seq in memory"
     seq=BlastSeqDescriptor()
     def __init__(self,db,id):
         self.db=db
         self.id=id
         NamedSequenceBase.__init__(self)
-    def __len__(self):
-        "Use persistent storage of sequence lengths to avoid reading whole sequence"
-        return self.db.seqLenDict[self.id]
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return fastacmd_seq(self.db.filepath,self.id,start,end)
 
+class BlastSequence(BlastSequenceBase):
+    "Rely on seqLenDict to give fast access to sequence lengths"
+    def __len__(self):
+        "Use persistent storage of sequence lengths to avoid reading whole sequence"
+        return self.db.seqLenDict[self.id]
 
 def blast_program(query_type,db_type):
     progs= {DNA_SEQTYPE:{DNA_SEQTYPE:'blastn', PROTEIN_SEQTYPE:'blastx'},
@@ -195,6 +206,7 @@ def save_interval_alignment(m,ival,srcSet,destSet=None,edgeClass=BlastHitInfo,
         m[srcPath][destPath]=edgeClass(ival) # SAVE ALIGNMENT WITH EDGE INFO
     else:
         m[srcPath]=destPath # JUST SAVE ALIGNMENT, NO EDGE INFO
+    return srcPath,destPath # HAND BACK IN CASE CALLER WANTS TO KNOW THE INTERVALS
 
 
 def read_interval_alignment(ofile,srcSet,destSet,al=None):
@@ -243,22 +255,25 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
 class BlastDB(dict):
     "Container representing Blast database"
     seqClass=BlastSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
-    def __init__(self,filepath):
+    def __init__(self,filepath,skipSeqLenDict=False):
         "format database and build indexes if needed"
         self.filepath=filepath
         dict.__init__(self)
         self.set_seqtype()
-        import anydbm
-        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
-            self.seqLenDict=shelve.open(filepath+'.seqlen','r')
-        except anydbm.error: # READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
-            self.seqLenDict=shelve.open(filepath+'.seqlen') # OPEN IN DEFAULT "CREATE" MODE
-            ifile,idFilter=self.raw_fasta_stream()
-            print 'Building sequence length index...'
-            store_seqlen_dict(self.seqLenDict,ifile,idFilter)
-            ifile.close()
-            self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
-            self.seqLenDict=shelve.open(filepath+'.seqlen','r') # REOPEN IT READ-ONLY
+        if skipSeqLenDict:
+            self.seqClass=BlastSequenceBase # DON'T USE seqLenDict
+        else:
+            import anydbm
+            try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
+                self.seqLenDict=shelve.open(filepath+'.seqlen','r')
+            except anydbm.error: # READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+                self.seqLenDict=shelve.open(filepath+'.seqlen') # OPEN IN DEFAULT "CREATE" MODE
+                ifile,idFilter=self.raw_fasta_stream()
+                print 'Building sequence length index...'
+                store_seqlen_dict(self.seqLenDict,ifile,idFilter)
+                ifile.close()
+                self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
+                self.seqLenDict=shelve.open(filepath+'.seqlen','r') # REOPEN IT READ-ONLY
         # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
         if not os.access(filepath+'.nsd',os.R_OK) \
                and not os.access(filepath+'.psd',os.R_OK):
@@ -426,7 +441,8 @@ class MAFStoredPathMapping(PathMapping):
             vseqs[i.dest_id]=None # KEEP TRACK OF ALL OUR VIRTUAL SEQUENCES...
         for vseqID in vseqs: # GET EVERYTHING THAT OUR vseqs MAP TO...
             for i in table.select('where src_id=%s',(vseqID,)): # SAVE MAPPING TO dbset
-                save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
+                if i.src_id==vseqID: # FILTER OUT MYSQL'S CASE-INSENSITIVE MATCHES!!!
+                    save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
 
     def __getitem__(self,k):
         return TempMAFIntervalDict(self,k)
