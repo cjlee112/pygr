@@ -4,6 +4,7 @@ from maf2graph import *
 from seqdb import *
 import MySQLdb
 from db_info import *
+import os
 
 db=MySQLdb.Connection(read_default_file='~/.my.cnf')
 cursor=db.cursor()
@@ -16,7 +17,8 @@ file=filelist.readline()
 
 while file:
     p=MafParser()
-    ofile=os.popen(DBINFO['GUNZIP']+' '+file)
+    os.system(DBINFO['GUNZIP']+' '+file+' >load.tmp')
+    ofile=open('load.tmp')
     try:
         p.parseIntoDB(ofile,cursor,DBINFO['ALIGN_TABLE'],DBINFO['INTERVAL_TABLE'])
     except Exception, inst:
@@ -25,5 +27,6 @@ while file:
         print type(inst)
         print inst.args
     ofile.close()
+    os.system('rm load.tmp')
     file=filelist.readline()
     
