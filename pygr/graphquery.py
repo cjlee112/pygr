@@ -40,8 +40,8 @@ class GraphQueryIterator(object):
     def closure(self):
         "this node is already matched.  Make sure there exists path to it (closure)"
         targetNode=self.queryMatch[self.queryNode]
-        container=self.dataGraph[self.dataNode]
         try: # GENERATE IFF container HAS EDGE TO targetNode
+            container=self.dataGraph[self.dataNode]
             yield targetNode,container[targetNode]
         except KeyError:pass
 
