@@ -36,6 +36,7 @@ class PathNextDescr(object):
         raise AttributeError(self.attrName+' is read-only!')
 
 
+NOT_ON_SAME_PATH= -2
 
 # BASE CLASS FOR SPECIFYING A PATH, IE. SEQUENCE INTERVAL.
 # THIS IMPLEMENTATION TAKES A SEQUENCE AS INITIALIZER
@@ -94,8 +95,9 @@ class SeqPath(object):
                 self.path==other.path):
             return cmp((self.start,self.end),(other.start,other.end))
         else:
-            raise TypeError('SeqPath not comparable, not on same path: %s,%s'
-                            % (self.path,other.path))
+            return NOT_ON_SAME_PATH
+            #raise TypeError('SeqPath not comparable, not on same path: %s,%s'
+            #                % (self.path,other.path))
     
     def __contains__(self,k):
         # PUT OTHER LOGIC HERE FOR CHECKING WHETHER INTERVAL IS CONTAINED...
