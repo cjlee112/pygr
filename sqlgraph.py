@@ -24,12 +24,12 @@ class SQLRow(object):
 
     def _select(self,what):
         "Get SQL select expression for this row"
-        kstr=self.table.keystr(self.id)
-        self.table.cursor.execute('select %s from %s where %s=%s'
-                                  % (what,self.table.name,self.table.primary_key,kstr))
+        self.table.cursor.execute('select %s from %s where %s=%%s'
+                                  % (what,self.table.name,self.table.primary_key),(self.id,))
         l=self.table.cursor.fetchall()
         if len(l)!=1:
-            raise KeyError('%s %s not found in %s, or not unique' %(kstr,what,self.name))
+            raise KeyError('%s %s not found in %s, or not unique'
+                           % (str(self.id),what,self.name))
         return l[0][0] # RETURN THE SINGLE FIELD WE REQUESTED
 
     def _attrSQL(self,attr):
@@ -88,7 +88,10 @@ class SQLTableBase(dict):
            t.addAttrAlias(**kwargs)
         """
         for key,val in kwargs.items():
-            self.data[key]=self.data[val]
+            try: # 1ST TREAT AS ALIAS TO EXISTING COLUMN
+                self.data[key]=self.data[val]
+            except KeyError: # TREAT AS ALIAS TO SQL EXPRESSION
+                self.data[key]=val
 
     def objclass(self,oclass=None):
         "Specify class for python object representing a row in this table"
@@ -102,12 +105,6 @@ class SQLTableBase(dict):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
         self.oclass=oclass
 
-    def keystr(self,k):
-        "Turn value into appropriate syntax for SQL WHERE clause"
-        if isinstance(k,types.StringType):
-            return '"'+k+'"'
-        else:
-            return str(k)
 
 def iterSQLKey(self):
     self.cursor.execute('select %s from %s' %(self.primary_key,self.name))
@@ -132,12 +129,11 @@ class SQLTable(SQLTableBase):
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
-            kstr=self.keystr(k)
-            self.cursor.execute('select * from %s where %s=%s'
-                                % (self.name,self.primary_key,kstr))
+            self.cursor.execute('select * from %s where %s=%%s'
+                                % (self.name,self.primary_key),(k,))
             l=self.cursor.fetchall()
             if len(l)!=1:
-                raise KeyError('%s not found in %s, or not unique' %(kstr,self.name))
+                raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
             try:
                 o=self.oclass(l[0]) # SAVE USING SPECIFIED OBJECT CLASS
             except AttributeError:
