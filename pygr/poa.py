@@ -316,7 +316,7 @@ class ContainsList(list):
 
 
 class TempIntervalList(object):
-    "Temporary object provides iterator for TempIntervalDict.__getattr__"
+    "Temporary object provides iterator for TempIntervalDict.__getitem__"
     def __init__(self,pathDict,p,targetPath):
         self.pathDict=pathDict
         self.p=p
