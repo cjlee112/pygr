@@ -215,7 +215,7 @@ class BlastDB(dict):
                               %(blastpath,self.filepath,blastprog,expmax)
         return process_blast(cmd,seq,al)
 
-    def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
+    #def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
 
 class StoredPathMapping(PathMapping):
     _edgeClass=BlastHitInfo
