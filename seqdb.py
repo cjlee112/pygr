@@ -124,12 +124,10 @@ class BlastSequence(NamedSequenceBase):
     def __init__(self,db,id):
         self.db=db
         self.id=id
-        self._seq_len_attr='__len__'
-        self.end=self.__len__()
-        self.path=self
-##        NamedSequenceBase.__init__(self)
+        NamedSequenceBase.__init__(self)
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
+        print 'called BlastSequence.__len__() on',self.id,self.db.seqLenDict[self.id]
         return self.db.seqLenDict[self.id]
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
