@@ -1,5 +1,6 @@
 
 from poa import *
+from pathquery import *
 
 # CREATE A FEW SEQUENCES TO PLAY WITH...
 s=NamedSequence('ABCDEFGHIJKLMNOPQRSTUVWXYZ','alpha')
@@ -18,10 +19,10 @@ for codon in orf[1:3]: # PRINT 1ST THREE CODONS OF orf
 ##         break
 
 
-al=PathMapping() # CONSTRUCT A FUNKY LITTLE PAIR OF ALIGNMENTS
+al=PathQueryPathMapping() # CONSTRUCT A FUNKY LITTLE PAIR OF ALIGNMENTS
 al[s[:13]]=s2[:13]
 al[s[18:25]]=s2[13:20]
-al2=PathMapping()
+al2=PathQueryPathMapping()
 al2[s2[0:5]]=s3[0:5]
 al2[s2[5:10]]=s3[7:12]
 al2[s2[10:15]]=s3[14:19]
@@ -119,7 +120,7 @@ for i in pd.iterkeys():
 
 # DO A TEST ON ALISSA'S ISOFORM TO SWISSPROT FEATURES DATASET
 fp=open('best_hits_B.tmp','r') # READ ALIGNMENT OF ISOFORMS TO SWISSPROT
-mRNA_swiss=PathMapping()
+mRNA_swiss=PathQueryPathMapping()
 swiss_mRNA=PathMapping()
 n1=0
 for line in fp:
@@ -132,7 +133,7 @@ for line in fp:
 fp.close()
 
 fp=open('annotations_B.tmp','r') # READ ALIGNMENT OF SWISSPROT TO FEATURES
-swiss_features=PathMapping()
+swiss_features=PathQueryPathMapping()
 n2=0
 for line in fp:
     l=line.split()
