@@ -116,14 +116,32 @@ def iterSQLKey(self):
 class SQLTable(SQLTableBase):
     "Provide on-the-fly access to rows in the database, caching the results in dict"
     __iter__=iterSQLKey
-    def load(self,oclass):
+    def load(self,oclass=None):
         "Load all data from the table"
+        if oclass is None:
+            oclass=self.oclass
         self.cursor.execute('select * from %s' % self.name)
         l=self.cursor.fetchall()
         for t in l:
             o=oclass(t)
             self[getattr(o,self.primary_key)]=o
         self.__class__=SQLTableBase # ONLY CAN LOAD ONCE, SO REVERT TO BASE CLASS
+
+    def select(self,whereClause,oclass=None):
+        "Generate the list of objects that satisfy the database SELECT"
+        if oclass is None:
+            oclass=self.oclass
+        self.cursor.execute('select t1.* from %s t1 %s' % (self.name,whereClause))
+        l=self.cursor.fetchall()
+        for t in l:
+            o=oclass(t)
+            id=getattr(o,self.primary_key)
+            try: # IF ALREADY LOADED IN OUR DICTIONARY, JUST RETURN THAT ENTRY
+                yield self[id]
+            except KeyError:
+                self[id]=o # OTHERWISE HAVE TO SAVE THE NEW ENTRY
+                yield o
+
 
     def __getitem__(self,k): # FIRST TRY LOCAL INDEX, THEN TRY DATABASE
         try:
