@@ -159,3 +159,44 @@ class dictGraph(dict):
             for edge in edgedict.edges():
                 yield edge
 
+
+
+
+
+class dictEdgeFB(dictEdge):
+    "dictEdge subclass that saves both forward and backward edges"
+    def __setitem__(self,target,edgeInfo):
+        "Save edge in both forward and backward dicts."
+        dictEdge.__setitem__(self,target,edgeInfo) # FORWARD EDGE
+        try:
+            d=self.graph._inverse[target]
+        except KeyError:
+            d=self.dictClass()
+            self.graph._inverse[target]=d
+        d[self.fromNode]=edgeInfo # SAVE BACKWARD EDGE
+
+    def __invert__(self):
+        "Get nodes with edges to this node"
+        return self.graph._inverse[self.fromNode]
+
+class dictGraphFB(dictGraph):
+    "Graph that saves both forward and backward edges"
+    def __init__(self,**kwargs):
+        dictGraph.__init__(self,**kwargs)
+        self._inverse=self.dictClass()
+
+    def __invert__(self):
+        "Get reverse mapping: edges TO a given node"
+        return self._inverse
+
+    def __delitem__(self,node):
+        "Delete node from the graph"
+        try:
+            fromNodes=self._inverse[node] # 
+            del self._inverse[node] # REMOVE FROM _inverse DICT
+        except KeyError:
+            pass
+        else: # DELETE EDGES TO THIS NODE
+            for i in fromNodes:
+                del self[i][node]
+        dictGraph.__delitem__(self,node)
