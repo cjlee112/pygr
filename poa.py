@@ -75,6 +75,10 @@ class SeqPath(object):
             return SeqPath(self.path,self.start+start*self.step,
                            self.start+stop*self.step,
                            self.step*step)
+        elif self.orientation<0 and not hasattr(self,'_next'):
+            return SeqPath(self.path,self.end-1-start*self.step,
+                           self.end-1-stop*self.step,
+                           self.step*step)
         else:
             return SeqPath(self,start,stop,step)
 
@@ -141,9 +145,7 @@ class SeqPath(object):
     def reverse_complement(self,s):
         compl={'a':'t', 'c':'g', 'g':'c', 't':'a', 'u':'a', 'n':'n',
                'A':'T', 'C':'G', 'G':'C', 'T':'A', 'U':'A', 'N':'N'}
-        l=[compl[c] for c in s]
-        l.reverse()
-        return ''.join(l)
+        return ''.join([compl.get(c,c) for c in s[::-1]])
 
     def seqtype(self):
         "Get the sequence type for this sequence"
@@ -178,9 +180,9 @@ class SeqPath(object):
         else:
             ori=''
         if isinstance(self.path,types.StringType):
-            return '%s%s[%d:%d]' % (ori,self.path,self.start,self.end)
+            return '%s%s[%s:%s]' % (ori,self.path,repr(self.start),repr(self.end))
         else:
-            return '%s%s[%d:%d]' % (ori,self.path.id,self.start,self.end)
+            return '%s%s[%s:%s]' % (ori,self.path,repr(self.start),repr(self.end))
 
     def repr_dict(self):
         "Return compact dictionary representing this interval"
