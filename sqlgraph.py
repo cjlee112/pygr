@@ -311,16 +311,31 @@ def createTableFromRow(cursor, tableName, row,typeTranslation=None,
     for col in row: # CREATE INDEXES FOR ID COLUMNS
         if col[-3:]=='_id' or col in indexDict:
             create_defs.append('index(%s)' % col)
-    cmd='create table %s (%s)' % (tableName,','.join(create_defs))
+    cmd='create table if not exists %s (%s)' % (tableName,','.join(create_defs))
     cursor.execute(cmd) # CREATE THE TABLE IN THE DATABASE
 
 
 def storeRow(cursor, tableName, row):
-    row_format=len(row)*'%s,'
-    cmd='insert into %s values (%s)' % (tableName,row_format[:-1])
+    row_format=','.join(len(row)*['%s'])
+    cmd='insert into %s values (%s)' % (tableName,row_format)
     cursor.execute(cmd,tuple(row.values()))
 
 def storeRowDelayed(cursor, tableName, row):
-    row_format=len(row)*'%s,'
-    cmd='insert delayed into %s values (%s)' % (tableName,row_format[:-1])
+    row_format=','.join(len(row)*['%s'])
+    cmd='insert delayed into %s values (%s)' % (tableName,row_format)
     cursor.execute(cmd,tuple(row.values()))
+
+
+class TableGroup(dict):
+    'provide attribute access to dbname qualified tablenames'
+    def __init__(self,db='test',suffix=None,**kw):
+        dict.__init__(self)
+        self.db=db
+        if suffix is not None:
+            self.suffix=suffix
+        for k,v in kw.items():
+            if '.' not in v:
+                v=self.db+'.'+v  # ADD DATABASE NAME AS PREFIX
+            self[k]=v
+    def __getattr__(self,k):
+        return self[k]
