@@ -248,14 +248,17 @@ class BlastDB(dict):
         self.filepath=filepath
         dict.__init__(self)
         self.set_seqtype()
-        self.seqLenDict=shelve.open(filepath+'.seqlen')
-        if len(self.seqLenDict)==0: # READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+        import anydbm
+        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
+            self.seqLenDict=shelve.open(filepath+'.seqlen','r')
+        except anydbm.error: # READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+            self.seqLenDict=shelve.open(filepath+'.seqlen') # OPEN IN DEFAULT "CREATE" MODE
             ifile,idFilter=self.raw_fasta_stream()
             print 'Building sequence length index...'
             store_seqlen_dict(self.seqLenDict,ifile,idFilter)
             ifile.close()
             self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
-            self.seqLenDict=shelve.open(filepath+'.seqlen') # REOPEN IT FOR USE
+            self.seqLenDict=shelve.open(filepath+'.seqlen','r') # REOPEN IT READ-ONLY
         # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
         if not os.access(filepath+'.nsd',os.R_OK) \
                and not os.access(filepath+'.psd',os.R_OK):
