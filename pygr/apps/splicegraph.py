@@ -63,7 +63,8 @@ def loadCluster(c,exon_forms,splices,clusterExons,clusterSplices,spliceGraph,alt
 
 
 
-def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,mrna_seq_t,protein_seq_t,loadAll=True):
+def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,
+                    mrna_seq_t=None,protein_seq_t=None,loadAll=True):
     """
     Build a splice graph from the specified SQL tables representing gene clusters,
     exon forms, and splices.  Each table must be specified as a DB.TABLENAME string.
@@ -90,14 +91,16 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,mrna_seq_t,pro
     g=jun03[genomic_seq_t]
     g.objclass(YiGenomicSequence) # FORCE GENOMIC SEQ TABLE TO USE TRANSPARENT ACCESS
 
-    mrna=jun03[mrna_seq_t]
-    mrna.objclass(SQLSequence) # FORCE mRNA SEQ TABLE TO USE TRANSPARENT ACCESS
+    if mrna_seq_t is not None: # ONLY PROCESS THIS IF USER PASSED US AN MRNA TABLE
+        mrna=jun03[mrna_seq_t]
+        mrna.objclass(SQLSequence) # FORCE mRNA SEQ TABLE TO USE TRANSPARENT ACCESS
 
-    class YiProteinSQLSequence(ProteinSQLSequence):
-        def __len__(self): return self.protein_length # USE SEQ LENGTH FROM DATABASE
-    protein=jun03[protein_seq_t]
-    protein.objclass(YiProteinSQLSequence) # FORCE PROTEIN SEQ TABLE TO USE TRANSPARENT ACCESS
-    protein.addAttrAlias(seq='protein_seq') # ALIAS protein_seq TO APPEAR AS seq
+    if protein_seq_t is not None: # ONLY PROCESS THIS IF USER PASSED US A PROTEIN TABLE
+        class YiProteinSQLSequence(ProteinSQLSequence):
+            def __len__(self): return self.protein_length # USE SEQ LENGTH FROM DATABASE
+        protein=jun03[protein_seq_t]
+        protein.objclass(YiProteinSQLSequence) # FORCE PROTEIN SEQ TABLE TO USE TRANSPARENT ACCESS
+        protein.addAttrAlias(seq='protein_seq') # ALIAS protein_seq TO APPEAR AS seq
 
     exon_forms=jun03[exon_t]
     class ExonForm(TupleO,SeqPath): # ADD ATTRIBUTES STORING SCHEMA INFO
