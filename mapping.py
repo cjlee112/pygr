@@ -78,13 +78,7 @@ class DirectedEdge(Edge):
 
 class dictEdge(dict):
     """2nd layer graph interface implemenation using dict.
-    Uses __getattr__ to pass requests for unknown attributes
-    down to the nodes that it contains, using the PathGraph interface.
-    This means you should be VERY careful about accessing nonexistent
-    attributes of this class.  Specifically, never use hasattr(),
-    since it will ALWAYS succeed.  I guess __getattr__ ought to check
-    if the attribute is actually present on the nodes before firing
-    up the PathGraph interface..."""
+    """
     dictClass=dict
     def __init__(self,graph,fromNode):
         self.graph=graph
@@ -128,13 +122,7 @@ class dictEdge(dict):
 
 class dictGraph(dict):
     """Top layer graph interface implemenation using dict.
-    Uses __getattr__ to pass requests for unknown attributes
-    down to the nodes that it contains, using the PathGraph interface.
-    This means you should be VERY careful about accessing nonexistent
-    attributes of this class.  Specifically, never use hasattr(),
-    since it will ALWAYS succeed.  I guess __getattr__ ought to check
-    if the attribute is actually present on the nodes before firing
-    up the PathGraph interface..."""
+    """
     dictClass=dict
     edgeDictClass=dictEdge
     def __init__(self,schema=None,domain=None,range=None):
