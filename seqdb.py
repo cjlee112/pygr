@@ -345,7 +345,7 @@ class StoredPathMapping(PathMapping):
         try: # RETURN STORED MAPPING
             return PathMapping.__getitem__(self,p)
         except KeyError: # TRY TO GET IT FROM THE STORED TABLE
-            for ival in self.table[p.id]: # READ INTERVAL MAPPINGS ONE BY ONE
+            for ival in self.table[p.path.id]: # READ INTERVAL MAPPINGS ONE BY ONE
                 save_interval_alignment(self,ival,self.srcSet,self.destSet,
                                         self._edgeClass) # SAVE IT
             return PathMapping.__getitem__(self,p) # RETURN TOTAL RESULT
