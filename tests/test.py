@@ -164,7 +164,7 @@ def graphQueryTests(spliceGraph,alt5Graph):
     #DD is a convenience function creating a dictionary.
 
     #To print for e.g., exon_form_id's that correspond to e0, and splice_id from 0->2
-    for d in graphquery(spliceGraph, queryGraph):
+    for d in GraphQuery(spliceGraph, queryGraph):
         print d[0].id,d[0,2].id
 
     #How do I get associated splice id?  Please add support for accessing edges.  
