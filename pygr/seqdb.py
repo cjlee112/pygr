@@ -318,8 +318,13 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
 class BlastDB(dict):
     "Container representing Blast database"
     seqClass=BlastSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
-    def __init__(self,filepath,skipSeqLenDict=False):
-        "format database and build indexes if needed"
+    def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None):
+        "format database and build indexes if needed. Provide filepath or file object"
+        if filepath is None:
+            try:
+                filepath=ifile.name
+            except AttributeError:
+                raise  TypeError("unable to obtain a filename")
         self.filepath=filepath
         dict.__init__(self)
         self.set_seqtype()
@@ -331,10 +336,9 @@ class BlastDB(dict):
                 self.seqLenDict=shelve.open(filepath+'.seqlen','r')
             except anydbm.error: # READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
                 self.seqLenDict=shelve.open(filepath+'.seqlen') # OPEN IN DEFAULT "CREATE" MODE
-                ifile,idFilter=self.raw_fasta_stream()
+                ifile,idFilter=self.raw_fasta_stream(ifile)
                 print 'Building sequence length index...'
                 store_seqlen_dict(self.seqLenDict,ifile,idFilter)
-                ifile.close()
                 self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
                 self.seqLenDict=shelve.open(filepath+'.seqlen','r') # REOPEN IT READ-ONLY
         # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
@@ -347,6 +351,8 @@ class BlastDB(dict):
             print 'Building index:',cmd
             if os.system(cmd)!=0: # BAD EXIT CODE, SO COMMAND FAILED
                 raise OSError('command %s failed' % cmd)
+        if ifile is not None: # NOW THAT WE'RE DONE CONSTRUCTING, CLOSE THE FILE OBJECT
+            ifile.close() # THIS SIGNALS WE'RE COMPLETELY DONE CONSTRUCTING THIS RESOURCE
 
     def set_seqtype(self):
         "Determine whether this database is DNA or protein"
@@ -361,8 +367,10 @@ class BlastDB(dict):
                 break # JUST READ ONE SEQUENCE
             ofile.close()
 
-    def raw_fasta_stream(self):
+    def raw_fasta_stream(self,ifile=None):
         'return a stream of fasta-formatted sequences, and ID filter function if needed'
+        if ifile is not None: # JUST USE THE STREAM WE ALREADY HAVE OPEN
+            return ifile,None
         try: # DEFAULT: JUST READ THE FASTA FILE, IF IT EXISTS
             return file(self.filepath),None
         except IOError: # TRY READING FROM FORMATTED BLAST DATABASE
