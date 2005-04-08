@@ -1052,12 +1052,16 @@ class RCMonitor(object):
         self.get_status()
 
     def get_status(self):
+        import socket
         self.name,self.errlog,self.systemLoad,self.hosts,coordinators, \
                self.rules,self.resources,self.locks=self.rc_server.get_status()
         print "Got status from ResourceController:",self.name,self.rc_url
         self.coordinators={}
         for cinfo in coordinators:
-            self.coordinators[cinfo[0]]=CoordinatorMonitor(cinfo)
+            try: # IF COORDINATOR HAS DIED, STILL WANT TO RETURN RCMonitor...
+                self.coordinators[cinfo[0]]=CoordinatorMonitor(cinfo)
+            except socket.error,e: # JUST COMPLAIN, BUT CONTINUE...
+                print >>sys.stderr,"Unable to connect to coordinator:",cinfo,e
 
     def __getattr__(self,attr):
         "just pass on method requests to our rc_server"
