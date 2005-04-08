@@ -141,7 +141,7 @@ class SQLTable(SQLTableBase):
                     yield self[id]
                 except KeyError:
                     self[id]=o # OTHERWISE HAVE TO SAVE THE NEW ENTRY
-            yield o
+                    yield o
 
 
     def __getitem__(self,k): # FIRST TRY LOCAL INDEX, THEN TRY DATABASE
