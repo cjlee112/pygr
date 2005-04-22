@@ -28,18 +28,18 @@ seq_id_counter=0
 def new_seq_id():
     global seq_id_counter
     seq_id_counter += 1
-    return seq_id_counter-1
+    return str(seq_id_counter-1)
 
 
 def write_fasta(ofile,s,chunk=60,id=None):
     "Trivial FASTA output"
     if id is None:
         try:
-            id=s.id
+            id=str(s.id)
         except AttributeError:
             id=new_seq_id()
 
-    ofile.write('>'+str(id)+'\n')
+    ofile.write('>'+id+'\n')
     seq=str(s)
     end=len(seq)
     pos=0
@@ -287,9 +287,9 @@ def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     ifile,ofile=os.popen2(cmd+'|parse_blast.awk -v mode=all')
     if seqString is None:
         seqString=seq
-    write_fasta(ifile,seqString,id=seq.id)
+    id=write_fasta(ifile,seqString)
     ifile.close()
-    al=read_interval_alignment(ofile,{seq.id:seq},seqDB,al)
+    al=read_interval_alignment(ofile,{id:seq},seqDB,al)
     print ofile.readline()
     if ofile.close() is not None:
         raise OSError('command %s failed' % cmd)
