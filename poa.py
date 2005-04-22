@@ -153,7 +153,7 @@ class SeqPath(object):
         while 1:
             if hasattr(obj,'_seqtype'):
                 return obj._seqtype
-            if obj.path!=obj:
+            if hasattr(obj,'path') and obj.path!=obj:
                 obj=obj.path
             else:
                 break
