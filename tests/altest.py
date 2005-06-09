@@ -168,7 +168,7 @@ from graphquery import *
 myjoin={1:{2:None},2:{3:DD(dataGraph=swiss_features)},3:{}}
 t=time.time()
 i=0
-for d in graphquery(mRNA_swiss,myjoin):
+for d in GraphQuery(mRNA_swiss,myjoin):
     i+=1
 print 'graphquery join time=',time.time()-t
 print 'join has %d elements' % i
