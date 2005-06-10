@@ -24,6 +24,12 @@ class ProteinSQLSequence(SQLSequence):
     _seqtype=PROTEIN_SEQTYPE
 
 
+# NCBI HAS THE NASTY HABIT OF TREATING THE IDENTIFIER AS A BLOB INTO
+# WHICH THEY STUFF FIELD AFTER FIELD... E.G. gi|1234567|foobarU|NT_1234567|...
+# THIS JUST YANKS OUT THE SECOND ARGUMENT SEPARATED BY |
+NCBI_ID_PARSER=lambda id:id.split('|')[1]
+
+
 seq_id_counter=0
 def new_seq_id():
     global seq_id_counter
@@ -318,7 +324,7 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
 class BlastDB(dict):
     "Container representing Blast database"
     seqClass=BlastSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
-    def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None):
+    def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None):
         "format database and build indexes if needed. Provide filepath or file object"
         if filepath is None:
             try:
@@ -336,7 +342,7 @@ class BlastDB(dict):
                 self.seqLenDict=shelve.open(filepath+'.seqlen','r')
             except anydbm.error: # READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
                 self.seqLenDict=shelve.open(filepath+'.seqlen') # OPEN IN DEFAULT "CREATE" MODE
-                ifile,idFilter=self.raw_fasta_stream(ifile)
+                ifile,idFilter=self.raw_fasta_stream(ifile,idFilter)
                 print 'Building sequence length index...'
                 store_seqlen_dict(self.seqLenDict,ifile,idFilter)
                 self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
@@ -367,15 +373,15 @@ class BlastDB(dict):
                 break # JUST READ ONE SEQUENCE
             ofile.close()
 
-    def raw_fasta_stream(self,ifile=None):
+    def raw_fasta_stream(self,ifile=None,idFilter=None):
         'return a stream of fasta-formatted sequences, and ID filter function if needed'
         if ifile is not None: # JUST USE THE STREAM WE ALREADY HAVE OPEN
-            return ifile,None
+            return ifile,idFilter
         try: # DEFAULT: JUST READ THE FASTA FILE, IF IT EXISTS
-            return file(self.filepath),None
+            return file(self.filepath),idFilter
         except IOError: # TRY READING FROM FORMATTED BLAST DATABASE
             cmd='fastacmd -D -d '+self.filepath
-            return os.popen(cmd),lambda id:id.split('|')[1] #BLAST ADDS lcl| TO id
+            return os.popen(cmd),NCBI_ID_PARSER #BLAST ADDS lcl| TO id
 
     def __iter__(self):
         'generate all IDs in this database'
