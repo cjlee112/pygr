@@ -20,9 +20,9 @@ spliceCalcs={'HUMAN_SPLICE_03':
                         protein='MOUSE_ISOFORMS.protein_seq_2'),
              'MOUSE_SPLICE_03':
              TableGroup(db='MOUSE_SPLICE_03',suffix='JUN03',clusters='cluster_JUN03',
-                        exons='ver_exon_JUN03',splices='splice_verification_JUN03',
-                        genomic='genomic_cluster_JUN03',mrna=None,
-                        protein=None)
+                        exons='exon_formJUN03',splices='splice_verification_JUN03',
+                        genomic='genomic_cluster_JUN03',mrna='mrna_seqJUN03',
+                        protein='protein_seqJUN03')
              }
 
 
