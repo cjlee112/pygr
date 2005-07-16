@@ -518,10 +518,10 @@ class MAFStoredPathMapping(PathMapping):
                               (id,ival.end,ival.start)):  # SAVE MAPPING TO vdbset
             save_interval_alignment(self,i,dbset,vdbset,None,MAF_get_interval)
             vseqs[i.dest_id]=None # KEEP TRACK OF ALL OUR VIRTUAL SEQUENCES...
-        for vseqID in vseqs: # GET EVERYTHING THAT OUR vseqs MAP TO...
-            for i in table.select('where src_id=%s',(vseqID,)): # SAVE MAPPING TO dbset
-                if i.src_id==vseqID: # FILTER OUT MYSQL'S CASE-INSENSITIVE MATCHES!!!
-                    save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
+##        print str(tuple(vseqs.keys()+['None']))
+        for i in table.select('where src_id in %s'%(str(tuple(vseqs.keys()+['None'])))): # SAVE MAPPING TO dbset
+            if vseqs.has_key(i.src_id): # FILTER OUT MYSQL'S CASE-INSENSITIVE MATCHES!!!
+                save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
 
     def __getitem__(self,k):
         return TempMAFIntervalDict(self,k)
