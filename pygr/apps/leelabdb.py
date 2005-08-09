@@ -28,7 +28,7 @@ spliceCalcs={'HUMAN_SPLICE_03':
 
 def getUserCursor(db):
     'get a cursor as the current user'
-    db=MySQLdb.connect(db=db,read_default_file=os.environ['HOME']+'/.my.cnf')
+    db=MySQLdb.connect(db=db,read_default_file=os.environ['HOME']+'/.my.cnf',compress=True)
     return db.cursor()
 
              
