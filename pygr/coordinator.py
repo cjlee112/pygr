@@ -745,6 +745,9 @@ class Coordinator(object):
 
     def next(self,host,pid,success_id):
         'return next ID from iterator to the XMLRPC caller'
+        if (host,pid) not in self.clients:
+            print >>sys.stderr,'next: unknown client %s:%d' % (host,pid)
+            return False # HAND BACK "NO MORE FOR YOU TO DO" SIGNAL
         try: # INITIALIZATION DONE, SO REMOVE FROM INITIALIZATION LIST
             del self.clients_initializing[(host,pid)]
         except KeyError:
