@@ -544,7 +544,7 @@ class Coordinator(object):
     python='python' # DEFAULT EXECUTABLE FOR RUNNING OUR CLIENTS
     def __init__(self,name,script,it,resources,port=8888,priority=1.0,rc_url=None,
                  errlog=False,immediate=False,ncpu_limit=999999,
-                 demand_ncpu=0,**kwargs):
+                 demand_ncpu=0,max_initialization_errors=3,**kwargs):
         self.name=name
         self.script=script
         self.it=iter(it) # MAKE SURE it IS AN ITERATOR; IF IT'S NOT, MAKE IT SO
@@ -554,6 +554,7 @@ class Coordinator(object):
         self.immediate=immediate
         self.ncpu_limit=ncpu_limit
         self.demand_ncpu=demand_ncpu
+        self.max_initialization_errors=max_initialization_errors
         self.kwargs=kwargs
         self.host=get_hostname()
         self.user=os.environ['USER']
@@ -580,6 +581,8 @@ class Coordinator(object):
         self.stop_clients={}
         self.logfile={}
         self.clients_starting={}
+        self.clients_initializing={}
+        self.initialization_errors={}
         try: # LOAD LIST OF IDs ALREADY SUCCESSFULLY PROCESSED, IF ANY
             f=file(name+'.success','r')
             for line in f:
@@ -616,12 +619,20 @@ class Coordinator(object):
                   len(self.clients),self.max_clients
             return # DON'T START ANOTHER PROCESS, TOO MANY ALREADY
         try:
-            if len(self.clients_starting[host])>self.max_ssh_errors:
+            if len(self.clients_starting[host])>=self.max_ssh_errors:
                 print >>sys.stderr,\
                       'start_client: blocked, too many unstarted jobs:',\
                       host,self.clients_starting[host]
                 return # DON'T START ANOTHER PROCESS, host MAY BE DEAD...
         except KeyError: # NO clients_starting ON host, GOOD!
+            pass
+        try:
+            if len(self.initialization_errors[host])>=self.max_initialization_errors:
+                print >>sys.stderr,\
+                      'start_client: blocked, too many initialization errors:',\
+                      host,self.initialization_errors[host]
+                return # DON'T START ANOTHER PROCESS, host HAS A PROBLEM
+        except KeyError: # NO initialization_errors ON host, GOOD!
             pass
         try:
             sshopts=self.hosts[host].sshopts # GET sshopts VIA XMLRPC
@@ -674,6 +685,7 @@ class Coordinator(object):
             del self.clients_starting[host][iclient] #REMOVE FROM STARTUP LIST
         except KeyError:
             print >>sys.stderr,'no client logfile?',host,pid,logfile
+        self.clients_initializing[(host,pid)]=logfile
         return True  # USE THIS AS DEFAULT XMLRPC RETURN VALUE
 
     def unregister_client(self,host,pid,message):
@@ -685,6 +697,10 @@ class Coordinator(object):
             print >>sys.stderr,'unregister_client: unknown client %s:%d' % (host,pid)
         try: # REMOVE IT FROM THE LIST OF CLIENTS TO SHUTDOWN, IF PRESENT
             del self.stop_clients[(host,pid)]
+        except KeyError:
+            pass
+        try: # REMOVE FROM INITIALIZATION LIST
+            del self.clients_initializing[(host,pid)]
         except KeyError:
             pass
         if len(self.clients)==0 and self.done: # NO MORE TASKS AND NO MORE CLIENTS
@@ -710,6 +726,12 @@ class Coordinator(object):
         "get traceback report from client as text"
         print >>sys.stderr,"TRACEBACK: %s:%s ID %s\n%s" % \
               (host,str(pid),str(id),tb_report)
+        if (host,pid) in self.clients_initializing:
+            logfile=self.clients_initializing[(host,pid)]
+            try:
+                self.initialization_errors[host].append(logfile)
+            except KeyError:
+                self.initialization_errors[host]=[logfile]
         try:
             del self.pending[id]
         except KeyError: # NOT ASSOCIATED WITH AN ACTUAL TASK ID, SO DON'T RECORD
@@ -723,6 +745,10 @@ class Coordinator(object):
 
     def next(self,host,pid,success_id):
         'return next ID from iterator to the XMLRPC caller'
+        try: # INITIALIZATION DONE, SO REMOVE FROM INITIALIZATION LIST
+            del self.clients_initializing[(host,pid)]
+        except KeyError:
+            pass
         if success_id is not False:
             self.report_success(host,pid,success_id)
         if self.done: # EXHAUSTED OUR ITERATOR, SO SHUT DOWN THIS CLIENT
@@ -908,18 +934,25 @@ class Processor(object):
         it=resultGenerator(self,**kwargs) # GET ITERATOR FROM GENERATOR
         report_time=time.time()
         self.register() # REGISTER WITH RESOURCE CONTROLLER & COORDINATOR
+        initializationError=None
         try: # TRAP ERRORS BOTH IN USER CODE AND coordinator CODE
             while 1:
                 try: # TRAP AND REPORT ALL ERRORS IN USER CODE
                     id=it.next() # THIS RUNS USER CODE FOR ONE ITERATION
                     self.success_id=id  # MARK THIS AS A SUCCESS...
                     errors_in_a_row=0
+                    initializationError=False
                 except StopIteration: # NO MORE TASKS FOR US...
-                    self.exit_message='done'
+                    if initializationError:
+                        self.exit_message='initialization error'
+                    else:
+                        self.exit_message='done'
                     break
                 except SystemExit: # sys.exit() CALLED
                     raise  # WE REALLY DO WANT TO EXIT.
                 except: # MUST HAVE BEEN AN ERROR IN THE USER CODE
+                    if initializationError is None: # STILL IN INITIALIZATION
+                        initializationError=True
                     self.report_error(self.pending_id) # REPORT THE PROBLEM
                     errors_in_a_row +=1
                     if errors_in_a_row>=self.max_errors_in_a_row:
