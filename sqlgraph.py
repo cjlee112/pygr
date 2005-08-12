@@ -279,7 +279,10 @@ def createTableFromRepr(rows,tableName,cursor,typeTranslation=None,
        each representing a tuple of values (indexed by their column
        names).
     """
-    row=rows.next() # GET 1ST ROW TO EXTRACT COLUMN INFO
+    try:
+        row=rows.next() # GET 1ST ROW TO EXTRACT COLUMN INFO
+    except StopIteration:
+        return # IF rows EMPTY, NO NEED TO SAVE ANYTHING, SO JUST RETURN
     try:
         createTableFromRow(cursor, tableName,row,typeTranslation,
                            optionalDict,indexDict)
