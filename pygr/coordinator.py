@@ -872,6 +872,7 @@ class Processor(object):
             else:
                 break
         if id is False: # NO MODE id FOR US TO PROCESS, SO QUIT
+            self.serverStopIteration=True # RECORD THIS AS GENUINE END EVENT
             raise StopIteration
         else: # HAND BACK THE id TO THE USER
             self.pending_id=id
@@ -946,7 +947,11 @@ class Processor(object):
                     errors_in_a_row=0
                     initializationError=False
                 except StopIteration: # NO MORE TASKS FOR US...
-                    if initializationError:
+                    if not hasattr(self,'serverStopIteration'): # WIERD!!
+                        # USER CODE RAISED StopIteration?!?
+                        self.report_error(self.pending_id) # REPORT THE PROBLEM
+                        self.exit_message='user StopIteration error'
+                    elif initializationError:
                         self.exit_message='initialization error'
                     else:
                         self.exit_message='done'
