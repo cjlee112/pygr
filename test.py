@@ -134,8 +134,8 @@ def pathQueryTests(spliceGraph,alt5Graph):
 
 def graphQueryTests(spliceGraph,alt5Graph):
     "example u11/12 alt5 graph query"
-    queryGraph={0:{2:DD(filter=lambda edge,**kw:edge.type=="U11/U12"),
-                   1:DD(dataGraph=alt5Graph)}, 1:{3:None}, 2:{3:None},3:{}}
+    queryGraph={0:{2:dict(filter=lambda edge,**kw:edge.type=="U11/U12"),
+                   1:dict(dataGraph=alt5Graph)}, 1:{3:None}, 2:{3:None},3:{}}
 
     #DD is a convenience function creating a dictionary.
 
