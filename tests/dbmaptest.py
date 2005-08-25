@@ -5,7 +5,7 @@ from seqdb import *
 sp=BlastDB('sp') # OPEN SWISSPROT BLAST DB
 s=NamedSequence(str(sp['CYGB_HUMAN'][40:-40]),'boo')
 
-db=MySQLdb.Connection('localhost','test','hedgehog')
+db=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf')
 cursor=db.cursor()
 t=SQLTableMultiNoCache('test.mytable',cursor)
 t._distinct_key='src_id'
