@@ -190,7 +190,13 @@ class GraphQuery(object):
                 q.append(self.newGQI(ContainerGQI,None,node,dataGraph,queryGraph,
                                      dataMatch,queryMatch,self.gqiDict))
                 n += 1
-
+        if n==0: # NO START NODES, SO JUST ADD THE FIRST QUERY NODE TO THE QUEUE
+            for node in queryGraph:
+                q.append(self.newGQI(ContainerGQI,None,node,dataGraph,queryGraph,
+                                     dataMatch,queryMatch,self.gqiDict))
+                n += 1
+                break # JUST ADD THE FIRST NODE TO THE QUEUE
+        if n==0: raise ValueError('query graph is empty!')
         visited={}
         i=0
         while i<n: # ADD NODE TO QUEUE EVEN IF ALREADY VISITED, BUT DON'T ADD ITS NEIGHBORS
