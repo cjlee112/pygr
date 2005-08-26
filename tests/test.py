@@ -1,8 +1,6 @@
+from pygr.graphquery import *
+from pygr.apps.leelabdb import *
 import time
-from leelabdb import *
-from pathquery import *
-from graphquery import *
-
 
 
 def loadTestJUN03(loadAll=False):
@@ -103,32 +101,32 @@ def forLoopTests(spliceGraph,alt5Graph):
 
 
 
-def pathQueryTests(spliceGraph,alt5Graph):
-    "run some path query example tests"
+#def pathQueryTests(spliceGraph,alt5Graph):
+#    "run some path query example tests"
     # path query examples: to make this work, let's force
     # spliceGraph to use path query wrapper interface
-    spliceGraph.__class__=PathQueryDictGraph
-    alt5Graph.__class__=PathQueryDictGraph
+#    spliceGraph.__class__=PathQueryDictGraph
+#    alt5Graph.__class__=PathQueryDictGraph
 
     # example exon skip query
-    l=[o for o in spliceGraph.next.next.filter(lambda p:p[2] in p[0].next)]
-    print len(l)
-
+ #   l=[o for o in spliceGraph.next.next.filter(lambda p:p[2] in p[0].next)]
+ 
+#3   print len(l)
     # same thing, but using graph join syntax
-    l=[o for o in (spliceGraph>>spliceGraph>>spliceGraph).filter(lambda p:p[2] in spliceGraph[p[0]])]
-    print len(l)
+ #   l=[o for o in (spliceGraph>>spliceGraph>>spliceGraph).filter(lambda p:p[2] in spliceGraph[p[0]])]
+#    print len(l)
 
 
     # example U11/U12 alt5 skip
-    l=[o for o in alt5Graph.alt5.next.next.filter(lambda p: p[3] in p[0].next
-                                             and p.edge[2].type=='U11/U12')]
-    print len(l)
+#    l=[o for o in alt5Graph.alt5.next.next.filter(lambda p: p[3] in p[0].next
+    #                                         and p.edge[2].type=='U11/U12')]
+#    print len(l)
 
-    # example U11/U12 alt3 skip
-    l=[o for o in spliceGraph.next.next.filter(lambda p: p.edge[2].type=='U11/U12'
-                                               and hasattr(p[2],'alt3'))
-       .alt3.filter(lambda p:p[4] in p[0].next)]
-    print len(l)
+#    # example U11/U12 alt3 skip
+#    l=[o for o in spliceGraph.next.next.filter(lambda p: p.edge[2].type=='U11/U12'
+    #                                           and hasattr(p[2],'alt3'))
+#       .alt3.filter(lambda p:p[4] in p[0].next)]
+#    print len(l)
 
 
 
@@ -155,7 +153,7 @@ def doTests():
     (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna,protein,
      clusterExons,clusterSplices)=loadTestJUN03(True)
     forLoopTests(spliceGraph,alt5Graph)
-    pathQueryTests(spliceGraph,alt5Graph)
+    #pathQueryTests(spliceGraph,alt5Graph)
     graphQueryTests(spliceGraph,alt5Graph)
 
 if __name__ == "__main__":
