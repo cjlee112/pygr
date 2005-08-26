@@ -1,7 +1,7 @@
 
-from sqlgraph import *
-from poa import *
-from seqdb import *
+from pygr.sqlgraph import *
+from pygr.poa import *
+from pygr.seqdb import *
 
 
 def buildClusterSpliceGraph(c,alt5,alt3):
