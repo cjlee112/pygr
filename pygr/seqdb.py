@@ -324,6 +324,7 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
 class BlastDB(dict):
     "Container representing Blast database"
     seqClass=BlastSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
+    id_delimiter='|' # FOR UNPACKING NCBI IDENTIFIERS AS WORKAROUND FOR BLAST ID CRAZINESS
     def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None):
         "format database and build indexes if needed. Provide filepath or file object"
         if filepath is None:
@@ -395,12 +396,58 @@ class BlastDB(dict):
     def __hash__(self): # TO ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...
         return id(self)
 
+    def unpack_id(self,id):
+        "NCBI packs identifier like gi|123456|gb|A12345|other|nonsense. Return as list"
+        return id.split(self.id_delimiter)
+
+    def index_unpacked_ids(self,unpack_f=None):
+        if unpack_f is None:
+            unpack_f=self.unpack_id
+        t={}
+        for id in self:
+            for s in unpack_f(id):
+                if s==id: continue # DON'T STORE TRIVIAL MAPPINGS!!
+                try:
+                    if t[s]!=id and t[s] is not None: 
+                        t[s]=None # s NOT UNIQUE, CAN'T BE AN IDENTIFIER!!
+                except KeyError:
+                    t[s]=id # s UNIQUE, TRY USING s AS AN IDENTIFIER
+        for id in t.itervalues():
+            if id is not None: # OK THERE ARE REAL MAPPINGS STORED, SO USE THIS
+                self._unpacked_dict=t # SAVE THE MAPPING TO REAL IDENTIFIERS
+                return
+        self._unpacked_dict={} # NO NON-TRIVIAL MAPPINGS, SO JUST SAVE EMPTY MAPPING
+
+    def get_real_id(self,bogusID,unpack_f=None):
+        "try to translate a partial NCBI id to the real sequence id"
+        if unpack_f is None:
+            unpack_f=self.unpack_id
+        if not hasattr(self,'_unpacked_dict'):
+            self.index_unpacked_ids(unpack_f)
+        for s in unpack_f(bogusID):
+            try:
+                id=self._unpacked_dict[s]
+                if id is not None:
+                    return id # OK, FOUND A MAPPING TO REAL ID
+            except KeyError:
+                pass # KEEP TRYING...
+        raise KeyError # FOUND NO MAPPING, SO RAISE EXCEPTION
+
     def __getitem__(self,id):
         "Get sequence matching this ID, using dict as local cache"
+        if hasattr(self,'_unpacked_dict'): # TRY USING ID MAPPING
+            try:
+                id=self.get_real_id(id)
+            except KeyError:
+                pass
         try:
             return dict.__getitem__(self,id)
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
-            s=self.seqClass(self,id)
+            try:
+                s=self.seqClass(self,id)
+            except KeyError:
+                id=self.get_real_id(id)
+                s=self.seqClass(self,id)
             s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
             dict.__setitem__(self,id,s) # CACHE IT
             return s
