@@ -1,6 +1,5 @@
 
-from poa import *
-from pathquery import *
+from pygr.poa import *
 
 # CREATE A FEW SEQUENCES TO PLAY WITH...
 s=NamedSequence('ABCDEFGHIJKLMNOPQRSTUVWXYZ','alpha')

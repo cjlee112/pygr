@@ -1,6 +1,6 @@
 
-from leelabdb import *
-import coordinator
+from pygr.leelabdb import *
+import pygr.coordinator
 
 def map_clusters(server,genome_rsrc='hg17',dbname='HUMAN_SPLICE_03',
                  result_table='GENOME_ALIGNMENT.hg17_cluster_JUN03_all',

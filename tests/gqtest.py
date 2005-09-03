@@ -1,4 +1,4 @@
-from graphquery import *
+from pygr.graphquery import *
 
 
 dataGraph={'a':{'b':None,'c':None,'d':None},'b':{'c':None},'c':{},'d':{}}

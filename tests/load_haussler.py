@@ -1,7 +1,7 @@
 #!/sw/bin/python
 
-from maf2graph import *
-from seqdb import *
+from pygr.apps.maf2VSgraph import *
+from pygr.seqdb import *
 import MySQLdb
 from db_info import *
 import os

@@ -67,20 +67,27 @@ metadata = {
     'download_url': "http://prdownloads.sourceforge.net/pygr/" \
                     "pygr-%s.tar.gz" % version, 
     'classifiers': [ c for c in classifiers.split('\n') if c ],
+
     'py_modules': [
 	"pygr/__init__",
 	"pygr/graphquery",
 	"pygr/mapping",
+        "pygr/coordinator",
+        "pygr/nestedlist",
 	"pygr/poa",
 	"pygr/schema",
 	"pygr/seqdb",
+	"pygr/sequence",
 	"pygr/sequtil",
 	"pygr/sqlgraph",
+        "pygr/parse_blast",
 	"pygr/apps/__init__",
 	"pygr/apps/leelabdb",
 	"pygr/apps/seqref",
 	"pygr/apps/splicegraph",
+        "pygr/apps/maf2VSgraph",
         ]
-    }
+ 
+   }
 
 setup(**metadata)                                                                               

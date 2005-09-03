@@ -1,6 +1,6 @@
 import time
-from leelabdb import *
-from poa import *
+from pygr.apps.leelabdb import *
+from pygr.poa import *
 
 cursor=getUserCursor('HUMAN_SPLICE_03')
 print 'Reading database schema...'

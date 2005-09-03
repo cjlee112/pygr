@@ -1,5 +1,6 @@
 
-from seqdb import *
+from pygr.seqdb import *
+
 db=BlastDB('sp') # OPEN SWISSPROT BLAST DB
 s=NamedSequence(str(db['CYGB_HUMAN'][40:-40]),'boo')
 m=db.blast(s) # DO BLAST SEARCH

@@ -1,5 +1,5 @@
-from poa import *
-from pathquery import *
+from pygr.poa import *
+#from pathquery import *
 
 class AnonSequence(NamedSequence):
     """Defines a sequence class with unknown sequence, but

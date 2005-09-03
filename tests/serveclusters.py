@@ -1,5 +1,5 @@
 
-from leelabdb import *
+from pygr.apps.leelabdb import *
 import idservice
 
 cursor=getUserCursor('HUMAN_SPLICE_03')

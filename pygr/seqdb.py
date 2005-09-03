@@ -2,7 +2,7 @@ import os
 import shelve
 from sqlgraph import *
 from poa import *
-
+from parse_blast import *
 
 class SQLSequence(SQLRow,NamedSequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
@@ -282,7 +282,7 @@ def read_interval_alignment(ofile,srcSet,destSet,al=None):
     "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
     if al is None:
         al=PathMapping()
-    for line in ofile:
+    for line in parse_blast(ofile,"all"):
         t=line.split('\t')
         if t[0]=='MATCH_INTERVAL':
             save_interval_alignment(al,BlastIval(t[1:]),srcSet,destSet)
@@ -290,7 +290,7 @@ def read_interval_alignment(ofile,srcSet,destSet,al=None):
 
 def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
-    ifile,ofile=os.popen2(cmd+'|parse_blast.awk -v mode=all')
+    ifile,ofile=os.popen2(cmd)
     if seqString is None:
         seqString=seq
     id=write_fasta(ifile,seqString)

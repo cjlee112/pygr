@@ -1,6 +1,6 @@
 
 import MySQLdb
-from seqdb import *
+from pygr.seqdb import *
 
 sp=BlastDB('sp') # OPEN SWISSPROT BLAST DB
 s=NamedSequence(str(sp['CYGB_HUMAN'][40:-40]),'boo')

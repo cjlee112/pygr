@@ -1,6 +1,6 @@
 
-from leelabdb import *
-import coordinator
+from pygr.leelabdb import *
+import pygr.coordinator
 
 def map_clusters(server,**kwargs):
     "map clusters one by one"
