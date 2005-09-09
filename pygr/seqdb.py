@@ -226,18 +226,8 @@ def blast_program(query_type,db_type):
 class BlastIval(TupleO):
     "Wrap a tuple with same attribute names as poa.IntervalTransform.repr_dict"
     _attrcol={'hit_id':0, 'src_id':1, 'dest_id':2, 'blast_score':3, 'e_value':4,
-              'percent_id':5, 'dest_ori':6, 'src_start':7, 'length':8, 'dest_start':9}
-    def __init__(self,t):
-        "Convert strings into appropriate types; adjust to zero-based indexes"
-        u=(int(t[0]),t[1],t[2],int(t[3]),float(t[4]),
-           int(t[5]),int(t[6]),int(t[7])-1,int(t[8]),int(t[9])-1)
-        TupleO.__init__(self,u)
-    def __getattr__(self,k):
-        'provide a few attributes to give same interface as poa.IntervalTransform.repr_dict'
-        if k=='src_ori': return 1
-        if k=='src_end': return self.src_start+self.length
-        if k=='dest_end': return self.dest_start+self.length
-        else: return TupleO.__getattr__(self,k)
+              'percent_id':5, 'src_ori':6,'dest_ori':7,
+              'src_start':8, 'src_end':9,'dest_start':10,'dest_end':11}
 
 class BlastHitInfo(TupleO):
     _attrcol={'blast_score':0,'e_value':1,'percent_id':2}
@@ -282,10 +272,9 @@ def read_interval_alignment(ofile,srcSet,destSet,al=None):
     "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
     if al is None:
         al=PathMapping()
-    for line in parse_blast(ofile,"all"):
-        t=line.split('\t')
-        if t[0]=='MATCH_INTERVAL':
-            save_interval_alignment(al,BlastIval(t[1:]),srcSet,destSet)
+    p=BlastHitParser()
+    for t in p.parse_file(ofile):
+        save_interval_alignment(al,BlastIval(t),srcSet,destSet)
     return al
 
 def process_blast(cmd,seq,seqDB,al=None,seqString=None):
@@ -321,10 +310,9 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
     return seq_masked
 
 
-class BlastDB(dict):
+class BlastDBbase(dict):
     "Container representing Blast database"
     seqClass=BlastSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
-    id_delimiter='|' # FOR UNPACKING NCBI IDENTIFIERS AS WORKAROUND FOR BLAST ID CRAZINESS
     def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None):
         "format database and build indexes if needed. Provide filepath or file object"
         if filepath is None:
@@ -396,17 +384,73 @@ class BlastDB(dict):
     def __hash__(self): # TO ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...
         return id(self)
 
+    def __getitem__(self,id):
+        "Get sequence matching this ID, using dict as local cache"
+        try:
+            return dict.__getitem__(self,id)
+        except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
+            s=self.seqClass(self,id)
+            s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
+            dict.__setitem__(self,id,s) # CACHE IT
+            return s
+
+    def blast(self,seq,al=None,blastpath='blastall',
+              blastprog=None,expmax=0.001,maxseq=None):
+        "Run blast search for seq in database, return aligned intervals"
+        if blastprog is None:
+            blastprog=blast_program(seq.seqtype(),self._seqtype)
+        cmd='%s -d %s -p %s -e %e'  %(blastpath,self.filepath,
+                                      blastprog,float(expmax))
+        if maxseq is not None: # ONLY TAKE TOP maxseq HITS
+            cmd+=' -b %d -v %d' % (maxseq,maxseq)
+        return process_blast(cmd,seq,self,al)
+
+    def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
+                  maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts=''):
+        "Run megablast search with repeat masking."
+        masked_seq=repeat_mask(seq,opts=rmOpts)  # MASK REPEATS TO lowercase
+        cmd='%s %s -d %s -D 2 -e %e -i stdin' % (blastpath,maskOpts,self.filepath,float(expmax))
+        if maxseq is not None: # ONLY TAKE TOP maxseq HITS
+            cmd+=' -b %d -v %d' % (maxseq,maxseq)
+        if minIdentity is not None:
+            cmd+=' -p %f' % float(minIdentity)
+        return process_blast(cmd,seq,self,al,seqString=masked_seq)
+
+
+class BlastDB(BlastDBbase):
+    """Since NCBI treats FASTA ID as a blob into which they like to stuff
+    many fields... and then NCBI BLAST mangles those IDs when it reports
+    hits, so they no longer match the true ID... we are forced into
+    contortions to rescue the true ID from mangled IDs.  If you dont want
+    these extra contortions, use the base class BlastDBbase instead.
+
+    Our workaround strategy: since NCBI packs the FASTA ID with multiple
+    IDs (GI, GB, RefSeq ID etc.), we can use any of these identifiers
+    that are found in a mangled ID, by storing a mapping of these
+    sub-identifiers to the true FASTA ID."""
+    id_delimiter='|' # FOR UNPACKING NCBI IDENTIFIERS AS WORKAROUND FOR BLAST ID CRAZINESS
     def unpack_id(self,id):
         "NCBI packs identifier like gi|123456|gb|A12345|other|nonsense. Return as list"
         return id.split(self.id_delimiter)
 
     def index_unpacked_ids(self,unpack_f=None):
+        """Build an index of sub-IDs (unpacked from NCBI nasty habit
+        of using the FASTA ID as a blob); you can customize the unpacking
+        by overriding the unpack_id function or changing the id_delimiter.
+        The index maps each sub-ID to the real ID, so that when BLAST
+        hands back a mangled, fragmentary ID, we can unpack that mangled ID
+        and look up the true ID in this index.  Any sub-ID that is found
+        to map to more than one true ID will be mapped to None (so that
+        random NCBI garbage like gnl or NCBI_MITO wont be treated as
+        sub-IDs).  
+        """
         if unpack_f is None:
             unpack_f=self.unpack_id
         t={}
         for id in self:
             for s in unpack_f(id):
                 if s==id: continue # DON'T STORE TRIVIAL MAPPINGS!!
+                s=s.upper() # NCBI FORCES ID TO UPPERCASE?!?!
                 try:
                     if t[s]!=id and t[s] is not None: 
                         t[s]=None # s NOT UNIQUE, CAN'T BE AN IDENTIFIER!!
@@ -419,12 +463,13 @@ class BlastDB(dict):
         self._unpacked_dict={} # NO NON-TRIVIAL MAPPINGS, SO JUST SAVE EMPTY MAPPING
 
     def get_real_id(self,bogusID,unpack_f=None):
-        "try to translate a partial NCBI id to the real sequence id"
+        "try to translate an id that NCBI has mangled to the real sequence id"
         if unpack_f is None:
             unpack_f=self.unpack_id
         if not hasattr(self,'_unpacked_dict'):
             self.index_unpacked_ids(unpack_f)
         for s in unpack_f(bogusID):
+            s=s.upper() # NCBI FORCES ID TO UPPERCASE?!?!
             try:
                 id=self._unpacked_dict[s]
                 if id is not None:
@@ -452,27 +497,7 @@ class BlastDB(dict):
             dict.__setitem__(self,id,s) # CACHE IT
             return s
 
-    def blast(self,seq,al=None,blastpath='blastall',
-              blastprog=None,expmax=0.001,maxseq=None):
-        "Run blast search for seq in database, return aligned intervals"
-        if blastprog is None:
-            blastprog=blast_program(seq.seqtype(),self._seqtype)
-        cmd='%s -d %s -p %s -e %e'  %(blastpath,self.filepath,
-                                      blastprog,float(expmax))
-        if maxseq is not None: # ONLY TAKE TOP maxseq HITS
-            cmd+=' -b %d -v %d' % (maxseq,maxseq)
-        return process_blast(cmd,seq,self,al)
 
-    def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
-                  maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts=''):
-        "Run megablast search with repeat masking."
-        masked_seq=repeat_mask(seq,opts=rmOpts)  # MASK REPEATS TO lowercase
-        cmd='%s %s -d %s -D 2 -e %e -i stdin' % (blastpath,maskOpts,self.filepath,float(expmax))
-        if maxseq is not None: # ONLY TAKE TOP maxseq HITS
-            cmd+=' -b %d -v %d' % (maxseq,maxseq)
-        if minIdentity is not None:
-            cmd+=' -p %f' % float(minIdentity)
-        return process_blast(cmd,seq,self,al,seqString=masked_seq)
 
 class StoredPathMapping(PathMapping):
     _edgeClass=BlastHitInfo
@@ -501,6 +526,7 @@ class StoredPathMapping(PathMapping):
             yield p
 
     # NEED TO ADD APPROPRIATE HOOKS FOR __iter__, items(), ETC.
+
 
 
 
