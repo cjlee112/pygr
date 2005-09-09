@@ -1,221 +1,168 @@
-#!/usr/bin/python
-
-import re
-import sys
-import string
 import math
 
+# AUTHORS: zfierstadt, leec
 
-def print_interval(mode,hit_id,subj_seq,subject_id,blast_score,e_value,identity_percent,blast_frame,query_start,query_end,subj_start,subj_end,q_interval_start,i_query,s_interval_start,i_subj,output):
-   if (mode == "all"):
+def is_line_start(token,line):
+    "check whether line begins with token"
+    return token==line[:len(token)]
 
-      identity_percent = re.sub("%","",identity_percent)
+def get_ori_letterunit(start,end,seq,gapchar='-'):
+    """try to determine orientation (1 or -1) based on whether start>end,
+    and letterunit (1 or 3) depending on the ratio of end-start difference
+    vs the actual non-gap letter count.  Returns tuple (ori,letterunit)"""
+    if end>start:
+        ori=1
+    else:
+        ori= -1
+    ngap=0
+    for l in seq:
+        if l==gapchar:
+            ngap+=1
+    seqlen=len(seq)-ngap
+    if ori*float(end-start)/seqlen >2.0:
+        letterunit=3
+    else:
+        letterunit=1
+    return ori,letterunit
 
-      if (int(blast_frame)>=0):
-          match = "MATCH_INTERVAL\t%d\t%s\t%s\t%d\t%.5f\t%s\t%s\t%d\t%d\t%d\n" %(hit_id,subj_seq,subject_id,float(blast_score),e_value,identity_percent,blast_frame,q_interval_start,i_query-q_interval_start,int(s_interval_start))
-          output += match
-      else:
-         match = "MATCH_INTERVAL\t%d\t%s\t%s\t%d\t%.5f\t%s\t%s\t%d\t%d\t%d\n" %(hit_id,subj_seq,subject_id,float(blast_score),e_value,identity_percent,blast_frame,q_interval_start,i_query-q_interval_start,i_subj-int(blast_frame))
-         output += match
+class BlastHitParser(object):
+    """reads alignment info from blastall standard output.
+    Method parse_file(fo) reads file object fo, and generates tuples
+    suitable for BlastIval."""
+    gapchar='-'
+    def __init__(self):
+        self.hit_id=0
+        self.reset()
+    def reset(self):
+        "flush any alignment info, so we can start reading new alignment"
+        self.query_seq=""
+        self.subject_seq=""
+        self.hit_id+=1
+    def save_query(self,line):
+        self.query_id=line.split()[1]
+    def save_subject(self,line):
+        self.subject_id=line.split()[0][1:]
+    def save_score(self,line):
+        "save a Score: line"
+        self.blast_score=float(line.split()[2])
+        s=line.split()[7]
+        if s[0]=='e':
+            s='1'+s
+        try:
+            self.e_value= -math.log(float(s))/math.log(10.0)
+        except (ValueError,OverflowError):
+            self.e_value=300.
+    def save_identity(self,line):
+        "save Identities line"
+        s=line.split()[3][1:]
+        self.identity_percent=int(s[:s.find('%')])
+    def save_query_line(self,line):
+        "save a Query: line"
+        c=line.split()
+        if not self.query_seq:
+            self.query_start=int(c[1])
+        self.query_end=int(c[3])
+        self.query_seq+=c[2]
+        self.seq_start_char=line.find(c[2]) # IN CASE BLAST SCREWS UP Sbjct:
+    def save_subject_line(self,line):
+        "save a Sbjct: line, attempt to handle various BLAST insanities"
+        c=line.split()
+        if len(c)<4: # OOPS, BLAST FORGOT TO PUT SPACE BEFORE 1ST NUMBER
+            # THIS HAPPENS IN TBLASTN... WHEN THE SUBJECT SEQUENCE
+            # COVERS RANGE 1-1200, THE FOUR DIGIT NUMBER WILL RUN INTO
+            # THE SEQUENCE, WITH NO SPACE!!
+            c=['Sbjct:',line[6:self.seq_start_char]] \
+               +line[self.seq_start_char:].split() # FIX BLAST SCREW-UP
+        if not self.subject_seq:
+            self.subject_start=int(c[1])
+        self.subject_end=int(c[3])
+        self.subject_seq+=c[2]
+        lendiff=len(self.query_seq)-len(self.subject_seq)
+        if lendiff>0: # HANDLE TBLASTN SCREWINESS: Sbjct SEQ OFTEN TOO SHORT!!
+            # THIS APPEARS TO BE ASSOCIATED ESPECIALLY WITH STOP CODONS *
+            self.subject_seq+=lendiff*'A' # EXTEND TO SAME LENGTH AS QUERY...
+        elif lendiff<0 and not hasattr(self,'ignore_query_truncation'):
+            # WHAT THE HECK?!?!  WARN THE USER: BLAST RESULTS ARE SCREWY...
+            raise ValueError(
+                """BLAST appears to have truncated the Query: sequence
+                to be shorter than the Sbjct: sequence:
+                Query: %s
+                Sbjct: %s
+                This should not happen!  To ignore this error, please
+                create an attribute ignore_query_truncation on the
+                BlastHitParser object.""" % (self.query_seq,self.subject_seq)) 
+    def repr_tuple(self,q_start,q_end,s_start,s_end,
+                   query_ori,query_factor,subject_ori,subject_factor):
+        "return as tuple following our orientation, location conventions"
+        query_start=self.query_start+q_start*query_ori*query_factor -1
+        query_end=self.query_start+q_end*query_ori*query_factor -1
+        subject_start=self.subject_start+s_start*subject_ori*subject_factor -1
+        subject_end=self.subject_start+s_end*subject_ori*subject_factor -1
+        l=[self.hit_id,self.query_id,self.subject_id,self.blast_score,
+           self.e_value,self.identity_percent,query_ori,subject_ori]
+        if query_start<query_end:
+            l+=(query_start,query_end)
+        else:
+            l+=(query_end,query_start)
+        if subject_start<subject_end:
+            l+=(subject_start,subject_end)
+        else:
+            l+=(subject_end,subject_start)
+        return tuple(l)
+    def is_valid_hit(self):
+        return self.query_seq and self.subject_seq
+    def generate_intervals(self):
+        "generate interval tuples for the current alignment"
+        query_ori,query_factor=get_ori_letterunit(self.query_start,\
+                  self.query_end,self.query_seq,self.gapchar)
+        subject_ori,subject_factor=get_ori_letterunit(self.subject_start,\
+                  self.subject_end,self.subject_seq,self.gapchar)
+        q_start= -1
+        s_start= -1
+        i_query=0
+        i_subject=0
+        for i in range(len(self.query_seq)): # SCAN ALIGNMENT FOR GAPS
+            if self.query_seq[i]==self.gapchar or self.subject_seq[i]==self.gapchar:
+                if q_start>=0: # END OF AN UNGAPPED INTERVAL
+                    yield self.repr_tuple(q_start,i_query,s_start,i_subject,
+                                          query_ori,query_factor,
+                                          subject_ori,subject_factor)
+                q_start= -1
+            elif q_start<0: # START OF AN UNGAPPED INTERVAL
+                q_start=i_query
+                s_start=i_subject
+            if self.query_seq[i]!=self.gapchar: # COUNT QUERY LETTERS
+                i_query+=1
+            if self.subject_seq[i]!=self.gapchar: # COUNT SUBJECT LETTERS
+                i_subject+=1
+        if q_start>=0: # REPORT THE LAST INTERVAL
+            yield self.repr_tuple(q_start,i_query,s_start,i_subject,
+                                  query_ori,query_factor,
+                                  subject_ori,subject_factor)
+    def parse_file(self,myfile):
+        "generate interval tuples by parsing BLAST output from myfile"
+        for line in myfile:
+            if self.is_valid_hit() and \
+               (is_line_start('>',line) or is_line_start(' Score =',line) \
+                or is_line_start('  Database:',line)):
+                for t in self.generate_intervals(): # REPORT THIS ALIGNMENT
+                    yield t # GENERATE ALL ITS INTERVAL MATCHES
+                self.reset() # RESET TO START A NEW ALIGNMENT
+            if is_line_start('Query=',line):
+                self.save_query(line)
+            elif is_line_start('>',line):
+                self.save_subject(line)
+            elif is_line_start(' Score =',line):
+                self.save_score(line)
+            elif 'Identities =' in line:
+                self.save_identity(line)
+            elif is_line_start('Query:',line):
+                self.save_query_line(line)
+            elif is_line_start('Sbjct:',line):
+                self.save_subject_line(line)
 
-   elif (mode == "detail"):
-      match = "%d\t%d\t%d\t%d\t%d\n" %(hit_id,q_interval_start,i_query-1,s_interval_start,i_subj-blast_frame)
-      output += match
-
-   return output
-
-def print_hit(mode,hit_id,seq_id,subject_id,blast_score,e_value,identity_percent,blast_frame,query_start,query_end,subj_start,subj_end,query_seq,subj_seq,output):
-
-   query_len=len(query_seq)
-   q_interval_start = -1
-   i_query=query_start
-
-   if(int(blast_frame)>0):
-      i_subj=subj_start
-
-   else:
-      i_subj=subj_end
- 
-   i = 0 
-
-   while(i<(query_len)):
-
-      if (query_seq[i] == "-"):
-
-         if(q_interval_start>0):
-           output = print_interval(mode,hit_id,seq_id,subject_id,blast_score,e_value,identity_percent,blast_frame,query_start,query_end,subj_start,subj_end,q_interval_start,i_query,s_interval_start,i_subj,output)
-
-         q_interval_start = -1
-         i_subj += int(blast_frame)
- 
-      else:
-
-         if(subj_seq[i] == "-"):
-
-            if(q_interval_start>0):
-               output = print_interval(mode,hit_id,seq_id,subject_id,blast_score,e_value,identity_percent,blast_frame,query_start,query_end,subj_start,subj_end,q_interval_start,i_query,s_interval_start,i_subj,output)
-  
-            q_interval_start = -1
-    
-         else:
-            if(q_interval_start < 0):
-               q_interval_start=i_query
-               s_interval_start=i_subj
-            i_subj += int(blast_frame)
-     
-         i_query += 1
-      i += 1 
-
-   if (q_interval_start>0):
-  
-       output = print_interval(mode,hit_id,seq_id,subject_id,blast_score,e_value,identity_percent,blast_frame,query_start,query_end,subj_start,subj_end,q_interval_start,i_query,s_interval_start,i_subj,output)
-
-   query_seq = re.sub("-","",query_seq) 
-   subj_seq = re.sub("-","",query_seq)
-
-   if(mode =="summary"):
-      print("%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",hit_id,seq_id,subject_id,blast_score,e_value,identity_percent,blast_frame,query_start,query_end,subj_start,subj_end)
-   query_start=9999999999
-   query_end=-1
-   subj_start=9999999999
-   subj_end=-1
-   
-   return query_start,query_end,subj_start,subj_end,output
-
-
-
-def parse_blast(fd,mode):
-
-   hit_id = 0 
-   output = "" 
-   rbuf = 0 
-   dbuf = ""
- 
-   while(rbuf != ""):
-      rbuf = fd.read(1024)
-      dbuf += rbuf
-
-   dbuf = dbuf.split("\n")
-
-   for i in dbuf:
-
-      seq = re.search(r"^Query=.*",i)
-      if (seq): 
-          init_query_data = seq.group(0).split(" ")
-          seq_id = init_query_data[1]
-          query_start= 9999999999
-          query_end = -1
-          subj_start = 9999999999
-          subj_end = -1
-
-      seq =  re.search(r"^>.*",i)
-      if (seq):
-         if(query_start < query_end):
-            hit_id += 1  
-            query_start,query_end,subj_start,subj_end,output = print_hit(mode,hit_id,seq_id,subject_id,blast_score,e_value,identity_percent,blast_frame,query_start,query_end,subj_start,subj_end,query_seq,subj_seq,output)
-         subject_data = seq.group(0).split(" ")
-         subject_id = subject_data[0][1:]
-         r_subject_title = "" 
-
-         for i in subject_data[1:]:
-           r_subject_title += i + " "   
-   
-         subject_title = string.strip(r_subject_title)
-         blast_frame="+1"
-
-      seq = re.search(r"^ Score =.*",i)
-      if(seq):
-         if (query_start < query_end):
-            hit_id += 1  
-            query_start,query_end,subj_start,subj_end,output = print_hit(mode,hit_id,seq_id,subject_id,blast_score,e_value,identity_percent,blast_frame,query_start,query_end,subj_start,subj_end,query_seq,subj_seq,output)
-
-         blast_field = 3
-         e_field = 8
-         score_data = seq.group(0).split(" ")
-
-         while (score_data[blast_field] == ""):
-            blast_field += 1
-            e_field += 1  
-         blast_score = score_data[blast_field]
-         e_value = score_data[e_field]
-         if (re.search("e",e_value)):
-            e_value = "1" + e_value
-         if (float(e_value) + 0.0 == 0.0):
-            e_value = 300               
-         else:
-            e_value = -math.log(float(e_value)+0.0)/math.log(10.0);
-            if str(e_value) == "inf":
-               e_value = 300
-      
-         e_value = float(str(e_value))
-   
-         query_seq = ""
-         subj_seq = "" 
-         subj_start=9999999999
-         subj_end= -1         
-
-      seq = re.search(r"^  Database:.*",i)
-      if (seq):
-         if(query_start < query_end):
-            hit_id += 1
-            query_start,query_end,subj_start,subj_end,output = print_hit(mode,hit_id,seq_id,subject_id,blast_score,e_value,identity_percent,blast_frame,query_start,query_end,subj_start,subj_end,query_seq,subj_seq,output)
-         db_data = seq.group(0).split(" ")
-
-      seq = re.search(r"Identities =.*",i)
-      if (seq):
-         ident_data = seq.group(0).split(" ")
-         identity_percent = ident_data[3][1:len(ident_data[3])-2]
-
-      seq = re.search(r"^ Frame =.*",i)
-      if (seq):
-         frame_data = seq.group(0).split(" ")
-         blast_frame = frame_data[len(frame_data) - 1]
-
-      seq = re.search(r"^ Strand =.*",i)
-      if (seq):
-         strand_data = seq.group(0).split(" ") 
-         strand = strand_data[5]
-         if (strand == "Plus"):
-            blast_frame ="+1"
-         if (strand == "Minus"):
-            blast_frame = "-1"
-
-      seq = re.search(r"^Query:.*",i)
-      if (seq):
-         query_data = seq.group(0).split(" ") 
-         query_s = int(query_data[1])
-         query_e = int(query_data[len(query_data)-1])
-         if query_s < query_start:
-      	    query_start = query_s
-         if query_e <= query_start:
-            query_start = query_e 
-         if query_s >= query_end:
-            query_end <= query_s 
-         if query_e >= query_end: 
-            query_end = query_e
-         query_seq = string.strip(query_seq + " " + query_data[len(query_data) - 2])
-         query_seq = re.sub(" ","",query_seq)
-
-      seq = re.search(r"^Sbjct:.*",i)
-      if (seq):
-         subj_data = seq.group(0).split(" ")
-         sub_s = int(subj_data[1])
-         sub_e = int(subj_data[len(subj_data)-1])
-         if sub_s <= subj_start:
-            subj_start = sub_s
-         if sub_e <= subj_start:
-            subj_start = sub_e
-         if sub_s >= subj_end:
-            subj_end = sub_s
-         if sub_e >= subj_end:
-            subj_end = sub_e 
-         subj_seq = subj_seq + " " + subj_data[len(subj_data) - 2]
-    
-   for i in output.split("\n"):
-      if (i != ""):
-         yield i 
-
-if __name__ == "__main__":
- 
-   for i in parse_blast(open("/dev/stdin"),"all"):
-      print i
+if __name__=='__main__':
+    import sys
+    p=BlastHitParser()
+    for t in p.parse_file(sys.stdin):
+        print t
