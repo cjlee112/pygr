@@ -54,8 +54,8 @@ Installation
 
 Installing pygr is quite simple. 
 
-1) tar -xzvf pygr-1.0.tar.gz 
-2) cd pygr-1.0/
+1) tar -xzvf pygr-0.1.tar.gz 
+2) cd pygr
 3) python setup.py install 
 
 Once the test framework has completed successfully, the setup script
