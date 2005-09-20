@@ -2,7 +2,7 @@
 #
 # This code serves as a testing harness for the Pygr source tree. 
 # If your tarball is fresh out of CVS, and a test fails, please 
-# forward stdout to <pygrsupport@somedomain.com> so issues can
+# forward stdout to <leec@ucla.edu> so issues can
 # can be addressed in a timely fashion. Thank you!
 
 import os
@@ -57,11 +57,12 @@ class TestFrameWork(TestMain):
   
    def go(self):
 
+     print "Initializing Test Framework...\n"
+
      unittest = self.unittest
      mapping = self.mapping
      graphquery = self.graphquery
 
-     print "Initializing Test Framework...\n" 
 
      class QuerySuite(unittest.TestCase):
 
@@ -134,14 +135,18 @@ class TestFrameWork(TestMain):
            self.dqcmp(datagraph,querygraph,result)
 			
 
-#	def testHeadlessQuery(self): # Test a query with no head nodes
-#
-#           self.datagraph = {0:{1:None},1:{2:None},2:{3:None},3:{4:None},4:{1:None}}
-#	   self.querygraph = {0:{1:None},1:{2:None},2:{3:None},3:{0:None}}
-#  
-#           self.result = {0:{0: 1, 1: 2, 2: 3, 3: 4}}
-           
-#           self.dqcmp()
+	def testHeadlessQuery(self): # Test a query with no head nodes
+
+           datagraph = {0:{1:None},1:{2:None},2:{3:None},3:{4:None},4:{1:None}}
+	   querygraph = {0:{1:None},1:{2:None},2:{3:None},3:{0:None}}
+  
+           result = {0:{0: 1, 1: 2, 2: 3, 3: 4},\
+		     1:{0: 2, 1: 3, 2: 4, 3: 1},\
+	             2:{0: 3, 1: 4, 2: 1, 3: 2},\
+		     3:{0: 4, 1: 1, 2: 2, 3: 3}}
+
+          
+           self.dqcmp(datagraph,querygraph,result)
 
 
      class MappingSuite(unittest.TestCase):

@@ -60,7 +60,7 @@ metadata = {
     'description': "Pygr", 
     'long_description': __doc__,
     'author': "Christopher Lee",
-    'author_email': "clee@ucla.edu",
+    'author_email': "leec@ucla.edu",
     'license': "GPL",
     'platforms': "ALL",
     'url': "http://sourceforge.net/projects/pygr",
