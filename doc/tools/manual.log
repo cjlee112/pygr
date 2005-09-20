@@ -1,0 +1,38 @@
+This is TeX, Version 3.14159 (Web2C 7.4.5) (format=latex 2004.9.30)  2 JUN 2005 15:43
+**manual
+(/usr/share/texmf/tex/xmltex/manual.tex
+LaTeX2e <2001/06/01>
+Babel <v3.7h> and hyphenation patterns for american, french, german, ngerman, n
+ohyphenation, loaded.
+(/usr/share/texmf/tex/xmltex/xmltex.tex
+xmltex version: 2002/06/25 v1.9 (Exp)
+\XML@attribute@toks=\toks14
+\XML@ns@count=\count79
+\XML@catalogue=\toks15
+\XMLgrabtoks=\toks16
+
+Encoding = utf-8 (/usr/share/texmf/tex/xmltex/xmltex.cfg) 
+No File: manual.cfg
+! I can't find file `manual.xml'.
+<to be read again> 
+                   \relax 
+l.2400 ...\^^M \expandafter\XML@catcodes\XML@tempa
+                                                  
+Please type another input file name: 
+! Emergency stop.
+<to be read again> 
+                   \relax 
+l.2400 ...\^^M \expandafter\XML@catcodes\XML@tempa
+                                                  
+End of file on the terminal!
+
+ 
+Here is how much of TeX's memory you used:
+ 557 strings out of 95847
+ 4339 string characters out of 1193752
+ 49658 words of memory out of 1000001
+ 3580 multiletter control sequences out of 10000+50000
+ 3640 words of font info for 14 fonts, out of 500000 for 1000
+ 14 hyphenation exceptions out of 1000
+ 14i,0n,8p,164b,31s stack positions out of 1500i,500n,5000p,200000b,5000s
+No pages of output.

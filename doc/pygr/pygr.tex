@@ -1,0 +1,1162 @@
+\documentclass{howto}
+\usepackage{distutils}
+
+% TODO:
+%   Fill in XXX comments
+
+\title{Pygr: Docs Overview}
+
+% The audience for this document includes people who don't know anything 
+% about Python and aren't about to learn the language just in order to
+% install and maintain it for their users, i.e. system administrators.
+% Thus, I have to be sure to explain the basics at some point:
+% sys.path and PYTHONPATH at least.  Should probably give pointers to
+% other docs on "import site", PYTHONSTARTUP, PYTHONHOME, etc.
+% 
+% Finally, it might be useful to include all the material from my "Care
+% and Feeding of a Python Installation" talk in here somewhere.  Yow!
+
+\input{boilerplate}
+
+\author{Chris Lee}
+\authoraddress{
+\strong{UCLA, Department of Bioinformatics}\\
+	Email: \email{leec@ucla.edu}
+}
+
+\makeindex
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  \noindent
+   A roadmap to the Pygr documentation.
+\end{abstract}
+
+%\begin{abstract}
+%\noindent
+%Abstract this!
+%\end{abstract}
+
+
+% The ugly "%begin{latexonly}" pseudo-environment supresses the table
+% of contents for HTML generation.
+%
+%begin{latexonly}
+\tableofcontents
+%end{latexonly}
+
+
+\section{Introduction}
+\label{intro}
+
+Pygr is an open source software project used to develop graph database
+interfaces for the popular Python language, with a strong emphasis
+on bioinformatics applications ranging from genome-wide analysis of
+alternative splicing patterns, to comparative genomics queries of
+multi-genome alignment data.
+
+The following introductory examples show how to use Pygr for graph queries, sequence searching and alignment queries, annotation queries, and multigenome alignment queries.
+
+
+\subsection{Example: Simple graph query}
+Why would you want to use Pygr?  Interesting data often consists of specific graph structures, and these relationships are much easier to describe as graphs than they are in SQL.  For example, the simplest and most common form of alternative splicing is exon-skipping, where an exon is either skipped or included (see slide 15 of the ISMB slides for a picture).  This can be defined immediately as a graph in which three nodes (exons 1, 2, 3) are joined by edges either as 1-2-3 or 1-3.  Unfortunately, writing an SQL query for this simple pattern requires a 6-way JOIN (argh).
+
+\begin{verbatim}
+SELECT * FROM exons t1, exons t2, exons t3, splices t4, splices t5, splices t6 
+WHERE t1.cluster_id=t4.cluster_id AND t1.gen_end=t4.gen_start 
+  AND t4.cluster_id=t2.cluster_id AND t4.gen_end=t2.gen_start 
+  AND t2.cluster_id=t5.cluster_id AND t2.gen_end=t5.gen_start 
+  AND t5.cluster_id=t3.cluster_id AND t5.gen_end=t3.gen_start 
+  AND t1.cluster_id=t6.cluster_id AND t1.gen_end=t6.gen_start 
+  AND t6.cluster_id=t3.cluster_id AND t6.gen_end=t3.gen_start;
+\end{verbatim}
+
+Such a six-way JOIN is painfully slow in a relational database; in general such queries just aren't practical.  More fundamentally, the relational schema is forced to represent the graph relation with combinations of foreign keys and other data that the user really should not have to remember.  All the user should know is that there is a specific relation, e.g. from this exon, the "next" exon is X, and the relation joining them is splice Y.
+
+In Pygr, writing the query is just a matter of writing down the graph (edges from 1 to 2, 1 to 3, and 2 to 3, but no special "edge information"):
+
+\begin{verbatim}
+queryGraph={1:{2:None,3:None},2:{3:None},3:{}}
+\end{verbatim}
+
+We can now execute the query using the GraphQuery class:
+
+\begin{verbatim}
+results=[dict(m) for m in GraphQuery(spliceGraph,queryGraph)]
+\end{verbatim}
+
+This is more or less equivalent to writing a bunch of for-loops for iterating over the possible closures:
+
+\begin{verbatim}
+results=[]
+for e1 in spliceGraph: # FIND ALL EXONS
+    for e2 in spliceGraph[e1]: # NEXT EXON
+        for e3 in spliceGraph[e2]: # NEXT EXON
+            if e3 in spliceGraph[e1]: # MAKE SURE SPLICE FROM e1 -> e3
+                results.append({1:e1,2:e2,3:e3}) # OK, SAVE MATCH
+\end{verbatim}
+
+It is often convenient to bind an object attribute to a graph, so that you can use either the graph syntax or a traditional object attribute and mean exactly the same thing.  In the splice graph example, we bind the exon.next attribute to the spliceGraph, so the above for-loops can also be written:
+
+\begin{verbatim}
+results=[]
+for e1 in spliceGraph: # FIND ALL EXONS
+    for e2 in e1.next: # NEXT EXON
+        for e3 in e2.next: # NEXT EXON
+            if e3 in e1.next: # MAKE SURE SPLICE FROM e1 -> e3
+                results.append({1:e1,2:e2,3:e3}) # OK, SAVE MATCH
+\end{verbatim}
+
+Another interesting query in the alternative splicing field is the so-called U12-adapter exon query (see slide 21 of the ISMB slides):
+
+\begin{verbatim}
+queryGraph={0:{1:dict(dataGraph=alt5Graph),
+               2:dict(filter=lambda edge,**kwargs:edge.type=='U11/U12')},
+            1:{3:None},
+            2:{3:None},
+            3:{}}
+\end{verbatim}
+
+Here we use edge information in the query graph to add a few constraints:
+
+\begin{itemize}
+\item
+the dataGraph argument tells the query to search for exon 1 from exon 0 using a different graph (alt5Graph).
+
+\item    
+the filter argument provides a function that returns True only if the edge between exon 0 and exon 2 is of type U11/U12.  Therefore the query will only match sp
+lice graphs that have a U12 splice between this pair of exons.
+
+\end{itemize}
+
+Note that the query graph "nodes" (in this example, the integers 0, 1, 2, 3) are
+quite arbitrary.  We could have used strings, or other kinds of objects instead.
+
+Now if we want to see the results right away, we use the mapping returned by GraphQuery to look at individual nodes and edges of the dataGraph that matched our query:
+
+\begin{verbatim}
+for m in GraphQuery(spliceGraph,queryGraph):
+    print m[1].id,m[0,2].id # PRINT EXON ID FOR EXON 1,
+                            # SPLICE ID FOR SPLICE 0 -> 2
+\end{verbatim}
+
+The match is returned by GraphQuery as a mapping from nodes and edges of the query graph to nodes and edges of the data graph.  Edges are specified simply as tuples of the nodes you want to get the edge for (in this example 0,2).
+Constructing a Graph
+How was the spliceGraph created in the first place?  Let's say we have an initial list of tuples giving connections between exon objects and splice objects, where each tuple consists of a pair of exons connected by a splice.
+
+\begin{verbatim}
+for exon1,exon2,splice in spliceConnections: 
+    spliceGraph+=exon1 # add exon1 as a node in the graph
+    spliceGraph+=exon2 # if already a node in the graph, does nothing...
+    exon1.next[exon2]=splice # add an edge, with splice as the edgeinfo
+\end{verbatim}
+
+The last operation makes use of the binding of exon.next to spliceGraph, and is equivalent to
+
+\begin{verbatim}
+spliceGraph[exon1][exon2]=splice
+\end{verbatim}
+
+If we didn't want to save the edge information, we could use the simpler syntax
+
+\begin{verbatim}
+spliceGraph[exon1]+=exon2 # equivalent to exon1.next+=exon2
+\end{verbatim}
+
+This "short" form is equivalent to saving None as the edge information.
+
+
+\subsection{Sequence / Alignment Tutorial}
+\label{seq-align}
+
+Sequences and alignments also can be modeled as graph structures in Pygr, providing the same consistent and simple framework for queries.
+
+\subsubsection{Sequence Objects}
+Pygr tries to provide a very "Pythonic" model for sequences.  This python interpreter session illustrates some simple features:
+
+\begin{verbatim}
+>>> from seqdb import *
+>>> s=NamedSequence('attatatgccactat','bobo') #create a sequence named bobo
+>>> s # interpreter will print repr(s)
+bobo[0:15]
+>>> t=s[-8:] #python slice gives last 8 nt of s
+>>> t # interpreter will print repr(t)
+bobo[7:15]
+>>> str(t) #string conversion just yields the sequence as a string 
+'gccactat'
+>>> rc= -s #get the reverse complement
+>>> str(rc[:5]) #its first five letters
+'atagt'
+\end{verbatim}
+
+Several points:
+\begin{itemize}
+
+\item
+   Slices of a sequence object (e.g. s[1:10] or s[-8:]) are themselves sequence objects.
+
+\item    
+The string value of a sequence object (e.g. str(s)) is just the sequence itself (as a string).
+
+\end{itemize}
+
+\subsubsection{Working with Sequences from Databases}
+
+Pygr provides a variety of "back-end" implementations of sequence objects, ranging from sequences stored in a relational database table, or a BLAST database, to sequences created by the user in Python (as above).  All of these provide the same consistent interface, and in general try to be efficient.  For example, Pygr sequence objects are just "placeholders" that record what sequence interval you're working with, but if the back-end is an external database, the sequence object itself does not store the sequence, and creating new sequence objects (e.g. taking slices of the object as above) will not require anything to be done on the actual sequence itself (such as copying a portion of it).  Pygr only obtains sequence information when you actually ask for it (e.g. by taking the string value str(s) of a sequence object), and normally only obtains just the portion that you ask for (i.e. str(s[1000000:1000100]) only obtains 100nt of sequence, even if s is a 100 megabase sequence.  By contrast str(s)[1000000:1000100] would force it to obtain the whole sequence from the database, then slice out just the 100 nt you selected). 
+
+Here's an example of working with sequences from a relational database:
+
+\begin{verbatim}
+>>> import MySQLdb # standard module for accessing MySQL, now get a cursor...
+>>> rdb=MySQLdb.connect(db='HUMAN_SPLICE_03',read_default_file=os.environ['HOME'
+]+'/.my.cnf')
+>>> t=SQLTable('genomic_cluster_JUN03',rdb.cursor()) #interface to a table of
+ sequences
+>>> from seqdb import *   # pygr module for working with sequences from databases
+>>> t.objclass(DNASQLSequence) #use this class as "row objects"
+>>> s2=t['Hs.1162'] # get a specific sequence object by ID
+>>> str(s2[1000:1050]) # this will only get 50 nt of the genomic sequence from 
+MySQL
+'acctgggtgatgaaataaatttttacgccaaatcccgatgacacacaatt'
+\end{verbatim}
+
+(Note: in this example we used MySQLdb.connect()'s ability to read database 
+server and user authentication information directly from the standard ~/.my.cnf file normally used by the MySQL client).
+
+Here's an example of working with sequences from a BLAST database:
+
+\begin{verbatim}
+>>> from seqdb import *
+>>> db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
+>>> s=db['CYGB_HUMAN'][90:150] # get a sequence by ID, and take a slice
+>>> str(s)
+'TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA'
+>>> m=db.blast(s) # get alignment to all BLAST hits in db
+>>> for e in m.edges(): # print out the alignment edges
+...     print e.srcPath,repr(e.srcPath),'\n',e.destPath,repr(e.destPath),e.blast
+_score,'\n'
+... 
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPP CYGB_HUMAN[90:145] 
+TLVENLRDADKLNTIFNQMGKSHALRHKVDPVYFKILAGVILEVLVEAFPQCFSP CYGB_BRARE[87:142] 72
+
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150] 
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150]
+ 120
+
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150] 
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPMYFKILSGVILEVIAEEFANDFPVETQKA CYGB_MOUSE[90:150]
+112 
+...
+\end{verbatim}
+
+This example introduces the use of a Pygr alignment object to store the mapping of s onto homologous sequences in db, obtained from BLAST.  Here's what Pygr actually does:
+
+\begin{itemize}
+
+\item
+When you first create the BlastDB object, it looks for existing BLAST database files associated with the FASTA file 'sp'.  If present, it uses them.  If not, it creates them automatically, using the NCBI program formatdb (it figures out whether the sequences are nucleotide or protein, and gives formatdb the appropriate command line options).  It then returns a BlastDB object, which is just a placeholder that acts as a convenient interface to the BLAST database.  For example, it acts as a Python dictionary mapping sequence IDs to the associated sequence objects (i.e. if 'CYGB_HUMAN' is a sequence ID in sp, then db['CYGB_HUMAN'] is the sequence object for that sequence.  This object is instantiated from class BlastSequence, which provides an interface to the BLAST database.
+
+\item 
+When you work with such sequence objects, slicing etc. happens in the usual way, creating new sequence objects.
+
+\item  
+Only when you ask for actual sequence (by taking str(s)) does it obtain a sequence string from the database, using NCBI's fastacmd.  This is done using fastacmd's -L option to obtain just the selected slice.  So you can efficiently obtain a substring of a sequence, even if that sequence is an entire chromosome.
+    * When you invoke the db.blast() method on a sequence object, it obtains the actual string of the object, and uses it to run a BLAST search.  It determines the type (nucleotide or protein) of the sequence object, and uses the appropriate search method (in this case blastp).  You can pass optional arguments for controlling BLAST.  It then reads the results into a Pygr multiple sequence alignment object, which stores the alignments as sets of matched intervals.  Specifically, it is a graph, whose nodes are sequence intervals (i.e. sequence objects that typically represent only part of a sequence), and whose edges represent an alignment between a pair of intervals.  To illustrate this, we ran a for-loop over all the "edge relations" in this graph, and printed them out.  This interface is being rewritten to make it more general, but already is fairly simple: e.srcPath and e.destPath are the two aligned sequence intervals; other edge attributes such as e.blast_score or e.percent_id give you access to the BLAST info for that alignment.  Note: print converts its arguments to strings (i.e. calls str() on them), so we used repr(e.srcPath) to get a "string representation" of each sequence interval.  When print calls str() on individualBlastSequence interval objects returned by the BLAST search, they invoke fastacmd -L to obtain the specific sequence slice representing that interval.
+\end{itemize}
+
+\subsubsection{Alignment Graph Basics}
+
+Pygr multiple alignment objects can be treated as mappings of sequence intervals onto sequence intervals.  Here is a very simple example (continuing from the previous example), showing basic operations for constructing an alignment:
+
+\begin{verbatim}
+>>> m2=PathMapping() # create an empty alignment object
+>>> m2[s]=db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interva
+l of MYG_CHICK
+>>> m2[s[:10] ] # get alignment for first 10 letters, and print representation
+MYG_CHICK[83:93]
+>>> m2[s]=db['MYG_CANFA'][45:105] # add an additional edge
+>>> for s2 in m2[s[:10] ]: # get aligned seqs for the first 10 letters again...
+...     print repr(s2)
+...
+MYG_CHICK[83:93]
+MYG_CANFA[45:55]
+\end{verbatim}
+In this case we created an alignment of sequence intervals without edge information.  However, we can also store edge information with a given alignment edge, in the "usual" Pygr way:
+
+\begin{verbatim}
+>>> class Foo(object): pass # create a dummy class that we can add attributes to
+...
+>>> a=Foo() # create a dummy object
+>>> a.x=7 # add an attribute
+>>> m2=PathMapping() # create an empty alignment object
+>>> m2+=s # add as node to the alignment graph
+>>> m2[s][db['MYG_CHICK'][83:143] ]=a # add an edge mapping interval s -> an int
+erval of MYG_CHICK
+>>> for e in m2[s[:10] ].edges(): # get alignment edges for the first 10 letters
+ again...
+...     print repr(e.destPath),e.x # we can access edge attributes
+...
+MYG_CHICK[83:93] 7
+\end{verbatim}
+
+\subsubsection{Alignment Query}
+
+Since Pygr alignments follow the same interface as any Pygr graph, we can query them using the standard GraphQuery class.  Let's say we have a Python script load_alignments.py that loads two alignments:
+
+\begin{itemize}
+
+\item
+mRNA_swiss: an alignment of mRNA sequences to homologous SwissProt sequences;
+
+\item
+swiss_features: an alignment of SwissProt sequences onto annotation objects. 
+
+\end{itemize}
+To find out how the known SwissProt annotations map on to our mRNA sequences requires a join, which can be formulated as a simple Pygr graph, consisting of a mapping of an mRNA sequence interval (node 1), onto a SwissProt sequence interval (node 2), onto a feature annotation (node 3):
+
+\begin{verbatim}
+>>> from load_alignments import * # load the alignments
+>>> from graphquery import *      # import the graph query code
+>>> queryGraph={1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} # 
+edge 2->3 must come from swiss_features
+>>> l=[dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] # run the query and 
+save the mappings
+>>> len(l) # how many annotations mapped onto our mRNA sequences?
+4703
+\end{verbatim}
+
+We assumed that mRNA_swiss would be passed as the default dataGraph, and specified directly that edge 2->3 should be looked up in swiss_features.  We then captured all the results from the GraphQuery iterator using a Python list comprehension.  Note that since the iterator returns each result in the same container (mapping object), if we want to save all the individual results we have to copy each one to a new mapping (dict) object, as illustrated in this example.
+Storing Alignments in a Relational Database
+
+Pygr makes it easy to store alignments persistently in a relational database.  To illustrate, here we run BLAST to generate an alignment of one sequence to manyother sequences, and store it to a MySQL table test.alignment:
+
+\begin{verbatim}
+from seqdb import *
+db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
+m=db.blast(db['CYGB_HUMAN']) # get alignment to all BLAST hits in db
+import MySQLdb # import the MySQL adapter
+import os
+# open a connection to the test database
+cursor=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf').cursor()
+# save the alignment, creating table test.alignment if not exists
+createTableFromRepr(m.repr_dict(),'test.alignment',cursor,
+                    {'src_id':'varchar(12)','dest_id':'varchar(12)'})
+\end{verbatim}
+
+The only line here that needs comment is Pygr's createTableFromRepr() function.  It takes four arguments:
+
+   1. an iterator, each of whose return values is a dictionary mapping column names to value representations that can be stored in a relational table.  Here we have passed m.repr_dict() as the iterator.  It is a generator function that simply yields edge.repr_dict() on each of the edges stored in m.  The edge.repr_dict() method in turn simply returns a dictionary mapping column names (like 'src_id') onto values that are storable in a relational table.
+   2. a table name: in this case, 'test.alignment'
+   3. a cursor for connecting to the database
+   4. an optional dictionary for customizing exactly how specific columns should be stored in the database.  In this case, we specified varchar(12) for both src_id and dest_id (the identifiers of the source and destination (aligned) sequences)
+
+This function constructs a schema and creates the table in the database if it does not already exist.  It then saves all of the output of m.repr_dict() as rows in the database table.  To see exactly what it generates, we can look at its output interactively:
+
+\begin{verbatim}
+>>> for e in m.repr_dict(): break
+... 
+>>> e
+{'src_id': 'CYGB_HUMAN', 'blast_score': 344, 'dest_id': 'CYGB_HUMAN', 'src_end':
+ 190, 'src_ori': 1, 'percent_id': 90, 'dest_ori': 1, 'src_start': 0, 'dest_start' : 0, e_value': 94.301000000000002, 'dest_end': 190}
+
+Here is the schema automatically created by createTableFromRepr():
+
+mysql> desc alignment;
++-------------+-------------+------+-----+---------+-------+
+| Field       | Type        | Null | Key | Default | Extra |
++-------------+-------------+------+-----+---------+-------+
+| src_id      | varchar(12) |      | MUL |         |       |
+| blast_score | int(11)     |      |     | 0       |       |
+| dest_id     | varchar(12) |      | MUL |         |       |
+| src_end     | int(11)     |      |     | 0       |       |
+| src_ori     | int(11)     |      |     | 0       |       |
+| percent_id  | int(11)     |      | MUL | 0       |       |
+| dest_ori    | int(11)     |      |     | 0       |       |
+| src_start   | int(11)     |      |     | 0       |       |
+| dest_start  | int(11)     |      |     | 0       |       |
+| e_value     | float       |      |     | 0       |       |
+| dest_end    | int(11)     |      |     | 0       |       |
++-------------+-------------+------+-----+---------+-------+
+11 rows in set (0.01 sec)
+\end{verbatim}
+
+Thus the basic format of stored alignments is
+
+\begin{itemize}
+
+\item
+only alignment information is stored; no actual sequence is stored, only the sequence identifiers and begin-end points of each aligned interval.
+
+\item
+additional edge information for each alignment row is saved, as provided by the edges repr_dict() method.
+
+\item
+directional: it distinguishes one of the sequence pair as the source sequence, the other as the destination sequence.
+
+\end{itemize}
+
+We can now make use of the stored alignment in Pygr just as if it were a normal (in-memory) alignment object.  The only difference is we use the StoredPathMapping class instead of the standard PathMapping class.  Here is an example script that connects to the stored alignment, and prints out the alignment of one sequence:
+
+\begin{verbatim}
+import MySQLdb
+from seqdb import *
+cursor=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf').cursor()
+t=SQLTableMultiNoCache('test.alignment',cursor)
+t._distinct_key='src_id' # use this column as the ID field to search
+sp=BlastDB('sp') # OPEN SWISSPROT BLAST DB
+m=StoredPathMapping(t,sp,sp) # tell it to search sp for both source and target 
+sequence IDs
+for e in m[sp['CYGB_HUMAN'] ].edges(): # SHOW ALL ALIGNMENTS FOR THIS SEQUENCE
+    print repr(e.srcPath),repr(e.destPath),e.blast_score
+\end{verbatim}
+
+StoredPathMapping expects three arguments:
+
+   1. an SQLTable object which provides the interface to the database table containing the alignment.  t is just an interface to the MySQL table.  Since each sequence can potentially have many rows (many alignment intervals against one or more destination sequences), we used the SQLTableMultiNoCache subclass: each key value (source sequence ID) can have multiple rows; and we chose not to have it cache rows that it retrieves (there would be no benefit from doing so, since StoredPathMapping itself performs result caching).  Also note the t._distinct_key assignment: this informs the table object that when we try to access a particular key (e.g. t['CYGB_HUMAN']), the column to search for this key is 'src_id'.
+   2. a sequence dictionary object from which to obtain the source sequences.  This dictionary must map a source sequence identifier to an actual sequence object representing that sequence.  In this case, we just used our sp BLAST database as the source sequence dictionary.
+   3. a sequence dictionary object from which to obtain the destination sequences.  This dictionary must map a destination sequence identifier to an actual sequence object representing that sequence.  We just used the sp database again.
+
+Thus we informed StoredPathMapping to treat t as a mapping of sp onto itself.
+
+The StoredPathMapping object (m) acts as an interface to the relational database, which we can treat just like a regular PathMapping alignment object.  The difference is that it looks up the alignment from the back-end database table when you request a mapping of a specific sequence.  In other words, only when we invoked m[sp['CYGB_HUMAN'] ] did it obtain the alignment information for that source sequence from the database; once retrieved, this information is cached locally so that subsequent queries of the same source sequence will just use the local data without having to re-query the database.
+Example: Mapping an entire gene set onto a new genome version
+To illustrate how Pygr can perform a big task with a little code, here is an example that maps a set of gene sequences onto a new version of the genome, using megablast to do the mapping, and a relational database to store the results.  Moreover, since mapping 80,000 gene clusters takes a fair amount of time, the calculation is parallelized to run over a large number of compute nodes simultaneously:
+
+\begin{verbatim}
+from leelabdb import * # this accesses our databases
+import coordinator     # this provides parallelization support
+
+def map_clusters(server,genome_rsrc='hg17',dbname='HUMAN_SPLICE_03',
+                 result_table='GENOME_ALIGNMENT.hg17_cluster_JUN03_all',
+                 rmOpts='',**kwargs):
+    "CLIENT FUNCTION: map clusters one by one"
+    # CONSTRUCT RESOURCE FOR US IF NEEDED
+    genome=BlastDB(ifile=server.open_resource(genome_rsrc,'r'))
+    # LOAD DB SCHEMA
+    (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna, 
+    protein, clusterExons,clusterSplices)=getSpliceGraphFromDB(spliceCalcs[dbname])
+    # NOW MAP CLUSTER SEQUENCES ONE BY ONE TO OUR NEW genome
+    for cluster_id in server:
+        g=genomic_seq[cluster_id] # GET THE OLD GENOMIC SEQUENCE FOR THIS CLUSTER
+        m=genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # MASK, BLAST, READ INTO m
+        # SAVE ALIGNMENT m TO DATABASE TABLE result_table USING cursor
+        createTableFromRepr(m.repr_dict(),result_table,clusters.cursor,
+                            {'src_id':'varchar(12)','dest_id':'varchar(12)'})
+        yield cluster_id # WE MUST FUNCTION AS GENERATOR TO KEEP ERROR TRAPPING 
+		         # HAPPY
+
+def serve_clusters(dbname='HUMAN_SPLICE_03',
+                   source_table='HUMAN_SPLICE_03.genomic_cluster_JUN03',**kwargs):
+    "SERVER FUNCTION: serve up cluster_id one by one to as many clients as you want"
+    cursor=getUserCursor(dbname)
+    t=SQLTable(source_table,cursor)
+    for id in t:
+        yield id # HAND OUT ONE CLUSTER ID TO A CLIENT
+
+if __name__=='__main__': # AUTOMATICALLY RUN EITHER THE CLIENT OR SERVER FUNCTION
+    coordinator.start_client_or_server(map_clusters,serve_clusters,['hg17'],__file__)
+\end{verbatim}
+
+First, let's just focus on the map_clusters() function, which illustrates how the mapping of each gene is generated and saved.  Let's examine the data piece by piece:
+\begin{itemize}
+
+\item
+genome: a BLAST database storing our "new" genome sequence
+
+\item
+genomic_seq: another sequence database (which in this case happens to be stored in a relational database), mapping each cluster ID to a piece of the old genomic sequence version containing that specific gene.
+
+\item   
+cluster_id: a cluster ID for us to process.
+
+\item
+g: the actual sequence object associated with this cluster_id
+
+\item
+m: the mapping of g onto genome, as generated by megablast after first running RepeatMasker on g, using the RepeatMasker options passed as rmOpts.  Note that only the top hit will be saved (maximum number of hits to save maxseq=1), and only if it has at least 98% identity.  This alignment is then saved to a relational database table using createTableFromRepr().
+
+\end{itemize}
+This code will run in parallel over as many compute nodes as you have free, using Pygr's coordinator module.  The parallelization model for this particular task is simple: a single iterator (server) dispensing task IDs to many clients. 
+
+\begin{itemize}
+
+\item
+server: the serve_clusters() function is trivial: all it does is connect to a specific database table (source_table) and iterate over all its primary keys, yielding them one by one.
+
+\item    
+client: the map_clusters() function expects an iterator as its first argument, which must give it a sequence of task IDs (cluster_id in this script).  This iterator is actually using an XMLRPC request to the server to get the next task ID, but that is done transparently by the coordinator.Processor() class.  The map_clusters() function is modeled as a generator: that is, it first does some initial setup (loading the database schema for example), then it runs its actual task loop, yielding each completed task ID. This enables coordinator.Processor to run map_clusters() within an error-trapping try: except: clause that catches and reports all errors to the central coordinator.Coordinator instance, and also to implement some intelligent error handling policies (like robustly preventing rare individual errors from causing an entire Processor() to crash, but detecting when consistent patterns of errors occur on a particular Processor, and automatically shutting down that Processor.
+
+\item 
+start_client_or_server(): this line automatically starts up the correct function (depending on whether this process is running as client or server).  To make a long story short, all you have to do is run the script once (as a server), and it will automatically start clients for you on free compute nodes (using ssh-agent), with reasonable load-balancing and queuing policies.  For details, see the coordinator module docs.
+\end{itemize}
+
+\subsubsection{Example: Working with the UCSC Multigenome Alignment Data}
+
+David Haussler's group has constructed alignments of multiple genomes.  These alignments are extremely useful and interesting, but so large that it is cumbersome to work with the dataset using conventional methods.  For example, for the 8-genome alignment you have to work simultaneously with the individual genome datasets for human, chimp, mouse, rat, dog, chicken, fugu and zebrafish, as well as the huge alignment itself.  Pygr makes this quite easy.  Here we illustrate an example of mapping the exons of a specific gene onto the multiple alignment, and then printing out all intervals from the different genomes that are aligned to its exons.
+
+\begin{verbatim}
+from test import * # THIS LOADS seqdb MODULE AND GIVES US ACCESS TO OUR SCHEMA.i
+..
+
+# GET CONNECTIONS TO ALL OUR GENOMES
+hg17=BlastDB(localCopy('/usr/tmp/ucsc_msa/hg17','gunzip -c /data/yxing/databases
+/ucsc_msa/human_assembly_HG17/*.fa.gz >%s'))
+mm5=BlastDB(localCopy('/usr/tmp/ucsc_msa/mm5','unzip -p /data/yxing/databases/uc
+sc_msa/MouseMM5/chromFa.zip >%s'))
+rn3=BlastDB(localCopy('/usr/tmp/ucsc_msa/rn3','unzip -p /data/yxing/databases/uc
+sc_msa/RatRn3/chromFa.zip >%s'))
+cf1=BlastDB(localCopy('/usr/tmp/ucsc_msa/cf1','unzip -p /data/genome/ucsc_msa/ca
+nFam1/chromFa.zip >%s'))
+dr1=BlastDB(localCopy('/usr/tmp/ucsc_msa/dr1','unzip -p /data/genome/ucsc_msa/da
+nRer1/chromFa.zip >%s'))
+fr1=BlastDB(localCopy('/usr/tmp/ucsc_msa/fr1','unzip -p /data/genome/ucsc_msa/fr
+1/chromFa.zip >%s'))
+gg2=BlastDB(localCopy('/usr/tmp/ucsc_msa/gg2','unzip -p /data/genome/ucsc_msa/ga
+lGal2/chromFa.zip >%s'))
+pt1=BlastDB(localCopy('/usr/tmp/ucsc_msa/pt1','unzip -p /data/yxing/databases/uc
+sc_msa/chimp_pantro1/chromFa.zip >%s'))
+
+genomes={'hg17':hg17,'mm5':mm5, 'rn3':rn3, 'canFam1':cf1, 'danRer1':dr1,
+'fr1':fr1, 'galGal2':gg2, 'panTro1':pt1} # PREFIX DICTIONARY FOR THE UNION 
+					 # OF ALL OUR GENOMES
+genomeUnion=PrefixUnionDict(genomes) # GIVES ACCESS TO ID FORMAT 'panTro1.chr7'
+for db in genomes.values(): # FORCE ALL OUR DATABASES TO USE INTERVAL CACHING
+    db.seqClass=BlastSequenceCache
+
+(clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna,protein, 
+clusterExons,clusterSplices)=loadTestJUN03() # GET OUR USUAL SPLICE GRAPH
+ct=SQLTableMultiNoCache('GENOME_ALIGNMENT.hg17_cluster_JUN03',clusters.cursor)
+ct._distinct_key='src_id'
+cm=StoredPathMapping(ct,genomic_seq,hg17) # MAPPING OF OUR CLUSTER GENOMIC ONTO 
+					  # hg17
+
+alTable=SQLTable('GENOME_ALIGNMENT.haussler_align2',clusters.cursor) # THE MAF ALIGNMENT TABLE
+alTable.objclass() # USE STANDARD TupleO OBJECT FOR EACH ROW
+
+c=clusters['Hs.10267'] # GET DATA FOR THIS CLUSTER ON chr22
+loadCluster(c,exons,splices,clusterExons,clusterSplices,spliceGraph,alt5Graph,
+	    alt3Graph)
+for e in c.exons:
+    for g in cm[e]: # GET A GENOMIC INTERVAL ALIGNED TO OUR EXON
+        print 'exon interval:',repr(g)
+        maf=MAFStoredPathMapping(g,alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
+        for ed in maf.edges(): # PRINT THE ALIGNED SEQUENCES
+            print '%s (%s)\n%s (%s)\n' % \
+	    (ed.srcPath,genomeUnion.getName(ed.srcPath.path), ed.destPath,
+            genomeUnion.getName(ed.destPath.path))
+\end{verbatim}
+
+A few notes:
+
+\begin{itemize}
+
+\item
+We instantiate BlastDB objects as interfaces to each of our eight genomes.  The localCopy() function simply "caches" a local copy of each BLAST database in /usr/tmp, autogenerating it from the source (over NFS) if needed.  This script was designed to be run in parallel on many compute nodes, so I wanted to reduce NFS traffic to the minimum by creating local copies of each BLAST database before I started using them.
+
+\item 
+Since the UCSC multigenome alignment uses a "prefix.ID" format for specifying sequences (where prefix is the name of the genome, and ID is the identifier of a specific sequence in that genome, we create a "prefix union" object that acts like a union of all eight genome databases.  That is, it will map any key of the form prefix.ID to the specific database whose name is prefix, and use it to map ID to a sequence object.  To create this, we just made a dictionary that maps our desired "prefix" name to each individual genome database, and used that to initialize a PrefixUnionDict object.  It now acts as our interface to all 8 genomes.
+
+\item
+To speed up repeated sequence access requests, we force our genome database objects to use the BlastSequenceCache class as our sequence object class.  This implements smart bundling and caching of requests, so that multiple requests to the same region of the genome will be combined into a single query for the superinterval containing the individual requests, which then are simply accessed from this cache.
+
+\item
+To make our job a little harder, let's imagine that the exons we want to map were originally annotated on a different version of the human genome than the version (hg17) that is included in the UCSC alignment.  That means we first have to map each exon onto the correct coordinates in hg17 before we can even query the alignment.  That mapping is taken care of by our cm StoredPathMapping (which if you're curious was generated and saved to a MySQL database in the previous example).  To make a long story short, once we have an exon e, its mapping onto the hg17 genome is just cm[e].
+
+\item
+The UCSC multigenome alignment (itself about 24 GB in size) was parsed using a simple Pygr script written by Alex Alekseyenko, and stored as a StoredPathMapping in a MySQL database table GENOME_ALIGNMENT.hassler_align2.  This data is a bit more complicated than a standard Pygr alignment, because it maps each sequence not to another sequence, but to UCSC's "internal alignment coordinate" system.  To make a long story short, we wrote a subclass MAFStoredPathMapping that simply hides this "intermediate step" from the user; it acts like a normal Pygr PathMapping, mapping an input sequence to the set of other sequence intervals that are aligned to it.  Also, crucial for working with huge sequences (entire chromosomes, in this case), MAFStoredPathMapping allows you to specify exactly what part of the alignment database you want to fetch, by simply specifying a part of a sequence to map.  MAFStoredPathMapping takes three arguments: the sequence interval whose alignment you want to fetch; the database table object to fetch it from; and the sequence database in which to look up all the sequence identifiers (in this case we used our genomeUnion).
+
+\item
+Once we have our mapping object, we just use it like any Pygr alignment object, for example printing out all the intervals of sequence from other genomes that are aligned to our exons, as illustrated here. 
+
+\end{itemize}
+Running this on the whole gene (outputting the actual sequences of about a hundred aligned intervals), exon by exon, takes about a minute.  After importing this test script (from maftest import *), you can very easily query alignments for other genes or regions in the interactive python interpreter.  As the code promptly spits our various aligned intervals of sequence from chimp, chicken or fish, consider the wide variety of resources that Pygr is marshalling for you behind its simple front-end interface.  For every query you perform:
+
+\begin{itemize}
+
+\item
+your exon sequence (stored in a MySQL database) is mapped to hg17 (BLAST database) using a MySQL database (cm). 
+
+\item
+the resulting hg17 intervals are then queried against the UCSC multigenome alignment, stored in a MySQL database (even just searching this 24GB database with decent speed requires careful indexing). 
+
+\item
+This yields UCSC's "internal coordinates" (virtual sequences, if you will) which are then themselves searched against the multigenome alignment (in the same MySQL database) to obtain output genome alignment interval information.
+
+\item
+Pygr turns these intervals into sequence objects that link to the eight genome databases (each a large BLAST database).
+
+\item
+When the print  statement requests str() representations of these sequence objects, Pygr uses fastacmd -L to extract just the right piece of the corresponding chromosomes from the eight BLAST databases.
+
+\end{itemize}
+
+(Actually, because of Pygr's caching / optimizations, considerably more is going on than indicated in this simplified sketch.  But you get the idea: Pygr makes it relatively effortless to work with a variety of disparate (and large) resources in an integrated way.)
+
+	
+\subsubsection{More examples}
+\label{more-exam}
+
+Additional examples of how to use pygr can be found in the tests/ directory within the pygr distribution package.
+
+
+\section{Module Documentation}
+\label{module-doc}
+
+The following subsections provide details about how to use specific
+modules of Pygr functionality. 
+
+\subsection{graphs and graph query module}
+\label{graphs-query}
+
+The basic idea of Pygr is that all Python data can be viewed as a graph whose nodes are objects and whose edges are object relations (in Python, references from one object to another).  This has a number of advantages. 
+
+   1. All data in a Python program become a database  that can be queried through simple but general graph query tools.  In many cases the need to write new code for some task can be replaced by a database query. 
+
+   2. Graph databases are more general and flexible in terms of what they can represent and query than relational databases, which is very important for complex bioinformatics data.
+
+   3. Indeed, in Pygr, a query is itself just a graph that can be stored and queried in a database, opening paths to automated query construction.
+
+   4. Pygr graphs are fully indexed, making queries about edge relationships (which are often unacceptably slow in relational databases) fast.
+
+   5. The interface can be very simple and pythonic: it's just a Mapping.  In Python "everything is a dictionary", also known as "the Mapping protocol": a dictionary maps some set of inputs to some set of outputs. e.g. m[a]=b maps a onto b, as a unique relation.  In Pygr, if we want to be able to map a node to multiple target nodes (i.e. allow it to have multiple edges), we simply add another layer of mapping: m[a][b]=edgeInfo (where edgeInfo is optional edge info.)
+
+Examples of the Pygr syntax:
+
+\begin{verbatim}
+graph += node1 # ADD node1 TO graph
+graph[node1] += node2 # ADD AN EDGE FROM node1 TO node2
+graph[node1][node2]=edge_info # ADD AN EDGE WITH ASSOCIATED edge_info
+# ADD SCHEMA BINDING WITH graph[node] BOUND AS node.attr
+setschema(node,attr,graph) 
+# SEARCH graph FOR SUBGRAPH {1->2; 1->3; 2->3}, 
+# I.E. EXONSKIP, WHERE THE SPLICE FROM 2 -> 3 HAS ATTRIBUTE type 'U11/U12' 
+for m in GraphQuery(graph,{1:{2:None,3:None},\
+                   2:{3:dict(filter=lambda edge,**kwargs:edge.type=='U11/U12')},\
+                   3:{}}):
+    print m[1].id,m[2].id,m[1,2].id
+\end{verbatim}
+
+Let's examine these examples one by one:
+\begin{itemize}
+
+\item
+adding a node to a graph is distinct from creating edges between it and other nodes.  The graph+=node notation simply adds node to the graph, initially with no edges to other nodes.
+
+\item 
+A similar syntax (graph[node1]+=node2) can be used to add an edge between two nodes, but with no edge information.  In this case the edge information stored for this relation is simply the Python None value.  Note that in Pygr the default type of graph has directed edges; that is a->b does not imply b->a.  In the default dictGraph graph class, these are two distinct edges that would have to be added separately if you truly want to have an edge going both from a to b and from b to a.
+
+\item 
+To add an edge between two nodes with edge information, use the graph[node1][node2]=edge_info syntax. 
+
+\item 
+You can bind an object attribute to a graph, using setschema(obj,attr,graph).  This acts like Python's built-in setattr(obj,attr,value), but instead of obj.attr simply storing the specified value, it is bound to the graph so that obj.attr is equivalent to graph[obj].  Both syntaxes are interchangeable and can be mixed in different pieces of code accessing the same object.
+
+\item 
+Since Pygr adopts the Mapping protocol as its model for storing graphs, you can create graphs simply by creating Python dict objects e.g. {foo:bar}.  In this example we construct a query graph whose "nodes" are just the integers 1, 2, and 3.  Since any kind of object is a valid key in Python mappings, they can therefore also be used as "nodes" in a Pygr graph.  This query graph illustrates a few simple principles:
+
+\item 
+a Pygr graph is just a two-level Python mapping.  For example, {1:{2,None}} is a graph with a single edge from 1 to 2, with no edge information.  Pygr graphs can have multiple edges from or to a given node. 
+
+\item    
+edge information in a query graph can be used to specify extra query arguments, again in the form of a Python dictionary.  This dictionary is interpreted as a set of "named arguments" to be used by the GraphQuery search method.  For example, a filter argument is interpreted as a callable function that is passed a set of named arguments describing the current edge / node matching being tested, and whose return value (True or False) will determine whether this edge "matches" our query graph.  In this example, we used it to check whether the edge.type attribute is "U11/U12" (an unusual type of splicing in gene structure graphs).
+
+\item         
+Graph query in Pygr simply means finding a subgraph of the datagraph that has node-to-node match to the edge structure given in the query graph.  In this example it is a simple exon-skip structure (3 exons, one of which can either be included or skipped).  The GraphQuery class provides a general mechanism for performing graph queries on any Python data (see below for full details).  It can be used as an iterator that will return all matches to the query (if any). 
+
+\item          
+Matches are themselves returned as a mapping of nodes and edges of the query graph (in this example, its nodes are the integers 1, 2 and 3) onto nodes and edges of the data graph.  In this example the match is returned as m, so m[1] is the node in the data graph corresponding to node 1 in the query graph.  This example assumes that object has an id attribute, which is printed out.  To refer to an edge, just use a tuple corresponding to a pair of nodes in the query graph.  In this example, 1,2 refers to the edge from node 1 to node 2 in the query graph, so m[1,2] is the edge in data graph between nodes m[1] and m[2].  This example also attempts to print an id attribute from that edge object.
+
+\item         
+Note on current behavior: currently, GraphQuery will throw a KeyError exception if it tries to search for a query node in the query graph and does not find it.  That's why we have to add the "node with no edges" entry 3:{} for node 3.  This will probably be addressed in the future, since this seems like a potential source of many annoying little bugs.
+
+\end{itemize}
+
+\subsubsection{dictGraph}
+
+dictGraph is Pygr's main graph class.  It provides all the standard behaviors described above.  The current reference implementation uses standard Python dict objects to store the graph.  All the usual Mapping protocol methods can be used on dictGraph objects (top-level interface, in the examples above graph) and dictEdge objects (second-level interface; in the examples above graph[node]). e.g.
+
+\begin{itemize}
+
+\item
+for node in graph: iterator method returns all nodes in the graph; you could also use graph.items() to get node,dictEdge pairs, etc.
+
+\item
+for node in graph[node]:  iterator method returns all nodes that are targets of edges originating at node.  Again, you could use graph[node].items() to get node,edgeInfo pairs.  Note: if node is not in graph, this will throw a KeyError exception just like any regular Python dict.
+
+\item
+if node in graph:  contains method checks whether node is present in the graph, using dict indexing.
+
+\item
+if node2 in graph[node1]:  test whether node1 has an edge to node2.  Again, if node1 isn't in graph, this will throw a KeyError exception.
+
+\end{itemize}
+
+Directionality and Reverse Traversal
+
+Note that dictGraph stores directed edges, that is, a->b does not imply b->a; those are two distinct edges that would have to be added separately if you want an edge going both directions.  Moreover, the current implementation of dictGraph does not provide a mechanism for traveling an edge backwards.  To do so with algorithmic efficiency requires storing each edge twice: once in a forward index and once in a reverse index.  Since that doubles the memory requirements for storing a graph, the default dictGraph class does not do this.  If you want such a "forward-backwards" graph, use the dictGraphFB subclass that stores both forwad and reverse indexes, and supports the inverse operator (~).  ~graph gets the reverse mapping, e.g. (~graph)[node2] corresponds to the set of nodes that have edges to node2.  This area of the code hasn't been tested much yet.
+Schema: binding object attributes to graphs
+The goal of Pygr is to provide a single consistent model for working with data explicitly modeled as graphs (i.e. dictGraph-like objects) and standard Python objects that were not originally designed to be queried (or thought of) as a "graph".  Since Python uses the Mapping concept throughout the language and object model, and provides introspection, there is no reason why Pygr can't work with both kinds of data transparently.  One mechanism for making this idea explicit is the idea of binding an object attribute to a graph, via the new method we've called setschema(obj,attr,graph).  The idea here is that once you bind an object attribute to a graph, the two different data models obj.attr (object model) or graph[obj] (graph model) are made equivalent and interchangeable.  Operating on one affects the other and vice versa; they are two ways of referring to the same relation.  This concept can be applied at several different levels
+
+\begin{itemize}
+\item
+individual objects: just like getattr() and setattr(), you can apply schema methods to individual objects: getschema(obj,attr) (returns the bound graph) or setschema(obj,attr,graph) (binds the object attribute to the graph). 
+
+\item
+all instances of a class: you can bind specific attributes of a given class to a graph using the following class attribute syntax:
+
+\end{itemize}
+\begin{verbatim}
+class ExonForm(object): # ADD ATTRIBUTES STORING SCHEMA INFO
+    __class_schema__=SchemaDict(((spliceGraph,'next'),(alt5Graph,'alt5'),(alt3Graph,'alt3')))
+\end{verbatim}
+
+In this class we bound the next attribute to spliceGraph, alt5 attribute to alt5Graph, and alt3 attribute to alt3Graph.  That means, every instance obj of this class will have an attribute obj.next that is equivalent to spliceGraph[obj], etc.  Note that this is schema, not the actual operation of adding the object as a node to the graph.  Indeed, when obj is first created, it is not automatically added to spliceGraph; that is up to the user.  Unless your code has added the node to the graph (e.g. spliceGraph+=obj), obj.next should throw a KeyError exception.
+
+The general method getschema(obj,attr) works regardless of whether the schema was stored on an individual object or at the class level.
+GraphQuery
+The GraphQuery class implements simple node-to-node matching, in which each new node-set is generated by an iterator associated with a specific node in the query graph.  This iterator model is general: since indexes (mappings) support the iterator protocol, a given iterator may actually be an index lookup (or other clever search algorithm).  The GraphQuery constructor takes two arguments: the default data graph being queried, and the query graph.  The query graph is just a graph; its nodes can be any object that can be a graph node (i.e. any object that is indexible, e.g. by adding a __hash__() method).  Its node objects will not be modified in any way by the GraphQuery.  Its edges are expected to be dictionaries that can be checked for specific keyword arguments:
+
+\begin{itemize}
+
+\item
+filter: must be a callable function that accepts keyword arguments and returns True (accept this edge as a match to the queryGraph) or False (do not accept this edge as a match).  This function will be called with the following keyword arguments:
+       \begin{itemize}
+          \item
+          toNode: the target node of this edge, in the data graph
+          \item
+          fromNode: the origin node of this edge, in the data graph
+          \item
+           edge: the edge information for this edge in the data graph
+          \item 
+           queryMatch: a mapping of the query graph to the data graph, based on the partial matchings made so far
+           \item
+           gqi: the GraphQueryIterator instance associated with this matching operation.  Much more data is available from specific attributes of this object.
+	\end{itemize}
+
+\item 
+dataGraph: graph in which the current edge should be search for.  This allows a query to traverse multiple graphs.  In other words, when searching for edges from the current node, look up dataGraph[node] instead of defaultGraph[node].
+
+\item
+attr: object attribute name to use as the iterator, instead of the defaultGraph.In other words, generate edges from the current node via getattr(node,attr) instead of defaultGraph[node].  The object obtained from this attribute must act like a mapping; specifically, it must provide an items() method that returns zero or more pairs of targetNode,edgeInfo, just like a standard Pygr dictEdge object. 
+
+\item
+attrN: object attribute name to use as the iterator, instead of the defaultGraph. In other words, generate edges from the current node via getattr(node,attr) instead of defaultGraph[node].  The object obtained from this attribute must act like a sequence; specifically, it must provide an iterator that returns zero or more targetNode.  The edgeInfo for any edges generated this way will be None.
+
+\item
+f: a callable function that must return an iterator producing zero or more pairs of targetNode,edgeInfo.  Typically f is a Python generator function containing a statement like yield targetNode,edgeInfo.
+
+\item
+fN: a callable function that must return an iterator producing zero or more targetNode.  Typically fN is a Python generator function containing a statement like yield targetNode.  The edgeInfo for any edges generated this way will be None.
+
+\item 
+subqueries: a tuple of query graphs to be performed.  Since GraphQuery traversalcorresponds to logical AND (i.e. all the query graph nodes must be successfully matched to return a match), the subqueries are currently treated as a union (logical OR), by simply returning every match from each subquery as a match (at least for this node).  Each subquery is itself just another query graph.  Moreover, since query graphs can share nodes (i.e. the same object can appear as a node in multiple query graphs), subqueries can make reference to nodes that are already matched by the higher query.  This is an area that has not been explored much yet, but provides a pretty general model for powerful queries.
+
+\end{itemize}
+The attr - subqueries options are all implemented as extremely simple subclasses of GraphQuery.  If you want to see just how easy it is to write new subclasses of GraphQuery functionality, look at the graphquery.py module (the entire graph query module is only 237 lines long).
+
+Note: an easy way to pass keyword dictionaries (e.g. as edge information) is simply using the dict() constructor, e.g. dict(dataGraph=myGraph,filter=my_filter).  I think this is a little more readable than {'dataGraph':myGraph, 'filter':my_filter}.
+
+Note on current behavior: currently, the GraphQuery iterator returns the same mapping object for each iteration (simply changing its contents).  So to save these multiple values safely in a list comprehension we have to copy each one into a new dict object via dict(m).
+What is GraphQuery actually doing?
+A GraphQuery is basically an iterator that returns all possible mappings of the query graph onto the datagraph that match all of the nodes and edges of the query graph onto nodes and edges of the data graph.  As an iterator, it does not instantiate a list of the matches, but simply returns the matches one by one.  The current design is very simple.  The GraphQuery constructor builds an "iterator stack" of GraphQueryIterators, each representing one node in the query graph; they are enumerated in order by a breadth-first-search of the query graph.  The GraphQuery iterator processes the stack of GraphQueryIterators: any match simply pushes the stack to the next level; any match at the deepest level of the stack is a complete match (yield the queryMatch mapping); the end of any GraphQueryIterator simply pops the stack.  One obvious idea for improving all this is to replace this "interpreter" with a "compiler" that compiles Python for loops that are equivalent to this stack, and run that... likely to be many fold faster.
+
+
+\subsection{Python Graphs}
+\label{python-graphs}
+
+Pygr interface to sequence databases stored in FASTA, BLAST or relational databases.
+
+Python Graphs
+
+Overview
+
+The seqdb module provides a simple, consistent interface to sequence databases from a variety of different storage sources such as FASTA, BLAST and relational databases.  Sequence databases are modeled (like other Pygr container classes) as dictionaries, whose keys are sequence IDs and whose values are sequence objects.  Pygr sequence objects use the Python sequence protocol in all the ways you'd expect: a subinterval of a sequence object is just a Python slice (s[0:10]), which just returns a sequence object representing that interval; the reverse complement is just -s; the length of a sequence is just len(s); to obtain the actual string sequence of a sequence object is just str(s).  Pygr sequence objects work intelligently with different types of back-end storage (e.g. relational databases or BLAST databases) to efficiently access just the parts of sequence that are requested, only when an actual sequence string is needed.
+
+\subsubsection{BlastDB}
+Interface to an existing BLAST database or FASTA sequence file; in the latter case, it will automatically construct BLAST database files for you using the NCBI tool formatdb. Here's a simple example of opening a BLAST database and searching it for matches to a specific piece of sequence:
+
+\begin{verbatim}
+from seqdb import *
+db=BlastDB('sp') # OPEN SWISSPROT BLAST DB
+s=NamedSequence(str(db['CYGB_HUMAN'][40:-40]),'boo')
+m=db.blast(s) # DO BLAST SEARCH
+myg=db['MYG_CHICK']
+for i in m[s][myg]:
+    print repr(i.srcPath),repr(i.destPath),i.blast_score,i.percent_id
+\end{verbatim}
+
+Let's go through this example line by line:
+
+\begin{itemize}
+
+\item    
+construction of a BlastDB object: This looks for either a FASTA file with the path 'sp' or BLAST database formatted files based on this path (e.g. 'sp.psd' for protein sequences, or 'sp.nsd' for nucleotide sequences).
+
+\item
+db['CYGB_HUMAN'] obtains a sequence object representing the SwissProt sequence whose ID is CYGB_HUMAN.  The slice operation [40:-40] behaves just like normal Python slicing: it obtains a sequence object representing the subinterval omitting the first 40 letters and last 40 letters of the sequence.  The str() operation obtains the actual string representation of this subinterval.
+
+\item
+NamedSequence(letter_string, name) creates a new sequence object whose sequence is letter_string, and whose ID is name.
+
+\item
+Running the db.blast(s) method searches the BLAST database for homologies to s, using NCBI BLAST.  It chooses reasonable parameters based upon the sequence types of the database and supplied query.  However, you can specify extra parameter options if you wish.  It returns a Pygr sequence mapping (multiple alignment) that represents a standard Pygr graph of alignment relationships between s and the homologies that were found.
+
+\item
+The expression m[s][myg] obtains the "edge information" for the graph relationship between the two sequence nodes s and myg.  (if there was no edge in the m graph representing a relationship between these two sequences, this would produce a KeyError).  This edge information consists of a set of interval alignment relationships (described in detail below), which are printed out in this example.
+
+\end{itemize}
+
+Additional options for constructing a BlastDB:
+
+\begin{itemize}
+
+\item
+skipSeqLenDict: To facilitate the rapid creation of sequence objects (which requires the length of the sequence), it also creates a sequence length index (based on the filepath, in this case 'sp.seqlen' as a Python shelve).  This enables it to avoid actually loading the sequence string into memory each time a sequence object is created; instead it just looks up the sequence length.  While this speeds up access to genomic sequence databases (where each sequence tends to be extremely long), it is unnecessary and slow for databases of short sequences.  Setting skipSeqLenDict option to True, will prevent construction of this sequence length index.
+
+\item
+ifile: if you have a file object, you can pass it directly to BlastDB instead of a filepath.  NB: the BlastDB() constructor will close ifile when it is done reading from the file object.
+
+\end{itemize}
+Useful methods:
+
+\begin{itemize}
+
+\item
+iter(): iterate over all IDs in the BLAST database.
+
+\item
+len(): number of sequences in the BLAST database.
+
+\item 
+blast(seq,al=None,blastpath='blastall',blastprog=None,expmax=0.001,maxseq=None): run a BLAST search on sequence object seq.  Maxseq will limit the number of returned hits to the best maxseq hits. 
+ 
+\item
+megablast(seq,al=None,blastpath='megablast',expmax=1e-20,maxseq=None,minIdentity
+=None,maskOpts='-U T -F m',rmOpts=''): first performs repeat masking on the sequ
+ence by converting repeats to lowercase, then runs megablast with command line o
+ptions to prevent seeding new alignments within repeats, but allowing extension 
+of alignments into repeats.  minIdentity should be a number (maximum value, 100)indicating the minimum percent identity for hits to be returned.
+
+Useful attributes:
+
+\item
+seqClass: the object class to use for instantiating new sequence objects from this BLAST database.  You can set this to create customized sequence behaviors.
+
+\subsubsection{BlastSequence}
+
+The default class for sequence objects returned from BlastDB.  It has several optimizations for working with BLAST databases:
+
+\item
+it uses the NCBI tool fastacmd to retrieve sequence efficiently from a BLAST database, when your program requests an actual string of sequence text.  Moreover, for subintervals (slices) of the sequence, it uses fastacmd's -L option to request just the desired subinterval of the sequence, rather than the whole sequence.  This makes it efficient for requesting specific intervals of large genomic contigs.  Basically, just use Python slicing and str() methods on sequence objects, and subsequences will be obtained in an efficient manner.
+
+\item 
+the len() method is implemented using the seqLenDict, a precalculated index of the sequence lengths.  So again no sequence has to be read by Python.
+
+\end{itemize}
+BlastSequenceCache
+
+Implements a variant of BlastSequence designed to merge and cache requests for local intervals of sequence so that repeated accesses to these regions are bundled and cached for efficiency.  You work with sequence objects of this type normally, using Python slicing to obtain subintervals, and str() to get the sequence string for a subinterval.  But behind the scenes, it does two things:
+
+\begin{itemize}
+\item
+all slicing operations are recorded, in the form of a cache of superintervals.  Overlapping or adjacent intervals are merged into a superinterval up to a maximum superinterval size (default 20000).  It will automatically create as many superintervals as needed to cover the requested subinterval slices.  Each superinterval is represented by an object of the FastacmdIntervalCache class.
+
+\item 
+when the sequence string of a subinterval is requested, the cache actually retrieves (and caches) the entire superinterval containing that subinterval.  Fastacmd only needs to be called once for this superinterval.  Subsequent subinterval string requests that fall within this cached superinterval are simply returned directly from the cache, without calling fastacmd.
+
+\end{itemize}
+
+\subsubsection{SQLSequence}
+
+Implements a subclass inheriting from SQLRow and NamedSequenceBase, to use a relational database table to obtain the actual sequence.  There are three minor variants DNASQLSequence, RNASQLSequence, ProteinSQLSequence (so that the sequence does not have to analyze itself to determine what kind of sequence it is).  Its constructor takes the same arguments as SQLRow(table, id), where table is the SQLTable object representing the table in which the sequence is stored, and id is the primary key of the row representing this sequence.  However, normally this class is simply passed to the Table object itself so that it will use it to instantiate new row objects whenever they are requested via its dictionary interface.  Here's a simple example:
+
+\begin{verbatim}
+class YiProteinSequence(ProteinSQLSequence): # CREATE A NEW SQL SEQUENCE CLASS
+    def __len__(self): return self.protein_length  # USE LENGTH STORED IN DATABASE
+protein=jun03[protein_seq_t] # protein IS OUR SQLTable OBJECT REPRESENTING PROTEIN SEQUENCE TABLE
+protein.objclass(YiProteinSequence) # FORCE PROTEIN SEQ TABLE TO USE THIS TO INSTANTIATE ROW OBJECTS
+pseq=protein['Hs.1162'] # GET PROTEIN SEQUENCE OBJECT FOR A SPECIFIC CLUSTER
+\end{verbatim}
+
+Let's go through this line by line:
+
+\begin{itemize}
+
+\item
+we create a subclass of ProteinSQLSequence to show how Python makes it easy to create customized behaviors that can make database access more efficient.  Here we've simply added a __len__ method that uses the protein_length attribute obtained directly from the database, courtesy of SQLRow.__getattr__, which knows what columns exist in the database, and provides them transparently as object attributes.  (The ordinary NamedSequenceBase __len__ method calculates it by obtaining the whole sequence string and calculating its length.  Clearly it's more efficient for the database to retrieve this number (stored as a column called protein_length) and return it, rather than making it send us the whole sequence).
+
+\item
+next we call the protein.objclass() method to inform the table object that it should use our new class for instantiating any row objects for this table.  It will call this class with the usual SQLRow contructor arguments (table, id).
+\end{itemize}
+
+\subsubsection{Sequence Alignment}
+
+A second major area in Pygr is representation and query of multiple sequence alignment databases in a way that is scalable to whole genomes.  We have previously showed (in our work on Partial Order Alignment) that graphs provide both a compact and algorithmically powerful way to store alignments.  Combining this with "interval alignment" makes it scalable and gives a simple interface.  In Pygr, alignments are just another kind of graph, whose nodes are sequence intervals, and edges are alignment relations.  This provides a general-purpose facility for working with sets of sequence intervals, sequence annotation databases, and multiple sequence alignments, all queryable via Pygr graph queries.  We have implemented different container subclasses to work with these data in memory or to work transparently with data stored in relational databases.  The consistency and simplicity of the Pygr framework makes it a good interface both to run external tools like BLAST, and to store or query the results in persistent storage like a MySQL database.
+
+\begin{verbatim}
+hg17=BlastDB('/data/ucsc/hg17') # GET CONTAINER FOR HUMAN GENOME DATABASE
+bcl2m=hg17['chr22'][16544303:16588541] # GET INTERVAL WITH BCL2L13 GENE
+al=hg17.megablast(mouse_bcl2,maxseq=1) # GET REPEAT-MASKED MEGABLAST ALIGNMENT, ONLY TOP HIT
+al[bcl2m[1000:1100] ]+=mrna[210:310] #ADD ALIGNMENT OF A 100nt SEGMENT TO mrna SEGMENT
+al.storeSQL('test.table',db_cursor) # STORE COMPLETE ALIGNMENT IN RELATIONAL DATABASE
+for e in MAFStoredPathMapping(bcl2m,'ucsc_maf8',u).edges(): #GET ITS MULTIGENOMEALIGNMENTS
+   print str(e.srcPath),str(e.destPath) # PRINT THE ACTUAL ALIGNED SEQUENCE INTERVALS
+\end{verbatim}
+
+
+\subsection{Coordinator Module}
+\label{coord-module}
+
+Framework for running subtasks distributed over many computers, in a pythonic way, using SSH for secure process invocation and XMLRPC for message passing. Also provides simple interface for queuing and managing any number of such "batch jobs".
+
+Overview
+
+The coordinator module provides a simple system for running a large collection of tasks on a set of cluster nodes.  It assumes:
+
+\begin{itemize}
+
+\item
+authentication is handled using ssh-agent.  The coordinator module does no authentication itself; it simply tries to spawn jobs to remote nodes using ssh, assuming that you have previously authenticated yourself to ssh-agent. 
+
+\item
+the client nodes can access your scripts using the same path as on the initiating system.  In other words, if you launch a coordinator job /home/bob/mydir/myscript.py, your client nodes must also be able to access /home/bob/mydir/myscript.py (e.g. via NFS).
+
+\item
+your job consists of a large set of task IDs, and a computation to be performed on each ID.  To run this job, you provide an iterator that generates the list of task IDs for the Coordinator to distribute to your client nodes.  You start your script to run a Coordinator that serves your list of task IDs to the client nodes.  You also provide  a function that performs your desired computation on each task ID it receives from the Coordinator.  Typically, you provide both the server function (i.e. the iterator that generates the list of task IDs) and the client function (that runs your desired computation for each ID) within a single Python script file.  Running this script without extra flags starts the Coordinator, which in turn launches your script as a Processor on one or more client nodes.  The Processors andCoordinator work together to complete all the task IDs.
+
+\item
+a ResourceController performs load balancing and resource allocation functions, including: dividing up loads from one or more Coordinators over a set of hosts (each with one or more CPUs); serving a Resource database to Processors requesting specific resources; resource-locking on a per node basis for preventing Processors from using a Resource that is under construction by another Processor.  For very large files that are used repeatedly by your computation, it is preferable to first copy them to local disk on each cluster node (fast), rather than reading them over and over again from NFS (slow).  Resources provide a simple mechanism for doing this.
+
+\end{itemize}
+To see how to use this, let's look at an example script, mapclusters5.py:
+
+\begin{verbatim}
+
+from leelabdb import *
+import coordinator
+
+def map_clusters(server,genome_rsrc='hg17',dbname='HUMAN_SPLICE_03',
+                 result_table='GENOME_ALIGNMENT.hg17_cluster_JUN03_all',
+                 rmOpts='',**kwargs):
+    "map clusters one by one"
+    # CONSTRUCT RESOURCE FOR US IF NEEDED
+    genome=BlastDB(ifile=server.open_resource(genome_rsrc,'r'))
+    # LOAD DB SCHEMA
+    (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna, \
+     protein,clusterExons,clusterSplices)=getSpliceGraphFromDB(spliceCalcs[dbname])
+
+    for cluster_id in server:
+        g=genomic_seq[cluster_id]
+        m=genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # MASK, BLAST, READ INTO m
+        # SAVE ALIGNMENT m TO DATABASE TABLE test.mytable USING cursor
+        createTableFromRepr(m.repr_dict(),result_table,clusters.cursor,
+                            {'src_id':'varchar(12)','dest_id':'varchar(12)'})
+        yield cluster_id # WE MUST FUNCTION AS GENERATOR
+
+def serve_clusters(dbname='HUMAN_SPLICE_03',
+                   source_table='HUMAN_SPLICE_03.genomic_cluster_JUN03',**kwargs):
+    "serve up cluster_id one by one"
+    cursor=getUserCursor(dbname)
+    t=SQLTable(source_table,cursor)
+    for id in t:
+        yield id
+
+if __name__=='__main__':
+    coordinator.start_client_or_server(map_clusters,serve_clusters,['hg17'],__file__)
+\end{verbatim}
+
+Let's analyze the script line by line:
+
+\begin{itemize}
+
+\item
+mapclusters() is a client generator function to be run in a Processor on a client node.  It takes one argument representing its connection to the server (a Processor object), and optional keyword arguments read from the command line.  It first does some initial setup (opens a BLAST database and loads a schema from a MySQL database), then iterates over task IDs returned to it from the server.  A few key points:
+
+\item
+server.open_resource(genome_rsrc,'r') requests a resource given by the genome_rsrc argument from the ResourceController, does whatever is necessary to copy this resource to local disk, and then opens it for reading, returning a file-like object.  This can then be used however you like, but you MUST call its close() method (just as you should always do for any file object) to indicate that you're done using it.  Failure to close() the file object will leave the Resource "hg17" permanently locked on this specific node.  (You would then have to unlock it by hand using the ResourceController.release_rule() method).
+
+\item
+yield cluster_id: the client function must be a Python generator function (i.e. it must use the yield statement), and it must yield the list of IDs that it has processed.  Python's generator construct is extremely convenient for many purposes: here it lets us perform both our initializations and iteration over IDs within a single function, while at the same time wrapping each iteration within the Processor's error trapping code (to prevent a single error in your code from causing the entire Processor to shut down).  The Processor will trap any errors in your code and and send tracebacks to your Coordinator, which will report them in its logfile.  The Processor will tolerate occasional errors and continue processing more IDs.  However, if more than a certain number of IDs in a row fail with errors (controlled by the Processor.max_errors_in_a_row attribute), the Processor will exit, on the assumption that either your code or this specific client node don't work correctly.
+
+\item
+serve_clusters() is the server generating function to be run in the Coordinator.  It returns an iterator that generates all the task IDs that we want to run.  Again, the Python generator construct provides a very clean way of doing this: we simply yield each ID that we want to process in our client Processors.
+
+\item
+if __name__=="__main__": this final clause automatically launches our script as either a Coordinator or Processor depending on the command line options (which are automatically parsed by start_client_or_server()).  All we have to do is pass the client generator function, the server generator function, a list of the resources this job will use, and the name of the script file to be run on client nodes.  Since that is just this script itself, we use the Python builtin symbol __file__ (which just evaluates to the name of the current script).
+
+\item     
+Command-line arguments are parsed (GNU-style, ie. --foo=bar) by start_client_or_server() and passed to your client and server functions as Python named parameters.  Because the same list of arguments is passed to your client and server functions, and each of these functions won't necessarily want to get all the named arguments, you should include the **kwargs at the end of the argument list.  Any unmatched arguments will be stored in kwargs as a Python mapping (dictionary).  If you fail to do this, your client or server function will crash if called with any named parameters other than the ones it expects.
+\end{itemize}
+
+Log and Error Information
+Process logging and error information go to three different types of logs:
+
+\begin{itemize}
+
+\item
+Processor logfile(s): every individual Processor (and all subprocesses run by it) send stdout and stderr to a logfile on local disk of the host on which it is running.  Currently the filename is /usr/tmp/NAME_N.log, where NAME is the name you assigned to the job when you started the Coordinator, and N is the numeric ID of the Processor assigned by the coordinator (just an auto-increment integer beginning at 0, and increasing by one for each Processor the Coordinator starts).  This logfile is the place to look if your job is failing mysteriously--look in the logfile and see its last words before its demise.  You can get a complete list of the logfiles for all the Coordinator's Processors by inspecting the logfile attribute of the CoordinatorMonitor (see below).
+
+\item
+Coordinator logfile: all XMLRPC requests from client Processors, as well as error messages from them, are logged here.  All Python errors (tracebacks) in your client (Processor) code are reported here.  Also, the actual SSH commands used to invoke your Processors on cluster nodes, are logged here.  This is usually the place to start, to see whether things are going well (you should see a long stream of next requests as Processors finish a task and request the next one), or failing with errors.
+
+\item
+ResourceController logfile: all XMLRPC requests from Processors and Coordinatorsare logged here, including register() and unregister(), resource requests, and load reporting from cluster nodes.  If things are working well, you should see a stream of regular report_load() messages showing steady, full utilization of all the host processors.  Excessive register/unregister churning (jobs that start and immediately exit) is a common sign of trouble with your jobs.
+
+\end{itemize}
+\subsubsection{Coordinator}
+
+To start a job coordinator (which in turn will the run the whole job by starting Processors on cluster nodes using SSH):
+
+\begin{verbatim}
+python mapclusters5.py mm5_jan02 --errlog=/usr/tmp/leec/mm5_jan02.log \ 
+  --dbname=MOUSE_SPLICE --source_table=genomic_cluster_jan02 \
+  --genome_rsrc=mm5 --result_table=GENOME_ALIGNMENT.mm5_cluster_jan02_all \ 
+  --rmOpts=-rodent \
+\end{verbatim}
+
+Here we have told the Coordinator to name itself "mm5_jan02" in all its communications with the ResourceController.  Since we gave no command-line flags, the Coordinator will assume that a ResourceController is already running on port 5000 of the current host.    You must have an ssh-agent running BEFORE you start the Coordinator, since the Coordinator will attempt to spawn jobs using SSH.  The Coordinator will exit with an error message if it is unable to connect to ssh-agent.  A few notes:
+
+\begin{itemize}
+
+\item
+The Coordinator will run as a demon process (i.e. in the background, and detached from your terminal session), and redirect its  output into a file (here, given by the --errlog option). If you don't specify an --errlog filename, it will create a filename determined by the name we told it to run as, in this case "mm_jan02.log".  
+
+\item
+You must ensure that SSH can launch processes on your client nodes "unattended" i.e. without a connection to a controlling terminal.  If SSH has to ask for userconfirmations when connecting to a given host (e.g. if it asks whether you want to accept the host key), the Coordinator will not be able to use that host.
+
+\item
+Python errors (tracebacks) in your will be GNU-style command-line options (e.g. --port=8889) are automatically parsed by start_client_or_server() and passed to the Coordinator.__init__() as keyword arguments.  This constructor takes the following optional arguments: 
+    \begin{itemize}
+    \item
+    port: the port number on which this Coordinator should run
+    
+    \item
+    priority: a floating point number specifying the priority level at which this Coordinator should be run by the ResourceController.  The default value is 1.0.  A value of 2.0 will give it twice as many Processors as a competing Coordinator of priority 1.0.
+
+    \item
+    rc_url: the URL for the ResourceController.  Defaults to http://THISHOST:5000
+    \item
+    errlog: logfile path for saving all output to.  Defaults to NAME.log, where NAME is the name you assigned to this Coordinator. Can be an absolute path.
+
+    \item
+    immediate: if True, make the job run immediately, without waiting for previous jobs to finish.  Default: False.
+    
+    \item
+    demand_ncpu: if set to a non-zero value, specifies the exact number of Processors you want to run your job.
+
+    \item
+    NB: command line arguments are also passed to your server function, and to your client function, as Python named parameters.  See the mapclusters5.py example above.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{ResourceController}
+
+Whereas you start a separate Coordinator for each set of jobs you want to run, you only need a single ResourceController running. To start the ResourceController, run:
+
+python coordinator.py --rc=bigcheese
+
+This starts the ResourceController (running as a demon process in the background) and names it "bigcheese"; a name argument (given by the --rc flag) is REQUIRED.  Since you didn't specify command-line flags, it will run on the default port 5000.  It will use several files based on the name you gave it:
+\begin{itemize}
+ 
+\item
+bigcheese.hosts: a list of cluster nodes and associated maximum load (separated by whitespace, one pair per line).  It will attempt to fill these nodes with jobs, up to the maximum load level specified for each, sharing the load between whatever set of Coordinators contact it.
+
+\item
+bigcheese.log: all output from the ResourceController (showing requests made to it by Coordinators and Processors) is logged to this file.
+
+\item
+bigcheese.rules: this file is a Python shelve created by the ResourceController as its rules database.
+
+\item
+bigcheese.rsrc: this file is a Python shelve created by the ResourceController as its resource database.GNU-style command-line options (e.g. --port=5001) are automatically parsed by start_client_or_server() and passed to the ResourceController.__init__() as keyword arguments.  This constructor takes the following optional arguments:
+
+\item
+port: the port number on which this ResourceController should run
+
+\item
+overload_margin: how much "extra" load above the standard level is allowable.  This prevents temporary load spikes from causing Processors to exit.  Set by default to 0.6.  I.e. if the maxload for a host was set to 2.0, any load above 2.6 would cause the ResourceController to start shutting down Processor(s) on that host.
+
+\item
+rebalance_frequency: the time interval, in seconds, for rerunning the ResourceController.load_balance() method.  Defaults to 1200 sec.
+
+\item
+errlog: logfile path for saving all output to.  Defaults to NAME.log, where NAME is the name you assigned to this ResourceController. Can be an absolute path.
+
+\end{itemize}
+
+RCMonitor
+The coordinator module also provides a convenience interface for interrogating and controlling jobs.  In an interactive Python shell, import the coordinator module, and create an RCMonitor object::
+
+\begin{verbatim}
+import coordinator
+m=coordinator.RCMonitor()
+\end{verbatim}
+
+Since you did not specify any arguments, it will default to searching for the ResourceController on the current host, port 5000.  You can specify a host and or port as additional arguments.  It also loads an index of coordinators currently registered with this ResourceController, accessible on its coordinators attribute:
+
+\begin{verbatim}
+for name,c in m.coordinators.items():
+  print name,len(c.client_report)
+\end{verbatim}
+
+will print a list of the coordinators and how many Processors each is currently running.  Each coordinator is represented by a CoordinatorMonitor object in this coordinators index.
+
+Both RCMonitor and CoordinatorMonitor objects give you access to the XMLRPC methods of the ResourceController and Coordinators they represent.  That is, running a method on the RCMonitor actually runs the identically-named method on the ResourceController.  Some of the most useful ResourceController methods are:
+
+\begin{itemize}
+
+\item
+report_load(host,pid,load): inform RC that the current load on host is load.
+
+\item
+load_balance(): make the RC rebalance load, using all available nodes and coordinators
+
+\item
+setrule(rsrc,rule): set a production rule for the resource named rsrc.  rule must be a tuple consisting of the local filepath to be used for the resource, and a shell command that will construct it, with a %s where you want the filename to be filled in.
+
+\item
+delrule(rsrc): deletes the rule for rsrc from the rules database.
+
+\item
+set_hostinfo(host,attr,val) set an attribute for host.  For example, to set the maximum load for this host: rcm.set_hostinfo(host,'maxload',2.0).  This should usually be the number of CPUs on this host.  NB: these settings will apply only to the current ResourceController, and are not saved back to its NAME.hosts file.  If you want to make these settings permanent (i.e. to apply to ResourceControllers you start anew in the future), then edit the NAME.hosts file.
+
+\item
+retry_unused_hosts(): make the RC search its hosts database for hosts that are not currently in use (e.g. jobs may have died) and try to reallocate them to the existing coordinators.
+
+\end{itemize}
+Both RCMonitor and CoordinatorMonitor objects have a get_status() method that updates them with the latest information from their associated ResourceController or Coordinator.
+
+Here are some typical monitor usages:
+
+\begin{verbatim}
+c=m.coordinators['mapclusters3'] # GET MY COORDINATOR
+c.client_report.sort() # MAKE IT SORT CLIENTS BY HOSTNAME
+c.client_report # PRINT THE SORTED LIST, SHOWING HOST, PID, #TASKS DONE
+c.pending_report # PRINT LIST OF TASK IDS CURRENTLY RUNNING
+c.nsuccess # PRINT TOTAL #TASKS DONE
+c.nerrors  # PRINT TOTAL #TASKS FAILED
+c.logfile # PRINT LIST OF ALL PROCESSOR LOGFILES
+
+m.rules # PRINT THE CURRENT RULES DATABASE
+m.resources # PRINT THE CURRENT RESOURCES DATABASE
+m.setrule('hg17',
+('/usr/tmp/ucsc_msa/hg17',
+'gunzip -c /data/yxing/databases/ucsc_msa/human_assembly_HG17/*.fa.gz
+>%s'))
+m.get_status() # UPDATE OUR RC INFO
+m.set_hostinfo('llc22','maxload',2.0) # ADD A NEW HOST TO OUR DATABASE
+m.setload('llc1','maxload',0.0) # STOP USING llc1 FOR THE MOMENT
+m.load_balance() # MAKE IT ALLOCATE ANY FREE CPUS NOW...
+m.locks # SHOW LIST OF RESOURCES CURRENTLY LOCKED, UNDER CONSTRUCTION
+\end{verbatim}
+
+\subsubsection{Security}
+
+Internal communication between Processors, Coordinators and ResourceController is performed using XMLRPC and thus is not secure. However, since no authentication information or actual commands are transmitted by XMLRPC, and the coordinator module does not enable the processes that use it to do anything that they are not ALREADY capable of doing on their own (i.e. spawn ssh processes), the main security vulnerabilty is Denial Of Service (i.e. an attacker listening to the XMLRPC traffic could send messages causing Processors to shutdown, or Coordinators to be blocked from running any Processors).  In other words the security philosophy of this module is to avoid compromising your security, by leaving the security of process invocation entirely to your existing security mechanisms (i.e. ssh and ssh-agent).  Commands are only sent using SSH, not XMLRPC, and the XMLRPC components are designed to prevent known ways that an XMLRPC caller might be able to run a command on an XMLRPC server or client. (I blocked known security vulnerabilities in Python's SimpleXMLRPCServer module).
+
+In the same spirit, the current implementation does not seek to block users from issuing commands that could let them "hog" resources, for the simple reason that in an SSH-enabled environment, they would be able to do so regardless of this module's policy.  I.e. the user can simply not use this module, and spawn lots of processes directly using SSH.  In the current implementation, every user can send directives to the ResourceController that affect resource allocation to other users' jobs.  This means everybody has to "play nice", only giving their Coordinator(s) higher priority if it is really appropriate and agreed by other users.  Unless a different process invocation mechanism (other than SSH by each user) were adopted, it doesn't really make sense to me to try to enforce a policy that is stricter than the policy of the underlying process invocation mechanism (i.e. SSH).  Since every user can use SSH to spawn as many jobs as they want, without regard for sharing with others, making this module's policy "strict" doesn't really secure anything.
+
+\end{document}
