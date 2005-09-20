@@ -1,5 +1,5 @@
 from seqref import *
-from seqdb import *
+from pygr.seqdb import *
 import string 
 
 def refIntervals(s):
