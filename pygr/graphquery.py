@@ -46,10 +46,13 @@ class QueryMatcher(object):
 class GraphQueryCompiler(object):
     'compile a series of GraphQueryIterators into python code, run them'
     #queryMatch=QueryMatchDescriptor()
+    _lang="" # NO LANGUAGE STEM
     def __init__(self,name='graphquery',globalDict=None):
         self.name=name
         self.code=[]
         self.unmark_code=[]
+        self.next_code=[]
+        self.end_code=[]
         self.indent=[]
         self.gqi=[]
         self.queryLayerGraph=dictGraph()
@@ -61,7 +64,11 @@ class GraphQueryCompiler(object):
         self.queryMatch=QueryMatcher(self)
     def __getitem__(self,key):
         'return appropropriate code for accessing nodes / edges in data or query'
-        if key=='dataGraph':
+        if key=='n':
+            return self.n
+        elif key=='name':
+            return self.name
+        elif key=='dataGraph':
             queryEdge=self.gqi[self.n].queryGraph[self.gqi[self.n].fromNode][self.gqi[self.n].queryNode]
             try: # CHECK IF QUERY EDGE USES A NON-DEFAULT DATA GRAPH
                 dg=queryEdge['dataGraph']
@@ -91,16 +98,17 @@ class GraphQueryCompiler(object):
 
     def indent_code(self,codestr,current_indent):
         'calculate indentation levels added by code in codestr'
+        codestr=codestr % self # PERFORM MACRO SUBSTITUTIONS
         lines=codestr.split('\n')
         lastline=lines[-1]
-        if lastline=='': # IGNORE TERMINAL BLANK LINE
+        if lastline=='' and len(lines)>1: # IGNORE TERMINAL BLANK LINE
             lastline=lines[-2]
         nindent=len(lastline.split('\t'))-1 # DETERMINE FINAL INDENTATION LEVEL
-        if lastline[-1]==':':
+        if len(lastline)>0 and lastline[-1]==':':
             nindent+=1
         s='' # NOW FORMAT THE CODE WITH PROPER INDENTATION LEVEL
         for line in lines:
-            s+=current_indent*'\t'+(line%self)+'\n'
+            s+=current_indent*'\t'+line+'\n'
         return s,current_indent+nindent
     
     def __iadd__(self,gqi):
@@ -108,22 +116,42 @@ class GraphQueryCompiler(object):
         self.gqi.append(gqi)
         if gqi.queryNode not in self.queryLayerGraph: # NOT ALREADY BOUND?
             self.queryLayerGraph+=gqi.queryNode
-            codestr=gqi._generator_code
-            markstr=gqi._index_code
-            unmarkstr=gqi._unmark_code
+            codestr=getattr(gqi,self._lang+'_generator_code')
+            markstr=getattr(gqi,self._lang+'_index_code')
+            unmarkstr=getattr(gqi,self._lang+'_unmark_code')
+            try:
+                endcode=getattr(gqi,self._lang+'_end_code')
+            except AttributeError:
+                endcode=''
+            try:
+                nextcode=getattr(gqi,self._lang+'_next_code')
+            except AttributeError:
+                nextcode=''
+            self.lastGenerator=self.n
         else:
-            codestr=gqi._closure_code
+            codestr=getattr(gqi,self._lang+'_closure_code')
             markstr=None
-            unmarkstr=gqi._unmark_closure_code
+            unmarkstr=getattr(gqi,self._lang+'_unmark_closure_code')
+            try:
+                endcode=getattr(gqi,self._lang+'_end_closure_code')
+            except AttributeError:
+                endcode=''
+            try:
+                nextcode=getattr(gqi,self._lang+'_next_closure_code')
+            except AttributeError:
+                nextcode=''
         #BIND QUERY EDGE TO THIS LAYER
         self.queryLayerGraph[gqi.queryNode][gqi.fromNode]=self.n
         try: # GET INDENTATION LEVEL FROM PREVIOUS LAYER
             current_indent=self.indent[-1]
         except IndexError:
             current_indent=1 # TOPLEVEL: MUST INDENT INSIDE def
+        self.end_code.append(self.indent_code(endcode,current_indent)[0])
         s,current_indent=self.indent_code(codestr,current_indent)
+        self.next_code.append(self.indent_code(nextcode,current_indent)[0])
         if hasattr(gqi,'filter'):
-            s2,current_indent=self.indent_code(gqi._filter_code,current_indent)
+            s2,current_indent=self.indent_code(getattr(gqi,self._lang+'_filter_code'),
+                                               current_indent)
             s+=s2
         if hasattr(gqi,'filtercode'):
             s2,current_indent=self.indent_code(gqi.filtercode,current_indent)
@@ -135,34 +163,220 @@ class GraphQueryCompiler(object):
             s2,tail_indent=self.indent_code(unmarkstr,current_indent)
             self.unmark_code.append(s2)
         else:
-            self.unmark_code.append('')
+            self.unmark_code.append('') # NO UNMARK CODE, SO JUST APPEND BLANK
         self.code.append(s)
         self.indent.append(current_indent)
         self.n+=1
         return self # iadd MUST RETURN self!!
+    _def_code="""
+def %(name)s(self,dataGraph,dataMatch=None,queryMatch=None):
+	if dataMatch is None: dataMatch={}
+	self.dataMatch=dataMatch
+	dataEdge=%(n)d*[None]
+	self.dataEdge=dataEdge
+"""
+    _yield_code='yield self.queryMatch\n'
+    _end_code=''
     def __str__(self):
         'generate code for this query, as a string function definition'
-        s='def %s(self,dataGraph,dataMatch=None,queryMatch=None):\n' \
-           % self.name
-        s+='\tif dataMatch is None: dataMatch={}\n'
-        s+='\tself.dataMatch=dataMatch\n'
-        s+='\tdataEdge=%d*[None]\n' % self.n
-        s+='\tself.dataEdge=dataEdge\n'
+        s=self._def_code % self
         for layer in self.code: # GENERATE ALL THE TRAVERSAL CODE
             s+=layer
-        s+=self.indent[-1]*'\t'+'yield self.queryMatch\n' # yield THE RESULT
+        s2=self.indent_code(self._yield_code,self.indent[-1])[0] # yield THE RESULT
+        s+=s2
         i=len(self.unmark_code)-1
         while i>=0: # GENERATE THE UNMARKING CODE...
             s+=self.unmark_code[i]
+            s+=self.next_code[i]
+            s+=self.end_code[i]
             i-=1
+        s+=self._end_code % self
         return s
     def run(self,dataGraph,*args,**kwargs):
         'run the query, pre-compiling it if necessary'
         try: # JUST TRY RUNNING OUR FUNCTION: IT RETURNS AN ITERATOR
             return self._compiled[self.name](self,dataGraph,*args,**kwargs)
         except KeyError:
-            exec str(self) in self._compiled # COMPILE OUR FUNCTION
+            self.compile()
             return self._compiled[self.name](self,dataGraph,*args,**kwargs) # RUN IT
+    def compile(self):
+        'compile using Python exec statement'
+        exec str(self) in self._compiled # COMPILE OUR FUNCTION
+        
+
+
+def find_distutils_lib(path='build'):
+    'locate the build/lib path where distutils builds modules'
+    import os
+    dirs=os.listdir('build') # TRY TO FIND LIB DIRECTORY CONTAINING BUILT MODULE
+    for d in dirs:
+        if d[:4]=='lib.':
+            return path+'/'+d
+    raise OSError((1,'unable to locate build/lib where distutils built your module!'))
+
+
+
+class GraphQueryPyrex(GraphQueryCompiler):
+    'compile a series of GraphQueryIterators into pyrex code, run them'
+    #queryMatch=QueryMatchDescriptor()
+    _lang="_pyrex" # NO LANGUAGE STEM
+    def __getitem__(self,key):
+        'return appropropriate code for accessing nodes / edges in data or query'
+        if key=='n':
+            return self.n
+        elif key=='name':
+            return self.name
+        elif key=='dataGraph':
+            try: # CHECK IF QUERY EDGE USES A NON-DEFAULT DATA GRAPH
+                queryEdge=self.gqi[self.n].queryGraph[self.gqi[self.n].fromNode][self.gqi[self.n].queryNode]
+                dg=queryEdge['dataGraph']
+                return 'self.gqi[%d].dataGraph' % self.n
+            except (TypeError,KeyError):
+                return 'dataGraph'
+        elif key=='filter':
+            return 'self.gqi[%d].filter' % self.n
+        elif key=='toQueryNode':
+            return 'self.gqi[%d].queryNode' % self.n
+        elif key=='fromQueryNode':
+            return 'self.gqi[%d].fromNode' % self.n
+        if key[:2]=='to':
+            layer=self.queryLayerGraph[self.gqi[self.n].queryNode]
+        elif key[:4]=='from':
+            layer=self.queryLayerGraph[self.gqi[self.n].fromNode]
+        if key[-8:]=='DataNode': # GET 1ST LAYER WHERE THIS NODE ASSIGNED
+            return 'dataNode%d' %layer.values()[0]
+        if key[-8:]=='DataEdge': # GET LAST LAYER, WHERE THIS EDGE CREATED
+            return 'dataEdge%d' %layer.values()[-1]
+        if key[-8:]=='DataDict': # GET 1ST LAYER WHERE THIS NODE ASSIGNED
+            return 'cDict%d' %layer.values()[0]
+        if key[-7:]=='DataPtr': # GET 1ST LAYER WHERE THIS NODE ASSIGNED
+            return 'pDictEntry%d' %layer.values()[0]
+        if key[-11:]=='DataPtrCont': # GET 1ST LAYER WHERE THIS NODE ASSIGNED
+            return 'pGraphEntry%d' %layer.values()[0]
+        if key[-11:]=='DataCounter': # GET 1ST LAYER WHERE THIS NODE ASSIGNED
+            return 'i%d' %layer.values()[0]
+        if key=='toDataNodeUnmatched':
+            l=['dataNode%d!=dataNode%d' %(self.queryLayerGraph[self.gqi[i].queryNode].values()[0],
+                                          self.queryLayerGraph[self.gqi[self.n].queryNode].values()[0])
+               for i in range(self.n)]
+            if len(l)>0:
+                return ' and '.join(l)
+            else:
+                return 'True'
+        if key=='dataNodeDefs':
+            return ','.join(['dataNode%d' %i for i in range(self.n)])
+        if key=='dataEdgeDefs':
+            return ','.join(['dataEdge%d' %i for i in range(self.n)])
+        if key=='dataDictDefs':
+            return ','.join(['*cDict%d' %i for i in range(self.n)])
+        if key=='dataPtrDefs':
+            return ','.join(['*pDictEntry%d' %i for i in range(self.n)])
+        if key=='dataPtrContDefs':
+            return ','.join(['*pGraphEntry%d' %i for i in range(self.n)])
+        if key=='dataCounterDefs':
+            return ','.join(['i%d' %i for i in range(self.n)])
+        if key=='dataCounterArgs':
+            return ','.join(['int i%d' %i for i in range(self.n)])
+        if key=='itaVector':
+            return ','.join(['ita.vector[%d]' %i for i in range(self.n)])
+        if key=='itaTuple':
+            return ',\\\n'.join(['p_ita[%d]' %i for i in range(2*self.n)])
+        if key=='resultTuple':
+            return ',\\\n'.join(['dataNode%d,dataEdge%d'
+                             %(self.queryLayerGraph[self.gqi[i].queryNode].values()[0],i)
+                             for i in range(self.n)])
+        if key=='resultTuples':
+            return ','.join(['(dataNode%d,dataEdge%d)'
+                             %(self.queryLayerGraph[self.gqi[i].queryNode].values()[0],i)
+                             for i in range(self.n)])
+        if key=='level' or key=='nEdges':
+            return self.n
+        if key=='lastGenerator':
+            return self.lastGenerator
+        try:
+            return getattr(self.gqi[self.n],key)
+        except AttributeError:
+            raise KeyError('%s not a valid GraphQueryPyrex key' % key)        
+
+    _def_code="""
+cimport cdict
+cdef c_%(name)s(cdict.CGraphDict cgd,cdict.IntTupleArray ita,%(dataCounterArgs)s):
+	cdef cdict.CGraph *dataGraph
+	cdef cdict.CDict %(dataDictDefs)s
+	cdef cdict.CDictEntry %(dataPtrDefs)s
+	cdef cdict.CDictEntry *pd_temp
+	cdef cdict.CGraphEntry %(dataPtrContDefs)s
+	cdef cdict.CGraphEntry *p_temp
+	#cdef int %(dataCounterDefs)s
+	cdef int %(dataNodeDefs)s
+	cdef int %(dataEdgeDefs)s
+	cdef int *p_ita
+	dataGraph=cgd.d
+	p_ita=ita.data
+"""
+    _yield_code="""
+%(itaTuple)s=%(resultTuple)s
+p_ita=p_ita+2*%(nEdges)d
+ita.n=ita.n+1
+if ita.n>=ita.n_alloc:
+	ita.set_vector((%(dataCounterDefs)s),1)
+	return
+"""
+    #results.append((%(resultTuples)s))\n
+    _end_code="""
+	ita.isDone=1 # COMPLETED THIS QUERY
+
+import cdict
+def %(name)s(self,g,int maxhit=1000,cdict.IntTupleArray ita=None,qml=None):
+	if not isinstance(g,cdict.CGraphDict):
+		g=cdict.CGraphDict(g,cdict.KeyIndex())
+	if ita is None:
+		ita=cdict.IntTupleArray(maxhit,%(nEdges)d,2,%(lastGenerator)d)
+	ita.n=0
+	c_%(name)s(g,ita,%(itaVector)s) # RUN THE QUERY
+	if qml is not None:
+		qml.matches=ita
+		return qml
+	else:
+		return cdict.QueryMatchList(self,ita,g,%(name)s)
+"""
+    def compile(self):
+        'compile using Pyrex, Distutils, and finally import!'
+        import os
+        try: # WE NEED ACCESS TO PYGR SOURCE TO ACCESS cgraph FUNCTIONS IN THIS MODULE...
+            pygrpath=os.environ['PYGRPATH']
+        except KeyError:
+            raise OSError((1,"""pyrex compilation requires access to pygr source.
+            Please set the environment variable PYGRPATH to the top of the pygr source package."""))
+        if not os.access(pygrpath+'/pygr/cgraph.c',os.R_OK):
+            raise OSError((1,"""Unable to access %s/pygr/cgraph.c.
+            Is PYGRPATH set to the top of the pygr source package?""" % pygrpath))
+        exit_status=os.system('cp %s/pygr/cgraph.c %s/pygr/cgraph.h %s/pygr/cdict.pxd .'
+                              % (pygrpath,pygrpath,pygrpath))
+        if exit_status!=0:  # RUN THE PYREX COMPILER TO PRODUCE C
+            raise OSError((exit_status,
+                           'unable to copy source code to this directory.'))
+        modulename=self.name+str(id(self)) # CONSTRUCT A UNIQUE NAME FOR MODULE
+        myfile=file(modulename+'.pyx','w') # GENERATE PYREX CODE
+        myfile.write(str(self)) # WRITE CODE
+        myfile.close()
+        exit_status=os.system('pyrexc %s.pyx' % (modulename))
+        if exit_status!=0:  # RUN THE PYREX COMPILER TO PRODUCE C
+            raise OSError((exit_status,
+                           'pyrex compilation failed.  Is pyrex missing or not in your PATH?'))
+        from distutils.core import setup, Extension
+        module1 = Extension(modulename,sources = ['cgraph.c', modulename+'.c'])
+        setup (name = modulename,description = 'autogenerated by pygr.graphquery',
+               ext_modules = [module1],script_args=['build']) # BUILD MODULE USING distutils
+        modulepath=find_distutils_lib() # FIND DIRECTORY CONTAINING OUR BUILT MODULE
+        import imp  # FINALLY, TRY TO IMPORT THE NEW MODULE
+        modulefile,path,desc=imp.find_module(modulename,[modulepath])
+        self._module=imp.load_module(modulename,modulefile,path,desc) # LOAD & BIND THE MODULE
+        self._compiled[self.name]=getattr(self._module,self.name) # BIND OUR QUERY FUNCTION
+        modulefile.close()
+            
+
+        
 
 
 class GraphQueryIterator(object):
@@ -234,6 +448,11 @@ else:
         #queryMatch[%(toQueryNode)s]=%(toDataNode)s
         #queryMatch[%(fromQueryNode)s,%(toQueryNode)s]=%(toDataEdge)s
 # THIS LINE PREVENTS COMPILER FROM PUSHING EXTRA INDENTATION LAYER"""
+    _filter_code="if self.gqi[%(level)d].filter(toNode=%(toDataNode)s,fromNode=%(fromDataNode)s,edge=%(toDataEdge)s,queryMatch=self.queryMatch,gqi=self.gqi[%(level)d]):"
+    _unmark_code="""
+del dataMatch[%(toDataNode)s]
+#del queryMatch[%(toQueryNode)s]
+#del queryMatch[%(fromQueryNode)s,%(toQueryNode)s]"""
     _closure_code="""
 try: # CLOSURE
 	%(toDataEdge)s=%(dataGraph)s[%(fromDataNode)s][%(toDataNode)s]
@@ -241,12 +460,32 @@ except KeyError:
 	pass
 else:
 	#queryMatch[%(fromQueryNode)s,%(toQueryNode)s]=%(toDataEdge)s"""
-    _filter_code="if self.gqi[%(level)d].filter(toNode=%(toDataNode)s,fromNode=%(fromDataNode)s,edge=%(toDataEdge)s,queryMatch=self.queryMatch,gqi=self.gqi[%(level)d]):"
-    _unmark_code="""
-del dataMatch[%(toDataNode)s]
-#del queryMatch[%(toQueryNode)s]
-#del queryMatch[%(fromQueryNode)s,%(toQueryNode)s]"""
     _unmark_closure_code="#del queryMatch[%(fromQueryNode)s,%(toQueryNode)s]"
+
+    # PYREX CODE
+    _pyrex_generator_code="""
+p_temp=cdict.cgraph_getitem(%(dataGraph)s,%(fromDataNode)s)
+if p_temp!=NULL:
+	%(fromDataDict)s=p_temp[0].v
+	%(toDataPtr)s=%(fromDataDict)s[0].dict
+	while %(toDataCounter)s < %(fromDataDict)s[0].n:
+		%(toDataNode)s=%(toDataPtr)s[%(toDataCounter)s].k
+		%(toDataEdge)s=%(toDataPtr)s[%(toDataCounter)s].v
+"""
+    #for %(toDataCounter)s from 0 <= %(toDataCounter)s < %(fromDataDict)s[0].n:
+    _pyrex_index_code='if %(toDataNodeUnmatched)s:'
+    _pyrex_unmark_code='# COMPILER NEEDS AT LEAST ONE LINE, EVEN THOUGH NOTHING TO DO HERE'
+    _pyrex_next_code='%(toDataCounter)s=%(toDataCounter)s+1'
+    _pyrex_end_code='%(toDataCounter)s=0'
+    _pyrex_closure_code="""
+p_temp=cdict.cgraph_getitem(%(dataGraph)s,%(fromDataNode)s)
+if p_temp!=NULL:
+	%(fromDataDict)s=p_temp[0].v
+	pd_temp=cdict.cdict_getitem(%(fromDataDict)s,%(toDataNode)s)
+	if pd_temp!=NULL:
+		%(toDataEdge)s=pd_temp[0].v
+"""
+    _pyrex_unmark_closure_code='# COMPILER NEEDS AT LEAST ONE LINE, EVEN THOUGH NOTHING TO DO HERE'
 
     def unmark(self):
         "erase node and edge assignment associated with the iterator"
@@ -291,6 +530,15 @@ class ContainerGQI(GraphQueryIterator):
     _generator_code="""
 %(toDataEdge)s=None # CONTAINER
 for %(toDataNode)s in dataGraph:"""
+
+    _pyrex_generator_code="""
+%(toDataPtrCont)s=%(dataGraph)s[0].dict
+for %(toDataCounter)s from 0 <= %(toDataCounter)s < %(dataGraph)s[0].n:
+	%(toDataNode)s=%(toDataPtrCont)s[%(toDataCounter)s].k
+	%(toDataEdge)s= -1 # NO EDGE INFO
+"""
+
+
 
 class AttributeGQI(GraphQueryIterator):
     "Iterate over all nodes in attribute called self.attr of self.dataNode"
@@ -439,9 +687,9 @@ class GraphQuery(object):
         for q in self.q:
             q.unmark()
 
-    def compile(self,globals=None):
+    def compile(self,globals=None,compilerClass=GraphQueryCompiler,**kwargs):
         'return a compiled version of this query, using globals namespace if specified'
-        compiler=GraphQueryCompiler(globalDict=globals)
+        compiler=compilerClass(globalDict=globals,**kwargs)
         for gqi in self.q:
             compiler+=gqi
         return compiler
