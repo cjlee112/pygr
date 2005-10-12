@@ -14,7 +14,7 @@ multi-genome alignment data.
 
 import os
 import sys
-from distutils.core import setup
+from distutils.core import setup, Extension
 
 testdir = os.path.join(os.getcwd(),"tests")
 sys.path.append(testdir)
@@ -54,6 +54,10 @@ Programming t Language :: Python
 Topic :: Scientific/Engineering
 Topic :: Scientific/Engineering :: Bioinformatics
 """
+
+cdict_module = Extension('pygr.cdict',sources = ['pygr/cgraph.c', 'pygr/cdict.c'])
+
+
 metadata = {
     'name': name,
     'version': version,
@@ -86,8 +90,10 @@ metadata = {
 	"pygr/apps/seqref",
 	"pygr/apps/splicegraph",
         "pygr/apps/maf2VSgraph",
-        ]
- 
+        ],
+
+
+    'ext_modules': [cdict_module]
    }
 
 setup(**metadata)                                                                               
