@@ -30,9 +30,11 @@ class TestMain(object):
 
       try:
  	import mapping
-	import graphquery 
+	import graphquery
+        import sequence
         self.mapping = mapping
-	self.graphquery = graphquery 
+	self.graphquery = graphquery
+        self.sequence = sequence
       except:
          raise ImportError("Unable to load Pygr modules. Set PYGRPATH accordingly.") 
 
@@ -62,6 +64,7 @@ class TestFrameWork(TestMain):
      unittest = self.unittest
      mapping = self.mapping
      graphquery = self.graphquery
+     sequence = self.sequence
 
 
      class QuerySuite(unittest.TestCase):
@@ -335,8 +338,33 @@ class TestFrameWork(TestMain):
            for i in graphquery.GraphQuery(datagraph,querygraph):
                self.failUnless(i == result[self.result_kounter], 'incorrect result')
                self.result_kounter += 1
-                      
-     suite_list =[QuerySuite,MappingSuite,IteratorSuite]
+
+
+     class SequenceSuite(unittest.TestCase):
+        'basic sequence class tests'
+        def setUp(self):
+           self.seq=sequence.NamedSequence('atttgactatgctccag','foo')
+           
+        def testLength(self):
+           self.assertEqual(len(self.seq),17)
+        def testSlice(self):
+           self.assertEqual(str(self.seq[5:10]),'actat')
+        def testSliceRC(self):
+           self.assertEqual(str(-(self.seq[5:10])),'atagt')
+        def testRCSlice(self):
+           self.assertEqual(str((-self.seq)[5:10]),'gcata')
+        def testjoin(self):
+           self.assertEqual(str(self.seq[5:15]*self.seq[8:]),'atgctcc')
+        def testRCjoin(self):
+           self.assertEqual(str((-(self.seq[5:10]))*((-self.seq)[5:10])),'ata')
+        def testseqtype(self):
+           self.assertEqual(self.seq.seqtype(),sequence.DNA_SEQTYPE)
+           self.assertEqual(sequence.NamedSequence('auuugacuaugcuccag','foo').seqtype(),
+                            sequence.RNA_SEQTYPE)
+           self.assertEqual(sequence.NamedSequence('kqwestvvarphal','foo').seqtype(),
+                            sequence.PROTEIN_SEQTYPE)
+
+     suite_list =[QuerySuite,MappingSuite,IteratorSuite,SequenceSuite]
 
      test_results = []
 
