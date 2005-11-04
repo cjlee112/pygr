@@ -66,10 +66,10 @@ class MafParser:
             # PROCESS THE KNOWN INTERVALS
             if(s[4]=='-'):
                 ns=self.sequences[s[1]][-int(s[2]):-int(s[2])-int(s[3])]
-                self.sequences[s[1]].seqsplice(reverse_complement(s[6].replace('-','')),ns.start,ns.end)
+                self.sequences[s[1]].seqsplice(reverse_complement(s[6].replace('-','')),ns.start,ns.stop)
             else:
                 ns=self.sequences[s[1]][ int(s[2]): int(s[2])+int(s[3])]
-                self.sequences[s[1]].seqsplice(s[6].replace('-',''),ns.start,ns.end)
+                self.sequences[s[1]].seqsplice(s[6].replace('-',''),ns.start,ns.stop)
 
             for inter in refIntervals(s[6]):
                 self.mAlign[vseq[inter[0]:inter[1]]][ns[inter[2]:inter[3]]]=(inter[4])
