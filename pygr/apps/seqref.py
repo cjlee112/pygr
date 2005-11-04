@@ -1,17 +1,17 @@
 from pygr.poa import *
 #from pathquery import *
 
-class AnonSequence(NamedSequence):
+class AnonSequence(Sequence):
     """Defines a sequence class with unknown sequence, but
     known length"""
-    def __init__(self, len, id):
+    def __init__(self, length, id):
         s=''
         self.known=list()
-        NamedSequence.__init__(self,s,id)
-        self.end=len
+        Sequence.__init__(self,s,id)
+        self.stop=length
 
     def seqsplice(self,s,start,end):
-        (begin,stop,step)=slice(start,end).indices(self.end)
+        (begin,stop,step)=slice(start,end).indices(self.stop)
         
         if(start<end):
             self.known+=[(s,start,stop)]
@@ -23,7 +23,7 @@ class AnonSequence(NamedSequence):
             yield {'src_id':self.id,'start':u[1],'end':u[2],'seq':u[0]}
                 
  
-class ReferenceSequence(NamedSequence):
+class ReferenceSequence(Sequence):
     """Defines a reference sequence class that is subscriptable
     by other sequences. If sequence ids match the resulting sequnce
     will reference this class. This is useful for coordinate
@@ -31,12 +31,12 @@ class ReferenceSequence(NamedSequence):
     to known sequence"""
     
     def __init__(self, s,id):
-        NamedSequence.__init__(self,s,id)
+        Sequence.__init__(self,s,id)
 
     def __getitem__(self,iv):
         if(isinstance(iv,SeqPath)):
             if(iv.id==self.id):
-                s=self[iv.start:iv.end:iv.step]
+                s=self[iv.start:iv.stop:iv.step]
                 s.orientation=iv.orientation
                 return s
         else:
@@ -56,19 +56,19 @@ class UnkSequence(SeqPath):
         self.id=id
         SeqPath.__init__(self,id)
         self.start=start
-        self.end=end
+        self.stop=end
         self.step=step
         self.orientation=orientation
-        if(self.start!=None and self.end!=None and self.start>self.end):
+        if(self.start is not None and self.stop is not None and self.start>self.stop):
             t=self.start
-            if(self.end>=0):
-                self.start=self.end+1
+            if(self.stop>=0):
+                self.start=self.stop+1
             else:
-                self.start=self.end
+                self.start=self.stop
             if(t>=0):
-                self.end=t+1
+                self.stop=t+1
             else:
-                self.end=t
+                self.stop=t
             self.orientation=-self.orientation
         
     def __getitem__(self,k):
