@@ -2,12 +2,12 @@
 from pygr.poa import *
 
 # CREATE A FEW SEQUENCES TO PLAY WITH...
-s=NamedSequence('ABCDEFGHIJKLMNOPQRSTUVWXYZ','alpha')
-s2=NamedSequence('01234567890123456789','number')
-s3=NamedSequence('ATGCGGCCATATATGGCAGACGATAG','foo')
+s=Sequence('ABCDEFGHIJKLMNOPQRSTUVWXYZ','alpha')
+s2=Sequence('01234567890123456789','number')
+s3=Sequence('ATGCGGCCATATATGGCAGACGATAG','foo')
 
 orf=s3[0:15:3]  # EXTENDED SLICE NOTATION MEANS start:stop:stepsize
-print orf,orf.start,orf.end
+print orf,orf.start,orf.stop
 for codon in orf[1:3]: # PRINT 1ST THREE CODONS OF orf
     print codon.start,str(codon)
 ## codon=orf[0] # GET THE 1ST CODON IN orf
@@ -163,7 +163,7 @@ l=[i for i in join]
 print 'pathquery join time=',time.time()-t
 print 'join has %d elements' % len(l)
 
-from graphquery import *
+from pygr.graphquery import *
 myjoin={1:{2:None},2:{3:DD(dataGraph=swiss_features)},3:{}}
 t=time.time()
 i=0
