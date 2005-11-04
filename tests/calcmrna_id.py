@@ -13,7 +13,7 @@ for s in somelist:
         seq=str(s.exons[0])[-100:]+str(s.exons[1])[:100] # UP TO 100nt FROM EACH EXON
     except KeyError:
         continue
-    n=NamedSequence(seq,'0')
+    n=Sequence(seq,'0')
     m=db.blast(n)
     dm=m.seq_dict()
     try:

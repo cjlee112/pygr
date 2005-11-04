@@ -3,7 +3,7 @@ import MySQLdb
 from pygr.seqdb import *
 
 sp=BlastDB('sp') # OPEN SWISSPROT BLAST DB
-s=NamedSequence(str(sp['CYGB_HUMAN'][40:-40]),'boo')
+s=Sequence(str(sp['CYGB_HUMAN'][40:-40]),'boo')
 
 db=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf')
 cursor=db.cursor()
