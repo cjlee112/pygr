@@ -106,7 +106,7 @@ class NestedList(list):
     def rebuild(self):
         "build a new NestedList in correct sorted order, and return it"
         leftSort=self.mergeIntervals() # SORT AND MERGE IDENTICAL INTERVALS
-        rightSort=[(leftSort[i][0].end,i) for i in range(len(leftSort))]
+        rightSort=[(leftSort[i][0].stop,i) for i in range(len(leftSort))]
         rightSort.sort() # SORT BY INTERVAL end, FIND THOSE THAT SHIFT IN ORDER
         saveDict={}
         containDict={}
