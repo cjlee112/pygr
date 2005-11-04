@@ -12,9 +12,9 @@ class AlignmentSummary(object):
     def __init__(self,e):
         #print 'creating AlignmentSummary for %s:%s' % (e.srcPath.path.id,e.destPath.path.id)
         self.srcMin=e.srcPath.start
-        self.srcMax=e.srcPath.end
+        self.srcMax=e.srcPath.stop
         self.destMin=e.destPath.start
-        self.destMax=e.destPath.end
+        self.destMax=e.destPath.stop
         self.edges=[e]
         self.srcPath=e.srcPath.path
         self.destPath=e.destPath.path
@@ -22,12 +22,12 @@ class AlignmentSummary(object):
         "add another alignment interval edge"
         if e.srcPath.start<self.srcMin:
             self.srcMin=e.srcPath.start
-        if e.srcPath.end>self.srcMax:
-            self.srcMax=e.srcPath.end
+        if e.srcPath.stop>self.srcMax:
+            self.srcMax=e.srcPath.stop
         if e.destPath.start<self.destMin:
             self.destMin=e.destPath.start
-        if e.destPath.end>self.destMax:
-            self.destMax=e.destPath.end
+        if e.destPath.stop>self.destMax:
+            self.destMax=e.destPath.stop
         self.edges.append(e)
         return self
 
