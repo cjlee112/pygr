@@ -4,11 +4,11 @@ from sqlgraph import *
 from poa import *
 from parse_blast import *
 
-class SQLSequence(SQLRow,NamedSequenceBase):
+class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
     def __init__(self,table,id):
         SQLRow.__init__(self,table,id)
-        NamedSequenceBase.__init__(self)
+        SequenceBase.__init__(self)
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return self._select('substring(%s FROM %d FOR %d)'
@@ -164,13 +164,13 @@ class BlastSeqDescriptor(object):
     def __get__(self,obj,objtype):
         return fastacmd_seq(obj.db.filepath,obj.id)
 
-class BlastSequenceBase(NamedSequenceBase):
+class BlastSequenceBase(SequenceBase):
     "Represents a sequence in a blast database, w/o keeping seq in memory"
     seq=BlastSeqDescriptor()
     def __init__(self,db,id):
         self.db=db
         self.id=id
-        NamedSequenceBase.__init__(self)
+        SequenceBase.__init__(self)
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return fastacmd_seq(self.db.filepath,self.id,start,end)
@@ -191,15 +191,14 @@ class BlastSequenceCache(BlastSequence):
     def __getitem__(self,k):
         "record all slices taken of this sequence, constructing a cache for fast access"
         ival=super(BlastSequenceCache,self).__getitem__(k) # GET THE INTERVAL OBJECT AS USUAL
-        s=slice(ival.start,ival.end)
         for i in self.cache:
             try:
-                i+=s # TRY TO EXTEND THIS INTERVAL CACHE TO CONTAIN ival
+                i+=ival # TRY TO EXTEND THIS INTERVAL CACHE TO CONTAIN ival
                 return ival # SUCCESS.  JUST RETURN ival AS USUAL
             except ValueError:
                 pass
         # HAVE TO ADD ival AS A NEW INTERVAL CACHE OBJECT
-        self.cache.append(FastacmdIntervalCache(ival.start,ival.end,
+        self.cache.append(FastacmdIntervalCache(ival.start,ival.stop,
                                                 super(BlastSequenceCache,self).strslice,self))
         return ival
     def strslice(self,start,end):
@@ -532,15 +531,15 @@ class StoredPathMapping(PathMapping):
 
 class VirtualSeq(SeqPath):
     """Empty sequence object acts purely as a reference system.
-    Automatically elongates if slice extends beyond current end."""
+    Automatically elongates if slice extends beyond current stop."""
     def __init__(self,id,length=1):
         SeqPath.__init__(self,self,0,length)
         self.id=id
     def __getitem__(self,k):
-        "Elongate if slice extends beyond current self.end"
+        "Elongate if slice extends beyond current self.stop"
         if isinstance(k,types.SliceType):
-            if k.stop>self.end:
-                self.end=k.stop
+            if k.stop>self.stop:
+                self.stop=k.stop
         return SeqPath.__getitem__(self,k)
     def strslice(self,start,end):
         "NO sequence access!  Raise an exception."
@@ -588,7 +587,7 @@ class MAFStoredPathMapping(PathMapping):
         self.vseqs=vseqs
         id=dbset.getName(ival.path)
         for i in table.select('where src_id=%s and src_start<%s and src_end>%s',
-                              (id,ival.end,ival.start)):  # SAVE MAPPING TO vdbset
+                              (id,ival.stop,ival.start)):  # SAVE MAPPING TO vdbset
             save_interval_alignment(self,i,dbset,vdbset,None,MAF_get_interval)
             vseqs[i.dest_id]=None # KEEP TRACK OF ALL OUR VIRTUAL SEQUENCES...
 ##        print str(tuple(vseqs.keys()+['None']))
