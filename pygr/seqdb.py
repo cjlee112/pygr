@@ -13,6 +13,12 @@ class SQLSequence(SQLRow,SequenceBase):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return self._select('substring(%s FROM %d FOR %d)'
                             %(self._attrSQL('seq'),start+1,end-start))
+    def __getattr__(self,attr):
+        'both parent classes have getattr, so have to call both'
+        try:
+            return SQLRow.__getattr__(self,attr)
+        except AttributeError:
+            return SequenceBase.__getattr__(self,attr)
 
 class DNASQLSequence(SQLSequence):
     _seqtype=DNA_SEQTYPE
@@ -536,8 +542,11 @@ class StoredPathMapping(PathMapping):
 class VirtualSeq(SeqPath):
     """Empty sequence object acts purely as a reference system.
     Automatically elongates if slice extends beyond current stop."""
+    start=0
+    step=1 # JUST DO OUR OWN SIMPLE INIT RATHER THAN CALLING SeqPath.__init__
     def __init__(self,id,length=1):
-        SeqPath.__init__(self,self,0,length)
+        self.path=self # DANGEROUS TO CALL SeqPath.__init__ WITH path=self!
+        self.stop=length # SO LET'S INIT OURSELVES TO AVOID THOSE PROBLEMS
         self.id=id
     def __getitem__(self,k):
         "Elongate if slice extends beyond current self.stop"
@@ -594,10 +603,15 @@ class MAFStoredPathMapping(PathMapping):
                               (id,ival.stop,ival.start)):  # SAVE MAPPING TO vdbset
             save_interval_alignment(self,i,dbset,vdbset,None,MAF_get_interval)
             vseqs[i.dest_id]=None # KEEP TRACK OF ALL OUR VIRTUAL SEQUENCES...
-##        print str(tuple(vseqs.keys()+['None']))
-        for i in table.select('where src_id in %s'%(str(tuple(vseqs.keys()+['None'])))): # SAVE MAPPING TO dbset
-            if vseqs.has_key(i.src_id): # FILTER OUT MYSQL'S CASE-INSENSITIVE MATCHES!!!
-                save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
+        for vseqID in vseqs: # GET EVERYTHING THAT OUR vseqs MAP TO...
+            for i in table.select('where src_id=%s',(vseqID,)): # SAVE MAPPING TO dbset
+                if i.src_id==vseqID: # FILTER OUT MYSQL'S CASE-INSENSITIVE MATCHES!!!
+                    save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
+
+# THIS VERSION FAILS IF vseqs HAS TOO MANY ENTRIES!!
+##         for i in table.select('where src_id in %s'%(str(tuple(vseqs.keys()+['None'])))): # SAVE MAPPING TO dbset
+##             if vseqs.has_key(i.src_id): # FILTER OUT MYSQL'S CASE-INSENSITIVE MATCHES!!!
+##                 save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
 
     def __getitem__(self,k):
         return TempMAFIntervalDict(self,k)
@@ -636,4 +650,5 @@ class PrefixUnionDict(object):
 
     def getName(self,path):
         "return fully qualified ID i.e. 'foo.bar'"
+        path=path.pathForward
         return self.dicts[path.db]+self.separator+path.id
