@@ -56,5 +56,7 @@ def localCopy(localFile,cpCommand):
     if not os.access(localFile,os.R_OK):
         cmd=cpCommand % localFile
         print 'copying data:',cmd
-        os.system(cmd)
+        exit_code=os.system(cmd)
+        if exit_code!=0:
+            raise OSError((exit_code,'command failed: %s' % cmd))
     return localFile
