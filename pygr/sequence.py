@@ -219,7 +219,7 @@ class SeqPath(object):
 
     def __getattr__(self,attr):
         'automatically generate start and stop if needed'
-        if self.path is self: # TOP-LEVEL SEQUENCE OBJECT
+        if self.__dict__['path'] is self: # TOP-LEVEL SEQUENCE OBJECT
             if attr=='start':
                 if self.orientation>0:
                     return 0 # FORWARD ORI
@@ -231,7 +231,7 @@ class SeqPath(object):
                 else:
                     return len(self) # FORWARD ORI
         elif attr=='start' or attr=='stop': # A SEQUENCE SLICE
-            if hasattr(self,'_raw_'+attr): # WE HAVE A RAW VALUE, 1st MUST CHECK IT!
+            if '_raw_'+attr in self.__dict__: # HAVE A RAW VALUE, MUST CHECK IT!
                 i=self.check_bounds(getattr(self,'_raw_'+attr),self.path,attr,True)
                 setattr(self,attr,i) # SAVE THE TRUNCATED VALUE
                 try: # SEE IF NEW INTERVAL BOUNDS ARE EMPTY...
@@ -346,13 +346,15 @@ class SeqPath(object):
 
     def seqtype(self):
         "Get the sequence type for this sequence"
+        path=self.pathForward
         try: # TRY GETTING IT FROM TOP-LEVEL SEQUENCE OBJECT?
-            return self.path._seqtype
+            return path._seqtype
         except AttributeError:
-            try: # TRY GETTING IT FROM RC?
-                return self.path._reverse._seqtype
-            except AttributeError:
-                return guess_seqtype(str(self))
+            try: # TRY TO GET IT FROM DB THIS SEQ IS ASSOCIATED WITH, IF ANY
+                return path.db._seqtype
+            except AttributeError:# GUESS IT FROM 1ST 40 LETTERS OF SEQUENCE
+                path._seqtype=guess_seqtype(str(self[0:40]))
+                return path._seqtype
 
     def __str__(self):
         'string for this sequence interval; use reverse complement if necessary...'
