@@ -8,7 +8,7 @@ rn3=BlastDB(localCopy('/usr/tmp/ucsc_msa/rn3','unzip -p /data/yxing/databases/uc
 cf1=BlastDB(localCopy('/usr/tmp/ucsc_msa/cf1','unzip -p /data/genome/ucsc_msa/canFam1/chromFa.zip >%s'))
 dr1=BlastDB(localCopy('/usr/tmp/ucsc_msa/dr1','unzip -p /data/genome/ucsc_msa/danRer1/chromFa.zip >%s'))
 fr1=BlastDB(localCopy('/usr/tmp/ucsc_msa/fr1','unzip -p /data/genome/ucsc_msa/fr1/chromFa.zip >%s'))
-gg2=BlastDB(localCopy('/usr/tmp/ucsc_msa/gg2','unzip -p /data/genome/ucsc_msa/galGal2/chromFa.zip >%s'))
+gg2=BlastDB(localCopy('/usr/tmp/ucsc_msa/gg2','unzip -p /data/yxing/databases/ucsc_msa/galGal2/chromFa.zip >%s'))
 pt1=BlastDB(localCopy('/usr/tmp/ucsc_msa/pt1','unzip -p /data/yxing/databases/ucsc_msa/chimp_pantro1/chromFa.zip >%s'))
 
 genomes={'hg17':hg17,'mm5':mm5, 'rn3':rn3, 'canFam1':cf1, 'danRer1':dr1, 'fr1':fr1,
