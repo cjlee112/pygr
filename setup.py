@@ -78,6 +78,7 @@ metadata = {
         "pygr/coordinator",
         "pygr/nestedlist",
 	"pygr/poa",
+	#"pygr/lpo",  # THIS IS TEMPORARY
 	"pygr/schema",
 	"pygr/seqdb",
 	"pygr/sequence",
@@ -99,16 +100,19 @@ if os.access('pygr/cdict.c',os.R_OK):
    print 'Using existing pyrexc-generated C-code...'
 else:  # HMM, NO PYREXC COMPILED CODE, HAVE TO RUN PYREXC
    exit_status=os.system('cd pygr;pyrexc cdict.pyx') # TRY USING PYREX TO COMPILE EXTENSIONS
-   if exit_status!=0:  # RUN THE PYREX COMPILER TO PRODUCE C
+   if exit_status!=0:  # CAN'T RUN THE PYREX COMPILER TO PRODUCE C
       print '\n\nPyrex compilation failed!  Is pyrex missing or not in your PATH?'
       print 'Skipping all extension modules... you will be lacking some functionality: pygr.cdict'
       buildExtensions=False
    else:
       print 'Generating C code using pyrexc: cdict.c...'
+      exit_status=os.system('cd pygr;pyrexc cnestedlist.pyx') # COMPILE PYREX cnestedlist
 
 
 if buildExtensions:
    cdict_module = Extension('pygr.cdict',sources = ['pygr/cgraph.c', 'pygr/cdict.c'])
-   metadata['ext_modules'] = [cdict_module]
+   cnestedlist_module = Extension('pygr.cnestedlist',
+                                  sources = ['pygr/intervaldb.c', 'pygr/cnestedlist.c'])
+   metadata['ext_modules'] = [cdict_module,cnestedlist_module]
 
 setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
