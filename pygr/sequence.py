@@ -138,18 +138,27 @@ class SeqOriDescriptor(object):
             try:
                 if seq._stop>0:
                     return 1 # FORWARD ORIENTATION
-            except KeyError:
-                pass
+            except AttributeError: # BOTH ATTRIBUTES MISSING!
+                raise AttributeError('SeqPath object has no start or stop!')
         return -1 # REVERSE ORIENTATION
+
+class PathForwardDescr(object):
+    'get the top-level forward sequence object'
+    def __get__(self,seq,objtype):
+        if seq.orientation>0:
+            return seq.path
+        else:
+            return seq.path._reverse
 
 
 class SeqPath(object):
     '''Base class for specifying a path, ie. sequence interval.
     This implementation takes a sequence object as initializer
     and simply represents the interval as a slice of the sequence.'''
-    orientation=SeqOriDescriptor()
+    orientation=SeqOriDescriptor()  # COMPUTE ORIENTATION AUTOMATICALLY
     _start=ShadowAttribute('start') # SHADOW start, stop WITHOUT TRIGGERING
     _stop=ShadowAttribute('stop')   #  getattr IF THEY ARE ABSENT
+    pathForward=PathForwardDescr()  # GET THE TOP-LEVEL FORWARD SEQUENCE OBJ
     def __init__(self,path,start=0,stop=None,step=None,reversePath=None):
         '''Return slice of path[start:stop:step].
         NB: start>stop means reverse orientation, i.e. (-path)[-stop:-start]
@@ -221,10 +230,14 @@ class SeqPath(object):
                     return 0 # REVERSE ORI
                 else:
                     return len(self) # FORWARD ORI
-        elif attr=='start' or attr=='stop':
+        elif attr=='start' or attr=='stop': # A SEQUENCE SLICE
             if hasattr(self,'_raw_'+attr): # WE HAVE A RAW VALUE, 1st MUST CHECK IT!
                 i=self.check_bounds(getattr(self,'_raw_'+attr),self.path,attr,True)
                 setattr(self,attr,i) # SAVE THE TRUNCATED VALUE
+                try: # SEE IF NEW INTERVAL BOUNDS ARE EMPTY...
+                    if self._start>=self._stop: # AVOIDS INFINITE getattr LOOP!
+                        raise IndexError('caught empty sequence interval!')
+                except AttributeError: pass # OTHER ATTRIBUTE MISSING... IGNORE.
                 delattr(self,'_raw_'+attr) # GET RID OF THE RAW VALUE
                 return i
             else:
