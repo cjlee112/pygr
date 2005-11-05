@@ -337,7 +337,9 @@ class BlastDBbase(dict):
                 self.seqLenDict=shelve.open(filepath+'.seqlen','r') # REOPEN IT READ-ONLY
         # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
         if not os.access(filepath+'.nsd',os.R_OK) \
-               and not os.access(filepath+'.psd',os.R_OK):
+               and not os.access(filepath+'.psd',os.R_OK) \
+               and not os.access(filepath+'.00.nsd',os.R_OK) \
+               and not os.access(filepath+'.00.psd',os.R_OK):
             # ATTEMPT TO BUILD BLAST DATABASE & INDEXES
             cmd='formatdb -i %s -o T' % filepath
             if self._seqtype!=PROTEIN_SEQTYPE:
@@ -350,9 +352,11 @@ class BlastDBbase(dict):
 
     def set_seqtype(self):
         "Determine whether this database is DNA or protein"
-        if os.path.isfile(self.filepath+'.psd'):
+        if os.path.isfile(self.filepath+'.psd') \
+               or os.path.isfile(self.filepath+'.00.psd'):
             self._seqtype=PROTEIN_SEQTYPE
-        elif os.path.isfile(self.filepath+'.nsd'):
+        elif os.path.isfile(self.filepath+'.nsd') \
+                 or os.path.isfile(self.filepath+'.00.nsd'):
             self._seqtype=DNA_SEQTYPE
         else:
             ofile=file(self.filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
