@@ -113,6 +113,12 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,
             TupleO.__init__(self,t) # 1ST INITIALIZE ATTRIBUTE ACCESS
             SeqPath.__init__(self,g[self.cluster_id], # INITIALIZE AS SEQ INTERVAL
                              self.genomic_start-1,self.genomic_end)
+        def __getattr__(self,attr):
+            'both parent classes have getattr, so have to call them both...'
+            try:
+                return TupleO.__getattr__(self,attr)
+            except AttributeError:
+                return SeqPath.__getattr__(self,attr)
     exon_forms.objclass(ExonForm) # BIND THIS CLASS TO CONTAINER, AS THE CLASS TO USE AS "ROW OBJECTS"
     if loadAll:
         print 'Loading %s...' % exon_forms
