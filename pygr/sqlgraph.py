@@ -10,7 +10,10 @@ class TupleO(object):
     def __init__(self,data):
         self.data=data
     def __getattr__(self,attr):
-        return self.data[self._attrcol[attr]]
+        try:
+            return self.data[self._attrcol[attr]]
+        except KeyError:
+            raise AttributeError('no attribute %s' % attr)
 
 
 class SQLRow(object):
