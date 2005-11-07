@@ -26,8 +26,18 @@ cm=StoredPathMapping(ct,genomic_seq,hg17) # MAPPING OF OUR CLUSTER GENOMIC ONTO 
 alTable=SQLTable('GENOME_ALIGNMENT.haussler_align2',clusters.cursor) # THE MAF ALIGNMENT TABLE
 alTable.objclass() # USE STANDARD TupleO OBJECT FOR EACH ROW
 
-c=clusters['Hs.10267'] # GET DATA FOR THIS CLUSTER ON chr22
-loadCluster(c,exons,splices,clusterExons,clusterSplices,spliceGraph,alt5Graph,alt3Graph)
+def getClusterAlignment(cluster_id):
+    c=clusters[cluster_id] # GET DATA FOR THIS CLUSTER ON chr22
+    loadCluster(c,exons,splices,clusterExons,clusterSplices,spliceGraph,alt5Graph,alt3Graph)
+    for e in c.exons:
+        for g in cm[e]: # GET A GENOMIC INTERVAL ALIGNED TO OUR EXON
+            print 'exon interval:',repr(g)
+            maf=MAFStoredPathMapping(g,alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
+            for ed in maf.edges(): # PRINT THE ALIGNED SEQUENCES
+                print '%s (%s)\n%s (%s)\n' % (ed.srcPath,genomeUnion.getName(ed.srcPath.path),
+                                              ed.destPath,genomeUnion.getName(ed.destPath.path))
+
+
 # THE FOLLOWING CODE IS A TEST OF LOADING ALIGNMENT OF WHOLE GENOMIC CLUSTER...
 # MAKES THE BlastSequenceCache MUCH FASTER, BECAUSE IT KNOWS THE WHOLE REGION TO PRE-LOAD...
 #for as in cm[genomic_seq[c.cluster_id]].seq_dict().values():
@@ -35,10 +45,6 @@ loadCluster(c,exons,splices,clusterExons,clusterSplices,spliceGraph,alt5Graph,al
 #    maf=MAFStoredPathMapping(g,alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
 #    break
 #maf=MAFStoredPathMapping(cm[cg],alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
-for e in c.exons:
-    for g in cm[e]: # GET A GENOMIC INTERVAL ALIGNED TO OUR EXON
-        print 'exon interval:',repr(g)
-        maf=MAFStoredPathMapping(g,alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
-        for ed in maf.edges(): # PRINT THE ALIGNED SEQUENCES
-            print '%s (%s)\n%s (%s)\n' % (ed.srcPath,genomeUnion.getName(ed.srcPath.path),
-                                          ed.destPath,genomeUnion.getName(ed.destPath.path))
+
+if __name__=='__main__':
+    getClusterAlignment('Hs.10267')
