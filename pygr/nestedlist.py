@@ -216,22 +216,22 @@ class OffsetList(list):
     def __setslice__(self,i,j,val):
         self[i:j:1]=val
 
-class NestedRCMSA(dict):
-    """a[p.path][i] => j
-       where i is index in p.path, and j is index in target path"""
-    def __init__(self,mylist,p):
-        self.nestedList=mylist
-        self.ival=p
-        for ival,targets in mylist.findIntervals(p):
-            for tval in targets:
-                try:
-                    l=self[tval.path]
-                except KeyError:
-                    l=OffsetList(p.start,len(p.path),len(p)*[None])
-                    self[tval.path]=l
-                xform=tval/ival # TRANSFORM FROM ival -> tval COORDINATES
-                for ipos in ival:
-                    l[ipos.start]=xform.xform(ipos.start)
+## class NestedRCMSA(dict):
+##     """a[p.path][i] => j
+##        where i is index in p.path, and j is index in target path"""
+##     def __init__(self,mylist,p):
+##         self.nestedList=mylist
+##         self.ival=p
+##         for ival,targets in mylist.findIntervals(p):
+##             for tval in targets:
+##                 try:
+##                     l=self[tval.path]
+##                 except KeyError:
+##                     l=OffsetList(p.start,len(p.path),len(p)*[None])
+##                     self[tval.path]=l
+##                 xform=tval/ival # TRANSFORM FROM ival -> tval COORDINATES
+##                 for ipos in ival:
+##                     l[ipos.start]=xform.xform(ipos.start) # WRONG.  FIX THIS!!!
 
                     
 
