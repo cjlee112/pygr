@@ -544,6 +544,7 @@ class VirtualSeq(SeqPath):
     Automatically elongates if slice extends beyond current stop."""
     start=0
     step=1 # JUST DO OUR OWN SIMPLE INIT RATHER THAN CALLING SeqPath.__init__
+    _seqtype=DNA_SEQTYPE # ALLOW THIS VIRTUAL COORD SYSTEM TO BE REVERSIBLE
     def __init__(self,id,length=1):
         self.path=self # DANGEROUS TO CALL SeqPath.__init__ WITH path=self!
         self.stop=length # SO LET'S INIT OURSELVES TO AVOID THOSE PROBLEMS
@@ -599,8 +600,9 @@ class MAFStoredPathMapping(PathMapping):
         vseqs={}
         self.vseqs=vseqs
         id=dbset.getName(ival.path)
+        start,stop=ival._abs_interval # GET ABSOLUTE COORDINATES
         for i in table.select('where src_id=%s and src_start<%s and src_end>%s',
-                              (id,ival.stop,ival.start)):  # SAVE MAPPING TO vdbset
+                              (id,stop,start)):  # SAVE MAPPING TO vdbset
             save_interval_alignment(self,i,dbset,vdbset,None,MAF_get_interval)
             vseqs[i.dest_id]=None # KEEP TRACK OF ALL OUR VIRTUAL SEQUENCES...
         for vseqID in vseqs: # GET EVERYTHING THAT OUR vseqs MAP TO...
@@ -620,7 +622,12 @@ class MAFStoredPathMapping(PathMapping):
         "get all mappings of self.ival, as edges"
         if ival is None:
             ival=self.ival
-        for e in PathMapping.__getitem__(self,ival).edges():
+        try:
+            edgeset=PathMapping.__getitem__(self,ival)
+        except KeyError: # OK, ACTUALLY NO RESULTS
+            print 'KeyError: no results?'
+            return # SO NOTHING TO YIELD...
+        for e in edgeset.edges():
             for e2 in PathMapping.__getitem__(self,e.destPath).edges():
                 if e2.destPath.path!=ival.path: # IGNORE SELF-MATCH
                     yield IntervalTransform(e.reverse(e2.srcPath),e2.destPath)
