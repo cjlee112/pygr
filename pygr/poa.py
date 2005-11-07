@@ -58,10 +58,11 @@ def clipUnalignedRegions(p):
 
 class Path2PathMap(object):
     "Temporary object provides iterator for TempIntervalDict.__getitem__"
-    def __init__(self,pathDict,p,targetPath):
+    def __init__(self,pathDict,p,targetPath,pleaseReverse=False):
         self.pathDict=pathDict
         self.p=p
         self.targetPath=targetPath
+        self.pleaseReverse=pleaseReverse
 
     def __iter__(self):
         for (srcPath,destList) in self.pathDict.findIntervals(self.p):
@@ -71,24 +72,26 @@ class Path2PathMap(object):
                 if d!=None: # PASSES TARGET CONSTRAINT
                     xform=IntervalTransform(srcPath,destPath,destList,'edge',i)
                     d2=d*xform[self.p]
-                    if d2!=None: # PASSES BOTH SOURCE AND TARGET CONSTRAINTS
+                    if d2 is not None: # PASSES BOTH SOURCE AND TARGET CONSTRAINTS
+                        if self.pleaseReverse:
+                            d2 = -d2
                         s2=xform.reverse(d2)
-                        xform.srcPath=s2 # SAVE ALIGNED INTERVALS
-                        xform.destPath=d2
+                        xform=IntervalTransform(s2,d2,destList,'edge',i)
                         yield xform # RETURN XFORM AS EDGE-INFORMATION
                 i += 1
         
 class TempIntervalDict(object):
     "Temporary object acts as second layer dictionary for graph interface"
-    def __init__(self,pathDict,p):
+    def __init__(self,pathDict,p,pleaseReverse=False):
         self.pathDict=pathDict
         self.p=p
+        self.pleaseReverse=pleaseReverse
 
     def __iter__(self):
         "Get all intervals aligned with self.p"
         for (srcPath,destList) in self.pathDict.findIntervals(self.p):
             for destPath in destList:
-                yield self.pathDict.xform(self.p,srcPath,destPath)
+                yield self.pathDict.xform(self.p,srcPath,destPath,self.pleaseReverse)
 
     def items(self,getItems=True):
         "Get both target intervals and edge information (transforms)"
@@ -96,11 +99,12 @@ class TempIntervalDict(object):
             i=0
             for destPath in destList:
                 xform=IntervalTransform(srcPath,destPath,destList,'edge',i)
-                i += 1
                 s=self.p * srcPath # FIND ALIGNED PART OF OUR INTERVAL
+                if self.pleaseReverse:
+                    s = -s
                 d=xform(s) # MAP TO THE TARGET SEQUENCE
-                xform.srcPath=s # SAVE THE INTERVAL INFO
-                xform.destPath=d
+                xform=IntervalTransform(s,d,destList,'edge',i)
+                i += 1
                 if getItems==True: # RETURN TARGET INTERVAL AND EDGE INFO
                     yield d,xform
                 else: # JUST RETURN EDGE INFO
@@ -128,7 +132,7 @@ class TempIntervalDict(object):
 
     def __getitem__(self,targetPath):
         "Get interval mapping(s) to a given target interval, as coord xforms"
-        return Path2PathMap(self.pathDict,self.p,targetPath)
+        return Path2PathMap(self.pathDict,self.p,targetPath,self.pleaseReverse)
     
     def __setitem__(self,k,val):
         "Save both an aligned interval and edge information"
@@ -175,9 +179,11 @@ class PathDict(object):
         self.update() # MAKE SURE CONTAINS-LIST PROPERLY SORTED
         return self.walk(getItems=True)
 
-    def xform(self,p,srcPath,destPath=None):
+    def xform(self,p,srcPath,destPath=None,pleaseReverse=False):
         intersection= p*srcPath # FIND INTERSECTION
-        if destPath==None: # FOR INTERSECTION OF PathSet...
+        if pleaseReverse:
+            intersection= -intersection
+        if destPath is None: # FOR INTERSECTION OF PathSet...
             return intersection
         else: # FOR PathMapping...
             xform=IntervalTransform(srcPath,destPath) # TRANSFORM TO TARGET
@@ -186,9 +192,13 @@ class PathDict(object):
     def __getitem__(self,p): # FIND INTERVAL p IN SORTED CONTAINS-LIST
         # IF HITS GIVE MAPPING, RETURN MAPPING.
         # OTHERWISE JUST RETURN THE HITS THEMSELVES
-        if self.path!=p.path:
-            raise KeyError('Path not in this PathDict!')
-        return TempIntervalDict(self,p) # PROVIDES DICT-LIKE INTERFACE TO MAPPED INTERVALS
+        if self.path is p.path:
+            return TempIntervalDict(self,p) # PROVIDES DICT-LIKE INTERFACE TO MAPPED INTERVALS
+        try:
+            if p.path._reverse is self.path: # SWITCH ORI TO MATCH self.path
+                return TempIntervalDict(self,-p,True) # BUT MAKE IT REVERSE RESULT
+        except AttributeError: pass
+        raise KeyError('Path not in this PathDict!')
 
 
     def __setitem__(self,p,val):
@@ -289,7 +299,7 @@ class PathMapping(object):
         
     def __getitem__(self,p):
         try:
-            return self.pathDict[p.path][p]
+            return self.pathDict[p.pathForward][p]
         except KeyError:
             raise KeyError('%s not in %s' % (repr(p),self))
 
