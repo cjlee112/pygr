@@ -5,15 +5,22 @@ from sequtil import *
 
 NOT_ON_SAME_PATH= -2
 
+class ReadOnlyAttribute(object):
+    def __init__(self,attr):
+        self.attr=attr
+    def __get__(self,obj,klass):
+        return getattr(obj,self.attr)
+
 class IntervalTransform(object):
     "Represents coordinate transformation from one interval to another"
+    srcPath=ReadOnlyAttribute('_srcPath') # PREVENT USER FROM MODIFYING THESE!
+    destPath=ReadOnlyAttribute('_destPath')
     def __init__(self,srcPath,destPath,edgeInfo=None,
                  edgeAttr=None,edgeIndex=None):
         "MAP FROM srcPath -> destPath"
         self.scale= len(destPath)/float(len(srcPath))
-        self.offset=destPath.start-self.scale*srcPath.start
-        self.srcPath=srcPath
-        self.destPath=destPath
+        self._srcPath=srcPath
+        self._destPath=destPath
         if edgeInfo!=None and edgeAttr!=None:
             try: # GET EDGE INFO IF PRESENT
                 edgeInfo=getattr(edgeInfo,edgeAttr)
@@ -25,28 +32,34 @@ class IntervalTransform(object):
             self.edgeInfo=edgeInfo
 
     def xform(self,i):
-        "transform a single integer value"
-        return int(self.scale*i+self.offset)
+        'transform int srcPath local coord to destPath local coord'
+        return int(i*self.scale)
+    def xformBack(self,i):
+        'transform int destPath local coord to srcPath local coord'
+        return int(i/self.scale)
+    def getStartStop(self,srcPath,ourPath):
+        'compute srcPath start,stop in ourPath local coords'
+        if srcPath.path is ourPath.path:
+            return srcPath.start-ourPath.start,srcPath.stop-ourPath.start
+        try:
+            if srcPath.path._reverse is ourPath.path:
+                return -(srcPath.start)-ourPath.start,\
+                       -(srcPath.stop)-ourPath.start
+        except AttributeError:pass
+        raise ValueError('sequence mismatch: argument not from this seq')
     def __call__(self,srcPath):
         """Apply this transformation to an interval
            NB: it is not restricted to the domain of this transform,
            and thus can extend BEYOND the boundaries of this transform.
-           If you want it clipped use xform[] interface instead of xform()."""
-        if srcPath.path is not self.srcPath.path:
-            raise ValueError('sequence mismatch: argument is not from source seq')
-        return SeqPath(self.destPath.path,self.xform(srcPath.start),\
-                       self.xform(srcPath.stop))
-    def xformBack(self,i):
-        "reverse transform a single integer value"
-        scale=1.0/self.scale
-        offset= -1.0*self.offset/self.scale
-        return int(scale*i+offset)
+           If you want it clipped use [] interface instead of ()."""
+        start,stop=self.getStartStop(srcPath,self.srcPath)
+        return SeqPath(self.destPath,self.xform(start),self.xform(stop),
+                       relativeToStart=True)
     def reverse(self,destPath):
         "reverse transform an interval"
-        if destPath.path is not self.destPath.path:
-            raise ValueError('sequence mismatch: argument is not from dest seq')
-        return SeqPath(self.srcPath.path,self.xformBack(destPath.start),
-                       self.xformBack(destPath.stop))
+        start,stop=self.getStartStop(destPath,self.destPath)
+        return SeqPath(self.srcPath,self.xformBack(start),
+                       self.xformBack(stop),relativeToStart=True)
     def __getitem__(self,srcPath): # PROVIDE DICT-LIKE INTERFACE
         """intersect srcPath with domain of this transform, then return
         transform to target domain coordinates"""
@@ -150,6 +163,14 @@ class PathForwardDescr(object):
         else:
             return seq.path._reverse
 
+class AbsIntervalDescr(object):
+    'get the top-level forward sequence object'
+    def __get__(self,seq,objtype):
+        if seq.orientation>0:
+            return seq.start,seq.stop
+        else:
+            return -(seq.stop),-(seq.start)
+
 
 class SeqPath(object):
     '''Base class for specifying a path, ie. sequence interval.
@@ -159,16 +180,24 @@ class SeqPath(object):
     _start=ShadowAttribute('start') # SHADOW start, stop WITHOUT TRIGGERING
     _stop=ShadowAttribute('stop')   #  getattr IF THEY ARE ABSENT
     pathForward=PathForwardDescr()  # GET THE TOP-LEVEL FORWARD SEQUENCE OBJ
-    def __init__(self,path,start=0,stop=None,step=None,reversePath=None):
+    _abs_interval=AbsIntervalDescr()
+    def __init__(self,path,start=0,stop=None,step=None,reversePath=None,
+                 relativeToStart=False):
         '''Return slice of path[start:stop:step].
         NB: start>stop means reverse orientation, i.e. (-path)[-stop:-start]
+        start/stop are LOCAL coordinates relative to the specified path
+        By default, start/stop are interpreted in the usual Python slicing way,
+        i.e. a negative start value is interpreted as len(path)-start.
+        The relativeToStart option turns off this behavior, so that negative
+        values are interpreted as negative coordinates in the local coordinate
+        system of path.
         '''
         if reversePath is not None:
             try: # IF reversePath.stop KNOWN, USE IT
                 start= -(reversePath._stop)
             except AttributeError: pass
-        start=sumSliceIndex(start,path,start is None or start>=0)
-        stop=sumSliceIndex(stop,path,stop is not None and stop>=0)
+        start=sumSliceIndex(start,path,relativeToStart or start is None or start>=0)
+        stop=sumSliceIndex(stop,path,relativeToStart or (stop is not None and stop>=0))
         if start is not None and stop is not None and start>stop:
             start= -start # start>stop MEANS REVERSE ORIENTATION!
             stop= -stop
@@ -312,7 +341,10 @@ class SeqPath(object):
                 self._reverse=SeqPath(None,None,stop=0,reversePath=self)
                 self._reverse._reverse=self
                 return self._reverse
-        return SeqPath(self.path,self.stop,self.start,self.step) #SWAP ==> RC
+        elif self.orientation>0: # FORWARD ORI: JUST REVERSE INDICES
+            return SeqPath(self.path,self.stop,self.start,self.step) #SWAP ==> RC
+        else: # REVERSE ORI: BECAUSE OF stop=0 POSSIBILITY, USE POSITIVE COORDS
+            return SeqPath(self.path._reverse,-(self.stop),-(self.start),self.step)
 
     def __add__(self,other):
         "return merged interval spanning both self and other intervals"
