@@ -23,7 +23,7 @@ ct=SQLTableMultiNoCache('GENOME_ALIGNMENT.hg17_cluster_JUN03',clusters.cursor)
 ct._distinct_key='src_id'
 cm=StoredPathMapping(ct,genomic_seq,hg17) # MAPPING OF OUR CLUSTER GENOMIC ONTO hg17
 
-alTable=SQLTable('GENOME_ALIGNMENT.haussler_align2',clusters.cursor) # THE MAF ALIGNMENT TABLE
+alTable=SQLTable('GENOME_ALIGNMENT.haussler_align_sorted',clusters.cursor) # THE MAF ALIGNMENT TABLE
 alTable.objclass() # USE STANDARD TupleO OBJECT FOR EACH ROW
 
 def getClusterAlignment(cluster_id):
