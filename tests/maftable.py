@@ -49,11 +49,11 @@ def writeNumToArray(n,a):
         a[i]=l
         i += 1
 
-def printHTML(d):
+def printHTML(d,ifile):
     'print HTML view of alignment'
     reference=d[d.first]
-    print '<HTML>\n<BODY><PRE>\n'
-    print 'Position               '[:15],''.join(d['#'])
+    print >>ifile,'<HTML>\n<BODY><PRE>\n'
+    print >>ifile,'Position               '[:15],''.join(d['#'])
     for name,s in d.items():
         l=[]
         for i in range(len(s)):
@@ -61,16 +61,19 @@ def printHTML(d):
                 l.append(s[i])
             else:
                 l.append('<B>%s</B>' % s[i])
-        print (name+32*' ')[:15],''.join(l)
-    print '</PRE></BODY></HTML>'
+        print >>ifile,(name+32*' ')[:15],''.join(l)
+    print >>ifile,'</PRE></BODY></HTML>'
 
 
 
 
 
-def printClusterAlignment(cluster_id):
+def printClusterAlignment(cluster_id,ifile=None):
     '''print alignment of a gene as text, with numbering,
     seq differences in bold.  Suitable for viewing as .txt file in a browser...'''
+    if ifile is None:
+        import sys
+        ifile=sys.stdout
     c=clusters[cluster_id] # GET DATA FOR THIS CLUSTER ON chr22
     loadCluster(c,exons,splices,clusterExons,clusterSplices,spliceGraph,alt5Graph,alt3Graph)
     gene=genomic_seq[cluster_id]
@@ -98,7 +101,7 @@ def printClusterAlignment(cluster_id):
 ##             writeSeqToArray(start,0,g,d,'Exons')
 
 
-    printHTML(d)
+    printHTML(d,ifile)
 ##     print 'Position             '[:15],''.join(d['#'])
 ##     for name,l in d.items():
 ##         print (name+32*' ')[:15],''.join(l)
