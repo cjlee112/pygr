@@ -36,7 +36,8 @@ def getSpliceGraphFromDB(dbgroup,loadAll=False):
     """load data from MySQL using the designated database table group.
     If loadAll true, then load the entire splice graph into memory."""
     cursor=getUserCursor(dbgroup.db)
-    print 'Reading database schema...'
+    import sys
+    print >>sys.stderr,'Reading database schema...'
     idDict={}
     tables=describeDBTables(dbgroup.db,cursor,idDict)
     if hasattr(dbgroup,'suffix'):
