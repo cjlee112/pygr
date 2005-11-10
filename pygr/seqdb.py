@@ -110,8 +110,13 @@ def store_seqlen_dict(d,ifile,idFilter=None):
 
 def fastacmd_seq(filepath,id,start=None,end=None):
     "Get complete sequence or slice from a BLAST formatted database"
+    len=None
     if start is not None: # USE ABILITY TO GRAB A SLICE OF THE SEQUENCE
-        cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end)
+        if start==0 and end==1: # fastacmd FAILS ON -L 1,1: RETURNS WHOLE SEQ! UGH!
+            cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end+1)
+            len=1 # GOT 2 LETTERS, SO HAVE TO SLICE DOWN TO 1... UGH!
+        else: # NORMAL USAGE... AT LEAST fastacmd WORKS SOME OF THE TIME...
+            cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end)
     else:
         cmd='fastacmd -d %s -s "%s"' % (filepath,id)
     ofile=os.popen(cmd)
@@ -122,7 +127,10 @@ def fastacmd_seq(filepath,id,start=None,end=None):
             s += word
     if ofile.close() is not None:
         raise OSError('command %s failed' % cmd)
-    return s
+    if len is None:
+        return s
+    else: # PROTECT AGAINST fastacmd SCREWUPS
+        return s[:len]
 
 
 class FastacmdIntervalCache(object):
