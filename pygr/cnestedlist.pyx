@@ -1,4 +1,5 @@
 #from lpo import POMSANodeRef
+import sequence
 
 cdef class IntervalDBIterator:
   def __new__(self,int start,int end,IntervalDB db):
@@ -159,40 +160,93 @@ cdef class IntervalFileDBIterator:
     return self
 
   cdef int extend(self,int ikeep):
+    'expand the buffer if necessary, keeping elements [ikeep:nbuf]'
     cdef int len,istart
     cdef IntervalMap *new_buf
     istart=self.nbuf-ikeep
-    len=sizeof(IntervalMap)*(self.nbuf-ikeep)
-    if ikeep<8: # RUNNING OUT OF ROOM, SO EXPAND BUFFER
+    len=sizeof(IntervalMap)*istart # #BYTES WE MUST KEEP
+    if ikeep==0: # KEEPING THE WHOLE BUFFER, SO MUST ALLOCATE NEW SPACE
+      new_buf=<IntervalMap *>realloc(self.im_buf,2*len) # DOUBLE OUR BUFFER
+      if new_buf==NULL:
+        raise MemoryError('out of memory')
+      self.im_buf=new_buf
+      self.nbuf=2*self.nbuf
+    elif ikeep<8: # RUNNING OUT OF ROOM, SO EXPAND BUFFER
       self.nbuf=2*self.nbuf
       new_buf=interval_map_alloc(self.nbuf)
       memcpy(new_buf,self.im_buf+ikeep,len)
       free(self.im_buf)
       self.im_buf=new_buf
-    else: # JUST SHIFT [ikeep:] SLICE OF BUFFER TO FRONT [0:]
+    else: # JUST SHIFT [ikeep:] SLICE OF BUFFER TO FRONT [0:istart]
       memmove(self.im_buf,self.im_buf+ikeep,len)
     return istart # RETURN START OF EMPTY BLOCK WHERE WE CAN ADD NEW DATA
 
+  cdef int saveInterval(self,int start,int end,int target_id,
+                        int target_start,int target_end):
+    'save an interval, expanding array if necessary'
+    cdef int i
+    if self.nhit>=self.nbuf: # EXPAND ARRAY IF NECESSARY
+      self.extend(0)
+    i=self.nhit
+    self.im_buf[i].start=start # SAVE INTERVAL INFO
+    self.im_buf[i].end=end
+    self.im_buf[i].target_id=target_id
+    self.im_buf[i].target_start=target_start
+    self.im_buf[i].target_end=target_end
+    self.nhit = i+1
+    return self.nhit
+
+  cdef int nextBlock(self,int *pkeep):
+    'load one more block of overlapping intervals'
+    cdef int i
+    if self.it==NULL: # ITERATOR IS EXHAUSTED
+      return -1
+    if pkeep and pkeep[0]>=0 and pkeep[0]<self.nhit: #MUST KEEP [ikeep:] SLICE
+      i=self.extend(pkeep[0]) # MOVE SLICE TO THE FRONT
+    else: # WE CAN USE THE WHOLE BUFFER
+      i=0
+    self.it=find_file_intervals(self.it,self.start,self.end,
+                                self.db.db[0].ii,self.db.db[0].nii,
+                                self.db.db[0].subheader,self.db.db[0].nlists,
+                                self.db.db[0].ntop,self.db.db[0].div,
+                                self.db.db[0].ifile_idb,
+                                self.im_buf+i,self.nbuf-i,
+                                &(self.nhit)) # GET NEXT BUFFER CHUNK
+    self.nhit=self.nhit+i # TOTAL #HITS IN THE BUFFER
+    self.ihit=i # START ITERATING FROM START OF NEW HITS
+    if pkeep and pkeep[0]>=0: # RESET ikeep INDEX TO START OF BUFFER
+      pkeep[0]=0
+    return self.nhit-self.ihit # RETURN #NEW HITS IN NEXT BLOCK
+
+  cdef IntervalMap *getIntervalMap(self):
+    '''return the IntervalMap array loaded by iterator,
+    and release it from iterator.  User must free the array!'''
+    cdef int len
+    cdef IntervalMap *im
+    if self.nhit==0: # NO HITS
+      return NULL
+    elif self.nhit<self.nbuf: # LARGER BUFFER THAN WE ACTUALLY NEED
+      len=sizeof(IntervalMap)*self.nhit # COMPUTE FINAL SIZE
+      im=<IntervalMap *>realloc(self.im_buf,len) # COMPACT TO FINAL SIZE
+    else: # JUST HAND BACK OUR FULL BUFFER
+      im=self.im_buf
+    self.im_buf=NULL # RELEASE THIS STORAGE FROM ITERATOR; USER MUST FREE IT!
+    return im # HAND BACK THE STORAGE
+
+  cdef int loadAll(self):
+    'load all overlapping interval hits, return count of hits'
+    cdef int len,ikeep
+    len=1
+    ikeep=0 # DON'T LET extend DISCARD ANY HITS, KEEP THEM ALL!
+    while len>0: # LOAD BLOCKS UNTIL NO MORE...
+      len=self.nextBlock(&ikeep) # LOAD ANOTHER BLOCK OF INTERVALS
+    return self.nhit
+
   cdef int cnext(self,int *pkeep): # C VERSION OF ITERATOR next METHOD
+    'get one more overlapping interval'
     cdef int i
     if self.ihit>=self.nhit: # TRY TO GET ONE MORE BUFFER CHUNK OF HITS
-      if self.it==NULL: # ITERATOR IS EXHAUSTED
-        return -1
-      if pkeep and pkeep[0]>=0 and pkeep[0]<self.nhit: #MUST KEEP [ikeep:] SLICE
-        i=self.extend(pkeep[0]) # MOVE SLICE TO THE FRONT
-      else: # WE CAN USE THE WHOLE BUFFER
-        i=0
-      self.it=find_file_intervals(self.it,self.start,self.end,
-                                  self.db.db[0].ii,self.db.db[0].nii,
-                                  self.db.db[0].subheader,self.db.db[0].nlists,
-                                  self.db.db[0].ntop,self.db.db[0].div,
-                                  self.db.db[0].ifile_idb,
-                                  self.im_buf+i,self.nbuf-i,
-                                  &(self.nhit)) # GET NEXT BUFFER CHUNK
-      self.nhit=self.nhit+i # TOTAL #HITS IN THE BUFFER
-      self.ihit=i # START ITERATING FROM START OF NEW HITS
-      if pkeep and pkeep[0]>=0: # RESET ikeep INDEX TO START OF BUFFER
-        pkeep[0]=0
+      self.nextBlock(pkeep) # LOAD THE NEXT BLOCK IF ANY
     if self.ihit<self.nhit: # RETURN NEXT ITEM FROM BUFFER
       i=self.ihit
       self.ihit = self.ihit+1 # ADVANCE THE BUFFER COUNTER
@@ -264,95 +318,103 @@ cdef class IntervalFileDB:
     self.close()
 
 
-cdef class IFDBIteratorBuffer:
-  def __new__(self,int start,int end,nlmsaSequence):
-    # CREATE THE ITERATOR
-    self.nlmsaSequence=nlmsaSequence
-    self.it=IntervalFileDBIterator(start,end,nlmsaSequence.db)
-    self.ipos= start-1
-    self.ikeep=0
-    self.imax= -1
+cdef class NLMSASlice:
+  def __new__(self,NLMSASequence ns,int start,int stop):
+    cdef int i,j,n,start_max,end_min,start2,stop2
+    cdef NLMSASequence ns_lpo
+    cdef IntervalFileDBIterator it,it2
+    cdef IntervalMap *im,*im2
+    self.nlmsaSequence=ns # SAVE BASIC INFO
+    self.start=start
+    self.stop=stop
+    it=IntervalFileDBIterator(start,stop,ns.db)
+    n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
+    if n<=0:
+      raise KeyError('this interval is not aligned!')
+    if not ns.nlmsaLetters.is_lpo(ns.id):
+      # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
+      ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id]
+      for i from 0 <= i < n:
+        if it.im_buf[i].target_id != ns_lpo.id:
+          raise ValueError('sequence mapped to non-LPO target??')
+        it2=IntervalFileDBIterator(it.im_buf[i].target_start,
+                                   it.im_buf[i].target_end,ns_lpo.db)
+        it2.loadAll() # GET ALL OVERLAPPING INTERVALS
+        im2=it2.getIntervalMap() # RELEASE ARRAY FROM THIS ITERATOR
+        if im2==NULL: # NO HITS, SO TRY THE NEXT INTERVAL???
+          continue
+        for j from 0 <= j < it2.nhit: # MAP EACH INTERVAL BACK TO ns
+          if im2[j].target_id==ns.id: # DISCARD SELF-MATCH
+            continue
+          if it.im_buf[i].target_start>im2[j].start: # GET INTERSECTION INTERVAL
+            start_max=it.im_buf[i].target_start
+          else:
+            start_max=im2[j].start
+          if it.im_buf[i].target_end<im2[j].end:
+            end_min=it.im_buf[i].target_end
+          else:
+            end_min=im2[j].end
+          start=it.im_buf[i].start+start_max-it.im_buf[i].target_start # ns COORDS
+          stop=it.im_buf[i].start+end_min-it.im_buf[i].target_start
+          start2=im2[j].target_start+start_max-im2[j].start # COORDS IN TARGET
+          stop2=im2[j].target_start+end_min-im2[j].start
+          it.saveInterval(start,stop,im2[j].target_id,start2,stop2) # SAVE IT!
+        free(im2) # FREE THE MAP OURSELVES, SINCE RELEASED FROM it2
 
-  def __iter__(self):
-    return self
+    self.im=it.getIntervalMap() # RELEASE THIS ARRAY FROM THE ITERATOR
+    self.n=it.nhit # TOTAL #INTERVALS SAVED FROM JOIN
 
-  cdef int cnext(self):
-    cdef int i,j
-    self.ipos=self.ipos+1 # ADVANCE BY ONE LETTER
-    # EXTEND THE BUFFER IF NEEDED
-    while self.imax<0 or self.ipos>self.it.im_buf[self.imax].start:
-      i=self.it.cnext(&(self.ikeep)) # GET ANOTHER INTERVAL
-      if i<0: # EXHAUSTED ITERATOR
-        break
-      self.imax=i # EXTEND UNTIL INTERVAL imax DOES NOT OVERLAP ipos
-    j=self.imax
-    i=j
-    while i>=self.ikeep: # COMPACT BUFFER TO ELIMINATE NON-OVERLAP 
-      if self.ipos<self.it.im_buf[i].end: # ipos in INTERVAL, SO KEEP IT
-        if j>i: # MOVE UP TO NEW LOCATION
-          memcpy(self.it.im_buf+j,self.it.im_buf+i,sizeof(IntervalMap))
-        j=j-1
-      i=i-1
-    self.ikeep=j+1 # START OF COMPACTED LIST OF OVERLAPPING INTERVALS
-
-    if self.ikeep>self.imax:
-      return -1
-
-    if self.ipos<self.it.im_buf[self.ikeep].start: # ipos B4 INTERVAL
-      self.ipos=self.it.im_buf[self.ikeep].start # SKIP TO START OF INTERVAL
-    self.im= self.it.im_buf+self.ikeep # PTR TO START OF OVERLAPPING INTERVALS
-    self.noverlap=self.imax-self.ikeep # #OVERLAPPING INTERVALS
-    if self.ipos>=self.it.im_buf[self.imax].start: # ipos IN INTERVAL
-      self.noverlap=self.noverlap+1 # imax ALSO OVERLAPS, SO COUNT IT TOO
-    return self.ipos
-  
-  def __next__(self):
-    cdef int i
-    i=self.cnext()
-    if i<0:
-      raise StopIteration
-    return NLMSANode(self)
-
-
-
-
-
-cdef class NLMSANode:
-  def __new__(self,IFDBIteratorBuffer it):
-    self.nlmsaSequence=it.nlmsaSequence
-    self.db=it.it.db
-    self.ipos=it.ipos
-    self.n=it.noverlap
-    self.im=interval_map_alloc(it.noverlap)
-    memcpy(self.im,it.im,it.noverlap*sizeof(IntervalMap))
-    
   def __dealloc__(self):
     if self.im:
       free(self.im)
+      self.im=NULL
 
+  def __iter__(self):
+    return NLMSASliceIterator(self)
+
+
+ 
+cdef class NLMSANode:
+  def __new__(self,int ipos,NLMSASlice nlmsaSlice,int istart,int istop):
+    cdef int i,n
+    self.nlmsaSlice=nlmsaSlice
+    self.ipos=ipos
+    self.istart=istart
+    self.istop=istop
+    self.id=ipos # DEFAULT: ASSUME SLICE IS IN LPO...
+    for i from istart <= i < istop:
+      if nlmsaSlice.im[i].start<=ipos and ipos<nlmsaSlice.im[i].end:
+        if nlmsaSlice.nlmsaSequence.nlmsaLetters.is_lpo(nlmsaSlice.im[i].target_id):
+          self.id=nlmsaSlice.im[i].target_start+ipos-nlmsaSlice.im[i].start #LPO ipos
+        else: # DON'T COUNT THE LPO SEQUENCE
+          self.n = self.n + 1
+    
   def __iter__(self): # CORRECT THIS TO RETURN SEQPOS!!!
     cdef int i,j
-    cdef NLMSASequence ns # FIRST LOOK UP THE SEQUENCE
+    cdef NLMSASequence ns
+    cdef NLMSALetters nl
+    nl=self.nlmsaSlice.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     l=[]
-    for i from 0 <= i < self.n:
-      ns=self.nlmsaSequence.nlmsaLetters.seqlist[self.im[i].target_id]
-      j=self.im[i].target_start+self.ipos-self.im[i].start
-      l.append(ns.seq[j:j+1])
+    for i from self.istart <= i < self.istop:
+      if self.nlmsaSlice.im[i].start<=self.ipos \
+             and self.ipos<self.nlmsaSlice.im[i].end \
+             and not nl.is_lpo(self.nlmsaSlice.im[i].target_id):
+        j=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
+        l.append(nl.seqInterval(self.nlmsaSlice.im[i].target_id,j,j+1))
     return iter(l)
 
   def getSeqPos(self,seq):
     'return seqpos for this seq at this node'
-    cdef int i,j,iseq
+    cdef int i,j
     cdef NLMSASequence ns # FIRST LOOK UP THE SEQUENCE
     try:
-      ns=self.nlmsaSequence.nlmsaLetters.seqs[seq.path,seq.orientation]
+      ns=self.nlmsaSequence.nlmsaLetters.seqs[seq]
     except KeyError:
       raise KeyError('seq not in this alignment')
-    iseq=ns.id # THEN GET ITS ID
-    for i from 0 <= i < self.n:
-      if self.im[i].target_id==iseq:
-        j=self.im[i].target_start+self.ipos-self.im[i].start
-        return ns.seq[j:j+1] # RETURN THE SEQUENCE INTERVAL
+    for i from self.istart <= i < self.istop:
+      if self.nlmsaSlice.im[i].target_id==ns.id: # RETURN THE SEQUENCE INTERVAL
+        j=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
+        return sequence.SeqPath(ns.seq,j,j+1,absoluteCoords=True)
     raise KeyError('seq not in node')
 
   def __getitem__(self,seq):
@@ -368,8 +430,9 @@ cdef class NLMSANode:
 
   cdef int check_edge(self,int iseq,int ipos):
     cdef int i
-    for i from 0 <= i < self.n:
-      if self.im[i].target_id==iseq and self.im[i].target_start==ipos:
+    for i from self.istart <= i < self.istop:
+      if self.nlmsaSlice.im[i].target_id==iseq \
+             and self.nlmsaSlice.im[i].target_start==ipos:
         return 1 # MATCH!
     return 0 # NO MATCH!
 
@@ -377,24 +440,26 @@ cdef class NLMSANode:
     "return dict of sequences that traverse edge from self -> other"
     cdef int i
     cdef NLMSASequence ns # FIRST LOOK UP THE SEQUENCE
+    cdef NLMSALetters nl
+    nl=self.nlmsaSlice.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     d={}
     if self.id==other.id and self.ipos+1==other.ipos: #other ADJACENT IN LPO
-      for i from 0 <= i < self.n:
-        if other.ipos<self.im[i].end: # THIS INTERVAL CONTAINS other
-          ns=self.nlmsaSequence.nlmsaLetters.seqlist[self.im[i].target_id]
-          d[ns.seq]=self.im[i].target_start+self.ipos-self.im[i].start
+      for i from self.istart <= i < self.istop:
+        if other.ipos<self.nlmsaSlice.im[i].end: # THIS INTERVAL CONTAINS other
+          ns=nl.seqlist[self.nlmsaSlice.im[i].target_id]
+          d[ns.seq]=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
         elif other.ipos==self.im[i].end \
-                 and other.check_edge(self.im[i].target_id, # MIGHT JUMP TO NEXT INTERVAL
-                                      self.im[i].target_end):
-          ns=self.nlmsaSequence.nlmsaLetters.seqlist[self.im[i].target_id]
-          d[ns.seq]=self.im[i].target_start+self.ipos-self.im[i].start
+                 and other.check_edge(self.nlmsaSlice.im[i].target_id,
+                                      self.nlmsaSlice.im[i].target_end):
+          ns=nl.seqlist[self.nlmsaSlice.im[i].target_id] # BRIDGE TO NEXT INTERVAL
+          d[ns.seq]=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
     else: # other NOT ADJACENT, SO INTERVALS THAT END HERE MIGHT JUMP TO other
-      for i from 0 <= i < self.n:
-        if self.ipos+1==self.im[i].end \
-                 and other.check_edge(self.im[i].target_id, # MIGHT JUMP TO NEXT INTERVAL
-                                      self.im[i].target_end):
-          ns=self.nlmsaSequence.nlmsaLetters.seqlist[self.im[i].target_id]
-          d[ns.seq]=self.im[i].target_start+self.ipos-self.im[i].start
+      for i from self.istart <= i < self.istop:
+        if self.ipos+1==self.nlmsaSlice.im[i].end \
+               and other.check_edge(self.nlmsaSlice.im[i].target_id,
+                                    self.nlmsaSlice.im[i].target_end):
+          ns=nl.seqlist[self.im[i].target_id] # BRIDGE TO NEXT INTERVAL
+          d[ns.seq]=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
     return d
 
   
@@ -467,6 +532,11 @@ cdef class NLMSASequence:
     if i!=1:
       raise IOError('write_padded_binary failed???')
     self.nbuild=self.nbuild+1 # INCREMENT COUNTER OF INTERVALS SAVED
+
+  def __getitem__(self,k):
+    if k.path is self.seq:
+      return NLMSASlice(self,k.start,k.stop)
+    raise KeyError('k not a slice of this sequence')
     
 
 class NLMSASeqDict(dict):
@@ -542,6 +612,10 @@ cdef class NLMSALetters:
     ns[seq]=(self.lpo_id,k.start,k.stop) # SAVE FORWARD MAPPING seq -> lpo
     ns_lpo=self.seqlist[self.lpo_id]
     ns_lpo[k]=(ns.id,seq.start,seq.stop) # SAVE REVERSE MAPPING lpo -> seq
+
+  def __getitem__(self,k):
+    'return a slice of the LPO'
+    return NLMSASlice(self.seqlist[self.lpo_id],k.start,k.stop)
     
   def build(self):
     'build nestedlist databases from saved mappings and initialize for use'
@@ -552,9 +626,55 @@ cdef class NLMSALetters:
     for ns in self.seqlist: # BUILD EACH IntervalFileDB ONE BY ONE
       ns.build()
       if ns.seq is not None:
-        ifile.write('%d\t%s\n' %(ns.id,ns.seq.name))
+        try:
+          ifile.write('%d\t%s\n' %(ns.id,ns.seq.name))
+        except AttributeError:
+          ifile.write('%d\t%s\n' %(ns.id,ns.seq.id))
       else:
         ifile.write('%d\t%s\n' %(ns.id,'NLMSA_LPO_Internal'))
     ifile.close()
     self.do_build=0
-      
+
+  cdef int is_lpo(self,int id):
+    if id==self.lpo_id:
+      return 1
+    else:
+      return 0
+
+  def seqInterval(self,int iseq,int istart,int istop):
+    'get specified interval in the target sequence'
+    ns=self.seqlist[iseq]
+    return sequence.SeqPath(ns.seq,istart,istop,absoluteCoords=True)
+
+
+cdef class NLMSASliceIterator:
+  def __new__(self,NLMSASlice nlmsaSlice):
+    self.nlmsaSlice=nlmsaSlice
+    self.ipos= nlmsaSlice.start - 1
+
+  def __iter__(self):
+    return self
+
+  cdef int advanceStartStop(self):
+    cdef int i
+    for i from self.istop <= i < self.nlmsaSlice.n:
+      if self.ipos>=self.nlmsaSlice.im[i].start: # ENTERS THIS INTERVAL
+        self.istop = i + 1 # ADVANCE THE END MARKER
+      else:
+        break # BEYOND ipos, SEARCH NO FURTHR
+    for i from self.istart <= i < self.istop: # FIND 1ST OVERLAP
+      if self.ipos<self.nlmsaSlice.im[i].end:
+        break
+    self.istart=i
+    return i
+
+  def __next__(self):
+    self.ipos = self.ipos + 1
+    self.advanceStartStop() # ADJUST istart,istop TO OVERLAP ipos
+    if self.istart>=self.istop: # HMM, NO OVERLAPS TO ipos
+      if self.istop<self.nlmsaSlice.n: # ANY MORE INTERVALS?
+        self.ipos=self.nlmsaSlice[self.istop].start # START OF NEXT INTERVAL
+        self.advanceStartStop() # ADJUST istart,istop TO OVERLAP ipos
+      else:
+        raise StopIteration # NO MORE POSITIONS IN THIS SLICE
+    return NLMSANode(self.ipos,self.nlmsaSlice,self.istart,self.istop)
