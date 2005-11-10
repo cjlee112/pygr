@@ -6,6 +6,8 @@ cdef extern from "string.h":
 
 cdef extern from "stdlib.h":
   void free(void *)
+  void *realloc(void *,size_t)
+  int c_abs "abs" (int)
 
 cdef extern from "stdio.h":
   ctypedef struct FILE:
@@ -88,14 +90,11 @@ cdef class IntervalFileDBIterator:
 
   cdef int cnext(self,int *pkeep)
   cdef int extend(self,int ikeep)
-
-cdef class IFDBIteratorBuffer:
-  cdef int ikeep,ipos,imax,noverlap
-  cdef IntervalFileDBIterator it
-  cdef IntervalMap *im
-  cdef readonly object nlmsaSequence
-
-  cdef int cnext(self)
+  cdef int saveInterval(self,int start,int end,int target_id,
+                        int target_start,int target_end)
+  cdef int nextBlock(self,int *pkeep)
+  cdef IntervalMap *getIntervalMap(self)
+  cdef int loadAll(self)
 
 
 cdef class NLMSALetters:
@@ -105,6 +104,8 @@ cdef class NLMSALetters:
   cdef int do_build
   cdef int lpo_id
 
+  cdef int is_lpo(self,int id)
+
 cdef class NLMSASequence:
   cdef readonly int id,length,nbuild,orientation,fixed_length
   cdef readonly object seq
@@ -113,12 +114,21 @@ cdef class NLMSASequence:
   cdef readonly object filestem
   cdef NLMSALetters nlmsaLetters
 
-cdef class NLMSANode:
-  cdef int id,ipos,n
+cdef class NLMSASlice:
+  cdef int n,start,stop
   cdef IntervalMap *im
-  cdef IntervalFileDB db
   cdef NLMSASequence nlmsaSequence
+
+
+cdef class NLMSANode:
+  cdef int id,ipos,istart,istop,n
+  cdef NLMSASlice nlmsaSlice
 
   cdef int check_edge(self,int iseq,int ipos)
 
 
+cdef class NLMSASliceIterator:
+  cdef int ipos,istart,istop
+  cdef NLMSASlice nlmsaSlice
+
+  cdef int advanceStartStop(self)
