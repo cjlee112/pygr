@@ -182,7 +182,7 @@ class SeqPath(object):
     pathForward=PathForwardDescr()  # GET THE TOP-LEVEL FORWARD SEQUENCE OBJ
     _abs_interval=AbsIntervalDescr()
     def __init__(self,path,start=0,stop=None,step=None,reversePath=None,
-                 relativeToStart=False):
+                 relativeToStart=False,absoluteCoords=False):
         '''Return slice of path[start:stop:step].
         NB: start>stop means reverse orientation, i.e. (-path)[-stop:-start]
         start/stop are LOCAL coordinates relative to the specified path
@@ -191,13 +191,22 @@ class SeqPath(object):
         The relativeToStart option turns off this behavior, so that negative
         values are interpreted as negative coordinates in the local coordinate
         system of path.
+
+        absoluteCoords option allows intervals to be created using Pygrs internal
+        coordinate convention i.e. -20,-10 --> -(path.pathForward[10:20])
         '''
         if reversePath is not None:
             try: # IF reversePath.stop KNOWN, USE IT
                 start= -(reversePath._stop)
             except AttributeError: pass
-        start=sumSliceIndex(start,path,relativeToStart or start is None or start>=0)
-        stop=sumSliceIndex(stop,path,relativeToStart or (stop is not None and stop>=0))
+        if absoluteCoords: # THIS OPTION PROVIDES TRANSPARENT WAY TO CREATE
+            if start>=0:   # INTERVALS USING start,stop PAIRS THAT FOLLOW
+                path=path.pathForward # OUR INTERNAL SIGN CONVENTION
+            else: # i.e. start<0 MEANS REVERSE ORIENTATION!
+                path= - (path.pathForward)
+        else: # ADJUST start,stop ACCORDING TO path.start / path.stop
+            start=sumSliceIndex(start,path,relativeToStart or start is None or start>=0)
+            stop=sumSliceIndex(stop,path,relativeToStart or (stop is not None and stop>=0))
         if start is not None and stop is not None and start>stop:
             start= -start # start>stop MEANS REVERSE ORIENTATION!
             stop= -stop
