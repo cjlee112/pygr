@@ -53,6 +53,14 @@ typedef struct IntervalIterator_S {
   struct IntervalIterator_S *down;
 } IntervalIterator;
 
+
+typedef struct {
+  int id;
+  int start;
+  int stop;
+} IDInterval;
+
+extern int imstart_qsort_cmp(const void *void_a,const void *void_b);
 extern IntervalMap *read_intervals(int n,FILE *ifile);
 extern SublistHeader *build_nested_list(IntervalMap im[],int n,
 					int *p_n,int *p_nlists);
@@ -74,6 +82,9 @@ extern char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
 				SublistHeader *subheader,int nlists,char filestem[]);
 extern IntervalDBFile *read_binary_files(char filestem[],char err_msg[]);
 extern int free_interval_dbfile(IntervalDBFile *db_file);
+extern IDInterval *interval_id_alloc(int n);
+extern int interval_id_union(int id,int start,int stop,IDInterval iv[],int n);
+extern IDInterval *interval_id_compact(IDInterval iv[],int *p_n);
 
 #define ITERATOR_STACK_TOP(it) while (it->up) it=it->up;
 #define FREE_ITERATOR_STACK(it,it2,it_next) \
