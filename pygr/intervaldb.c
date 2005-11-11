@@ -27,8 +27,26 @@ IntervalMap *read_intervals(int n,FILE *ifile)
 
 
 
+int imstart_qsort_cmp(const void *void_a,const void *void_b)
+{ /* STRAIGHTFORWARD COMPARISON OF SIGNED start VALUES, LONGER INTERVALS 1ST */
+  IntervalMap *a=(IntervalMap *)void_a,*b=(IntervalMap *)void_b;
+  if (a->start<b->start)
+    return -1;
+  else if (a->start>b->start)
+    return 1;
+  else if (a->end>b->end) /* SAME START: PUT LONGER INTERVAL 1ST */
+    return -1;
+  else if (a->end<b->end) /* CONTAINED INTERVAL SHOULD FOLLOW LARGER INTERVAL*/
+    return 1;
+  else
+    return 0;
+}
+
+
+
+
 int im_qsort_cmp(const void *void_a,const void *void_b)
-{
+{ /* MERGE FORWARD AND REVERSE INTERVALS AS IF THEY WERE ALL IN FORWARD ORI */
   int a_start,a_end,b_start,b_end;
   IntervalMap *a=(IntervalMap *)void_a,*b=(IntervalMap *)void_b;
   SET_INTERVAL_POSITIVE(*a,a_start,a_end);
@@ -682,5 +700,62 @@ int free_interval_dbfile(IntervalDBFile *db_file)
   FREE(db_file->subheader);
   free(db_file);
   return 0;
+}
+
+
+
+
+IDInterval *interval_id_alloc(int n)
+{
+  IDInterval *iv=NULL;
+  n*=2; /* DOUBLE STORAGE FOR + AND - ORIENTATIONS */
+  if (n<=0)
+    return NULL;
+  CALLOC(iv,n,IDInterval);
+  iv[0].id=iv[1].id= -1; /* ENSURE THAT iv[i].id != i/2 FOR ALL i */
+  return iv;
+ handle_malloc_failure:
+  return NULL;
+}
+
+int interval_id_union(int id,int start,int stop,IDInterval iv[],int n)
+{
+  int i;
+  i=id*2; /* STORE BOTH FORWARD AND REVERSE ORI FOR EACH SEQ */
+  if (start<0)  /* STORE REVERSE ORIENTATION SEPARATELY FROM FORWARD */
+    i+=1; 
+  if (i>=n) /* OUT OF BOUNDS! */
+    return -1; 
+  if (iv[i].id!=id) { /* NEW ENTRY, SO STORE IT*/
+    iv[i].id=id;
+    iv[i].start=start;
+    iv[i].stop=stop;
+  }
+  else {
+    if (start<iv[i].start)
+      iv[i].start=start;
+    if (stop>iv[i].stop)
+      iv[i].stop=stop;
+  }
+  return 0;
+}
+
+IDInterval *interval_id_compact(IDInterval iv[],int *p_n)
+{
+  int i,n=0;
+  for (i=0;i< *p_n;i++) {
+    if (iv[i].id== i/2) { /* VALID INTERVAL, KEEP IT */
+      if (n<i) /* COPY TO NEW COMPACTED LOCATION */
+	memcpy(iv+n,iv+i,sizeof(IDInterval));
+      n++;
+    }
+  }
+  if (n < *p_n) {
+    REALLOC(iv,n,IDInterval); /* SHRINK THE ARRAY */
+    *p_n = n; /* HAND BACK NEW SIZE TO CALLER */
+  }
+  return iv;
+ handle_malloc_failure:
+  return NULL;
 }
 
