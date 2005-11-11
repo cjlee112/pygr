@@ -8,6 +8,8 @@ cdef extern from "stdlib.h":
   void free(void *)
   void *realloc(void *,size_t)
   int c_abs "abs" (int)
+  void qsort(void *base, size_t nmemb, size_t size,
+             int (*compar)(void *,void *))
 
 cdef extern from "stdio.h":
   ctypedef struct FILE:
@@ -48,6 +50,12 @@ cdef extern from "intervaldb.h":
   ctypedef struct IntervalIterator:
     pass
 
+  ctypedef struct IDInterval:
+    int id
+    int start
+    int stop
+
+  int imstart_qsort_cmp(void *void_a,void *void_b)
   IntervalMap *read_intervals(int n,FILE *ifile)
   SublistHeader *build_nested_list(IntervalMap im[],int n,int *p_n,int *p_nlists)
   IntervalMap *interval_map_alloc(int n)
@@ -61,6 +69,10 @@ cdef extern from "intervaldb.h":
   IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,IntervalIndex ii[],int nii,SublistHeader subheader[],int nlists,int ntop,int div,FILE *ifile,IntervalMap buf[],int nbuf,int *p_nreturn)
   int write_padded_binary(IntervalMap im[],int n,int div,FILE *ifile)
   int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
+  IDInterval *interval_id_alloc(int n)
+  int interval_id_union(int id,int start,int stop,IDInterval iv[],int n)
+  IDInterval *interval_id_compact(IDInterval iv[],int *p_n)
+
 
 
 cdef class IntervalDB:
@@ -107,7 +119,7 @@ cdef class NLMSALetters:
   cdef int is_lpo(self,int id)
 
 cdef class NLMSASequence:
-  cdef readonly int id,length,nbuild,orientation,fixed_length
+  cdef readonly int id,length,nbuild,fixed_length
   cdef readonly object seq
   cdef IntervalFileDB db
   cdef FILE *build_ifile
@@ -115,13 +127,16 @@ cdef class NLMSASequence:
   cdef NLMSALetters nlmsaLetters
 
 cdef class NLMSASlice:
-  cdef int n,start,stop
+  cdef readonly start,stop 
+  cdef int n,nseqBounds
   cdef IntervalMap *im
+  cdef IDInterval *seqBounds
   cdef NLMSASequence nlmsaSequence
 
 
 cdef class NLMSANode:
-  cdef int id,ipos,istart,istop,n
+  cdef readonly int id,ipos
+  cdef int istart,istop,n
   cdef NLMSASlice nlmsaSlice
 
   cdef int check_edge(self,int iseq,int ipos)
