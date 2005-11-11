@@ -44,4 +44,26 @@
 
 #define FREE(P) if (P) {free(P);(P)=NULL;}
 
+/* IF realloc FAILS, memptr REMAINS VALID, BUT MALLOC_FAILURE_ACTION IS INVOKED. */
+#define REALLOC(memptr,N,ATYPE) \
+  if ((N)<=0) {\
+    char errstr[1024]; \
+    sprintf(errstr,"%s, line %d: *** invalid memory request: %s[%d].\n",\
+              __FILE__,__LINE__,STRINGIFY(memptr),(N));   \
+    PyErr_SetString(PyExc_ValueError,errstr); \
+    MALLOC_FAILURE_ACTION;\
+  }\
+  else {\
+    void *tmp_realloc_ptrZZ; \
+    if (NULL == (tmp_realloc_ptrZZ=realloc((memptr),(size_t)(N)*sizeof(ATYPE))))  { \
+      char errstr[1024]; \
+      sprintf(errstr,"%s, line %d: memory request failed: %s[%d].\n",\
+                __FILE__,__LINE__,STRINGIFY(memptr),(N));   \
+      PyErr_SetString(PyExc_MemoryError,errstr); \
+      MALLOC_FAILURE_ACTION;\
+    } \
+    else \
+      (memptr)=(ATYPE *)tmp_realloc_ptrZZ; \
+  }
+
 #endif
