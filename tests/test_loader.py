@@ -2,7 +2,7 @@
 #
 # This code serves as a testing harness for the Pygr source tree. 
 # If your tarball is fresh out of CVS, and a test fails, please 
-# forward stdout to <leec@ucla.edu> so issues can
+# forward stdout to <leec@chem.ucla.edu> so issues can
 # can be addressed in a timely fashion. Thank you!
 
 import os
@@ -11,7 +11,7 @@ import re
 
 class TestMain(object):
 
-   def __init__(self):
+   def __init__(self,testExtensions=True):
 
       self.environ = os.environ # Get OS dependent constants
       self.linesep = os.linesep
@@ -20,7 +20,13 @@ class TestMain(object):
       self.ver = sys.version.split(" ")[0][0:3]
       self.platform = sys.platform
       self.__doc__ = "Testing Framework for the Pygr source tree."
+      self.testExtensions=testExtensions
  
+      if  (float(self.ver) < 2.2):
+         raise AssertionError('''Pygr requires generators, which are only available in
+         Python versions >= 2.2.  Your version is: %s 
+         Please install a newer version of Python (very easy to do).''' %(self.ver))
+
       try:
          self.path.append(os.environ['PYGRPATH']) # Add src tree to search path 
 
@@ -32,11 +38,12 @@ class TestMain(object):
  	import mapping
 	import graphquery
         import sequence
-        import cnestedlist
         self.mapping = mapping
 	self.graphquery = graphquery
         self.sequence = sequence
-        self.cnestedlist = cnestedlist
+        if testExtensions:
+           import cnestedlist
+           self.cnestedlist = cnestedlist
       except:
          raise ImportError("Unable to load Pygr modules. Set PYGRPATH accordingly.") 
 
@@ -67,7 +74,9 @@ class TestFrameWork(TestMain):
      mapping = self.mapping
      graphquery = self.graphquery
      sequence = self.sequence
-     cnestedlist = self.cnestedlist
+     try: # EXTENSION TESTS ARE OPTIONAL...
+        cnestedlist = self.cnestedlist
+     except AttributeError: pass
 
 
      class QuerySuite(unittest.TestCase):
@@ -410,7 +419,9 @@ class TestFrameWork(TestMain):
                             [(-10, 0, 1, 100, 110), (-20, -5, 2, 300, 315)])
 
 
-     suite_list =[QuerySuite,MappingSuite,IteratorSuite,SequenceSuite,NestedListSuite]
+     suite_list =[QuerySuite,MappingSuite,IteratorSuite,SequenceSuite]
+     if self.testExtensions:
+        suite_list.append(NestedListSuite)
 
      test_results = []
 
