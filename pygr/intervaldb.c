@@ -29,14 +29,17 @@ IntervalMap *read_intervals(int n,FILE *ifile)
 
 int im_qsort_cmp(const void *void_a,const void *void_b)
 {
+  int a_start,a_end,b_start,b_end;
   IntervalMap *a=(IntervalMap *)void_a,*b=(IntervalMap *)void_b;
-  if (a->start<b->start)
+  SET_INTERVAL_POSITIVE(*a,a_start,a_end);
+  SET_INTERVAL_POSITIVE(*b,b_start,b_end);
+  if (a_start<b_start)
     return -1;
-  else if (a->start>b->start)
+  else if (a_start>b_start)
     return 1;
-  else if (a->end>b->end) /* SAME START: PUT LONGER INTERVAL 1ST */
+  else if (a_end>b_end) /* SAME START: PUT LONGER INTERVAL 1ST */
     return -1;
-  else if (a->end<b->end) /* CONTAINED INTERVAL SHOULD FOLLOW LARGER INTERVAL*/
+  else if (a_end<b_end) /* CONTAINED INTERVAL SHOULD FOLLOW LARGER INTERVAL*/
     return 1;
   else
     return 0;
@@ -72,7 +75,7 @@ SublistHeader *build_nested_list(IntervalMap im[],int n,
     parent=i;
     i=parent+1;
     while (i<n && parent>=0) { /* RECURSIVE ALGORITHM OF ALEX ALEKSEYENKO */
-      if (im[i].end<=im[parent].end) { /* i CONTAINED IN parent */
+      if (END_POSITIVE(im[i])<=END_POSITIVE(im[parent])) {/* i CONTAINED IN parent*/
 	im[i].sublist=parent; /* MARK AS CONTAINED IN parent */
 	nsub++; /* COUNT TOTAL #SUBLIST ENTRIES */
 	parent=i; /* AND PUSH ONTO RECURSIVE STACK */
@@ -153,12 +156,12 @@ int find_overlap_start(int start,int end,IntervalMap im[],int n)
   r=n-1;
   while (l<r) {
     mid=(l+r)/2;
-    if (im[mid].end<=start)
+    if (END_POSITIVE(im[mid])<=start)
       l=mid+1;
     else
       r=mid;
   }
-  if (l<n && im[l].start<end && start<im[l].end)
+  if (l<n && HAS_OVERLAP_POSITIVE(im[l],start,end))
     return l; /* l IS START OF OVERLAP */
   else 
     return -1; /* NO OVERLAP FOUND */
@@ -174,7 +177,7 @@ int find_index_start(int start,int end,IntervalIndex im[],int n)
   r=n-1;
   while (l<r) {
     mid=(l+r)/2;
-    if (im[mid].end<=start)
+    if (END_POSITIVE(im[mid])<=start)
       l=mid+1;
     else
       r=mid;
@@ -222,6 +225,22 @@ IntervalIterator *reset_interval_iterator(IntervalIterator *it)
   return it;
 }
 
+
+void reorient_intervals(int n,IntervalMap im[],int ori_sign)
+{
+  int i,tmp;
+  for (i=0;i<n;i++) {
+    if ((im[i].start>=0 ? 1:-1)!=ori_sign) { /* ORIENTATION MISMATCH */
+      tmp=im[i].start; /* SO REVERSE THIS INTERVAL MAPPING */
+      im[i].start= -im[i].end;
+      im[i].end =  -tmp;
+      tmp=im[i].target_start;
+      im[i].target_start= -im[i].target_end;
+      im[i].target_end =  -tmp;
+    }
+  }
+}
+
 IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,
 				 IntervalMap im[],int n,
 				 SublistHeader subheader[],int nlists,
@@ -229,40 +248,51 @@ IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,
 				 int *p_nreturn)
 {
   IntervalIterator *it=NULL,*it2=NULL;
-  int ibuf=0,j,k;
+  int ibuf=0,j,k,ori_sign=1;
   if (!it0) { /* ALLOCATE AN ITERATOR IF NOT SUPPLIED*/
     CALLOC(it,1,IntervalIterator);
   }
   else 
     it=it0;
+
+#ifdef MERGE_INTERVAL_ORIENTATIONS
+  if (start<0) { /* NEED TO CONVERT TO POSITIVE ORIENTATION */
+    j=start;
+    start= -end;
+    end= -j;
+    ori_sign = -1;
+  }
+#endif
   if (it->n == 0) { /* DEFAULT: SEARCH THE TOP NESTED LIST */
     it->n=n;
     it->i=find_overlap_start(start,end,im,n);
   }
-
   do {
-    while (it->i>=0 && it->i<it->n && im[it->i].start<end && im[it->i].end>start) {
+    while (it->i>=0 && it->i<it->n && HAS_OVERLAP_POSITIVE(im[it->i],start,end)) {
       memcpy(buf+ibuf,im + it->i,sizeof(IntervalMap)); /*SAVE THIS HIT TO BUFFER */
       ibuf++;
       k=im[it->i].sublist; /* GET SUBLIST OF i IF ANY */
       it->i++; /* ADVANCE TO NEXT INTERVAL */
       if (k>=0 && (j=find_suboverlap_start(start,end,k,im,subheader,nlists))>=0) {
-		  PUSH_ITERATOR_STACK(it,it2,IntervalIterator); /* RECURSE TO SUBLIST */
-		  it2->i = j; /* START OF OVERLAPPING HITS IN THIS SUBLIST */
-		  it2->n = subheader[k].start+subheader[k].len; /* END OF SUBLIST */
-		  it=it2; /* PUSH THE ITERATOR STACK */
+	PUSH_ITERATOR_STACK(it,it2,IntervalIterator); /* RECURSE TO SUBLIST */
+	it2->i = j; /* START OF OVERLAPPING HITS IN THIS SUBLIST */
+	it2->n = subheader[k].start+subheader[k].len; /* END OF SUBLIST */
+	it=it2; /* PUSH THE ITERATOR STACK */
       }
-      if (ibuf>=nbuf) { /* FILLED THE BUFFER, RETURN THE RESULTS SO FAR */
-		  *p_nreturn=ibuf;
-		  return it; /* HAND BACK ITERATOR FOR CONTINUING THE SEARCH */
-      }
+      if (ibuf>=nbuf) /* FILLED THE BUFFER, RETURN THE RESULTS SO FAR */
+	goto finally_return_result;
     }
   } while (POP_ITERATOR_STACK(it));  /* IF STACK EXHAUSTED,  EXIT */
   if (!it0) /* FREE THE ITERATOR WE CREATED.  NO NEED TO RETURN IT TO USER */
     free_interval_iterator(it);
-  
+  it=NULL;  /* ITERATOR IS EXHAUSTED */
+
+ finally_return_result:  
+#ifdef MERGE_INTERVAL_ORIENTATIONS
+  reorient_intervals(ibuf,buf,ori_sign); /* REORIENT INTERVALS TO MATCH QUERY ORI */
+#endif
   *p_nreturn=ibuf; /* #INTERVALS FOUND IN THIS PASS */
-  return NULL; /* ITERATOR IS EXHAUSTED */
+  return it; /* HAND BACK ITERATOR FOR CONTINUING THE SEARCH, IF ANY */
  handle_malloc_failure:
   return NULL;
 }
@@ -363,46 +393,59 @@ IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
 				      int *p_nreturn)
 {
   IntervalIterator *it=NULL,*it2=NULL;
-  int k,ibuf=0;
+  int k,ibuf=0,ori_sign=1;
   if (!it0) { /* ALLOCATE AN ITERATOR IF NOT SUPPLIED*/
     CALLOC(it,1,IntervalIterator);
   }
   else 
     it=it0;
+
+#ifdef MERGE_INTERVAL_ORIENTATIONS
+  if (start<0) { /* NEED TO CONVERT TO POSITIVE ORIENTATION */
+    k=start;
+    start= -end;
+    end= -k;
+    ori_sign = -1;
+  }
+#endif
+
   if (it->n == 0)  /* DEFAULT: SEARCH THE TOP NESTED LIST */
     find_file_start(it,start,end,-1,ii,nii,subheader,nlists,ntop,div,ifile);
   
   do { /* ITERATOR STACK LOOP */
     while (it->i_div < it->nii) { /* BLOCK ITERATION LOOP */
       while (it->i>=0 && it->i<it->n /* INDIVIDUAL INTERVAL ITERATION LOOP */
-				 && it->im[it->i].start<end && it->im[it->i].end>start) { /*OVERLAPS!*/
-		  memcpy(buf+ibuf,it->im + it->i,sizeof(IntervalMap)); /*SAVE THIS HIT */
-		  ibuf++;
-		  k=it->im[it->i].sublist; /* GET SUBLIST OF i IF ANY */
-		  it->i++; /* ADVANCE TO NEXT INTERVAL */
-		  PUSH_ITERATOR_STACK(it,it2,IntervalIterator); /* RECURSE TO SUBLIST */
-		  if (k>=0 && find_file_start(it2,start,end,k,ii,nii,subheader,nlists,
-												ntop,div,ifile)>=0)
-			 it=it2; /* PUSH THE ITERATOR STACK */
-		  
-		  if (ibuf>=nbuf) { /* FILLED THE BUFFER, RETURN THE RESULTS SO FAR */
-			 *p_nreturn=ibuf;
-			 return it; /* HAND BACK ITERATOR FOR CONTINUING THE SEARCH */
-		  }
+	     && HAS_OVERLAP_POSITIVE(it->im[it->i],start,end)) { /*OVERLAPS!*/
+	memcpy(buf+ibuf,it->im + it->i,sizeof(IntervalMap)); /*SAVE THIS HIT */
+	ibuf++;
+	k=it->im[it->i].sublist; /* GET SUBLIST OF i IF ANY */
+	it->i++; /* ADVANCE TO NEXT INTERVAL */
+	PUSH_ITERATOR_STACK(it,it2,IntervalIterator); /* RECURSE TO SUBLIST */
+	if (k>=0 && find_file_start(it2,start,end,k,ii,nii,subheader,nlists,
+				    ntop,div,ifile)>=0)
+	  it=it2; /* PUSH THE ITERATOR STACK */
+	
+	if (ibuf>=nbuf)  /* FILLED THE BUFFER, RETURN THE RESULTS SO FAR */
+	  goto finally_return_result;
       }
       it->i_div++; /* TRY GOING TO NEXT BLOCK */
       if (it->i == it->n  /* USED WHOLE BLOCK, SO THERE MIGHT BE MORE */
-			 && it->i_div < it->nii) { /* CONTINUE TO NEXT BLOCK */
-		  it->n=read_imdiv(ifile,it->im,div,it->i_div,it->ntop); /*READ NEXT BLOCK*/
-		  it->i=0; /* PROCESS IT FROM ITS START */
+	  && it->i_div < it->nii) { /* CONTINUE TO NEXT BLOCK */
+	it->n=read_imdiv(ifile,it->im,div,it->i_div,it->ntop); /*READ NEXT BLOCK*/
+	it->i=0; /* PROCESS IT FROM ITS START */
       }
     }
   } while (POP_ITERATOR_STACK(it));  /* IF STACK EXHAUSTED,  EXIT */
   if (!it0) /* FREE THE ITERATOR WE CREATED.  NO NEED TO RETURN IT TO USER */
     free_interval_iterator(it);
-  
+  it=NULL;  /* ITERATOR IS EXHAUSTED */
+
+ finally_return_result:  
+#ifdef MERGE_INTERVAL_ORIENTATIONS
+  reorient_intervals(ibuf,buf,ori_sign); /* REORIENT INTERVALS TO MATCH QUERY ORI */
+#endif
   *p_nreturn=ibuf; /* #INTERVALS FOUND IN THIS PASS */
-  return NULL; /* ITERATOR IS EXHAUSTED */
+  return it; /* HAND BACK ITERATOR FOR CONTINUING THE SEARCH, IF ANY */
  handle_malloc_failure:
   return NULL;
 }
@@ -467,11 +510,29 @@ int write_binary_index(IntervalMap im[],int n,int div,FILE *ifile)
 {
   int i,j,nsave=0;
   for (i=0;i<n;i+=div) {
-    fwrite(&(im[i].start),sizeof(int),1,ifile);  /*SAVE start */
+#ifdef MERGE_INTERVAL_ORIENTATIONS
+    if (im[i].start>=0) /* FORWARD ORI */
+#endif
+      fwrite(&(im[i].start),sizeof(int),1,ifile);  /*SAVE start */
+#ifdef MERGE_INTERVAL_ORIENTATIONS
+    else { /* REVERSE ORI */
+      j= - im[i].end;
+      fwrite(&j,sizeof(int),1,ifile);  /*SAVE start */
+    }
+#endif
     j=i+div-1;
     if (j>=n)
       j=n-1;
-    fwrite(&(im[j].end),sizeof(int),1,ifile);  /*SAVE end */
+#ifdef MERGE_INTERVAL_ORIENTATIONS
+    if (im[j].start>=0)  /* FORWARD ORI */
+#endif
+      fwrite(&(im[j].end),sizeof(int),1,ifile);  /*SAVE end */
+#ifdef MERGE_INTERVAL_ORIENTATIONS
+    else { /* REVERSE ORI */
+      j= - im[j].start;
+      fwrite(&j,sizeof(int),1,ifile);  /*SAVE end */
+    }
+#endif
     nsave++;
   }
   return nsave;
@@ -482,7 +543,7 @@ int write_binary_index(IntervalMap im[],int n,int div,FILE *ifile)
 char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
 			 SublistHeader *subheader,int nlists,char filestem[])
 {
-  int i,j,npad=0,nii,*subheader_pack=NULL;
+  int i,npad=0,nii,*subheader_pack=NULL;
   char path[2048];
   FILE *ifile=NULL,*ifile_subheader=NULL;
   SublistHeader sh_tmp;
@@ -545,7 +606,7 @@ char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
 
 IntervalDBFile *read_binary_files(char filestem[],char err_msg[])
 {
-  int i,n,ntop,div,nlists,nii;
+  int n,ntop,div,nlists,nii;
   char path[2048];
   IntervalIndex *ii=NULL;
   SublistHeader *subheader=NULL;
