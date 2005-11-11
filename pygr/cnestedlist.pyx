@@ -270,6 +270,8 @@ cdef class IntervalFileDBIterator:
       free(self.im_buf)
 
 
+
+
       
 cdef class IntervalFileDB:
   def __new__(self,filestem=None,mode='r'):
@@ -318,12 +320,17 @@ cdef class IntervalFileDB:
     self.close()
 
 
+
+
+
+
 cdef class NLMSASlice:
   def __new__(self,NLMSASequence ns,int start,int stop):
-    cdef int i,j,n,start_max,end_min,start2,stop2
+    cdef int i,j,n,start_max,end_min,start2,stop2,nseq,istart,istop
     cdef NLMSASequence ns_lpo
     cdef IntervalFileDBIterator it,it2
     cdef IntervalMap *im,*im2
+    cdef IDInterval *iv
     self.nlmsaSequence=ns # SAVE BASIC INFO
     self.start=start
     self.stop=stop
@@ -331,8 +338,22 @@ cdef class NLMSASlice:
     n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
     if n<=0:
       raise KeyError('this interval is not aligned!')
-    if not ns.nlmsaLetters.is_lpo(ns.id):
-      # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
+    for i from 0 <= i < n: # CLIP INTERVALS TO FIT [start:stop]
+      if stop<it.im_buf[i].end: # TRUNCATE TO FIT WITHIN [start:stop]
+        it.im_buf[i].target_end= it.im_buf[i].target_end \
+                                 +stop-it.im_buf[i].end # CALCULATE NEW ENDPOINT
+        it.im_buf[i].end=stop
+      if start>it.im_buf[i].start: # CALCULATE NEW STARTPOINT
+        it.im_buf[i].target_start=it.im_buf[i].target_start \
+                                 +start-it.im_buf[i].start
+        it.im_buf[i].start=start
+    nseq=len(ns.nlmsaLetters.seqlist)
+    iv=interval_id_alloc(nseq) # BOUNDS RECORDING
+    if ns.nlmsaLetters.is_lpo(ns.id): # LPO -> REAL SEQS MAPPING
+      for i from 0 <= i < n: # GET EACH SEQ'S BOUNDS
+        interval_id_union(it.im_buf[i].target_id,it.im_buf[i].target_start,
+                          it.im_buf[i].target_end,iv,2*nseq) # RECORD BOUNDS
+    else: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
       ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id]
       for i from 0 <= i < n:
         if it.im_buf[i].target_id != ns_lpo.id:
@@ -354,27 +375,83 @@ cdef class NLMSASlice:
             end_min=it.im_buf[i].target_end
           else:
             end_min=im2[j].end
-          start=it.im_buf[i].start+start_max-it.im_buf[i].target_start # ns COORDS
-          stop=it.im_buf[i].start+end_min-it.im_buf[i].target_start
+          istart=it.im_buf[i].start+start_max-it.im_buf[i].target_start # ns COORDS
+          istop=it.im_buf[i].start+end_min-it.im_buf[i].target_start
           start2=im2[j].target_start+start_max-im2[j].start # COORDS IN TARGET
           stop2=im2[j].target_start+end_min-im2[j].start
-          it.saveInterval(start,stop,im2[j].target_id,start2,stop2) # SAVE IT!
+          it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
+          interval_id_union(im2[j].target_id,start2,stop2,iv,2*nseq) # RECORD BOUNDS
         free(im2) # FREE THE MAP OURSELVES, SINCE RELEASED FROM it2
 
     self.im=it.getIntervalMap() # RELEASE THIS ARRAY FROM THE ITERATOR
     self.n=it.nhit # TOTAL #INTERVALS SAVED FROM JOIN
+    qsort(self.im,self.n,sizeof(IntervalMap),imstart_qsort_cmp) # ORDER BY start
+    n=2*nseq
+    self.seqBounds=interval_id_compact(iv,&n) # SHRINK THE LIST TO ELIMINATE EMPTY ENTRIES
+    self.nseqBounds=n
 
   def __dealloc__(self):
     if self.im:
       free(self.im)
       self.im=NULL
+    if self.seqBounds:
+      free(self.seqBounds)
+      self.seqBounds=NULL
+
+  def findSeqEnds(self,seq):
+    'get maximum interval of seq aligned in this interval'
+    cdef int i,ori,i_ori
+    cdef NLMSALetters nl
+    cdef NLMSASequence ns
+    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+    ns=nl.seqs[seq] # MAKE SURE THIS IS IN OUR ALIGNMENT
+    ori=seq.orientation # GET ITS ORIENTATION
+    for i from 0 <= i <self.nseqBounds:
+      if self.seqBounds[i].id==ns.id: # FOUND OUR SEQUENCE
+        if self.seqBounds[i].start<0:
+          i_ori= -1
+        else:
+          i_ori=1
+        if i_ori==ori: # AND THE ORIENTATIONS MATCH
+          return nl.seqInterval(self.seqBounds[i].id,self.seqBounds[i].start,
+                                self.seqBounds[i].stop)
+    raise KeyError('seq not aligned in this interval')
 
   def __iter__(self):
-    return NLMSASliceIterator(self)
+    cdef int i
+    cdef NLMSALetters nl
+    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+    l=[]
+    for i from 0 <= i <self.nseqBounds:
+      l.append(nl.seqInterval(self.seqBounds[i].id,self.seqBounds[i].start,
+                              self.seqBounds[i].stop))
+    return iter(l)
+
+  property letters:
+    'interface to individual LPO letters in this interval'
+    def __get__(self):
+      return NLMSASliceIterator(self)
+
+  def __len__(self):
+    return self.nseqBounds # NUMBER OF SEQUENCE/ORIS ALIGNED HERE
+
+  def generateIntervals(self):
+    'generate all 1:1 match intervals in this region of alignment'
+    cdef int i
+    cdef NLMSALetters nl
+    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+    l=[]
+    for i from 0 <= i <self.n:
+      l.append(nl.seqInterval(self.im[i].target_id,self.im[i].target_start,
+                              self.im[i].target_end))
+    return iter(l)
+    
+
 
 
  
 cdef class NLMSANode:
+  'interface to a node in NLMSA storage of LPO alignment'
   def __new__(self,int ipos,NLMSASlice nlmsaSlice,int istart,int istop):
     cdef int i,n
     self.nlmsaSlice=nlmsaSlice
@@ -389,7 +466,7 @@ cdef class NLMSANode:
         else: # DON'T COUNT THE LPO SEQUENCE
           self.n = self.n + 1
     
-  def __iter__(self): # CORRECT THIS TO RETURN SEQPOS!!!
+  def __iter__(self):
     cdef int i,j
     cdef NLMSASequence ns
     cdef NLMSALetters nl
@@ -408,7 +485,7 @@ cdef class NLMSANode:
     cdef int i,j
     cdef NLMSASequence ns # FIRST LOOK UP THE SEQUENCE
     try:
-      ns=self.nlmsaSequence.nlmsaLetters.seqs[seq]
+      ns=self.nlmsaSlice.nlmsaSequence.nlmsaLetters.seqs[seq]
     except KeyError:
       raise KeyError('seq not in this alignment')
     for i from self.istart <= i < self.istop:
@@ -431,8 +508,10 @@ cdef class NLMSANode:
   cdef int check_edge(self,int iseq,int ipos):
     cdef int i
     for i from self.istart <= i < self.istop:
-      if self.nlmsaSlice.im[i].target_id==iseq \
-             and self.nlmsaSlice.im[i].target_start==ipos:
+      if self.nlmsaSlice.im[i].start<=self.ipos \
+         and self.ipos<self.nlmsaSlice.im[i].end \
+         and self.nlmsaSlice.im[i].target_id==iseq \
+         and self.nlmsaSlice.im[i].target_start==ipos:
         return 1 # MATCH!
     return 0 # NO MATCH!
 
@@ -443,12 +522,13 @@ cdef class NLMSANode:
     cdef NLMSALetters nl
     nl=self.nlmsaSlice.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     d={}
-    if self.id==other.id and self.ipos+1==other.ipos: #other ADJACENT IN LPO
+    if self.id+1==other.id: #other ADJACENT IN LPO
       for i from self.istart <= i < self.istop:
-        if other.ipos<self.nlmsaSlice.im[i].end: # THIS INTERVAL CONTAINS other
+        if self.nlmsaSlice.im[i].start<=self.ipos+1 \
+               and self.ipos+1<self.nlmsaSlice.im[i].end: # THIS INTERVAL CONTAINS other
           ns=nl.seqlist[self.nlmsaSlice.im[i].target_id]
           d[ns.seq]=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
-        elif other.ipos==self.im[i].end \
+        elif self.ipos+1==self.im[i].end \
                  and other.check_edge(self.nlmsaSlice.im[i].target_id,
                                       self.nlmsaSlice.im[i].target_end):
           ns=nl.seqlist[self.nlmsaSlice.im[i].target_id] # BRIDGE TO NEXT INTERVAL
@@ -462,10 +542,12 @@ cdef class NLMSANode:
           d[ns.seq]=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
     return d
 
+
+
   
 
 cdef class NLMSASequence:
-  'sequence interface to NLMSA storage of an LPO'
+  'sequence interface to NLMSA storage of an LPO alignment'
   def __new__(self,NLMSALetters nl,filestem,seq,mode='r'):
     self.nlmsaLetters=nl
     self.filestem=filestem
@@ -534,10 +616,17 @@ cdef class NLMSASequence:
     self.nbuild=self.nbuild+1 # INCREMENT COUNTER OF INTERVALS SAVED
 
   def __getitem__(self,k):
-    if k.path is self.seq:
-      return NLMSASlice(self,k.start,k.stop)
-    raise KeyError('k not a slice of this sequence')
+    try:
+      if k.pathForward is self.seq:
+        return NLMSASlice(self,k.start,k.stop)
+    except AttributeError: pass
+    raise KeyError('key must be a sequene interval of this sequence')
+
+  def __len__(self):
+    return self.length
     
+
+
 
 class NLMSASeqDict(dict):
   'index sequences by pathForward, and use list to keep reverse mapping'
@@ -546,7 +635,10 @@ class NLMSASeqDict(dict):
     self.seqlist=[]
 
   def __getitem__(self,k):
-    return dict.__getitem__(self,k.pathForward)
+    try:
+      return dict.__getitem__(self,k.pathForward)
+    except AttributeError:
+      raise KeyError('key must be a sequence interval!')
 
   def __setitem__(self,k,NLMSASequence ns):
     if k is not None:
@@ -555,8 +647,12 @@ class NLMSASeqDict(dict):
     self.seqlist.append(ns)
 
 
+
+
+
+
 cdef class NLMSALetters:
-  'toplevel letter interface to NLMSA storage of an LPO'
+  'toplevel letter interface to NLMSA storage of an LPO alignment'
   def __new__(self,pathstem='',mode='r',seqDict=None):
     self.seqs=NLMSASeqDict()
     self.seqlist=self.seqs.seqlist
@@ -615,7 +711,12 @@ cdef class NLMSALetters:
 
   def __getitem__(self,k):
     'return a slice of the LPO'
-    return NLMSASlice(self.seqlist[self.lpo_id],k.start,k.stop)
+    try: # TREAT k AS A SEQUENCE INTERVAL
+      return NLMSASlice(self.seqs[k],k.start,k.stop)
+    except KeyError: # TREAT k AS A PYTHON SLICE OBJECT
+      return NLMSASlice(self.seqlist[self.lpo_id],k.start,k.stop)
+    except AttributeError:
+      raise KeyError('key must be a sequence interval or python slice object')
     
   def build(self):
     'build nestedlist databases from saved mappings and initialize for use'
@@ -647,7 +748,12 @@ cdef class NLMSALetters:
     return sequence.SeqPath(ns.seq,istart,istop,absoluteCoords=True)
 
 
+
+
+
+
 cdef class NLMSASliceIterator:
+  'generate letters (nodes) in this LPO slice'
   def __new__(self,NLMSASlice nlmsaSlice):
     self.nlmsaSlice=nlmsaSlice
     self.ipos= nlmsaSlice.start - 1
