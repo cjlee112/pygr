@@ -32,9 +32,11 @@ class TestMain(object):
  	import mapping
 	import graphquery
         import sequence
+        import cnestedlist
         self.mapping = mapping
 	self.graphquery = graphquery
         self.sequence = sequence
+        self.cnestedlist = cnestedlist
       except:
          raise ImportError("Unable to load Pygr modules. Set PYGRPATH accordingly.") 
 
@@ -65,6 +67,7 @@ class TestFrameWork(TestMain):
      mapping = self.mapping
      graphquery = self.graphquery
      sequence = self.sequence
+     cnestedlist = self.cnestedlist
 
 
      class QuerySuite(unittest.TestCase):
@@ -385,7 +388,29 @@ class TestFrameWork(TestMain):
            self.assertEqual(sequence.Sequence('kqwestvvarphal','foo').seqtype(),
                             sequence.PROTEIN_SEQTYPE)
 
-     suite_list =[QuerySuite,MappingSuite,IteratorSuite,SequenceSuite]
+     class NestedListSuite(unittest.TestCase):
+        'basic cnestedlist class tests'
+        def setUp(self):
+           self.db=cnestedlist.IntervalDB()
+           ivals=[(0,10,1,-110,-100),(-20,-5,2,300,315)]
+           self.db.save_tuples(ivals)
+
+        def testQuery(self):
+           self.assertEqual(self.db.find_overlap_list(0,10),
+                            [(0, 10, 1, -110, -100), (5, 20, 2, -315, -300)])
+        def testReverseQuery(self):
+           self.assertEqual(self.db.find_overlap_list(-11,-7),
+                            [(-10, 0, 1, 100, 110), (-20, -5, 2, 300, 315)])
+        def testFileDB(self):
+           self.db.write_binaries('wugga')
+           fdb=cnestedlist.IntervalFileDB('wugga')
+           self.assertEqual(fdb.find_overlap_list(0,10),
+                            [(0, 10, 1, -110, -100), (5, 20, 2, -315, -300)])
+           self.assertEqual(fdb.find_overlap_list(-11,-7),
+                            [(-10, 0, 1, 100, 110), (-20, -5, 2, 300, 315)])
+
+
+     suite_list =[QuerySuite,MappingSuite,IteratorSuite,SequenceSuite,NestedListSuite]
 
      test_results = []
 
