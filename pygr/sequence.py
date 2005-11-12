@@ -103,6 +103,16 @@ class IntervalTransform(object):
         return nid
 
 
+
+def absoluteSlice(seq,start,stop):
+    '''get slice of top-level sequence object, in absolute coordinates.
+    This method calls getitem on the top-level sequence object
+    i.e. seq.pathForward'''
+    if start<0: # REVERSE ORIENTATION
+        return -(seq.pathForward[-stop:-start])
+    else: # FORWARD ORIENTATION
+        return seq.pathForward[start:stop]
+
 def sumSliceIndex(i,myslice,relativeToStart):
     '''Adjust index value either relative to myslice.start (positive indexes)
     or relative to myslice.stop (negative indexes).  Handle the case where
@@ -341,8 +351,10 @@ class SeqPath(object):
 
     def __neg__(self):
         "return same interval in reverse orientation"
-        if self.seqtype()==PROTEIN_SEQTYPE:
-            raise ValueError('protein sequence has no reverse orientation!')
+        try:
+            if self.seqtype()==PROTEIN_SEQTYPE:
+                raise ValueError('protein sequence has no reverse orientation!')
+        except AttributeError: pass # ALLOW UNTYPED SEQ OBJECTS TO BE REV-COMPD
         if self is self.path: # TOP-LEVEL SEQUENCE OBJECT
             try:
                 return self._reverse # USE EXISTING RC OBJECT FOR THIS SEQ
