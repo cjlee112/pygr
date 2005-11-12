@@ -39,6 +39,7 @@ cdef class IntervalDBIterator:
       raise StopIteration
 
   def __dealloc__(self):
+    'remember: dealloc cannot call other methods!'
     free_interval_iterator(self.it_alloc)
 
 
@@ -129,6 +130,7 @@ cdef class IntervalDB:
       raise IOError(err_msg)
 
   def __dealloc__(self):
+    'remember: dealloc cannot call other methods!'
     if self.subheader:
       free(self.subheader)
     if self.im:
@@ -265,6 +267,7 @@ cdef class IntervalFileDBIterator:
       raise StopIteration
 
   def __dealloc__(self):
+    'remember: dealloc cannot call other methods!'
     free_interval_iterator(self.it_alloc)
     if self.im_buf:
       free(self.im_buf)
@@ -317,7 +320,10 @@ cdef class IntervalFileDB:
     self.db=NULL
 
   def __dealloc__(self):
-    self.close()
+    'remember: dealloc cannot call other methods!'
+    if self.db:
+      free_interval_dbfile(self.db)
+
 
 
 
@@ -393,6 +399,7 @@ cdef class NLMSASlice:
     self.nseqBounds=n
 
   def __dealloc__(self):
+    'remember: dealloc cannot call other methods!'
     if self.im:
       free(self.im)
       self.im=NULL
@@ -578,12 +585,16 @@ cdef class NLMSASequence:
       self.nbuild=0
 
   def __dealloc__(self):
-    self.close()
+    'remember: dealloc cannot call other methods!'
+    if self.build_ifile:
+      fclose(self.build_ifile)
+
   def close(self):
     'free memory and close files associated with this sequence index'
     self.db.close()
     if self.build_ifile:
       fclose(self.build_ifile)
+      self.build_ifile=NULL
 
   def build(self):
     'build nested list from saved unsorted alignment data'
