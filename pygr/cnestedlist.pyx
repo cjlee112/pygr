@@ -491,7 +491,7 @@ cdef class NLMSANode:
     for i from self.istart <= i < self.istop:
       if self.nlmsaSlice.im[i].target_id==ns.id: # RETURN THE SEQUENCE INTERVAL
         j=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
-        return sequence.SeqPath(ns.seq,j,j+1,absoluteCoords=True)
+        return sequence.absoluteSlice(ns.seq,j,j+1)
     raise KeyError('seq not in node')
 
   def __getitem__(self,seq):
@@ -561,7 +561,6 @@ cdef class NLMSASequence:
         except AttributeError:
           raise AttributeError('NLMSASequence: seq must have name or id attribute')
       self.seq=seq
-      self.length=len(seq)
       self.fixed_length=1
     else: # LPO SEQUENCES EXPAND AUTOMATICALLY
       self.seq=None
@@ -623,7 +622,11 @@ cdef class NLMSASequence:
     raise KeyError('key must be a sequene interval of this sequence')
 
   def __len__(self):
-    return self.length
+    'call len(self.seq) if we have a seq.  Otherwise self.length'
+    if self.seq is None:
+      return self.length
+    else:
+      return len(self.seq)
     
 
 
@@ -671,7 +674,7 @@ cdef class NLMSALetters:
     cdef NLMSASequence ns
     ifile=file(self.pathstem+'NLMSAindex')
     for line in ifile:
-      id,name=line.split('\t')
+      id,name=line.strip.split('\t')
       id=int(id)
       if id!=len(self.seqlist):
         raise IOError('corrupted NLMSAIndex???')
@@ -745,7 +748,7 @@ cdef class NLMSALetters:
   def seqInterval(self,int iseq,int istart,int istop):
     'get specified interval in the target sequence'
     ns=self.seqlist[iseq]
-    return sequence.SeqPath(ns.seq,istart,istop,absoluteCoords=True)
+    return sequence.absoluteSlice(ns.seq,istart,istop)
 
 
 
