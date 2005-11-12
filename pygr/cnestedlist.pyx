@@ -349,15 +349,17 @@ cdef class NLMSASlice:
         it.im_buf[i].start=start
     nseq=len(ns.nlmsaLetters.seqlist)
     iv=interval_id_alloc(nseq) # BOUNDS RECORDING
-    if ns.nlmsaLetters.is_lpo(ns.id): # LPO -> REAL SEQS MAPPING
+    if ns.is_lpo: # LPO -> REAL SEQS MAPPING
       for i from 0 <= i < n: # GET EACH SEQ'S BOUNDS
         interval_id_union(it.im_buf[i].target_id,it.im_buf[i].target_start,
                           it.im_buf[i].target_end,iv,2*nseq) # RECORD BOUNDS
     else: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
-      ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id]
+      ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id] # DEFAULT LPO
       for i from 0 <= i < n:
-        if it.im_buf[i].target_id != ns_lpo.id:
-          raise ValueError('sequence mapped to non-LPO target??')
+        if it.im_buf[i].target_id != ns_lpo.id: # SWITCHING TO A DIFFERENT LPO?
+          ns_lpo=ns.nlmsaLetters.seqlist[it.im_buf[i].target_id]
+          if not ns_lpo.is_lpo:
+            raise ValueError('sequence mapped to non-LPO target??')
         it2=IntervalFileDBIterator(it.im_buf[i].target_start,
                                    it.im_buf[i].target_end,ns_lpo.db)
         it2.loadAll() # GET ALL OVERLAPPING INTERVALS
@@ -561,10 +563,10 @@ cdef class NLMSASequence:
         except AttributeError:
           raise AttributeError('NLMSASequence: seq must have name or id attribute')
       self.seq=seq
-      self.fixed_length=1
+      self.is_lpo=0
     else: # LPO SEQUENCES EXPAND AUTOMATICALLY
       self.seq=None
-      self.fixed_length=0
+      self.is_lpo=1
       self.length=0
     self.db=IntervalFileDB(filestem,mode)
     if mode=='w':
@@ -595,6 +597,8 @@ cdef class NLMSASequence:
     db.buildFromUnsortedFile(filename,self.nbuild) # BUILD FROM .build
     db.write_binaries(self.filestem) # SAVE AS IntervalDBFile
     db.close() # DUMP NESTEDLIST FROM MEMORY
+    import os
+    os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
     self.db.open(self.filestem) # NOW OPEN THE IntervalDBFile
     
   def __setitem__(self,k,t): # SAVE TO .build FILE
@@ -603,7 +607,7 @@ cdef class NLMSASequence:
     cdef IntervalMap im_tmp
     if self.build_ifile==NULL:
       raise ValueError('not opened in write mode')
-    if not self.fixed_length: # AN LPO THAT EXPANDS AS WE ADD TO IT...
+    if self.is_lpo: # AN LPO THAT EXPANDS AS WE ADD TO IT...
       if k.stop>self.length: # EXPAND IT...
         self.length=k.stop
     im_tmp.start,im_tmp.end=(k.start,k.stop)
@@ -674,7 +678,7 @@ cdef class NLMSALetters:
     cdef NLMSASequence ns
     ifile=file(self.pathstem+'NLMSAindex')
     for line in ifile:
-      id,name=line.strip.split('\t')
+      id,name=line.strip().split('\t')
       id=int(id)
       if id!=len(self.seqlist):
         raise IOError('corrupted NLMSAIndex???')
@@ -740,7 +744,7 @@ cdef class NLMSALetters:
     self.do_build=0
 
   cdef int is_lpo(self,int id):
-    if id==self.lpo_id:
+    if id==self.lpo_id:  # FIX THIS TO ALLOW MULTIPLE LPO!!!!
       return 1
     else:
       return 0
