@@ -119,7 +119,7 @@ cdef class NLMSALetters:
   cdef int is_lpo(self,int id)
 
 cdef class NLMSASequence:
-  cdef readonly int id,length,nbuild,fixed_length
+  cdef readonly int id,length,nbuild,is_lpo
   cdef readonly object seq
   cdef IntervalFileDB db
   cdef FILE *build_ifile
