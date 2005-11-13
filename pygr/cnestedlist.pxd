@@ -6,6 +6,7 @@ cdef extern from "string.h":
 
 cdef extern from "stdlib.h":
   void free(void *)
+  void *malloc(size_t)
   void *realloc(void *,size_t)
   int c_abs "abs" (int)
   void qsort(void *base, size_t nmemb, size_t size,
@@ -18,7 +19,11 @@ cdef extern from "stdio.h":
   int fclose(FILE *)
   int sscanf(char *str,char *fmt,...)
   int sprintf(char *str,char *fmt,...)
+  char *fgets(char *str,int size,FILE *ifile)
 
+cdef extern from "string.h":
+  int strncmp(char *s1,char *s2,size_t len)
+  char *strcpy(char *dest,char *src)
 
 cdef extern from "intervaldb.h":
   ctypedef struct IntervalMap:
@@ -36,6 +41,9 @@ cdef extern from "intervaldb.h":
   ctypedef struct SublistHeader:
     int start
     int len
+
+  ctypedef struct SubheaderFile:
+    pass
   
   ctypedef struct IntervalDBFile:
     int n
@@ -45,6 +53,7 @@ cdef extern from "intervaldb.h":
     int nii
     IntervalIndex *ii
     SublistHeader *subheader
+    SubheaderFile subheader_file
     FILE *ifile_idb
 
   ctypedef struct IntervalIterator:
@@ -64,14 +73,26 @@ cdef extern from "intervaldb.h":
   IntervalIterator *reset_interval_iterator(IntervalIterator *it)
   IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn)
   char *write_binary_files(IntervalMap im[],int n,int ntop,int div,SublistHeader *subheader,int nlists,char filestem[])
-  IntervalDBFile *read_binary_files(char filestem[],char err_msg[])
+  IntervalDBFile *read_binary_files(char filestem[],char err_msg[],int subheader_nblock)
   int free_interval_dbfile(IntervalDBFile *db_file)
-  IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,IntervalIndex ii[],int nii,SublistHeader subheader[],int nlists,int ntop,int div,FILE *ifile,IntervalMap buf[],int nbuf,int *p_nreturn)
+  IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,IntervalIndex ii[],int nii,SublistHeader subheader[],int nlists,SubheaderFile *subheader_file,int ntop,int div,FILE *ifile,IntervalMap buf[],int nbuf,int *p_nreturn)
   int write_padded_binary(IntervalMap im[],int n,int div,FILE *ifile)
   int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
   IDInterval *interval_id_alloc(int n)
   int interval_id_union(int id,int start,int stop,IDInterval iv[],int n)
   IDInterval *interval_id_compact(IDInterval iv[],int *p_n)
+
+
+cdef extern from "apps/maf2nclist.h":
+  ctypedef struct SeqNameID_T:
+    char *p
+    int id
+  cdef int readMAFrecord(IntervalMap im[],int n,SeqNameID_T seqnames[],
+                         int nseq0,int *p_nseq1,
+		         int lpoStart,FILE *ifile)
+  cdef int seqnameID_qsort_cmp(void *void_a,void *void_b)
+  void free_seqnames(SeqNameID_T seqnames[],int n)
+
 
 
 
@@ -121,10 +142,13 @@ cdef class NLMSALetters:
 cdef class NLMSASequence:
   cdef readonly int id,length,nbuild,is_lpo
   cdef readonly object seq
+  cdef readonly object name
   cdef IntervalFileDB db
   cdef FILE *build_ifile
   cdef readonly object filestem
   cdef NLMSALetters nlmsaLetters
+  
+  cdef int saveInterval(self,IntervalMap im[],int n,int expand_self,FILE *ifile)
 
 cdef class NLMSASlice:
   cdef readonly start,stop 
