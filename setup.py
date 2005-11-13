@@ -116,7 +116,8 @@ def runSetup(script_args=None):
    if buildExtensions:
       cdict_module = Extension('pygr.cdict',sources = ['pygr/cgraph.c', 'pygr/cdict.c'])
       cnestedlist_module = Extension('pygr.cnestedlist',
-                                     sources = ['pygr/intervaldb.c', 'pygr/cnestedlist.c'])
+                                     sources = ['pygr/intervaldb.c', 'pygr/cnestedlist.c',
+                                                'pygr/apps/maf2nclist.c'])
       metadata['ext_modules'] = [cdict_module,cnestedlist_module]
 
    setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
