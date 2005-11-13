@@ -93,14 +93,16 @@ SublistHeader *build_nested_list(IntervalMap im[],int n,
     parent=i;
     i=parent+1;
     while (i<n && parent>=0) { /* RECURSIVE ALGORITHM OF ALEX ALEKSEYENKO */
-      if (END_POSITIVE(im[i])<=END_POSITIVE(im[parent])) {/* i CONTAINED IN parent*/
+      if (END_POSITIVE(im[i])>END_POSITIVE(im[parent]) /* i NOT CONTAINED */
+	  || (END_POSITIVE(im[i])==END_POSITIVE(im[parent]) /* SAME INTERVAL! */
+	      && START_POSITIVE(im[i])==START_POSITIVE(im[parent])))
+	parent=im[parent].sublist; /* POP RECURSIVE STACK*/
+      else  { /* i CONTAINED IN parent*/
 	im[i].sublist=parent; /* MARK AS CONTAINED IN parent */
 	nsub++; /* COUNT TOTAL #SUBLIST ENTRIES */
 	parent=i; /* AND PUSH ONTO RECURSIVE STACK */
 	i++; /* ADVANCE TO NEXT INTERVAL */
       }
-      else /* POP RECURSIVE STACK*/
-	parent=im[parent].sublist;
     }
   } /* AT THIS POINT sublist IS EITHER -1 IF NOT IN SUBLIST, OR INDICATES parent*/
 
@@ -219,7 +221,7 @@ int find_suboverlap_start(int start,int end,int isub,IntervalMap im[],
 }
 
 
-IntervalIterator *interval_iterator_alloc()
+IntervalIterator *interval_iterator_alloc(void)
 {
   IntervalIterator *it=NULL;
   CALLOC(it,1,IntervalIterator);
@@ -343,39 +345,69 @@ int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
 
 
 /* READ A SUBLIST FROM DATABASE FILE */
-IntervalMap *read_sublist(FILE *ifile,SublistHeader subheader[],int isub)
+IntervalMap *read_sublist(FILE *ifile,SublistHeader *subheader)
 {
   long ipos;
   IntervalMap *im=NULL;
-  CALLOC(im,subheader[isub].len,IntervalMap);
-  ipos=subheader[isub].start;
+  CALLOC(im,subheader->len,IntervalMap);
+  ipos=subheader->start;
   ipos*=sizeof(IntervalMap);
   fseek(ifile,ipos,SEEK_SET);
-  fread(im,sizeof(IntervalMap),subheader[isub].len,ifile);
+  fread(im,sizeof(IntervalMap),subheader->len,ifile);
   return im;
  handle_malloc_failure:
   return NULL;
 }
 
 
+/* READ A BLOCK OF THE SUBLIST HEADER FILE */
+int read_subheader_block(SublistHeader subheader[],int isub,int nblock,
+			 int nsubheader,FILE *ifile)
+{
+  long ipos,start;
+  start=isub-(isub%nblock); /* GET BLOCK START */
+  if (start+nblock>nsubheader)
+    nblock=nsubheader-start; /* TRUNCATE TO FIT MAX FILE LENGTH */
+  ipos=start * sizeof(SublistHeader);
+  fseek(ifile,ipos,SEEK_SET);
+  fread(subheader,sizeof(SublistHeader),nblock,ifile);
+  return start;
+}
+
+
+
 
 int find_file_start(IntervalIterator *it,int start,int end,int isub,
 		    IntervalIndex ii[],int nii,
-		    SublistHeader subheader[],int nlists,
+		    SublistHeader *subheader,int nlists,
+                    SubheaderFile *subheader_file,
 		    int ntop,int div,FILE *ifile)
 {
   IntervalMap *imdiv=NULL;
   int i_div= -1,offset=0,offset_div=0;
   if (isub<0)  /* TOP-LEVEL SEARCH: USE THE INDEX */
     i_div=find_index_start(start,end,ii,nii);
-  else if (subheader[isub].len>div) { /* BIG SUBLIST, SO USE THE INDEX */
-    offset=subheader[isub].start;
-    offset_div=offset/div;/* offset GUARANTEED TO BE MULTIPLE OF div */
-    ntop=subheader[isub].len;
-    nii=ntop/div; /* CALCULATE SUBLIST INDEX SIZE */
-    if (ntop%div) /* ONE EXTRA ENTRY FOR PARTIAL BLOCK */
-      nii++;    
-    i_div=find_index_start(start,end,ii+offset_div,nii);
+  else { /* GET PTR TO subheader[isub] */
+#ifdef ON_DEMAND_SUBLIST_HEADER
+    if (isub<subheader_file->start /* isub OUTSIDE OUR CURRENT BLOCK */
+	|| isub>=subheader_file->start+subheader_file->nblock)
+      subheader_file->start=  /* LOAD NEW BLOCK FROM DISK */
+	read_subheader_block(subheader_file->subheader,isub,
+			     subheader_file->nblock,nlists,
+			     subheader_file->ifile);
+    subheader=subheader_file->subheader + (isub-subheader_file->start);
+#else
+    subheader += isub; /* POINT TO OUR SUBHEADER */
+#endif
+    if (subheader->len>div) { /* BIG SUBLIST, SO USE THE INDEX */
+      offset=subheader->start;
+      offset_div=offset/div;/* offset GUARANTEED TO BE MULTIPLE OF div */
+      ntop=subheader->len;
+      nii=ntop/div; /* CALCULATE SUBLIST INDEX SIZE */
+      if (ntop%div) /* ONE EXTRA ENTRY FOR PARTIAL BLOCK */
+	nii++;    
+      i_div=find_index_start(start,end,ii+offset_div,nii);
+    }
   }
 
   if (i_div>=0) { /* READ A SPECIFIC BLOCK OF SIZE div */
@@ -390,8 +422,8 @@ int find_file_start(IntervalIterator *it,int start,int end,int isub,
   }
   else { /* A SMALL SUBLIST: READ THE WHOLE LIST INTO MEMORY */
     FREE(it->im);  /* DUMP ANY OLD ALLOCATION */
-    it->im=read_sublist(ifile,subheader,isub);
-    it->n=subheader[isub].len;
+    it->im=read_sublist(ifile,subheader);
+    it->n=subheader->len;
     it->nii=1;
     it->i_div=0; /* INDICATE THAT THERE ARE NO ADDITIONAL BLOCKS TO READ*/
   }
@@ -406,6 +438,7 @@ int find_file_start(IntervalIterator *it,int start,int end,int isub,
 IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
 				      IntervalIndex ii[],int nii,
 				      SublistHeader subheader[],int nlists,
+				      SubheaderFile *subheader_file,
 				      int ntop,int div,FILE *ifile,
 				      IntervalMap buf[],int nbuf,
 				      int *p_nreturn)
@@ -428,7 +461,8 @@ IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
 #endif
 
   if (it->n == 0)  /* DEFAULT: SEARCH THE TOP NESTED LIST */
-    find_file_start(it,start,end,-1,ii,nii,subheader,nlists,ntop,div,ifile);
+    find_file_start(it,start,end,-1,ii,nii,subheader,nlists,
+		    subheader_file,ntop,div,ifile);
   
   do { /* ITERATOR STACK LOOP */
     while (it->i_div < it->nii) { /* BLOCK ITERATION LOOP */
@@ -440,7 +474,7 @@ IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
 	it->i++; /* ADVANCE TO NEXT INTERVAL */
 	PUSH_ITERATOR_STACK(it,it2,IntervalIterator); /* RECURSE TO SUBLIST */
 	if (k>=0 && find_file_start(it2,start,end,k,ii,nii,subheader,nlists,
-				    ntop,div,ifile)>=0)
+				    subheader_file,ntop,div,ifile)>=0)
 	  it=it2; /* PUSH THE ITERATOR STACK */
 	
 	if (ibuf>=nbuf)  /* FILLED THE BUFFER, RETURN THE RESULTS SO FAR */
@@ -568,7 +602,7 @@ char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
   static char err_msg[1024];
 
   if(nlists>0)
-	 repack_subheaders(im,n,div,subheader,nlists); /* REPACK SMALL SUBLISTS TO END */
+    repack_subheaders(im,n,div,subheader,nlists); /* REPACK SMALL SUBLISTS TO END */
   sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
   ifile_subheader=fopen(path,"w");
   if (!ifile_subheader) {
@@ -622,7 +656,8 @@ char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
 
 
 
-IntervalDBFile *read_binary_files(char filestem[],char err_msg[])
+IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
+				  int subheader_nblock)
 {
   int n,ntop,div,nlists,nii;
   char path[2048];
@@ -652,20 +687,28 @@ IntervalDBFile *read_binary_files(char filestem[],char err_msg[])
   fread(ii,sizeof(IntervalIndex),nii,ifile);
   fclose(ifile);
 
+  CALLOC(idb_file,1,IntervalDBFile);
   if(nlists>0){
-	 CALLOC(subheader,nlists,SublistHeader);
-	 sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
-	 ifile=fopen(path,"r");
-	 if (!ifile) {
-		if (err_msg)
-		  sprintf(err_msg,"unable to open file %s",path);
-		return NULL;
-	 }
-	 fread(subheader,sizeof(SublistHeader),nlists,ifile);  /*SAVE LIST */
-	 fclose(ifile);
+    sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
+    ifile=fopen(path,"r");
+    if (!ifile) {
+      if (err_msg)
+	sprintf(err_msg,"unable to open file %s",path);
+      return NULL;
+    }
+#ifdef ON_DEMAND_SUBLIST_HEADER
+    CALLOC(subheader,subheader_nblock,SublistHeader);
+    idb_file->subheader_file.subheader=subheader;
+    idb_file->subheader_file.nblock=subheader_nblock;
+    idb_file->subheader_file.start = -subheader_nblock; /* NO BLOCK LOADED */
+    idb_file->subheader_file.ifile=ifile;
+#else
+    CALLOC(subheader,nlists,SublistHeader); /* LOAD THE ENTIRE SUBHEADER */
+    fread(subheader,sizeof(SublistHeader),nlists,ifile);  /*SAVE LIST */
+    fclose(ifile);
+#endif
   }
 
-  CALLOC(idb_file,1,IntervalDBFile);
   idb_file->n=n;
   idb_file->ntop=ntop;
   idb_file->nlists=nlists;
@@ -695,7 +738,12 @@ IntervalDBFile *read_binary_files(char filestem[],char err_msg[])
 
 int free_interval_dbfile(IntervalDBFile *db_file)
 {
-  fclose(db_file->ifile_idb);
+  if (db_file->ifile_idb)
+    fclose(db_file->ifile_idb);
+#ifdef ON_DEMAND_SUBLIST_HEADER
+  if (db_file->subheader_file.ifile)
+    fclose(db_file->subheader_file.ifile);
+#endif
   FREE(db_file->ii);
   FREE(db_file->subheader);
   free(db_file);
