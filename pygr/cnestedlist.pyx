@@ -2,7 +2,7 @@
 import sequence
 
 cdef class IntervalDBIterator:
-  def __new__(self,int start,int end,IntervalDB db):
+  def __new__(self,int start,int end,IntervalDB db not None):
     self.it=interval_iterator_alloc()
     self.it_alloc=self.it
     self.start=start
@@ -122,7 +122,7 @@ cdef class IntervalDB:
       msg='empty IntervalDB, not searchable!'
       raise IndexError(msg)
 
-  def write_binaries(self,filestem,div=32):
+  def write_binaries(self,filestem,div=256):
     cdef char *err_msg
     err_msg=write_binary_files(self.im,self.n,self.ntop,div,
                                self.subheader,self.nlists,filestem)
@@ -149,7 +149,8 @@ cdef class IntervalDB:
 
 
 cdef class IntervalFileDBIterator:
-  def __new__(self,int start,int end,IntervalFileDB db,int nbuffer=1024):
+  def __new__(self,int start,int end,IntervalFileDB db not None,
+              int nbuffer=1024):
     self.it=interval_iterator_alloc()
     self.it_alloc=self.it
     self.start=start
@@ -210,6 +211,7 @@ cdef class IntervalFileDBIterator:
     self.it=find_file_intervals(self.it,self.start,self.end,
                                 self.db.db[0].ii,self.db.db[0].nii,
                                 self.db.db[0].subheader,self.db.db[0].nlists,
+                                &(self.db.db[0].subheader_file),
                                 self.db.db[0].ntop,self.db.db[0].div,
                                 self.db.db[0].ifile_idb,
                                 self.im_buf+i,self.nbuf-i,
@@ -283,7 +285,7 @@ cdef class IntervalFileDB:
 
   def open(self,filestem):
     cdef char err_msg[1024]
-    self.db=read_binary_files(filestem,err_msg)
+    self.db=read_binary_files(filestem,err_msg,1024)
     if self.db==NULL:
       raise IOError(err_msg)
 
@@ -302,6 +304,7 @@ cdef class IntervalFileDB:
     while it:
       it=find_file_intervals(it,start,end,self.db[0].ii,self.db[0].nii,
                              self.db[0].subheader,self.db[0].nlists,
+                             &(self.db[0].subheader_file),
                              self.db[0].ntop,self.db[0].div,
                              self.db[0].ifile_idb,im_buf,1024,
                              &(nhit)) # GET NEXT BUFFER CHUNK
@@ -331,7 +334,7 @@ cdef class IntervalFileDB:
 
 
 cdef class NLMSASlice:
-  def __new__(self,NLMSASequence ns,int start,int stop):
+  def __new__(self,NLMSASequence ns not None,int start,int stop):
     cdef int i,j,n,start_max,end_min,start2,stop2,nseq,istart,istop
     cdef NLMSASequence ns_lpo
     cdef IntervalFileDBIterator it,it2
@@ -340,6 +343,8 @@ cdef class NLMSASlice:
     self.nlmsaSequence=ns # SAVE BASIC INFO
     self.start=start
     self.stop=stop
+    if ns.db is None:
+      ns.forceLoad()
     it=IntervalFileDBIterator(start,stop,ns.db)
     n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
     if n<=0:
@@ -361,6 +366,8 @@ cdef class NLMSASlice:
                           it.im_buf[i].target_end,iv,2*nseq) # RECORD BOUNDS
     else: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
       ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id] # DEFAULT LPO
+      if ns_lpo.db is None:
+        ns_lpo.forceLoad()
       for i from 0 <= i < n:
         if it.im_buf[i].target_id != ns_lpo.id: # SWITCHING TO A DIFFERENT LPO?
           ns_lpo=ns.nlmsaLetters.seqlist[it.im_buf[i].target_id]
@@ -461,7 +468,8 @@ cdef class NLMSASlice:
  
 cdef class NLMSANode:
   'interface to a node in NLMSA storage of LPO alignment'
-  def __new__(self,int ipos,NLMSASlice nlmsaSlice,int istart,int istop):
+  def __new__(self,int ipos,NLMSASlice nlmsaSlice not None,
+              int istart,int istop):
     cdef int i,n
     self.nlmsaSlice=nlmsaSlice
     self.ipos=ipos
@@ -557,16 +565,21 @@ cdef class NLMSANode:
 
 cdef class NLMSASequence:
   'sequence interface to NLMSA storage of an LPO alignment'
-  def __new__(self,NLMSALetters nl,filestem,seq,mode='r'):
+  def __new__(self,NLMSALetters nl not None,filestem,seq,mode='r'):
     self.nlmsaLetters=nl
     self.filestem=filestem
-    if seq is not None: # REGULAR SEQUENCE
+    import types
+    if isinstance(seq,types.StringType):
+      self.name=seq # ALLOW USER TO BUILD INDEXES WITH A STRING NAME
+      self.seq=seq
+      self.is_lpo=0
+    elif seq is not None: # REGULAR SEQUENCE
       seq= seq.pathForward # GET THE WHOLE SEQUENCE, IN FORWARD ORIENTATION
       try: # MAKE SURE seq HAS A UNIQUE NAME FOR INDEXING IT...
-        tmp=str(seq.path.name)
+        self.name=str(seq.path.name)
       except AttributeError:
         try:
-          tmp=str(seq.path.id)
+          self.name=str(seq.path.id)
         except AttributeError:
           raise AttributeError('NLMSASequence: seq must have name or id attribute')
       self.seq=seq
@@ -575,7 +588,10 @@ cdef class NLMSASequence:
       self.seq=None
       self.is_lpo=1
       self.length=0
-    self.db=IntervalFileDB(filestem,mode)
+    if mode=='onDemand': # WAIT TO OPEN DB UNTIL ACTUALLY NEEDED
+      self.db=None
+    else:
+      self.db=IntervalFileDB(filestem,mode)
     if mode=='w':
       filename=filestem+'.build'
       self.build_ifile=fopen(filename,'w')
@@ -589,9 +605,15 @@ cdef class NLMSASequence:
     if self.build_ifile:
       fclose(self.build_ifile)
 
+  def forceLoad(self):
+    'force database to be initialized, if not already open'
+    self.db=IntervalFileDB(self.filestem,'r')
+
   def close(self):
     'free memory and close files associated with this sequence index'
-    self.db.close()
+    if self.db is not None:
+      self.db.close() # CLOSE THE DATABASE, RELEASE MEMORY
+      self.db=None # DISCONNECT FROM DATABASE
     if self.build_ifile:
       fclose(self.build_ifile)
       self.build_ifile=NULL
@@ -611,6 +633,20 @@ cdef class NLMSASequence:
     import os
     os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
     self.db.open(self.filestem) # NOW OPEN THE IntervalDBFile
+
+  cdef int saveInterval(self,IntervalMap im[],int n,int expand_self,FILE *ifile):
+    cdef int i
+    if expand_self: # AN LPO THAT EXPANDS AS WE ADD TO IT...
+      for i from 0 <= i < n:
+        if im[i].start>=0:
+          if im[i].end>self.length: # EXPAND IT...
+            self.length=im[i].end
+        elif -(im[i].start)>self.length:
+          self.length= -(im[i].start) # THIS HANDLES NEGATIVE ORI CASE
+    i=write_padded_binary(im,n,1,ifile)
+    if i!=n:
+      raise IOError('write_padded_binary failed???')
+    return i
     
   def __setitem__(self,k,t): # SAVE TO .build FILE
     'save mapping [k.start:k.stop] --> (id,start,stop)'
@@ -618,16 +654,13 @@ cdef class NLMSASequence:
     cdef IntervalMap im_tmp
     if self.build_ifile==NULL:
       raise ValueError('not opened in write mode')
-    if self.is_lpo: # AN LPO THAT EXPANDS AS WE ADD TO IT...
-      if k.stop>self.length: # EXPAND IT...
-        self.length=k.stop
     im_tmp.start,im_tmp.end=(k.start,k.stop)
     im_tmp.target_id,im_tmp.target_start,im_tmp.target_end=t
     im_tmp.sublist= -1
-    i=write_padded_binary(&im_tmp,1,1,self.build_ifile)
-    if i!=1:
-      raise IOError('write_padded_binary failed???')
-    self.nbuild=self.nbuild+1 # INCREMENT COUNTER OF INTERVALS SAVED
+    i=self.saveInterval(&im_tmp,1,self.is_lpo,self.build_ifile)
+##     print 'saveInterval:',self.id,im_tmp.start,im_tmp.end,im_tmp.target_id,\
+##           im_tmp.target_start,im_tmp.target_end
+    self.nbuild=self.nbuild+i # INCREMENT COUNTER OF INTERVALS SAVED
 
   def __getitem__(self,k):
     try:
@@ -659,7 +692,10 @@ class NLMSASeqDict(dict):
       raise KeyError('key must be a sequence interval!')
 
   def __setitem__(self,k,NLMSASequence ns):
-    if k is not None:
+    import types
+    if isinstance(k,types.StringType):
+      dict.__setitem__(self,k,ns) # ALLOW BUILD WITH A STRING OBJECT
+    elif k is not None:
       dict.__setitem__(self,k.pathForward,ns)
     ns.id=len(self.seqlist)
     self.seqlist.append(ns)
@@ -671,7 +707,13 @@ class NLMSASeqDict(dict):
 
 cdef class NLMSALetters:
   'toplevel letter interface to NLMSA storage of an LPO alignment'
-  def __new__(self,pathstem='',mode='r',seqDict=None):
+  def __new__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
+              maxOpenFiles=1024):
+    try:
+      import resource # WE MAY NEED TO OPEN A LOT OF FILES...
+      resource.setrlimit(resource.RLIMIT_NOFILE,(maxOpenFiles,-1))
+    except: # BUT THIS IS OPTIONAL...
+      pass
     self.seqs=NLMSASeqDict()
     self.seqlist=self.seqs.seqlist
     self.pathstem=pathstem
@@ -683,6 +725,8 @@ cdef class NLMSALetters:
       self.do_build=1
       self.newSequence()
       self.lpo_id=0
+      if mafFiles is not None:
+        self.readMAFfiles(mafFiles)
 
   def read_indexes(self,seqDict):
     'open all nestedlist indexes in this LPO database for immediate use'
@@ -702,7 +746,8 @@ cdef class NLMSALetters:
           seq=seqDict[name]
         except KeyError:
           raise KeyError('unable to find sequence %s in seqDict!' % name)
-      ns=NLMSASequence(self,filestem,seq) # OPEN THE IntervalDBFile
+      # CREATE THE SEQ INTERFACE, BUT DELAY OPENING THE IntervalDBFile
+      ns=NLMSASequence(self,filestem,seq,'onDemand') # UNTIL NEEDED
       self.seqs[seq]=ns # SAVE TO OUR INDEX
       
   def newSequence(self,seq=None):
@@ -714,7 +759,6 @@ cdef class NLMSALetters:
     self.seqs[seq]=ns # SAVE TO OUR INDEX
     return ns
     
-
   def __setitem__(self,k,seq):
     'save mapping of LPO slice [k.start:k.stop] --> seq interval'
     cdef int i,start,end
@@ -735,6 +779,77 @@ cdef class NLMSALetters:
       return NLMSASlice(self.seqlist[self.lpo_id],k.start,k.stop)
     except AttributeError:
       raise KeyError('key must be a sequence interval or python slice object')
+
+  def readMAFfiles(self,mafFiles):
+    'read alignment from a set of MAF files'
+    cdef int i,j,nseq0,nseq1,n,ipass,nseq
+    cdef SeqNameID_T seqnames[1024]
+    cdef char tmp[32768],*p,a_header[4]
+    cdef FILE *ifile
+    cdef IntervalMap im[1024],im_tmp
+    cdef NLMSASequence ns_lpo,ns
+    cdef FILE *build_ifile[1024]
+    cdef int nbuild[1024]
+
+    ns_lpo=self.seqlist[self.lpo_id]
+    seqnames[0].p=<char *>malloc(32)
+    strcpy(seqnames[0].p,"NLMSA_LPO_Internal")
+    seqnames[0].id=0
+    build_ifile[0]=ns_lpo.build_ifile
+    nseq=1
+    nseq0=1
+    nseq1=1
+
+    ipass=0
+    im_tmp.sublist= -1 # DEFAULT
+    strcpy(a_header,"a ") # MAKE C STRING 
+    for filename in mafFiles:
+      ifile=fopen(filename,'r')
+      if ifile==NULL:
+        raise IOError('unable to open file %s' % filename)
+      if fgets(tmp,32767,ifile)==NULL or strncmp(tmp,"##maf",4):
+        raise IOError('%s: not a MAF file? Bad format.' % filename)
+      p=fgets(tmp,32767,ifile)
+      while p: # GOT ANOTHER LINE TO PROCESS
+        if 0==strncmp(tmp,a_header,2): # ALIGNMENT HEADER: READ ALIGNMENT
+          n=readMAFrecord(im,0,seqnames,nseq0,&nseq1,ns_lpo.length,ifile)
+          ns_lpo.saveInterval(im,n,1,ns_lpo.build_ifile) # SAVE LPO -> SEQ
+##           for i from 0 <= i < n: # SAVE EACH INTERVAL SEQ -> LPO
+##             print 'saveInterval:',0,im[i].start,im[i].end,im[i].target_id,\
+##                   im[i].target_start,im[i].target_end
+          ns_lpo.nbuild=ns_lpo.nbuild+n # INCREMENT COUNT OF SAVED INTERVALS
+          for i from 0 <= i < n: # SAVE EACH INTERVAL SEQ -> LPO
+            j=im[i].target_id
+            if j>=nseq: # NEW SEQUENCE, NEED TO OPEN A NEW STREAM
+              ns=self.newSequence(seqnames[j].p) # PASS NAME AS DUMMY seq
+              if j!=seqnames[j].id or j!=ns.id:
+                raise ValueError('sequence ID mismatch: %d,%d' %(ns.id,j))
+              build_ifile[j]=ns.build_ifile # KEEP PTR SO WE CAN WRITE DIRECTLY!
+              nbuild[j]=0
+              nseq=nseq+1 # IF im.target_id SORTED, WE CAN ADD ONE BY ONE LIKE THIS
+##               print 'Creating new sequence:',j,seqnames[j].p,nseq
+            im_tmp.start=im[i].target_start # COPY DATA FOR SAVING
+            im_tmp.end=im[i].target_end
+            im_tmp.target_id=self.lpo_id
+            im_tmp.target_start=im[i].start
+            im_tmp.target_end=im[i].end
+##             print 'saveInterval:',j,im_tmp.start,im_tmp.end,im_tmp.target_id,\
+##                   im_tmp.target_start,im_tmp.target_end
+            ns_lpo.saveInterval(&im_tmp,1,0,build_ifile[j]) # SAVE SEQ -> LPO
+            nbuild[j]=nbuild[j]+1
+          if nseq1-nseq0>10 or (ipass%64==0 and nseq1>nseq0): # RE-SORT
+            qsort(seqnames,nseq1,sizeof(SeqNameID_T),seqnameID_qsort_cmp)
+            nseq0=nseq1  # NOW ALL NAMES ARE SORTED
+          ipass= ipass +1 # INCREMENT PASS COUNTER
+        p=fgets(tmp,32767,ifile) # TRY TO READ ANOTHER LINE...
+      fclose(ifile) # CLOSE THIS MAF FILE
+##     print 'nbuild[0]',ns_lpo.nbuild
+    for i from 1 <= i <nseq: # SAVE INTERVAL COUNTS BACK TO EACH SEQUENCE
+      ns=self.seqlist[i]
+      ns.nbuild=nbuild[i]
+##       print 'nbuild[%d]' % i,ns.nbuild
+    self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
+    free_seqnames(seqnames,nseq) # DUMP OUR STRING STORAGE
     
   def build(self):
     'build nestedlist databases from saved mappings and initialize for use'
@@ -745,10 +860,7 @@ cdef class NLMSALetters:
     for ns in self.seqlist: # BUILD EACH IntervalFileDB ONE BY ONE
       ns.build()
       if ns.seq is not None:
-        try:
-          ifile.write('%d\t%s\n' %(ns.id,ns.seq.name))
-        except AttributeError:
-          ifile.write('%d\t%s\n' %(ns.id,ns.seq.id))
+        ifile.write('%d\t%s\n' %(ns.id,ns.name))
       else:
         ifile.write('%d\t%s\n' %(ns.id,'NLMSA_LPO_Internal'))
     ifile.close()
@@ -772,7 +884,7 @@ cdef class NLMSALetters:
 
 cdef class NLMSASliceIterator:
   'generate letters (nodes) in this LPO slice'
-  def __new__(self,NLMSASlice nlmsaSlice):
+  def __new__(self,NLMSASlice nlmsaSlice not None):
     self.nlmsaSlice=nlmsaSlice
     self.ipos= nlmsaSlice.start - 1
 
