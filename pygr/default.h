@@ -2,6 +2,11 @@
 #ifndef DEFAULT_HEADER_INCLUDED
 #define DEFAULT_HEADER_INCLUDED 1
 
+/* ON LINUX, GIVE US SUPPORT FOR LARGE FILES BY DEFAULT */
+#define _FILE_OFFSET_BITS 64
+#define PYGR_OFF_T off_t
+#define PYGR_FSEEK(IFILE,OFFSET,WHENCE) fseeko(IFILE,OFFSET,WHENCE)
+
 #include "Python.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,5 +70,9 @@
     else \
       (memptr)=(ATYPE *)tmp_realloc_ptrZZ; \
   }
+
+
+
+
 
 #endif
