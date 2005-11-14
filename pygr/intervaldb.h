@@ -74,7 +74,7 @@ extern SublistHeader *build_nested_list(IntervalMap im[],int n,
 					int *p_n,int *p_nlists);
 extern IntervalMap *interval_map_alloc(int n);
 extern IntervalDB *build_interval_db(IntervalMap im[],int n);
-extern IntervalIterator *interval_iterator_alloc();
+extern IntervalIterator *interval_iterator_alloc(void);
 extern int free_interval_iterator(IntervalIterator *it);
 extern IntervalIterator *reset_interval_iterator(IntervalIterator *it);
 extern IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn);
@@ -146,5 +146,7 @@ extern IDInterval *interval_id_compact(IDInterval iv[],int *p_n);
 
 
 #define ON_DEMAND_SUBLIST_HEADER 1
+
+
 
 #endif
