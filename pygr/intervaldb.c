@@ -3,7 +3,7 @@
 
 IntervalMap *read_intervals(int n,FILE *ifile)
 {
-  int i=0,start,end,target_id,target_start,target_end;
+  int i=0;
   IntervalMap *im=NULL;
   CALLOC(im,n,IntervalMap); /* ALLOCATE THE WHOLE ARRAY */
   while (fscanf(ifile," %d %d %d %d %d",&im[i].start,&im[i].end,
@@ -84,7 +84,7 @@ int sublist_qsort_cmp(const void *void_a,const void *void_b)
 SublistHeader *build_nested_list(IntervalMap im[],int n,
 				 int *p_n,int *p_nlists)
 {
-  int i=0,j,k,l,parent,nsub=0,nlists=0;
+  int i=0,j,k,parent,nsub=0,nlists=0;
   IntervalMap *imsub=NULL;
   SublistHeader *subheader=NULL;
 
@@ -331,14 +331,14 @@ IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,
 int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
 {
   int block;
-  long ipos;
+  PYGR_OFF_T ipos;
   ipos=div*i_div; /* CALCULATE POSITION IN RECORDS */
   if (ipos+div<=ntop) /* GET A WHOLE BLOCK */
     block=div;
   else /* JUST READ PARTIAL BLOCK AT END */
     block=ntop%div;
   ipos *= sizeof(IntervalMap); /* CALCULATE FILE POSITION IN BYTES */
-  fseek(ifile,ipos,SEEK_SET);
+  PYGR_FSEEK(ifile,ipos,SEEK_SET);
   fread(imdiv,sizeof(IntervalMap),block,ifile);
   return block;
 }
@@ -347,12 +347,12 @@ int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
 /* READ A SUBLIST FROM DATABASE FILE */
 IntervalMap *read_sublist(FILE *ifile,SublistHeader *subheader)
 {
-  long ipos;
+  PYGR_OFF_T ipos;
   IntervalMap *im=NULL;
   CALLOC(im,subheader->len,IntervalMap);
-  ipos=subheader->start;
-  ipos*=sizeof(IntervalMap);
-  fseek(ifile,ipos,SEEK_SET);
+  ipos=subheader->start; /* CALCULATE POSITION IN RECORDS */
+  ipos*=sizeof(IntervalMap);  /* CALCULATE FILE POSITION IN BYTES */
+  PYGR_FSEEK(ifile,ipos,SEEK_SET);
   fread(im,sizeof(IntervalMap),subheader->len,ifile);
   return im;
  handle_malloc_failure:
@@ -364,12 +364,14 @@ IntervalMap *read_sublist(FILE *ifile,SublistHeader *subheader)
 int read_subheader_block(SublistHeader subheader[],int isub,int nblock,
 			 int nsubheader,FILE *ifile)
 {
-  long ipos,start;
+  PYGR_OFF_T ipos;
+  long start;
   start=isub-(isub%nblock); /* GET BLOCK START */
   if (start+nblock>nsubheader)
     nblock=nsubheader-start; /* TRUNCATE TO FIT MAX FILE LENGTH */
-  ipos=start * sizeof(SublistHeader);
-  fseek(ifile,ipos,SEEK_SET);
+  ipos=start; /* CONVERT TO off_t TYPE */
+  ipos *= sizeof(SublistHeader); /* CALCULATE ACTUAL BYTE OFFSET */
+  PYGR_FSEEK(ifile,ipos,SEEK_SET);
   fread(subheader,sizeof(SublistHeader),nblock,ifile);
   return start;
 }
@@ -383,7 +385,6 @@ int find_file_start(IntervalIterator *it,int start,int end,int isub,
                     SubheaderFile *subheader_file,
 		    int ntop,int div,FILE *ifile)
 {
-  IntervalMap *imdiv=NULL;
   int i_div= -1,offset=0,offset_div=0;
   if (isub<0)  /* TOP-LEVEL SEARCH: USE THE INDEX */
     i_div=find_index_start(start,end,ii,nii);
@@ -595,7 +596,7 @@ int write_binary_index(IntervalMap im[],int n,int div,FILE *ifile)
 char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
 			 SublistHeader *subheader,int nlists,char filestem[])
 {
-  int i,npad=0,nii,*subheader_pack=NULL;
+  int i,npad=0,nii;
   char path[2048];
   FILE *ifile=NULL,*ifile_subheader=NULL;
   SublistHeader sh_tmp;
