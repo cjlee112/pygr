@@ -623,6 +623,8 @@ cdef class NLMSASequence:
     cdef IntervalDB db
     if self.build_ifile==NULL:
       raise ValueError('not opened in write mode')
+    if self.nbuild<=0:
+      raise ValueError('No alignment data for this sequence.  Nothing to build!')
     fclose(self.build_ifile)
     self.build_ifile=NULL
     filename=self.filestem+'.build'
