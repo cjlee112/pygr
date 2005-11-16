@@ -549,20 +549,24 @@ class StoredPathMapping(PathMapping):
 
 class VirtualSeq(SeqPath):
     """Empty sequence object acts purely as a reference system.
-    Automatically elongates if slice extends beyond current stop."""
+    Automatically elongates if slice extends beyond current stop.
+    This class avoids setting the stop attribute, taking advantage
+    of SeqPath's mechanism for allowing a sequence to grow in length."""
     start=0
     step=1 # JUST DO OUR OWN SIMPLE INIT RATHER THAN CALLING SeqPath.__init__
     _seqtype=DNA_SEQTYPE # ALLOW THIS VIRTUAL COORD SYSTEM TO BE REVERSIBLE
     def __init__(self,id,length=1):
         self.path=self # DANGEROUS TO CALL SeqPath.__init__ WITH path=self!
-        self.stop=length # SO LET'S INIT OURSELVES TO AVOID THOSE PROBLEMS
+        self._current_length=length # SO LET'S INIT OURSELVES TO AVOID THOSE PROBLEMS
         self.id=id
     def __getitem__(self,k):
         "Elongate if slice extends beyond current self.stop"
         if isinstance(k,types.SliceType):
-            if k.stop>self.stop:
-                self.stop=k.stop
+            if k.stop>self._current_length:
+                self._current_length=k.stop
         return SeqPath.__getitem__(self,k)
+    def __len__(self):
+        return self._current_length
     def strslice(self,start,end):
         "NO sequence access!  Raise an exception."
         raise ValueError('VirtualSeq has no actual sequence')
