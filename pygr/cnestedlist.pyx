@@ -395,6 +395,7 @@ cdef class NLMSASlice:
           start2=im2[j].target_start+start_max-im2[j].start # COORDS IN TARGET
           stop2=im2[j].target_start+end_min-im2[j].start
           it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
+          assert ns_lpo.id!=im2[j].target_id:
           interval_id_union(im2[j].target_id,start2,stop2,iv,2*nseq) # RECORD BOUNDS
         free(im2) # FREE THE MAP OURSELVES, SINCE RELEASED FROM it2
 
@@ -458,8 +459,9 @@ cdef class NLMSASlice:
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     l=[]
     for i from 0 <= i <self.n:
-      l.append(nl.seqInterval(self.im[i].target_id,self.im[i].target_start,
-                              self.im[i].target_end))
+      if not nl.seqlist[self.im[i].target_id].is_lpo: # EXCLUDE LPO SEQUENCES
+        l.append(nl.seqInterval(self.im[i].target_id,self.im[i].target_start,
+                                self.im[i].target_end))
     return iter(l)
     
 
@@ -911,7 +913,7 @@ cdef class NLMSASliceIterator:
     self.advanceStartStop() # ADJUST istart,istop TO OVERLAP ipos
     if self.istart>=self.istop: # HMM, NO OVERLAPS TO ipos
       if self.istop<self.nlmsaSlice.n: # ANY MORE INTERVALS?
-        self.ipos=self.nlmsaSlice[self.istop].start # START OF NEXT INTERVAL
+        self.ipos=self.nlmsaSlice.im[self.istop].start # START OF NEXT INTERVAL
         self.advanceStartStop() # ADJUST istart,istop TO OVERLAP ipos
       else:
         raise StopIteration # NO MORE POSITIONS IN THIS SLICE
