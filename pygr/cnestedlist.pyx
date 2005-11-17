@@ -395,7 +395,7 @@ cdef class NLMSASlice:
           start2=im2[j].target_start+start_max-im2[j].start # COORDS IN TARGET
           stop2=im2[j].target_start+end_min-im2[j].start
           it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
-          assert ns_lpo.id!=im2[j].target_id:
+          assert ns_lpo.id!=im2[j].target_id
           interval_id_union(im2[j].target_id,start2,stop2,iv,2*nseq) # RECORD BOUNDS
         free(im2) # FREE THE MAP OURSELVES, SINCE RELEASED FROM it2
 
