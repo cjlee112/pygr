@@ -26,6 +26,19 @@ int cdict_free(CDict *d)
   return 0;
 }
 
+
+int cdict_qsort_cmp(const void *void_a,const void *void_b)
+{ /* STRAIGHTFORWARD COMPARISON OF SIGNED start VALUES, LONGER INTERVALS 1ST */
+  CDictEntry *a=(CDictEntry *)void_a,*b=(CDictEntry *)void_b;
+  if (a->k<b->k)
+    return -1;
+  else if (a->k>b->k)
+    return 1;
+  else
+    return 0;
+}
+
+
 CDictEntry *cdict_getitem(CDict *d,int k)
 {
   int l=0,mid,r;
