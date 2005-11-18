@@ -1,5 +1,10 @@
+cdef extern from "string.h":
+  ctypedef int size_t
+
 cdef extern from "stdlib.h":
   void free(void *)
+  void qsort(void *base, size_t nmemb, size_t size,
+             int (*compar)(void *,void *))
 
 cdef extern from "cgraph.h":
     ctypedef struct CDictEntry:
@@ -12,6 +17,7 @@ cdef extern from "cgraph.h":
 
     CDict *cdict_alloc(int n)
     int cdict_free(CDict *d)
+    int cdict_qsort_cmp(void *void_a,void *void_b)
     CDictEntry *cdict_getitem(CDict *d,int k)
 
     ctypedef struct CGraphEntry:
