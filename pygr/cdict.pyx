@@ -77,20 +77,37 @@ class QueryMatchList(object):
 cdef class CIntDictionary:
     'both keys and values MUST be integers'
     def __new__(self,d):
-        cdef int i
+        cdef int i,k,v
         self.d=cdict_alloc(len(d))
         if self.d==NULL: # NO MORE MEMORY??
             raise MemoryError()
         i=0
-        l=[]
-        for k in d:
-            l.append(k)
-        l.sort()
-        for k in l:
+        for k,v in d.iteritems():
             self.d[0].dict[i].k=k
-            self.d[0].dict[i].v=d[k]
+            self.d[0].dict[i].v=v
             i=i+1
         self.d[0].n=i
+        qsort(self.d[0].dict,self.d[0].n,sizeof(CDictEntry),cdict_qsort_cmp)
+
+    def keys(self):
+        cdef int i
+        l=[]
+        for i from 0 <= i < self.d[0].n:
+            l.append(self.d[0].dict[i].k)
+        return l
+
+    def __iter__(self):
+        return iter(self.keys())
+
+    def items(self):
+        cdef int i
+        l=[]
+        for i from 0 <= i < self.d[0].n:
+            l.append((self.d[0].dict[i].k,self.d[0].dict[i].v))
+        return l
+
+    def iteritems(self):
+        return iter(self.items())
 
     def __getitem__(self,k):
         cdef CDictEntry *e
@@ -101,7 +118,8 @@ cdef class CIntDictionary:
         return e[0].v
     
     def __dealloc__(self):
-        cdict_free(self.d)
+        if self.d:
+            cdict_free(self.d)
 
 
 cdef CDict *cdict_init(object d,object key_index):
@@ -110,16 +128,13 @@ cdef CDict *cdict_init(object d,object key_index):
     cd=cdict_alloc(len(d))
     if cd==NULL: # NO MORE MEMORY??
         raise MemoryError()
-    l=[]
-    for k,v in d.iteritems():
-        l.append((key_index[k],key_index[v]))
-    l.sort()
     i=0
-    for k,v in l:
-        cd[0].dict[i].k=k
-        cd[0].dict[i].v=v
+    for k,v in d.iteritems():
+        cd[0].dict[i].k=key_index[k]
+        cd[0].dict[i].v=key_index[v]
         i=i+1
     cd[0].n=i
+    qsort(cd[0].dict,cd[0].n,sizeof(CDictEntry),cdict_qsort_cmp)
     return cd
 
 
@@ -165,7 +180,8 @@ cdef class CDictionary:
         return l
     
     def __dealloc__(self):
-        cdict_free(self.d)
+        if self.d:
+            cdict_free(self.d)
 
 cdef class CDictionaryRef:
     'holds a reference to a CDict'
@@ -270,8 +286,9 @@ cdef class CGraphDict:
         return l
 
     def __dealloc__(self):
-        free(self.d[0].dict)
-        free(self.d)
+        if self.d:
+            free(self.d[0].dict)
+            free(self.d)
 
 
 cdef class CDictIterator:
@@ -383,5 +400,7 @@ cdef class IntTupleArray:
         self.data=calloc_int(n*self.vector_len*self.dim)
 
     def __dealloc__(self):
-        free(self.data)
-        free(self.vector)
+        if self.data:
+            free(self.data)
+        if self.vector:
+            free(self.vector)
