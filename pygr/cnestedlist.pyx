@@ -784,9 +784,14 @@ cdef class NLMSALetters:
     except AttributeError:
       raise KeyError('key must be a sequence interval or python slice object')
 
+  cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id):
+    seqnames[0].p=<char *>malloc(32)
+    strcpy(seqnames[0].p,"NLMSA_LPO_Internal")
+    seqnames[0].id=lpo_id
+
   def readMAFfiles(self,mafFiles):
     'read alignment from a set of MAF files'
-    cdef int i,j,nseq0,nseq1,n,ipass,nseq
+    cdef int i,j,nseq0,nseq1,n,ipass,nseq,maxint,block_len
     cdef SeqNameID_T seqnames[1024]
     cdef char tmp[32768],*p,a_header[4]
     cdef FILE *ifile
@@ -795,11 +800,10 @@ cdef class NLMSALetters:
     cdef FILE *build_ifile[1024]
     cdef int nbuild[1024]
 
-    ns_lpo=self.seqlist[self.lpo_id]
-    seqnames[0].p=<char *>malloc(32)
-    strcpy(seqnames[0].p,"NLMSA_LPO_Internal")
-    seqnames[0].id=0
-    build_ifile[0]=ns_lpo.build_ifile
+    import sys
+    maxint=sys.maxint-65536 # MAXIMUM VALUE REPRESENTABLE BY int
+    ns_lpo=self.seqlist[self.lpo_id] # OUR INITIAL LPO
+    self.seqname_alloc(seqnames,ns_lpo.id)
     nseq=1
     nseq0=1
     nseq1=1
@@ -816,27 +820,44 @@ cdef class NLMSALetters:
       p=fgets(tmp,32767,ifile)
       while p: # GOT ANOTHER LINE TO PROCESS
         if 0==strncmp(tmp,a_header,2): # ALIGNMENT HEADER: READ ALIGNMENT
-          n=readMAFrecord(im,0,seqnames,nseq0,&nseq1,ns_lpo.length,ifile)
-          ns_lpo.saveInterval(im,n,1,ns_lpo.build_ifile) # SAVE LPO -> SEQ
-##           for i from 0 <= i < n: # SAVE EACH INTERVAL SEQ -> LPO
-##             print 'saveInterval:',0,im[i].start,im[i].end,im[i].target_id,\
-##                   im[i].target_start,im[i].target_end
-          ns_lpo.nbuild=ns_lpo.nbuild+n # INCREMENT COUNT OF SAVED INTERVALS
-          for i from 0 <= i < n: # SAVE EACH INTERVAL SEQ -> LPO
+          n=readMAFrecord(im,0,seqnames,nseq0,&nseq1,ns_lpo.length,
+                          &block_len,ifile,1024)
+          if n<0:
+            raise ValueError('MAF block too long!  Increase max size')
+          for i from 0 <= i < n: # CHECK FOR NEW SEQUENCES TO CREATE
             j=im[i].target_id
             if j>=nseq: # NEW SEQUENCE, NEED TO OPEN A NEW STREAM
               ns=self.newSequence(seqnames[j].p) # PASS NAME AS DUMMY seq
-              if j!=seqnames[j].id or j!=ns.id:
+              if j!=ns.id or j!=seqnames[j].id:
                 raise ValueError('sequence ID mismatch: %d,%d' %(ns.id,j))
               build_ifile[j]=ns.build_ifile # KEEP PTR SO WE CAN WRITE DIRECTLY!
               nbuild[j]=0
               nseq=nseq+1 # IF im.target_id SORTED, WE CAN ADD ONE BY ONE LIKE THIS
+          if maxint-ns_lpo.length<=block_len: # TOO BIG! MUST CREATE A NEW LPO
+            j=ns_lpo.length # RECORD THE OLD OFFSET
+            ns_lpo=self.newSequence() # CREATE A NEW LPO SEQUENCE
+            self.seqname_alloc(seqnames+nseq,ns_lpo.id)
+            nseq=nseq+1
+            for i from 0<= i < n: # TRANSLATE THESE INTERVALS BACK TO ZERO OFFSET
+              if im[i].start>=0: # FORWARD INTERVAL
+                im[i].start = im[i].start - j
+                im[i].end = im[i].end - j
+              else: # REVERSE INTERVAL
+                im[i].start = im[i].start + j
+                im[i].end = im[i].end + j
+          ns_lpo.saveInterval(im,n,1,ns_lpo.build_ifile) # SAVE LPO -> SEQ
+          ns_lpo.nbuild=ns_lpo.nbuild+n # INCREMENT COUNT OF SAVED INTERVALS
+##           for i from 0 <= i < n: # SAVE EACH INTERVAL SEQ -> LPO
+##             print 'saveInterval:',0,im[i].start,im[i].end,im[i].target_id,\
+##                   im[i].target_start,im[i].target_end
 ##               print 'Creating new sequence:',j,seqnames[j].p,nseq
+          for i from 0 <= i < n: # SAVE EACH INTERVAL SEQ -> LPO
             im_tmp.start=im[i].target_start # COPY DATA FOR SAVING
             im_tmp.end=im[i].target_end
-            im_tmp.target_id=self.lpo_id
+            im_tmp.target_id=ns_lpo.id
             im_tmp.target_start=im[i].start
             im_tmp.target_end=im[i].end
+            j=im[i].target_id
 ##             print 'saveInterval:',j,im_tmp.start,im_tmp.end,im_tmp.target_id,\
 ##                   im_tmp.target_start,im_tmp.target_end
             ns_lpo.saveInterval(&im_tmp,1,0,build_ifile[j]) # SAVE SEQ -> LPO
@@ -850,7 +871,8 @@ cdef class NLMSALetters:
 ##     print 'nbuild[0]',ns_lpo.nbuild
     for i from 1 <= i <nseq: # SAVE INTERVAL COUNTS BACK TO EACH SEQUENCE
       ns=self.seqlist[i]
-      ns.nbuild=nbuild[i]
+      if not ns.is_lpo: # SAVE INTERVAL COUNTS BACK TO REGULAR SEQUENCES
+        ns.nbuild=nbuild[i]
 ##       print 'nbuild[%d]' % i,ns.nbuild
     self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
     free_seqnames(seqnames,nseq) # DUMP OUR STRING STORAGE
