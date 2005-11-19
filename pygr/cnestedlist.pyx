@@ -373,6 +373,7 @@ cdef class NLMSASlice:
           ns_lpo=ns.nlmsaLetters.seqlist[it.im_buf[i].target_id]
           if not ns_lpo.is_lpo:
             raise ValueError('sequence mapped to non-LPO target??')
+          ns_lpo.forceLoad()
         it2=IntervalFileDBIterator(it.im_buf[i].target_start,
                                    it.im_buf[i].target_end,ns_lpo.db)
         it2.loadAll() # GET ALL OVERLAPPING INTERVALS
@@ -473,14 +474,16 @@ cdef class NLMSANode:
   def __new__(self,int ipos,NLMSASlice nlmsaSlice not None,
               int istart,int istop):
     cdef int i,n
+    cdef NLMSALetters nl
     self.nlmsaSlice=nlmsaSlice
+    nl=nlmsaSlice.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     self.ipos=ipos
     self.istart=istart
     self.istop=istop
     self.id=ipos # DEFAULT: ASSUME SLICE IS IN LPO...
     for i from istart <= i < istop:
       if nlmsaSlice.im[i].start<=ipos and ipos<nlmsaSlice.im[i].end:
-        if nlmsaSlice.nlmsaSequence.nlmsaLetters.is_lpo(nlmsaSlice.im[i].target_id):
+        if nl.seqlist[nlmsaSlice.im[i].target_id].is_lpo:
           self.id=nlmsaSlice.im[i].target_start+ipos-nlmsaSlice.im[i].start #LPO ipos
         else: # DON'T COUNT THE LPO SEQUENCE
           self.n = self.n + 1
@@ -494,7 +497,7 @@ cdef class NLMSANode:
     for i from self.istart <= i < self.istop:
       if self.nlmsaSlice.im[i].start<=self.ipos \
              and self.ipos<self.nlmsaSlice.im[i].end \
-             and not nl.is_lpo(self.nlmsaSlice.im[i].target_id):
+             and not nl.seqlist[self.nlmsaSlice.im[i].target_id].is_lpo:
         j=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
         l.append(nl.seqInterval(self.nlmsaSlice.im[i].target_id,j,j+1))
     return iter(l)
@@ -893,10 +896,11 @@ cdef class NLMSALetters:
     self.do_build=0
 
   cdef int is_lpo(self,int id):
-    if id==self.lpo_id:  # FIX THIS TO ALLOW MULTIPLE LPO!!!!
-      return 1
-    else:
-      return 0
+    raise NotImplementedError('this method is currently broken.  Fix me!')
+##     if id==self.lpo_id:  # FIX THIS TO ALLOW MULTIPLE LPO!!!!
+##       return 1
+##     else:
+##       return 0
 
   def seqInterval(self,int iseq,int istart,int istop):
     'get specified interval in the target sequence'
