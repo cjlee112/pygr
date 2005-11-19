@@ -6,21 +6,12 @@
 
 \title{Pygr: Docs Overview}
 
-% The audience for this document includes people who don't know anything 
-% about Python and aren't about to learn the language just in order to
-% install and maintain it for their users, i.e. system administrators.
-% Thus, I have to be sure to explain the basics at some point:
-% sys.path and PYTHONPATH at least.  Should probably give pointers to
-% other docs on "import site", PYTHONSTARTUP, PYTHONHOME, etc.
-% 
-% Finally, it might be useful to include all the material from my "Care
-% and Feeding of a Python Installation" talk in here somewhere.  Yow!
 
 \input{boilerplate}
 
 \author{Chris Lee}
 \authoraddress{
-\strong{UCLA, Department of Chemistry & Biochemistry}\\
+\strong{UCLA, Department of Chemistry and Biochemistry}\\
 	Email: \email{leec@chem.ucla.edu}
 }
 
@@ -178,7 +169,7 @@ Sequences and alignments also can be modeled as graph structures in Pygr, provid
 Pygr tries to provide a very "Pythonic" model for sequences.  This python interpreter session illustrates some simple features:
 
 \begin{verbatim}
->>> from seqdb import *
+>>> from pygr.seqdb import *
 >>> s=NamedSequence('attatatgccactat','bobo') #create a sequence named bobo
 >>> s # interpreter will print repr(s)
 bobo[0:15]
@@ -215,7 +206,7 @@ Here's an example of working with sequences from a relational database:
 ]+'/.my.cnf')
 >>> t=SQLTable('genomic_cluster_JUN03',rdb.cursor()) #interface to a table of
  sequences
->>> from seqdb import *   # pygr module for working with sequences from databases
+>>> from pygr.seqdb import *   # pygr module for working with sequences from databases
 >>> t.objclass(DNASQLSequence) #use this class as "row objects"
 >>> s2=t['Hs.1162'] # get a specific sequence object by ID
 >>> str(s2[1000:1050]) # this will only get 50 nt of the genomic sequence from 
@@ -229,7 +220,7 @@ server and user authentication information directly from the standard ~/.my.cnf 
 Here's an example of working with sequences from a BLAST database:
 
 \begin{verbatim}
->>> from seqdb import *
+>>> from pygr.seqdb import *
 >>> db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
 >>> s=db['CYGB_HUMAN'][90:150] # get a sequence by ID, and take a slice
 >>> str(s)
@@ -319,7 +310,7 @@ To find out how the known SwissProt annotations map on to our mRNA sequences req
 
 \begin{verbatim}
 >>> from load_alignments import * # load the alignments
->>> from graphquery import *      # import the graph query code
+>>> from pygr.graphquery import *      # import the graph query code
 >>> queryGraph={1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} # 
 edge 2->3 must come from swiss_features
 >>> l=[dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] # run the query and 
@@ -334,7 +325,7 @@ Storing Alignments in a Relational Database
 Pygr makes it easy to store alignments persistently in a relational database.  To illustrate, here we run BLAST to generate an alignment of one sequence to manyother sequences, and store it to a MySQL table test.alignment:
 
 \begin{verbatim}
-from seqdb import *
+from pygr.seqdb import *
 db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
 m=db.blast(db['CYGB_HUMAN']) # get alignment to all BLAST hits in db
 import MySQLdb # import the MySQL adapter
@@ -402,7 +393,7 @@ We can now make use of the stored alignment in Pygr just as if it were a normal 
 
 \begin{verbatim}
 import MySQLdb
-from seqdb import *
+from pygr.seqdb import *
 cursor=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf').cursor()
 t=SQLTableMultiNoCache('test.alignment',cursor)
 t._distinct_key='src_id' # use this column as the ID field to search
@@ -426,8 +417,8 @@ Example: Mapping an entire gene set onto a new genome version
 To illustrate how Pygr can perform a big task with a little code, here is an example that maps a set of gene sequences onto a new version of the genome, using megablast to do the mapping, and a relational database to store the results.  Moreover, since mapping 80,000 gene clusters takes a fair amount of time, the calculation is parallelized to run over a large number of compute nodes simultaneously:
 
 \begin{verbatim}
-from leelabdb import * # this accesses our databases
-import coordinator     # this provides parallelization support
+from pygr.apps.leelabdb import * # this accesses our databases
+from pygr import coordinator     # this provides parallelization support
 
 def map_clusters(server,genome_rsrc='hg17',dbname='HUMAN_SPLICE_03',
                  result_table='GENOME_ALIGNMENT.hg17_cluster_JUN03_all',
@@ -694,10 +685,12 @@ if node2 in graph[node1]:  test whether node1 has an edge to node2.  Again, if n
 
 \end{itemize}
 
-Directionality and Reverse Traversal
+\subsubsection{Directionality and Reverse Traversal}
 
-Note that dictGraph stores directed edges, that is, a->b does not imply b->a; those are two distinct edges that would have to be added separately if you want an edge going both directions.  Moreover, the current implementation of dictGraph does not provide a mechanism for traveling an edge backwards.  To do so with algorithmic efficiency requires storing each edge twice: once in a forward index and once in a reverse index.  Since that doubles the memory requirements for storing a graph, the default dictGraph class does not do this.  If you want such a "forward-backwards" graph, use the dictGraphFB subclass that stores both forwad and reverse indexes, and supports the inverse operator (~).  ~graph gets the reverse mapping, e.g. (~graph)[node2] corresponds to the set of nodes that have edges to node2.  This area of the code hasn't been tested much yet.
-Schema: binding object attributes to graphs
+Note that dictGraph stores directed edges, that is, a->b does not imply b->a; those are two distinct edges that would have to be added separately if you want an edge going both directions.  Moreover, the current implementation of dictGraph does not provide a mechanism for traveling an edge backwards.  To do so with algorithmic efficiency requires storing each edge twice: once in a forward index and once in a reverse index.  Since that doubles the memory requirements for storing a graph, the default dictGraph class does not do this.  If you want such a "forward-backwards" graph, use the dictGraphFB subclass that stores both forwad and reverse indexes, and supports the inverse operator ($\sim$).  $\sim$ graph gets the reverse mapping, e.g. ($\sim$ graph)[node2] corresponds to the set of nodes that have edges to node2.  This area of the code hasn't been tested much yet.
+
+\subsubsection{Schema: binding object attributes to graphs}
+
 The goal of Pygr is to provide a single consistent model for working with data explicitly modeled as graphs (i.e. dictGraph-like objects) and standard Python objects that were not originally designed to be queried (or thought of) as a "graph".  Since Python uses the Mapping concept throughout the language and object model, and provides introspection, there is no reason why Pygr can't work with both kinds of data transparently.  One mechanism for making this idea explicit is the idea of binding an object attribute to a graph, via the new method we've called setschema(obj,attr,graph).  The idea here is that once you bind an object attribute to a graph, the two different data models obj.attr (object model) or graph[obj] (graph model) are made equivalent and interchangeable.  Operating on one affects the other and vice versa; they are two ways of referring to the same relation.  This concept can be applied at several different levels
 
 \begin{itemize}
@@ -716,7 +709,9 @@ class ExonForm(object): # ADD ATTRIBUTES STORING SCHEMA INFO
 In this class we bound the next attribute to spliceGraph, alt5 attribute to alt5Graph, and alt3 attribute to alt3Graph.  That means, every instance obj of this class will have an attribute obj.next that is equivalent to spliceGraph[obj], etc.  Note that this is schema, not the actual operation of adding the object as a node to the graph.  Indeed, when obj is first created, it is not automatically added to spliceGraph; that is up to the user.  Unless your code has added the node to the graph (e.g. spliceGraph+=obj), obj.next should throw a KeyError exception.
 
 The general method getschema(obj,attr) works regardless of whether the schema was stored on an individual object or at the class level.
-GraphQuery
+
+\subsubsection{GraphQuery}
+
 The GraphQuery class implements simple node-to-node matching, in which each new node-set is generated by an iterator associated with a specific node in the query graph.  This iterator model is general: since indexes (mappings) support the iterator protocol, a given iterator may actually be an index lookup (or other clever search algorithm).  The GraphQuery constructor takes two arguments: the default data graph being queried, and the query graph.  The query graph is just a graph; its nodes can be any object that can be a graph node (i.e. any object that is indexible, e.g. by adding a __hash__() method).  Its node objects will not be modified in any way by the GraphQuery.  Its edges are expected to be dictionaries that can be checked for specific keyword arguments:
 
 \begin{itemize}
@@ -760,18 +755,19 @@ The attr - subqueries options are all implemented as extremely simple subclasses
 Note: an easy way to pass keyword dictionaries (e.g. as edge information) is simply using the dict() constructor, e.g. dict(dataGraph=myGraph,filter=my_filter).  I think this is a little more readable than {'dataGraph':myGraph, 'filter':my_filter}.
 
 Note on current behavior: currently, the GraphQuery iterator returns the same mapping object for each iteration (simply changing its contents).  So to save these multiple values safely in a list comprehension we have to copy each one into a new dict object via dict(m).
-What is GraphQuery actually doing?
+
+\subsubsection{What is GraphQuery actually doing?}
+
 A GraphQuery is basically an iterator that returns all possible mappings of the query graph onto the datagraph that match all of the nodes and edges of the query graph onto nodes and edges of the data graph.  As an iterator, it does not instantiate a list of the matches, but simply returns the matches one by one.  The current design is very simple.  The GraphQuery constructor builds an "iterator stack" of GraphQueryIterators, each representing one node in the query graph; they are enumerated in order by a breadth-first-search of the query graph.  The GraphQuery iterator processes the stack of GraphQueryIterators: any match simply pushes the stack to the next level; any match at the deepest level of the stack is a complete match (yield the queryMatch mapping); the end of any GraphQueryIterator simply pops the stack.  One obvious idea for improving all this is to replace this "interpreter" with a "compiler" that compiles Python for loops that are equivalent to this stack, and run that... likely to be many fold faster.
 
 
-\subsection{Python Graphs}
-\label{python-graphs}
+\subsection{Seqdb Module}
+\label{seqdb}
 
-Pygr interface to sequence databases stored in FASTA, BLAST or relational databases.
+{\em Pygr interface to sequence databases stored in FASTA, BLAST or relational databases.}
 
-Python Graphs
 
-Overview
+\subsubsection{Overview}
 
 The seqdb module provides a simple, consistent interface to sequence databases from a variety of different storage sources such as FASTA, BLAST and relational databases.  Sequence databases are modeled (like other Pygr container classes) as dictionaries, whose keys are sequence IDs and whose values are sequence objects.  Pygr sequence objects use the Python sequence protocol in all the ways you'd expect: a subinterval of a sequence object is just a Python slice (s[0:10]), which just returns a sequence object representing that interval; the reverse complement is just -s; the length of a sequence is just len(s); to obtain the actual string sequence of a sequence object is just str(s).  Pygr sequence objects work intelligently with different types of back-end storage (e.g. relational databases or BLAST databases) to efficiently access just the parts of sequence that are requested, only when an actual sequence string is needed.
 
@@ -779,7 +775,7 @@ The seqdb module provides a simple, consistent interface to sequence databases f
 Interface to an existing BLAST database or FASTA sequence file; in the latter case, it will automatically construct BLAST database files for you using the NCBI tool formatdb. Here's a simple example of opening a BLAST database and searching it for matches to a specific piece of sequence:
 
 \begin{verbatim}
-from seqdb import *
+from pygr.seqdb import *
 db=BlastDB('sp') # OPEN SWISSPROT BLAST DB
 s=NamedSequence(str(db['CYGB_HUMAN'][40:-40]),'boo')
 m=db.blast(s) # DO BLAST SEARCH
@@ -856,7 +852,7 @@ it uses the NCBI tool fastacmd to retrieve sequence efficiently from a BLAST dat
 the len() method is implemented using the seqLenDict, a precalculated index of the sequence lengths.  So again no sequence has to be read by Python.
 
 \end{itemize}
-BlastSequenceCache
+\subsubsection{BlastSequenceCache}
 
 Implements a variant of BlastSequence designed to merge and cache requests for local intervals of sequence so that repeated accesses to these regions are bundled and cached for efficiency.  You work with sequence objects of this type normally, using Python slicing to obtain subintervals, and str() to get the sequence string for a subinterval.  But behind the scenes, it does two things:
 
@@ -910,9 +906,9 @@ for e in MAFStoredPathMapping(bcl2m,'ucsc_maf8',u).edges(): #GET ITS MULTIGENOME
 \subsection{Coordinator Module}
 \label{coord-module}
 
-Framework for running subtasks distributed over many computers, in a pythonic way, using SSH for secure process invocation and XMLRPC for message passing. Also provides simple interface for queuing and managing any number of such "batch jobs".
+{\em Framework for running subtasks distributed over many computers, in a pythonic way, using SSH for secure process invocation and XMLRPC for message passing. Also provides simple interface for queuing and managing any number of such "batch jobs".}
 
-Overview
+\subsubsection{Overview}
 
 The coordinator module provides a simple system for running a large collection of tasks on a set of cluster nodes.  It assumes:
 
@@ -935,8 +931,8 @@ To see how to use this, let's look at an example script, mapclusters5.py:
 
 \begin{verbatim}
 
-from leelabdb import *
-import coordinator
+from pygr.apps.leelabdb import *
+from pygr import coordinator
 
 def map_clusters(server,genome_rsrc='hg17',dbname='HUMAN_SPLICE_03',
                  result_table='GENOME_ALIGNMENT.hg17_cluster_JUN03_all',
@@ -991,7 +987,8 @@ if __name__=="__main__": this final clause automatically launches our script as 
 Command-line arguments are parsed (GNU-style, ie. --foo=bar) by start_client_or_server() and passed to your client and server functions as Python named parameters.  Because the same list of arguments is passed to your client and server functions, and each of these functions won't necessarily want to get all the named arguments, you should include the **kwargs at the end of the argument list.  Any unmatched arguments will be stored in kwargs as a Python mapping (dictionary).  If you fail to do this, your client or server function will crash if called with any named parameters other than the ones it expects.
 \end{itemize}
 
-Log and Error Information
+\subsubsection{Log and Error Information}
+
 Process logging and error information go to three different types of logs:
 
 \begin{itemize}
@@ -1056,7 +1053,9 @@ Python errors (tracebacks) in your will be GNU-style command-line options (e.g. 
 
 Whereas you start a separate Coordinator for each set of jobs you want to run, you only need a single ResourceController running. To start the ResourceController, run:
 
+\begin{verbatim}
 python coordinator.py --rc=bigcheese
+\end{verbatim}
 
 This starts the ResourceController (running as a demon process in the background) and names it "bigcheese"; a name argument (given by the --rc flag) is REQUIRED.  Since you didn't specify command-line flags, it will run on the default port 5000.  It will use several files based on the name you gave it:
 \begin{itemize}
@@ -1087,11 +1086,12 @@ errlog: logfile path for saving all output to.  Defaults to NAME.log, where NAME
 
 \end{itemize}
 
-RCMonitor
+\subsubsection{RCMonitor}
+
 The coordinator module also provides a convenience interface for interrogating and controlling jobs.  In an interactive Python shell, import the coordinator module, and create an RCMonitor object::
 
 \begin{verbatim}
-import coordinator
+from pygr import coordinator
 m=coordinator.RCMonitor()
 \end{verbatim}
 
