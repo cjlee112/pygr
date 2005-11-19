@@ -88,8 +88,8 @@ cdef extern from "apps/maf2nclist.h":
     char *p
     int id
   cdef int readMAFrecord(IntervalMap im[],int n,SeqNameID_T seqnames[],
-                         int nseq0,int *p_nseq1,
-		         int lpoStart,FILE *ifile)
+                         int nseq0,int *p_nseq1,int lpoStart,
+		         int *block_len,FILE *ifile,int maxseq)
   cdef int seqnameID_qsort_cmp(void *void_a,void *void_b)
   void free_seqnames(SeqNameID_T seqnames[],int n)
 
@@ -138,6 +138,7 @@ cdef class NLMSALetters:
   cdef int lpo_id
 
   cdef int is_lpo(self,int id)
+  cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id)
 
 cdef class NLMSASequence:
   cdef readonly int id,length,nbuild,is_lpo
