@@ -839,8 +839,9 @@ cdef class NLMSALetters:
           if maxint-ns_lpo.length<=block_len: # TOO BIG! MUST CREATE A NEW LPO
             j=ns_lpo.length # RECORD THE OLD OFFSET
             ns_lpo=self.newSequence() # CREATE A NEW LPO SEQUENCE
-            self.seqname_alloc(seqnames+nseq,ns_lpo.id)
-            nseq=nseq+1
+            self.seqname_alloc(seqnames+nseq1,ns_lpo.id)
+            nseq1=nseq1+1 # INCREMENT TOTAL SEQUENCE COUNT
+            nseq=nseq1 # AND INCREMENT OBJECT CREATION COUNTER
             for i from 0<= i < n: # TRANSLATE THESE INTERVALS BACK TO ZERO OFFSET
               if im[i].start>=0: # FORWARD INTERVAL
                 im[i].start = im[i].start - j
