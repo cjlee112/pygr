@@ -795,13 +795,13 @@ cdef class NLMSALetters:
   def readMAFfiles(self,mafFiles):
     'read alignment from a set of MAF files'
     cdef int i,j,nseq0,nseq1,n,ipass,nseq,maxint,block_len
-    cdef SeqNameID_T seqnames[1024]
+    cdef SeqNameID_T seqnames[4096]
     cdef char tmp[32768],*p,a_header[4]
     cdef FILE *ifile
-    cdef IntervalMap im[1024],im_tmp
+    cdef IntervalMap im[4096],im_tmp
     cdef NLMSASequence ns_lpo,ns
-    cdef FILE *build_ifile[1024]
-    cdef int nbuild[1024]
+    cdef FILE *build_ifile[4096]
+    cdef int nbuild[4096]
 
     import sys
     maxint=sys.maxint-65536 # MAXIMUM VALUE REPRESENTABLE BY int
@@ -824,7 +824,7 @@ cdef class NLMSALetters:
       while p: # GOT ANOTHER LINE TO PROCESS
         if 0==strncmp(tmp,a_header,2): # ALIGNMENT HEADER: READ ALIGNMENT
           n=readMAFrecord(im,0,seqnames,nseq0,&nseq1,ns_lpo.length,
-                          &block_len,ifile,1024)
+                          &block_len,ifile,4096)
           if n<0:
             raise ValueError('MAF block too long!  Increase max size')
           for i from 0 <= i < n: # CHECK FOR NEW SEQUENCES TO CREATE
