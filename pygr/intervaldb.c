@@ -233,6 +233,8 @@ IntervalIterator *interval_iterator_alloc(void)
 int free_interval_iterator(IntervalIterator *it)
 {
   IntervalIterator *it2,*it_next;
+  if (!it)
+    return 0;
   FREE_ITERATOR_STACK(it,it2,it_next);
   return 0;
 }
