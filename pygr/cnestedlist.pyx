@@ -55,7 +55,9 @@ cdef class IntervalDB:
       if ifile:
         self.im=read_intervals(self.n,ifile)
         fclose(ifile)
-        self.subheader=build_nested_list(self.im,self.n,&(self.ntop),&(self.nlists))
+        if self.im!=NULL:
+          self.subheader=build_nested_list(self.im,self.n,
+                                           &(self.ntop),&(self.nlists))
       else:
         msg='could not open file %s' % filename
         raise IOError(msg)
@@ -65,6 +67,8 @@ cdef class IntervalDB:
     self.close() # DUMP OUR EXISTING MEMORY 
     self.n=len(l)
     self.im=interval_map_alloc(self.n)
+    if self.im==NULL:
+      raise MemoryError('unable to allocate IntervalMap[%d]' % self.n)
     i=0
     for t in l:
       self.im[i].start=t[0]
@@ -86,6 +90,8 @@ cdef class IntervalDB:
     if ifile==NULL:
       raise IOError('unable to open '+filename)
     im_new=interval_map_alloc(n)
+    if im_new==NULL:
+      raise MemoryError('unable to allocate IntervalMap[%d]' % n)
     i=read_imdiv(ifile,im_new,n,0,n)
     fclose(ifile)
     if i!=n:
@@ -104,6 +110,8 @@ cdef class IntervalDB:
     cdef IntervalMap im_buf[1024]
     self.check_nonempty() # RAISE EXCEPTION IF NO DATA
     it=interval_iterator_alloc()
+    if it==NULL:
+      raise MemoryError('interval_iterator_alloc failed')
     it_alloc=it
     l=[] # LIST OF RESULTS TO HAND BACK
     while it:
@@ -715,7 +723,7 @@ class NLMSASeqDict(dict):
 cdef class NLMSALetters:
   'toplevel letter interface to NLMSA storage of an LPO alignment'
   def __new__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
-              maxOpenFiles=1024):
+              maxOpenFiles=1024,maxlen=None):
     try:
       import resource # WE MAY NEED TO OPEN A LOT OF FILES...
       resource.setrlimit(resource.RLIMIT_NOFILE,(maxOpenFiles,-1))
@@ -733,7 +741,7 @@ cdef class NLMSALetters:
       self.newSequence()
       self.lpo_id=0
       if mafFiles is not None:
-        self.readMAFfiles(mafFiles)
+        self.readMAFfiles(mafFiles,maxlen)
 
   def read_indexes(self,seqDict):
     'open all nestedlist indexes in this LPO database for immediate use'
@@ -792,7 +800,7 @@ cdef class NLMSALetters:
     strcpy(seqnames[0].p,"NLMSA_LPO_Internal")
     seqnames[0].id=lpo_id
 
-  def readMAFfiles(self,mafFiles):
+  def readMAFfiles(self,mafFiles,maxlen=None):
     'read alignment from a set of MAF files'
     cdef int i,j,nseq0,nseq1,n,ipass,nseq,maxint,block_len
     cdef SeqNameID_T seqnames[4096]
@@ -804,7 +812,10 @@ cdef class NLMSALetters:
     cdef int nbuild[4096]
 
     import sys
-    maxint=sys.maxint-65536 # MAXIMUM VALUE REPRESENTABLE BY int
+    if maxlen is None:
+      maxint=sys.maxint-65536 # MAXIMUM VALUE REPRESENTABLE BY int
+    else: # USE THIS AS USER CONTROL OVER MAXIMUM SIZE OF THE LPO
+      maxint=maxlen
     ns_lpo=self.seqlist[self.lpo_id] # OUR INITIAL LPO
     self.seqname_alloc(seqnames,ns_lpo.id)
     nseq=1
