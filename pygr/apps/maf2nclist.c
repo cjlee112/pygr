@@ -60,19 +60,17 @@ int save_interval(IntervalMap *im,int start,int stop,int iseq,int istart,int ist
 int readMAFrecord(IntervalMap im[],int n,SeqNameID_T seqnames[],int nseq0,int *p_nseq1,
 		  int lpoStart,int *p_block_len,FILE *ifile,int maxseq)
 {
-  int i,start,seqStart,rev,junk,iseq,max_len=0;
+  int i,start,seqStart,rev,junk,iseq,max_len=0,seqLength;
   char *p,tmp[32768],seq[32768],prefix[8],seqName[64],oriFlag[8];
   for (p=fgets(tmp,32767,ifile);
        p && 7==sscanf(tmp,"%2s %s %d %d %2s %d %s",prefix,seqName,&seqStart,&junk,
-		      oriFlag,&junk,seq) && 's'==prefix[0] && '\0'==prefix[1];
+		      oriFlag,&seqLength,seq) && 's'==prefix[0] && '\0'==prefix[1];
        p=fgets(tmp,32767,ifile)) {
 /*     printf("\tALIGN: %s,%s,%d,%d,%s,%d,%s\n",prefix,seqName,seqStart,junk,oriFlag,junk,seq); */
     iseq=findseqname(seqName,seqnames,nseq0,p_nseq1,maxseq); /* LOOK UP INDEX FOR SEQ */
     if (iseq<0) return -1;  /* ERROR: RAN OUT OF SPACE!!! */
     if (0==strcmp("-",oriFlag))
-      rev=1;
-    else 
-      rev=0;
+      seqStart= -(seqLength-seqStart); /* CALCULATE NEGATIVE INDEX INDICATING REVERSE STRAND*/
     i=0;
     while (seq[i]) {
       while ('-'==seq[i]) i++; /* SKIP GAP REGIONS */
@@ -80,10 +78,7 @@ int readMAFrecord(IntervalMap im[],int n,SeqNameID_T seqnames[],int nseq0,int *p
       for (start=i;seq[i] && seq[i]!='-';i++); /* GET A SEQUENCE INTERVAL */
 /*       printf("\t\t%d,%d\n",start,i); */
       if (n>=maxseq) return -1; /* ERROR: RAN OUT OF SPACE!!! */
-      if (rev) 
-	save_interval(im+n,-(lpoStart+i),-(lpoStart+start),iseq,seqStart,seqStart+i-start);
-      else
-	save_interval(im+n,lpoStart+start,lpoStart+i,iseq,seqStart,seqStart+i-start);
+      save_interval(im+n,lpoStart+start,lpoStart+i,iseq,seqStart,seqStart+i-start);
       n++;
       seqStart += i-start;
     }
