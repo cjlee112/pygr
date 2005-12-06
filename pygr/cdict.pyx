@@ -28,7 +28,8 @@ class CGraphQueryMatch(dict):
         while len(l)>=2: # STORE MAPPING INTO OUR DICT
             node,edge=l[:2]
             self[gqcompiler.gqi[i].queryNode]=index_keys[node]
-            self[gqcompiler.gqi[i].fromNode,gqcompiler.gqi[i].queryNode]=index_keys[edge]
+            if gqcompiler.gqi[i].fromNode is not None:
+                self[gqcompiler.gqi[i].fromNode,gqcompiler.gqi[i].queryNode]=index_keys[edge]
             i=i+1
             l=l[2:]
 
