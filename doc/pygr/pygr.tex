@@ -761,6 +761,255 @@ Note on current behavior: currently, the GraphQuery iterator returns the same ma
 A GraphQuery is basically an iterator that returns all possible mappings of the query graph onto the datagraph that match all of the nodes and edges of the query graph onto nodes and edges of the data graph.  As an iterator, it does not instantiate a list of the matches, but simply returns the matches one by one.  The current design is very simple.  The GraphQuery constructor builds an "iterator stack" of GraphQueryIterators, each representing one node in the query graph; they are enumerated in order by a breadth-first-search of the query graph.  The GraphQuery iterator processes the stack of GraphQueryIterators: any match simply pushes the stack to the next level; any match at the deepest level of the stack is a complete match (yield the queryMatch mapping); the end of any GraphQueryIterator simply pops the stack.  One obvious idea for improving all this is to replace this "interpreter" with a "compiler" that compiles Python for loops that are equivalent to this stack, and run that... likely to be many fold faster.
 
 
+
+
+
+\subsection{sequence Module}
+\label{sequence}
+
+{\em Base classes for representing sequences and sequence intervals.}
+
+
+\subsubsection{Overview}
+Pygr provides one base class representing both sequences and sequence intervals (SeqPath),
+from which all sequence classes are derived (Sequence, SQLSequence, BlastSequence etc.).
+In this section we document both the features of the base class, and ways to extend or
+customize it by creating your own subclasses derived from SeqPath.  The IntervalTransform
+class represents a coordinate system mapping from one interval of a sequence, onto 
+another interval of the same or a different sequence.
+
+\subsubsection{SeqPath}
+This class provides the basic capabilities of a sliceable sequence or sequence interval,
+used widely in Pygr.  It tries to provide core operations on sequences in a highly
+Pythonic way:
+
+\begin{itemize}
+
+\item    
+{\em Python Sequence}: of course, SeqPath behaves like a Python sequence. i.e.
+the length of a SeqPath {\em s} is just {\em len(s)}, 
+and you iterate over the ``letters'' in it using 
+{\em for l in s:}  
+(Note, the individual letters produced by this iterator
+will themselves by SeqPath objects (by default, of length 1)).  And all the slicing
+operations defined for Python Sequences also apply to SeqPath (see below).
+
+\item    
+{\em Slicing}: SeqPath is designed to represent a slice (subinterval) of a sequence.
+Like the Python builtin {\em slice} class, it has {\em start}, {\em stop}, and 
+{\em step} attributes that indicate the interval beginning, end, and ``stride''.
+Moreover, it is itself sliceable in the usual pythonic way, i.e. s[start:stop],
+where {\em start} and {\em stop} are in the {\em local} coordinate system of s 
+(i.e. s[0] is the first letter of the interval represented by s). Note that SeqPath
+follows the Python slicing coordinate conventions of positive integers as
+forward coordinates (i.e. counting from the interval start) and negative integers
+as reverse coordinates (i.e. counting from the interval end).
+
+\item    
+{\em String value}: to obtain the actual sequence string representation
+of a SeqPath, just use the Python builtin {\em str(s)}.  
+Note that in most cases
+a SeqPath object does not itself store the sequence string associated with it
+but obtains it from somewhere else when the user requests it.
+
+\item
+{\em comparison and containment}: SeqPath implements the interval-ordering
+and interval-containment relations using the standard Python order operators
+and containment operators. i.e. s<t iff s.start<t.start, and s in t iff
+t.start<=s.start and s.stop<=t.stop.
+
+\item
+{\em orientation}: SeqPath carefully represents relationships between intervals
+on opposite strands of a double-stranded nucleotide sequence.  A SeqPath object
+knows whether it is an interval on the forward or reverse strand.  Pygr provides
+a number of operations for manipulating and comparing intervals of different
+orientations.  For example, -s yields the interval of the opposite strand that
+is base-paired to interval s (i.e. this is not just the reverse-complement of s
+in the string 'atgc' $\rightarrow$ 'gcat' sense, but is specifically the coordinate
+interval on the opposite strand that is base-paired to s).
+
+\item
+{\em schema}: a SeqPath object knows ``what sequence'' it is an interval of;
+it is not just a (start,stop) coordinate pair, but is actually bound to a specific
+parent sequence object.  Specifically, s.path is the parent sequence object of
+which s is a subinterval; s.path will itself be an instance of SeqPath, and its path
+attribute will simply be itself.  All SeqPath objects are descended from such ``top-level''
+SeqPath objects.  Note that when you have sequence intervals from both forward
+and reverse strands of a sequence, all of the forward strand intervals will share
+the same path attribute (your original top-level sequence object representing
+the whole sequence in forward orientation), while all the reverse strand intervals
+will reference another top-level SeqPath created automatically to represent the
+reverse strand.
+
+\item
+{\em Mutable Sequences}: Just as the Python builtin list class implements
+``mutable sequence'' objects that can be resized, SeqPath objects can be
+resized and changed, without breaking existing subinterval objects that
+are ``part of'' the resized SeqPath object.  In particular, just as a list
+can be resized by extending its ``stop'' coordinate to a higher value, a SeqPath can
+be resized by extending its stop coordinate to a higher value.  Indeed,
+you can even create a SeqPath for a particular sequence without knowing that
+sequence's length (computing the length of a genome sequence might take a long
+time, if all you want to do is create a sequence object to represent that
+sequence).  You can do this by passing {\em None} as the stop (or start)
+coordinate.  In that case, SeqPath will automatically determine its own
+length at a later time iff a specific user operation makes it absolutely 
+necessary to know this length.
+
+\item
+{\em intersection, union, difference}: SeqPath uses the Python *, + and - 
+operators to implement interval intersection, union, and difference
+operations respectively.
+
+\end{itemize}
+
+
+\subsubsection{Sequence class}
+The Sequence class provides a SeqPath flavor that stores a sequence string
+and identifier for this sequence.
+
+\begin{verbatim}
+from pygr import sequence
+s=sequence.Sequence('GPTPCDLMETQ','FOOG_HUMAN')
+\end{verbatim}
+
+\begin{itemize}
+
+\item    
+You can change the actual string sequence using the {\em update} method:
+
+\begin{verbatim}
+s.update('TKRRPLEDKMNEPS')
+\end{verbatim}
+
+\item
+{\em id}: the {\em id} attribute stores the sequence's identifier.
+
+\end{itemize}
+
+\subsubsection{Coordinate System}
+SeqPath follows Python slicing conventions (i.e. 0-based indexing, positive indexes
+count forward from start, negative indexes count backwards from the sequence
+end, and always {\em start<stop}).
+
+Each SeqPath object has a number of attributes giving information about its
+``location'':
+
+\begin{itemize}
+
+\item    
+{\em orientation}: +1 if on the forward strand, or -1 if on the reverse strand.
+
+\item
+{\em path}: the top-level sequence object that this interval is part of, or self
+if this object is its top-level (i.e. not a slice of a larger sequence).  Note that
+all forward intervals share the same path attribute, but reverse strand intervals
+all have a path attribute that represents the entire reverse strand.
+
+\item
+{\em pathForward}: same as {\em path}, but always the forward strand sequence.
+
+\item
+{\em start}: start coordinate of the interval.  NB: SeqPath stores coordinates
+relative to the start of the {\em forward} strand.  This is necessary for allowing
+resizing of the top-level SeqPath; if coordinates were relative to the end of the
+sequence, they would have to be recomputed every time the length of the sequence 
+changed.  The main consequence of this is that coordinates for forward intervals
+are always positive, whereas coordinates for reverse intervals are always 
+negative (i.e. following the Python convention
+that negative coordinates count backwards
+from the end, and the fact that the end of the reverse strand corresponds to 
+the start of the forward strand). NB2: if the SeqPath was originally created with
+{\em start=None}, requesting its start attribute will force it to compute its start
+coordinate, typically requiring a computation of the sequence length.  In this
+case, the start attribute will computed automatically by SeqPath.__getattr__().
+
+\item
+{\em stop}: end coordinate of the interval.  The above comments for {\em start}
+apply to {\em stop}.  Note that for reverse intervals, a {\em stop} value of 0
+means the end of the reverse strand (i.e. -1 is the last nucleotide of the 
+reverse strand, and 0 is one beyond the last nucleotide of the reverse strand).
+
+\item
+{\em _abs_interval}: a tuple giving the ({\em start,stop}) coordinates of the 
+interval on the forward strand corresponding to this interval (i.e. for a 
+forward interval, itself, or for a reverse interval, the interval that base-pairs
+to it).
+
+\end{itemize}
+
+
+\subsubsection{Extending and Customizing}
+There are several methods and attributes you can override to extend or customize
+the behavior of your own SeqPath-derived classes.  Typically you will derive
+either from the Sequence class, or in some cases from the SeqPath class.
+
+\begin{itemize}
+
+\item
+{\em strslice(start, stop)}: self.strslice() is called to get the string
+sequence of the interval (start,stop).  You can provide your own strslice()
+method to customize how sequence is stored and accessed.  For example,
+SQLSequence.strslice() gets the sequence via a SQL query, and 
+BlastSequence obtains it using the fastacmd -L start,stop 
+UNIX shell command from the NCBI toolkit.
+
+\item    
+{\em __len__()}: is called to compute the length of the sequence.  You can
+customize this to provide an efficient length method for your particular
+sequence storage.  e.g. SQLSequence obtains it via a SQL query; BlastSequence
+obtains it from a precomputed length index.
+The default Sequence.__len__()
+method computes it from len(self.seq), assuming that the sequence can be accessed
+from the {\em seq} attribute.
+
+\item
+{\em seq}: the Sequence class assumes that the actual sequence is stored
+on the {\em seq} attribute.  You could customize this behavior by 
+making the seq attribute a property that is computed on the fly
+by some method of your own.
+
+\item    
+{\em __getitem__(slice_obj)}: if you want to monitor or intercept slicing
+requests on your sequence, you can do so by providing your own getitem method.
+See seqdb.BlastSequenceCache class for an example.
+\end{itemize}
+
+
+\subsubsection{Methods}
+The sequence module also provides several convenience functions:
+
+\begin{itemize}
+
+\item
+{\em SeqPath.seqtype()}: returns DNA_SEQTYPE for DNA sequences, 
+RNA_SEQTYPE for RNA, and PROTEIN_SEQTYPE for protein.
+
+
+\item
+{\em guess_seqtype(s)}: based on the letter composition of
+the string s, returns DNA_SEQTYPE for DNA sequences, 
+RNA_SEQTYPE for RNA, and PROTEIN_SEQTYPE for protein.
+
+\item
+{\em SeqPath.reverse_complement(s)}: returns the reverse
+complement of the sequence string s.
+
+\end{itemize}
+
+\subsubsection{IntervalTransform}
+This class provides a mapping transform between the coordinate
+systems of a pair of intervals.
+
+\begin{verbatim}
+xform=IntervalTransform(srcPath,destPath)
+d2=xform(s2) # MAPS s2 FROM srcPath coords to destPath coord system
+d3=xform[s2] # CLIPS s2 TO NOT EXTEND OUTSIDE srcPath, THEN XFORMS
+s3=xform.reverse(d3) # MAP BACK TO srcPath COORD SYSTEM
+\end{verbatim}
+
+
+
 \subsection{Seqdb Module}
 \label{seqdb}
 
@@ -901,6 +1150,80 @@ al.storeSQL('test.table',db_cursor) # STORE COMPLETE ALIGNMENT IN RELATIONAL DAT
 for e in MAFStoredPathMapping(bcl2m,'ucsc_maf8',u).edges(): #GET ITS MULTIGENOMEALIGNMENTS
    print str(e.srcPath),str(e.destPath) # PRINT THE ACTUAL ALIGNED SEQUENCE INTERVALS
 \end{verbatim}
+
+
+\subsubsection{VirtualSeq}
+This class provides an empty sequence object that
+acts purely as a reference system.
+Automatically elongates if slice extends beyond current stop.
+This class avoids setting the {\em stop} attribute, taking advantage
+of SeqPath's mechanism for allowing a sequence to grow in length.
+\begin{verbatim}
+s=VirtualSeq('FOOG_HUMAN')
+len(s) # ONLY 1 LETTER LONG BY DEFAULT
+s1=s[100:215] # GET A SLICE OF THIS SEQUENCE
+len(s) # NOW IT'S 215
+\end{verbatim}
+
+The associated VirtualSeqDB class provides a ``sequence database''
+that returns a VirtualSeq object for every identifier requested of
+it.  It acts like a Python dictionary:
+\begin{verbatim}
+db=VirtualSeqDB()
+s=db['FOOG_HUMAN'] # ASK FOR A SEQUENCE BY ITS IDENTIFIER
+s1=s[100:215] # GET A SLICE OF THIS SEQUENCE
+\end{verbatim}
+For a given identifier it always returns the same VirtualSeq
+object (i.e. the object returned from the first request for that identifier).
+In other words, if the identifier was previously requested,
+it returns the VirtualSeq for that identifier; if not, it 
+creates a new one.
+This can be convenient when performing operations that just
+need a coordinate reference system, not actual sequence.
+
+
+\subsubsection{PrefixUnionDict}
+This class acts as a wrapper for a set of dictionaries, each
+of which is assigned a specific string ``prefix''.  It provides
+a dictionary interface that accepts string keys of the form
+``prefix.suffix'', and returns d['suffix'] where {\em d} is
+the dictionary associated with the corresponding prefix.  This
+is useful for providing a unified ``database interface'' to a
+set of multiple databases.
+\begin{verbatim}
+hg17=BlastDB('/usr/tmp/ucsc_msa/hg17')
+mm5=BlastDB('/usr/tmp/ucsc_msa/mm5')
+... # LOAD A BUNCH OF OTHER GENOMES TOO...
+genomes={'hg17':hg17,'mm5':mm5, 'rn3':rn3, 'canFam1':cf1, 'danRer1':dr1,
+'fr1':fr1, 'galGal2':gg2, 'panTro1':pt1} # PREFIX DICTIONARY FOR THE UNION 
+					 # OF ALL OUR GENOMES
+genomeUnion=PrefixUnionDict(genomes)
+ptChr7=genomeUnion['panTro1.chr7'] # GET CHIMP CHROMOSOME 7
+\end{verbatim}
+
+
+\subsubsection{Functions}
+The seqdb module also provides several convenience functions:
+
+\begin{itemize}
+
+\item
+{\em read_fasta(ifile,onlyReadOneLine=False)}: a generator function
+that yields tuples of (id,title,seq) from ifile.  
+The {\em onlyReadOneLine} option is useful if you only want to 
+determine the sequence type (e.g. DNA vs protein) and the
+whole sequence might be extremely long (e.g. a genome!).
+
+\item
+{\em write_fasta(ofile,s,chunk=60,id=None)}: writes the sequence s
+to the output file {\em ofile}, using {\em chunk} as the line width.
+{\em id} can provide an identifier to use instead of the default s.id.
+
+\end{itemize}
+
+
+
+
 
 
 \subsection{Coordinator Module}
