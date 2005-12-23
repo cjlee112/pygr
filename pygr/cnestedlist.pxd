@@ -65,22 +65,22 @@ cdef extern from "intervaldb.h":
     int stop
 
   int imstart_qsort_cmp(void *void_a,void *void_b)
-  IntervalMap *read_intervals(int n,FILE *ifile)
-  SublistHeader *build_nested_list(IntervalMap im[],int n,int *p_n,int *p_nlists)
-  IntervalMap *interval_map_alloc(int n)
-  IntervalIterator *interval_iterator_alloc()
+  IntervalMap *read_intervals(int n,FILE *ifile) except NULL
+  SublistHeader *build_nested_list(IntervalMap im[],int n,int *p_n,int *p_nlists) except NULL
+  IntervalMap *interval_map_alloc(int n) except NULL
+  IntervalIterator *interval_iterator_alloc() except NULL
   int free_interval_iterator(IntervalIterator *it)
   IntervalIterator *reset_interval_iterator(IntervalIterator *it)
-  IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn)
+  IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn) except NULL
   char *write_binary_files(IntervalMap im[],int n,int ntop,int div,SublistHeader *subheader,int nlists,char filestem[])
-  IntervalDBFile *read_binary_files(char filestem[],char err_msg[],int subheader_nblock)
+  IntervalDBFile *read_binary_files(char filestem[],char err_msg[],int subheader_nblock) except NULL
   int free_interval_dbfile(IntervalDBFile *db_file)
-  IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,IntervalIndex ii[],int nii,SublistHeader subheader[],int nlists,SubheaderFile *subheader_file,int ntop,int div,FILE *ifile,IntervalMap buf[],int nbuf,int *p_nreturn)
+  IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,IntervalIndex ii[],int nii,SublistHeader subheader[],int nlists,SubheaderFile *subheader_file,int ntop,int div,FILE *ifile,IntervalMap buf[],int nbuf,int *p_nreturn) except NULL
   int write_padded_binary(IntervalMap im[],int n,int div,FILE *ifile)
   int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
-  IDInterval *interval_id_alloc(int n)
+  IDInterval *interval_id_alloc(int n) except NULL
   int interval_id_union(int id,int start,int stop,IDInterval iv[],int n)
-  IDInterval *interval_id_compact(IDInterval iv[],int *p_n)
+  IDInterval *interval_id_compact(IDInterval iv[],int *p_n) except NULL
 
 
 cdef extern from "apps/maf2nclist.h":
