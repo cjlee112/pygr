@@ -426,6 +426,8 @@ int find_file_start(IntervalIterator *it,int start,int end,int isub,
   else { /* A SMALL SUBLIST: READ THE WHOLE LIST INTO MEMORY */
     FREE(it->im);  /* DUMP ANY OLD ALLOCATION */
     it->im=read_sublist(ifile,subheader);
+    if (it->im == NULL)
+      goto handle_malloc_failure;
     it->n=subheader->len;
     it->nii=1;
     it->i_div=0; /* INDICATE THAT THERE ARE NO ADDITIONAL BLOCKS TO READ*/
@@ -434,7 +436,7 @@ int find_file_start(IntervalIterator *it,int start,int end,int isub,
   it->i=find_overlap_start(start,end,it->im,it->n);
   return it->i;
  handle_malloc_failure:
-  return -1; /* NO OVERLAP */
+  return -2; /* SIGNAL THAT MEMORY ERROR OCCURRED */
 }
 
 
@@ -447,7 +449,7 @@ IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
 				      int *p_nreturn)
 {
   IntervalIterator *it=NULL,*it2=NULL;
-  int k,ibuf=0,ori_sign=1;
+  int k,ibuf=0,ori_sign=1,ov=0;
   if (!it0) { /* ALLOCATE AN ITERATOR IF NOT SUPPLIED*/
     CALLOC(it,1,IntervalIterator);
   }
@@ -464,8 +466,9 @@ IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
 #endif
 
   if (it->n == 0)  /* DEFAULT: SEARCH THE TOP NESTED LIST */
-    find_file_start(it,start,end,-1,ii,nii,subheader,nlists,
-		    subheader_file,ntop,div,ifile);
+    if (find_file_start(it,start,end,-1,ii,nii,subheader,nlists,
+			subheader_file,ntop,div,ifile) == FIND_FILE_MALLOC_ERR)
+      goto handle_malloc_failure;
   
   do { /* ITERATOR STACK LOOP */
     while (it->i_div < it->nii) { /* BLOCK ITERATION LOOP */
@@ -476,9 +479,11 @@ IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
 	k=it->im[it->i].sublist; /* GET SUBLIST OF i IF ANY */
 	it->i++; /* ADVANCE TO NEXT INTERVAL */
 	PUSH_ITERATOR_STACK(it,it2,IntervalIterator); /* RECURSE TO SUBLIST */
-	if (k>=0 && find_file_start(it2,start,end,k,ii,nii,subheader,nlists,
-				    subheader_file,ntop,div,ifile)>=0)
+	if (k>=0 && (ov=find_file_start(it2,start,end,k,ii,nii,subheader,nlists,
+					subheader_file,ntop,div,ifile))>=0)
 	  it=it2; /* PUSH THE ITERATOR STACK */
+	if (FIND_FILE_MALLOC_ERR == ov)
+	  goto handle_malloc_failure;
 	
 	if (ibuf>=nbuf)  /* FILLED THE BUFFER, RETURN THE RESULTS SO FAR */
 	  goto finally_return_result;
@@ -604,8 +609,12 @@ char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
   SublistHeader sh_tmp;
   static char err_msg[1024];
 
-  if(nlists>0)
-    repack_subheaders(im,n,div,subheader,nlists); /* REPACK SMALL SUBLISTS TO END */
+  if (nlists>0  /* REPACK SMALL SUBLISTS TO END */
+      && repack_subheaders(im,n,div,subheader,nlists)
+      == FIND_FILE_MALLOC_ERR) {
+    sprintf(err_msg,"unable to malloc %d subheaders",nlists);
+    return err_msg;
+  }
   sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
   ifile_subheader=fopen(path,"w");
   if (!ifile_subheader) {

@@ -96,6 +96,8 @@ extern IDInterval *interval_id_alloc(int n);
 extern int interval_id_union(int id,int start,int stop,IDInterval iv[],int n);
 extern IDInterval *interval_id_compact(IDInterval iv[],int *p_n);
 
+#define FIND_FILE_MALLOC_ERR -2
+
 #define ITERATOR_STACK_TOP(it) while (it->up) it=it->up;
 #define FREE_ITERATOR_STACK(it,it2,it_next) \
   for (it2=it->down;it2;it2=it_next) { \
