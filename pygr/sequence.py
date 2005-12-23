@@ -260,9 +260,19 @@ class SeqPath(object):
 
     def __getitem__(self,k):
         if isinstance(k,types.IntType):
-            k=slice(k,k+1,1)
-        if isinstance(k,types.SliceType):
+            if k== -1: # HAVE TO HANDLE THIS CASE SPECIALLY
+                k=slice(k,None,1) # -1 IS LAST LETTER, SO [-1:None] slice
+            else: # REGULAR CASE, JUST [k:k+1] slice
+                k=slice(k,k+1,1)
+        if isinstance(k,types.SliceType): # GET AN INTERVAL USING slice
             return SeqPath(self,k.start,k.stop,k.step)
+        elif isinstance(k,SeqPath): # MODEL SEQ AS GRAPH
+            if k.path is not self.path:
+                raise KeyError('node is not in this sequence!')
+            try:
+                return {SeqPath(self.path,k.stop,k.stop+len(k)*k.step,k.step):None}
+            except IndexError: # OUT OF BOUNDS, SO NO NEXT NODE
+                return {}
         raise KeyError('requires a slice object or integer key')
 
     def __getattr__(self,attr):
@@ -295,7 +305,11 @@ class SeqPath(object):
     def __len__(self):
         if self.path is self and self.orientation<0:
             return len(self._reverse) # GET LENGTH FROM FORWARD SEQUENCE
-        return (self.stop-self.start)/self.step
+        d=(self.stop-self.start)/self.step # NUMBER OF RESULTS FROM iter(self)
+        if d>0: # IF stop-start<step, d WILL BE ZERO -- PREVENT THAT!
+            return d
+        else: # NEVER RETURN 0 LENGTH ... BOUNDS CHECKING ENSURES NON-EMPTY IVAL
+            return 1
 
     def __iter__(self):
         for i in range(len(self)):
