@@ -110,8 +110,6 @@ cdef class IntervalDB:
     cdef IntervalMap im_buf[1024]
     self.check_nonempty() # RAISE EXCEPTION IF NO DATA
     it=interval_iterator_alloc()
-    if it==NULL:
-      raise MemoryError('interval_iterator_alloc failed')
     it_alloc=it
     l=[] # LIST OF RESULTS TO HAND BACK
     while it:
@@ -317,7 +315,8 @@ cdef class IntervalFileDB:
                              self.db[0].ifile_idb,im_buf,1024,
                              &(nhit)) # GET NEXT BUFFER CHUNK
       for i from 0 <= i < nhit:
-        l.append((im_buf[i].start,im_buf[i].end,im_buf[i].target_id,im_buf[i].target_start,im_buf[i].target_end))
+        l.append((im_buf[i].start,im_buf[i].end,im_buf[i].target_id,
+                  im_buf[i].target_start,im_buf[i].target_end))
     free_interval_iterator(it_alloc)
     return l
 
@@ -337,6 +336,23 @@ cdef class IntervalFileDB:
 
 
 
+
+cdef class NLMSASliceLetters:
+  'graph interface to letter graph within this region'
+  def __new__(self,NLMSASlice nlmsaSlice):
+    self.nlmsaSlice=nlmsaSlice
+  def __iter__(self):
+    return NLMSASliceIterator(self.nlmsaSlice)
+  def __getitem__(self,NLMSANode node):
+    return node.nodeEdges()
+  def items(self):
+    'list of tuples (node,{target_node:edge})'
+    l=[]
+    for node in self:
+      l.append((node,node.nodeEdges()))
+    return l
+  def iteritems(self):
+    return iter(self.items())
 
 
 
@@ -368,11 +384,11 @@ cdef class NLMSASlice:
         it.im_buf[i].start=start
     nseq=len(ns.nlmsaLetters.seqlist)
     iv=interval_id_alloc(nseq) # BOUNDS RECORDING
-    if ns.is_lpo: # LPO -> REAL SEQS MAPPING
-      for i from 0 <= i < n: # GET EACH SEQ'S BOUNDS
-        interval_id_union(it.im_buf[i].target_id,it.im_buf[i].target_start,
-                          it.im_buf[i].target_end,iv,2*nseq) # RECORD BOUNDS
-    else: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
+    for i from 0 <= i < n: # GET EACH SEQ'S BOUNDS, INCLUDING LPO
+      interval_id_union(it.im_buf[i].target_id,it.im_buf[i].start,
+                        it.im_buf[i].end,it.im_buf[i].target_start,
+                        it.im_buf[i].target_end,iv,2*nseq) # RECORD BOUNDS
+    if not ns.is_lpo: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
       ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id] # DEFAULT LPO
       if ns_lpo.db is None:
         ns_lpo.forceLoad()
@@ -405,7 +421,8 @@ cdef class NLMSASlice:
           stop2=im2[j].target_start+end_min-im2[j].start
           it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
           assert ns_lpo.id!=im2[j].target_id
-          interval_id_union(im2[j].target_id,start2,stop2,iv,2*nseq) # RECORD BOUNDS
+          interval_id_union(im2[j].target_id,istart,istop,
+                            start2,stop2,iv,2*nseq) # RECORD BOUNDS
         free(im2) # FREE THE MAP OURSELVES, SINCE RELEASED FROM it2
 
     self.im=it.getIntervalMap() # RELEASE THIS ARRAY FROM THE ITERATOR
@@ -414,6 +431,12 @@ cdef class NLMSASlice:
     n=2*nseq
     self.seqBounds=interval_id_compact(iv,&n) # SHRINK THE LIST TO ELIMINATE EMPTY ENTRIES
     self.nseqBounds=n
+    n=0
+    for i from 0 <= i < self.nseqBounds: # COUNT NON-LPO SEQUENCES
+      ns_lpo=ns.nlmsaLetters.seqlist[self.seqBounds[i].id]
+      if not ns_lpo.is_lpo:
+        n=n+1
+    self.nrealseq=n # SAVE THE COUNT
 
   def __dealloc__(self):
     'remember: dealloc cannot call other methods!'
@@ -424,6 +447,33 @@ cdef class NLMSASlice:
       free(self.seqBounds)
       self.seqBounds=NULL
 
+  ##################################### 1:1 INTERVAL METHODS
+  def matchIntervals(self,seq=None):
+    '''get all 1:1 match intervals in this region of alignment
+    as dict.  if seq argument not None, only match intervals
+    for that sequence will be included.  No clipping is performed.'''
+    cdef int i,target_id
+    cdef NLMSALetters nl
+    cdef NLMSASequence ns
+    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+    if seq is not None:
+      ns=nl.seqs[seq] # MAKE SURE THIS IS IN OUR ALIGNMENT
+      target_id=ns.id
+    else:
+      target_id= -1
+    d={}
+    for i from 0 <= i <self.n: # GET ALL STORED INTERVALS
+      ns=nl.seqlist[self.im[i].target_id] # GET TARGET SEQ
+      if not ns.is_lpo and (target_id<0 or ns.id==target_id):
+        ival1=sequence.absoluteSlice(ns.seq,self.im[i].target_start,
+                                     self.im[i].target_end)
+        ival2=sequence.absoluteSlice(self.nlmsaSequence.seq,
+                                     self.im[i].start,self.im[i].end)
+        if ival1.orientation==seq.orientation:
+          d[ival1]=ival2 # SAVE THE INTERVAL MATCH
+    return d
+
+  ############################## INTERVAL-TO-INTERVAL EDGE METHODS
   def findSeqEnds(self,seq):
     'get maximum interval of seq aligned in this interval'
     cdef int i,ori,i_ori
@@ -434,59 +484,201 @@ cdef class NLMSASlice:
     ori=seq.orientation # GET ITS ORIENTATION
     for i from 0 <= i <self.nseqBounds:
       if self.seqBounds[i].id==ns.id: # FOUND OUR SEQUENCE
-        if self.seqBounds[i].start<0:
+        if self.seqBounds[i].target_start<0:
           i_ori= -1
         else:
           i_ori=1
         if i_ori==ori: # AND THE ORIENTATIONS MATCH
-          return nl.seqInterval(self.seqBounds[i].id,self.seqBounds[i].start,
-                                self.seqBounds[i].stop)
+          return nl.seqInterval(self.seqBounds[i].id,
+                                self.seqBounds[i].target_start,
+                                self.seqBounds[i].target_stop)
     raise KeyError('seq not aligned in this interval')
 
+  property edges:
+    'get list of tuples (ival1,ival2,edge)'
+    def __get__(self):
+      cdef int i
+      cdef NLMSALetters nl
+      cdef NLMSASequence ns
+      nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+      seq=self.nlmsaSequence.seq
+      l=[]
+      for i from 0 <= i <self.nseqBounds:
+        ns=nl.seqlist[self.seqBounds[i].id]
+        if ns.is_lpo: # DON'T RETURN EDGES TO LPO
+          continue
+        ival1=sequence.absoluteSlice(seq,self.seqBounds[i].start,
+                                     self.seqBounds[i].stop)
+        ival2=nl.seqInterval(self.seqBounds[i].id,
+                             self.seqBounds[i].target_start,
+                             self.seqBounds[i].target_stop)
+        l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2)))
+      return l
+  def items(self):
+    'get list of tuples (ival2,edge) aligned to this interval'
+    l=[]
+    for ival1,ival2,edge in self.edges:
+      l.append((ival2,edge))
+    return l
+  def iteritems(self):
+    return iter(self.items())
   def __iter__(self):
+    l=[]
+    for ival1,ival2,edge in self.edges:
+      l.append(ival2)
+    return iter(l)
+  def __getitem__(self,k):
+    return sequence.Seq2SeqEdge(self,k)
+  def __len__(self):
+    return self.nrealseq # NUMBER OF NON-LPO SEQUENCE/ORIS ALIGNED HERE
+
+  ############################################## LPO REGION METHODS
+  def split(self,int maxgap=5,int maxinsert=5,int mininsert= 0,
+            seqs=None):
+    '''query method for subdividing slice via group-by rules:
+      - maxgap (=5): longest gap allowed within a region
+      - maxinsert (=5): longest insert allowed within a region
+      - mininsert (=0): should be 0, to prevent cycles within a region
+      - seqs (=None): list of sequences to apply these rules to;
+        other sequences alignment will be ignored if seqs not None'''
+    cdef int i,gap,insert,start,sliceEnd
+    cdef NLMSALetters nl
+    cdef NLMSASequence ns
+    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+    filterSeqs=None
+    if seqs is not None: # BUILD FILTER SEQUENCE INDEX
+      filterSeqs={}
+      for seq in seqs: # seq NOT IN ALIGNMENT WILL RAISE KeyError
+        filterSeqs[nl.seqs[seq]]=None
+    start=self.start
+    l=[]
+    end={}
+    target_end={}
+    for i from 0 <= i < self.n: # SCAN ALL INTERVALS FOR INDELS
+      ns=nl.seqlist[self.im[i].target_id] # GET TARGET SEQUENCE
+      if not ns.is_lpo and (filterSeqs is None or ns in filterSeqs):
+        try: # CHECK FOR GAP
+          gap= self.im[i].start - end[self.im[i].target_id]
+        except KeyError:
+          gap=0
+        try: # CHECK FOR INSERTION
+          insert=self.im[i].target_start \
+                  - target_end[self.im[i].target_id]
+        except KeyError:
+          insert=0
+        if gap>maxgap or insert>maxinsert or insert<mininsert:
+          sliceEnd=end[self.im[i].target_id] # SAVE NEW SUB-SLICE
+          subslice=NLMSASlice(self.nlmsaSequence,start,sliceEnd)
+          l.append(subslice)
+          start=sliceEnd # NEXT SLICE SHOULD START HERE...
+        end[self.im[i].target_id]=self.im[i].end # SAVE IVAL END
+        target_end[self.im[i].target_id]=self.im[i].target_end
+    if len(l)>0: # SINCE SPLIT, HAVE TO SAVE THE LAST SUB-SLICE
+      l.append(NLMSASlice(self.nlmsaSequence,start,self.stop))
+      return l # RETURN LIST OF SUB-SLICES
+    else:
+      return [self] # NO SUB-SLICING OCCURRED!
+            
+      
+  def regions(self,**kwargs):
+    '''get LPO region(s) corresponding to this interval
+    Same group-by rules apply here as for the split() method.'''
     cdef int i
     cdef NLMSALetters nl
+    cdef NLMSASequence ns_lpo
+    if self.nlmsaSequence.is_lpo: # ALREADY AN LPO REGION!
+      return self.split(**kwargs) # JUST APPLY GROUP-BY RULES TO  self
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     l=[]
     for i from 0 <= i <self.nseqBounds:
-      l.append(nl.seqInterval(self.seqBounds[i].id,self.seqBounds[i].start,
-                              self.seqBounds[i].stop))
-    return iter(l)
+      ns_lpo=nl.seqlist[self.seqBounds[i].id]
+      if ns_lpo.is_lpo: # ADD ALL LPO INTERVALS ALIGNED HERE
+        subslice=NLMSASlice(ns_lpo,self.seqBounds[i].target_start,
+                            self.seqBounds[i].target_stop)
+        l=l+subslice.split(**kwargs) # APPLY GROUP-BY RULES
+    if len(l)>0:
+      return l
+    raise ValueError('no LPO in nlmsaSlice.seqBounds?  Debug!')
 
+  ########################################### LETTER METHODS
   property letters:
     'interface to individual LPO letters in this interval'
     def __get__(self):
-      return NLMSASliceIterator(self)
+      return NLMSASliceLetters(self)
 
-  def __len__(self):
-    return self.nseqBounds # NUMBER OF SEQUENCE/ORIS ALIGNED HERE
+  def __cmp__(self,other):
+    if isinstance(other,NLMSASlice):
+      return cmp(self.nlmsaSequence,other.nlmsaSequence)
+    else:
+      return -1
 
-  def generateIntervals(self):
-    'generate all 1:1 match intervals in this region of alignment'
-    cdef int i
-    cdef NLMSALetters nl
-    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
-    l=[]
-    for i from 0 <= i <self.n:
-      if not nl.seqlist[self.im[i].target_id].is_lpo: # EXCLUDE LPO SEQUENCES
-        l.append(nl.seqInterval(self.im[i].target_id,self.im[i].target_start,
-                                self.im[i].target_end))
-    return iter(l)
-    
 
+
+
+
+def advanceStartStop(NLMSASlice nlmsaSlice not None,int ipos,
+                     int istart,int istop):
+  cdef int i
+  if istop>=nlmsaSlice.n:
+    raise IndexError('out of bounds')
+  for i from istop <= i < nlmsaSlice.n:
+    if ipos>=nlmsaSlice.im[i].start: # ENTERS THIS INTERVAL
+      istop = i + 1 # ADVANCE THE END MARKER
+    else:
+      break # BEYOND ipos, SEARCH NO FURTHR
+  for i from istart <= i < istop: # FIND 1ST OVERLAP
+    if ipos<nlmsaSlice.im[i].end:
+      break
+  return i,istop
+
+
+
+
+
+
+cdef class NLMSASliceIterator:
+  'generate letters (nodes) in this LPO slice'
+  def __new__(self,NLMSASlice nlmsaSlice not None):
+    self.nlmsaSlice=nlmsaSlice
+    self.ipos= nlmsaSlice.start - 1
+
+  def __iter__(self):
+    return self
+
+  def __next__(self): 
+    self.ipos = self.ipos + 1
+    # ADJUST istart,istop TO OVERLAP ipos
+    self.istart,self.istop= \
+      advanceStartStop(self.ipos,self.nlmsaSlice,self.istart,self.istop)
+    if self.istart>=self.istop: # HMM, NO OVERLAPS TO ipos
+      if self.istop<self.nlmsaSlice.n: # ANY MORE INTERVALS?
+        self.ipos=self.nlmsaSlice.im[self.istop].start # START OF NEXT INTERVAL
+        # ADJUST istart,istop TO OVERLAP ipos
+        self.istart,self.istop= \
+          advanceStartStop(self.ipos,self.nlmsaSlice,self.istart,self.istop)
+      else:
+        raise StopIteration # NO MORE POSITIONS IN THIS SLICE
+    return NLMSANode(self.ipos,self.nlmsaSlice,self.istart,self.istop)
 
 
  
+
+
+
+
 cdef class NLMSANode:
   'interface to a node in NLMSA storage of LPO alignment'
   def __new__(self,int ipos,NLMSASlice nlmsaSlice not None,
-              int istart,int istop):
+              int istart=0,int istop= -1):
     cdef int i,n
     cdef NLMSALetters nl
     self.nlmsaSlice=nlmsaSlice
     nl=nlmsaSlice.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     self.ipos=ipos
-    self.istart=istart
+    if istop<0:
+      istart,istop= \
+        advanceStartStop(ipos,nlmsaSlice,istart,istart) # COMPUTE PROPER BOUNDS
+    self.istart=istart # SAVE BOUNDS
     self.istop=istop
     self.id=ipos # DEFAULT: ASSUME SLICE IS IN LPO...
     for i from istart <= i < istop:
@@ -495,7 +687,10 @@ cdef class NLMSANode:
           self.id=nlmsaSlice.im[i].target_start+ipos-nlmsaSlice.im[i].start #LPO ipos
         else: # DON'T COUNT THE LPO SEQUENCE
           self.n = self.n + 1
-    
+
+  ############################################# ALIGNED LETTER METHODS
+  def __len__(self):
+    return self.n
   def __iter__(self):
     cdef int i,j
     cdef NLMSASequence ns
@@ -524,17 +719,32 @@ cdef class NLMSANode:
         return sequence.absoluteSlice(ns.seq,j,j+1)
     raise KeyError('seq not in node')
 
+  property edges:
+    "get this node's edges as list of tuples (ival1,ival2,edge)"
+    def __get__(self):
+      l=[]
+      ival1=sequence.absoluteSlice(self.nlmsaSlice.nlmsaSequence.seq,
+                                   self.ipos,self.ipos+1) # OUR SEQ INTERVAL
+      for ival2 in self:
+        l.append((ival1,ival2,None)) # GET EDGE INFO!!!
+      return l
+
   def __getitem__(self,seq):
-    from lpo import POMSANodeRef # PROBABLY WONT NEED THIS AFTER RENAMING!!!
-    try:
-      s=self.getSeqPos(seq)
-      return POMSANodeRef(self,seq.path)
+    raise NotImplementedError('hey! write some code here!')
+##     from lpo import POMSANodeRef # PROBABLY WONT NEED THIS AFTER RENAMING!!!
+##     try:
+##       s=self.getSeqPos(seq)
+##       return POMSANodeRef(self,seq.path)
+##     else:
+##       raise KeyError('seq not in node')
+
+  def __cmp__(self,other):
+    if isinstance(other,NLMSANode):
+      return cmp((self.nlmsaSlice,ipos),(other.nlmsaSlice,ipos))
     else:
-      raise KeyError('seq not in node')
+      return -1
 
-  def __len__(self):
-    return self.n
-
+  ########################################## NODE-TO-NODE EDGE METHODS
   cdef int check_edge(self,int iseq,int ipos):
     cdef int i
     for i from self.istart <= i < self.istop:
@@ -568,13 +778,43 @@ cdef class NLMSANode:
         if self.ipos+1==self.nlmsaSlice.im[i].end \
                and other.check_edge(self.nlmsaSlice.im[i].target_id,
                                     self.nlmsaSlice.im[i].target_end):
-          ns=nl.seqlist[self.im[i].target_id] # BRIDGE TO NEXT INTERVAL
+          ns=nl.seqlist[self.nlmsaSlice.im[i].target_id] # BRIDGE TO NEXT INTERVAL
           d[ns.seq]=self.nlmsaSlice.im[i].target_start+self.ipos-self.nlmsaSlice.im[i].start
     return d
 
-
+  def nodeEdges(self):
+    'get all outgoing edges from this node'
+    cdef int i,has_continuation
+    has_continuation= -1
+    d={}
+    nodes={} # LIST OF TARGET NODES WE HAVE AN EDGE TO
+    for i from self.istart <= i < self.nlmsaSlice.n:
+      if i>=self.istop and len(d)==0: # NO FURTHER CHECKS TO DO
+        break
+      if self.nlmsaSlice.im[i].start<=self.ipos and \
+         self.ipos<self.nlmsaSlice.im[i].end-1:
+        has_continuation=i # ipos INSIDE THIS INTERVAL, SO HAS EDGE TO ipos+1
+      elif self.ipos==self.nlmsaSlice.im[i].end-1: # END OF THIS INTERVAL
+        d[self.nlmsaSlice.im[i].target_id]=self.nlmsaSlice.im[i].target_end
+      else:
+        try: # CHECK FOR START OF AN "ADJACENT" INTERVAL
+          if d[self.nlmsaSlice.im[i].target_id]==self.nlmsaSlice.im[i].target_start:
+            nodes[self.nlmsaSlice.im[i].start]=i
+            del d[self.nlmsaSlice.im[i].target_id] # REMOVE FROM ADJACENCY LIST
+        except KeyError:
+          pass
+    if has_continuation>=0:
+      nodes[self.ipos+1]=has_continuation
+    result={}
+    for i in nodes:
+      node=NLMSANode(i,self.nlmsaSlice,self.istart)
+      result[node]=sequence.LetterEdge(self,node) # EDGE OBJECT
+    return result
 
   
+
+
+
 
 cdef class NLMSASequence:
   'sequence interface to NLMSA storage of an LPO alignment'
@@ -922,37 +1162,3 @@ cdef class NLMSALetters:
 
 
 
-
-
-cdef class NLMSASliceIterator:
-  'generate letters (nodes) in this LPO slice'
-  def __new__(self,NLMSASlice nlmsaSlice not None):
-    self.nlmsaSlice=nlmsaSlice
-    self.ipos= nlmsaSlice.start - 1
-
-  def __iter__(self):
-    return self
-
-  cdef int advanceStartStop(self):
-    cdef int i
-    for i from self.istop <= i < self.nlmsaSlice.n:
-      if self.ipos>=self.nlmsaSlice.im[i].start: # ENTERS THIS INTERVAL
-        self.istop = i + 1 # ADVANCE THE END MARKER
-      else:
-        break # BEYOND ipos, SEARCH NO FURTHR
-    for i from self.istart <= i < self.istop: # FIND 1ST OVERLAP
-      if self.ipos<self.nlmsaSlice.im[i].end:
-        break
-    self.istart=i
-    return i
-
-  def __next__(self):
-    self.ipos = self.ipos + 1
-    self.advanceStartStop() # ADJUST istart,istop TO OVERLAP ipos
-    if self.istart>=self.istop: # HMM, NO OVERLAPS TO ipos
-      if self.istop<self.nlmsaSlice.n: # ANY MORE INTERVALS?
-        self.ipos=self.nlmsaSlice.im[self.istop].start # START OF NEXT INTERVAL
-        self.advanceStartStop() # ADJUST istart,istop TO OVERLAP ipos
-      else:
-        raise StopIteration # NO MORE POSITIONS IN THIS SLICE
-    return NLMSANode(self.ipos,self.nlmsaSlice,self.istart,self.istop)
