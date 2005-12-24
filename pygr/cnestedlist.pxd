@@ -63,6 +63,8 @@ cdef extern from "intervaldb.h":
     int id
     int start
     int stop
+    int target_start
+    int target_stop
 
   int imstart_qsort_cmp(void *void_a,void *void_b)
   IntervalMap *read_intervals(int n,FILE *ifile) except NULL
@@ -79,7 +81,7 @@ cdef extern from "intervaldb.h":
   int write_padded_binary(IntervalMap im[],int n,int div,FILE *ifile)
   int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
   IDInterval *interval_id_alloc(int n) except NULL
-  int interval_id_union(int id,int start,int stop,IDInterval iv[],int n)
+  int interval_id_union(int id,int start,int stop,int target_start,int target_stop,IDInterval iv[],int n)
   IDInterval *interval_id_compact(IDInterval iv[],int *p_n) except NULL
 
 
@@ -153,10 +155,13 @@ cdef class NLMSASequence:
 
 cdef class NLMSASlice:
   cdef readonly start,stop 
-  cdef int n,nseqBounds
+  cdef int n,nseqBounds,nrealseq
   cdef IntervalMap *im
   cdef IDInterval *seqBounds
   cdef NLMSASequence nlmsaSequence
+
+cdef class NLMSASliceLetters:
+  cdef NLMSASlice nlmsaSlice
 
 
 cdef class NLMSANode:
@@ -171,4 +176,3 @@ cdef class NLMSASliceIterator:
   cdef int ipos,istart,istop
   cdef NLMSASlice nlmsaSlice
 
-  cdef int advanceStartStop(self)
