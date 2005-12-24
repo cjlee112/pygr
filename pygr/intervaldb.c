@@ -778,7 +778,9 @@ IDInterval *interval_id_alloc(int n)
   return NULL;
 }
 
-int interval_id_union(int id,int start,int stop,IDInterval iv[],int n)
+int interval_id_union(int id,int start,int stop,
+		      int target_start,int target_stop,
+		      IDInterval iv[],int n)
 {
   int i;
   i=id*2; /* STORE BOTH FORWARD AND REVERSE ORI FOR EACH SEQ */
@@ -790,12 +792,18 @@ int interval_id_union(int id,int start,int stop,IDInterval iv[],int n)
     iv[i].id=id;
     iv[i].start=start;
     iv[i].stop=stop;
+    iv[i].target_start=target_start;
+    iv[i].target_stop=target_stop;
   }
   else {
-    if (start<iv[i].start)
+    if (target_start<iv[i].target_start) {
       iv[i].start=start;
-    if (stop>iv[i].stop)
+      iv[i].target_start=target_start;
+    }
+    if (target_stop>iv[i].target_stop) {
       iv[i].stop=stop;
+      iv[i].target_stop=target_stop;
+    }
   }
   return 0;
 }
