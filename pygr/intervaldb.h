@@ -66,6 +66,8 @@ typedef struct {
   int id;
   int start;
   int stop;
+  int target_start;
+  int target_stop;
 } IDInterval;
 
 extern int imstart_qsort_cmp(const void *void_a,const void *void_b);
@@ -93,7 +95,7 @@ extern IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
 					 int subheader_nblock);
 extern int free_interval_dbfile(IntervalDBFile *db_file);
 extern IDInterval *interval_id_alloc(int n);
-extern int interval_id_union(int id,int start,int stop,IDInterval iv[],int n);
+extern int interval_id_union(int id,int start,int stop,int target_start,int target_stop,IDInterval iv[],int n);
 extern IDInterval *interval_id_compact(IDInterval iv[],int *p_n);
 
 #define FIND_FILE_MALLOC_ERR -2
