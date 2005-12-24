@@ -119,7 +119,7 @@ class IntervalTransform(object):
 class S2SEEdgesDescriptor(object):
     "list of interval matches as list of tuples (ival1,ival2,xform)"
     def __get__(self,s2se,objtype):
-        return [t.srcPath,t.destPath,t for t in s2se.matches]
+        return [(t.srcPath,t.destPath,t) for t in s2se.matches]
 
 
 
