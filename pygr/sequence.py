@@ -11,6 +11,15 @@ class ReadOnlyAttribute(object):
     def __get__(self,obj,klass):
         return getattr(obj,self.attr)
 
+
+
+###################################################################
+#
+# INTERVAL - INTERVAL MAPPING
+# CORRECTLY HANDLES SCALING AND ORIENTATION TRANSFORMATIONS
+# ASSUMES A SIMPLE SCALAR TRANSFORMATION FROM ONE COORD SYSTEM
+# TO THE OTHER.  DOES NOT HANDLE INDELS WITHIN THE MAPPING!
+
 class IntervalTransform(object):
     "Represents coordinate transformation from one interval to another"
     srcPath=ReadOnlyAttribute('_srcPath') # PREVENT USER FROM MODIFYING THESE!
@@ -101,6 +110,119 @@ class IntervalTransform(object):
                 nid+=1
             i+=1
         return nid
+    def percent_id(self):
+        "calculate fractional identity for this pairwise alignment"
+        return self.nidentity/float(len(self.srcPath))
+
+
+
+class S2SEEdgesDescriptor(object):
+    "list of interval matches as list of tuples (ival1,ival2,xform)"
+    def __get__(self,s2se,objtype):
+        return [t.srcPath,t.destPath,t for t in s2se.matches]
+
+
+
+
+class Seq2SeqEdge(object):
+    '''Maps two sequence regions onto each other, using a list
+    of scalar transformations.  Can handle indels within the
+    mapping.'''
+    edges=S2SEEdgesDescriptor()
+    def __init__(self,msaSlice,targetPath):
+        self.msaSlice=msaSlice
+        self.targetPath=targetPath
+        l=[]
+        for i2,i1 in msaSlice.matchIntervals(targetPath).iteritems():
+            i2b=i2*targetPath # INTERSECTION 
+            if i2 is not None:
+                t=IntervalTransform(i2,i1) # COMPUTE MAPPING
+                try:
+                    i1b=t[i2b] # MAP TARGET IVAL TO SOURCE
+                except IndexError: # NO OVERLAP, IGNORE
+                    continue
+                l.append(IntervalTransform(i1b,i2b)) # SAVE MAPPING
+        if len(l)==0: # NO MAPPED INTERVALS
+            raise KeyError('targetPath not aligned in msaSlice')
+        # COMPUTE MAXIMUM ALIGNED REGION OF i1 SOURCE
+        start=min([t.srcPath.start for t in l])
+        stop=max([t.srcPath.stop for t in l])
+        self.sourcePath=absoluteSlice(i1,start,stop)
+        self.matches=l # SAVE OUR INTERVAL TRANSFORMS
+
+    def __iter__(self):
+        return iter(self.matches)
+
+    def percent_id(self):
+        "calculate fractional identity for this pairwise alignment"
+        nid=0
+        start1=self.sourcePath.start
+        end1=self.sourcePath.end
+        s1=str(self.sourcePath)
+        start2=self.targetPath.start
+        end2=self.targetPath.end
+        s2=str(self.targetPath)
+        for srcPath,destPath in self.matches.items():
+            isrc=srcPath.start-start1
+            idest=destPath.start-start2
+            for i in xrange(len(srcPath)):
+                if s1[isrc+i]==s2[idest+i]:
+                    nid+=1
+        len1=end1-start1
+        len2=end2-start2
+        if len1>len2:
+            return nid/float(len1)
+        else:
+            return nid/float(len2)
+
+
+
+
+###################################################################
+#
+# SINGLE LETTER GRAPH INTERFACE CLASSES
+# INSTANTIATED ON THE FLY TO PROVIDE LETTER GRAPH INTERFACE
+
+class LetterEdgeDescriptor(object):
+    "cached dict of sequences traversing this edge"
+    def __get__(self,edge,objtype):
+        try:
+            return edge._seqs
+        except AttributeError:
+            edge._seqs=edge.origin.getEdgeSeqs(edge.target)
+            return edge._seqs
+
+
+class LetterEdge(object):
+    "represents an edge from origin -> target. seqs returns its sequences"
+    seqs=LetterEdgeDescriptor()
+    def __init__(self,origin,target):
+        self.origin=origin
+        self.target=target
+    def __iter__(self):
+        'generate origin seqpos for sequences that traverse this edge'
+        for seq in self.seqs:
+            yield self.origin.getSeqPos(seq) # REDUCE 1:MANY SCHEMA TO 1:1, DISCARD EDGE INFO
+    def iteritems(self):
+        'generate origin,target seqpos for sequences that traverse this edge'
+        for seq in self.seqs: # REDUCE 1:MANY SCHEMA TO 1:1, DISCARD EDGE INFO
+            yield self.origin.getSeqPos(seq),self.target.getSeqPos(seq)
+    def __getitem__(self,k):
+        'return origin,target seqpos for sequence k; raise KeyError if not in this edge'
+        try:
+            k=k.path
+        except AttributeError:
+            raise TypeError('k not a valid sequence: it has no path attribute')
+        return (self.origin.getSeqPos(k.path),self.target.getSeqPos(k.path))
+    def __cmp__(self,other):
+        'two edge objects match if they link identical nodes'
+        try:
+            if self.origin==other.origin and self.target==other.target:
+                return 0 # REPORT A MATCH
+        except AttributeError: # other MUST BE A DIFFERENT TYPE, SO NO MATCH
+            pass
+        return cmp(id(self),id(other))
+
 
 
 
@@ -270,7 +392,8 @@ class SeqPath(object):
             if k.path is not self.path:
                 raise KeyError('node is not in this sequence!')
             try:
-                return {SeqPath(self.path,k.stop,k.stop+len(k)*k.step,k.step):None}
+                target=SeqPath(self.path,k.stop,k.stop+len(k)*k.step,k.step)
+                return {target:LetterEdge(k,target)}
             except IndexError: # OUT OF BOUNDS, SO NO NEXT NODE
                 return {}
         raise KeyError('requires a slice object or integer key')
@@ -311,11 +434,36 @@ class SeqPath(object):
         else: # NEVER RETURN 0 LENGTH ... BOUNDS CHECKING ENSURES NON-EMPTY IVAL
             return 1
 
+    ################################ LETTER GRAPH METHODS: JUST A LINEAR GRAPH
     def __iter__(self):
         for i in range(len(self)):
             yield self[i]
+    def iteritems(self):
+        'letter graph iterator over (node1,{node2:edge}) tuples'
+        src=self[0] # GET 1ST LETTER
+        for i in range(1,len(self)): # ITERATE OVER ALL ADJACENT PAIRS
+            target=self[i]
+            yield src,{target:LetterEdge(src,target)}
+            src=target
+        yield src,{} # LAST LETTER HAS NO EDGES
+    def getEdgeSeqs(self,other):
+        'return dict of sequences that traverse edge from self -> other'
+        if self.path is other.path and self.stop==other.start:
+            return {self.path:self.stop - self.step}
+        else:
+            return {}
+    def getSeqPos(self,seq):
+        'get seq interval corresponding to this node in sequence graph'
+        if seq.path is self.path:
+            return self
+        raise KeyError('seq not on this path!')
 
+    ################################ INTERVAL COMPOSITION OPERATORS
+    def __hash__(self):
+        'ensure that same seq intervals match in dict'
+        return id(self.path)^hash(self.start)^hash(self.stop)
     def __cmp__(self,other):
+        'ensure that same seq intervals match in cmp()'
         if not isinstance(other,SeqPath):
             return -1
         if self.path is other.path:
@@ -348,7 +496,7 @@ class SeqPath(object):
     def __mul__(self,other):
         "find intersection of two intervals"
         if isinstance(other,SeqPath):
-            if self.path!=other.path:
+            if self.path is not other.path:
                 return None
             start=max(self.start,other.start)
             stop=min(self.stop,other.stop)
@@ -404,7 +552,8 @@ class SeqPath(object):
         if other.stop>self.stop:
             self.stop=other.stop
         return self # iadd MUST ALWAYS RETURN self!!
-    
+
+    ############################################ STRING SEQUENCE METHODS
     _complement={'a':'t', 'c':'g', 'g':'c', 't':'a', 'u':'a', 'n':'n',
                  'A':'T', 'C':'G', 'G':'C', 'T':'A', 'U':'A', 'N':'N'}
     def reverse_complement(self,s):
