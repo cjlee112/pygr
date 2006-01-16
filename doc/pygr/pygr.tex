@@ -787,33 +787,39 @@ Pythonic way:
 
 \item    
 {\em Python Sequence}: of course, SeqPath behaves like a Python sequence. i.e.
-the length of a SeqPath {\em s} is just {\em len(s)}, 
-and you iterate over the ``letters'' in it using 
-{\em for l in s:}  
+the length of a \class{SeqPath} \var{s} is just \code{len(s)}, 
+and you iterate over the ``letters'' in it using \code{for l in s:}  
 (Note, the individual letters produced by this iterator
-will themselves be SeqPath objects (by default, of length 1)).  And all the slicing
-operations defined for Python Sequences also apply to SeqPath (see below).
+will themselves be \class{SeqPath} objects (by default, of length 1)).  
+And all the slicing
+operations defined for Python Sequences also apply to 
+\class{SeqPath} (see below).
 
 \item    
-{\em Slicing}: SeqPath is designed to represent a slice (subinterval) of a sequence.
-Like the Python builtin {\em slice} class, it has {\em start}, {\em stop}, and 
-{\em step} attributes that indicate the interval beginning, end, and ``stride''.
-Moreover, it is itself sliceable in the usual pythonic way, i.e. s[start:stop],
-where {\em start} and {\em stop} are in the {\em local} coordinate system of s 
-(i.e. s[0] is the first letter of the interval represented by s). Note that SeqPath
+{\em Slicing}: \class{SeqPath} is designed to represent a slice 
+(subinterval) of a sequence.
+Like the Python builtin \class{slice} class, it has \member{start}, 
+\member{stop}, and \member{step} attributes that indicate 
+the interval beginning, end, and ``stride''.
+Moreover, it is itself sliceable in the usual pythonic way, 
+i.e. \code{s[start:stop]},
+where \var{start} and \var{stop} are in the local coordinate system of \var{s} 
+(i.e. \code{s[0]} is the first letter of the interval represented by 
+\var{s}). Note that \class{SeqPath}
 follows the Python slicing coordinate conventions of positive integers as
 forward coordinates (i.e. counting from the interval start) and negative integers
 as reverse coordinates (i.e. counting from the interval end).
 
 \item    
 {\em String value}: to obtain the actual sequence string representation
-of a SeqPath, just use the Python builtin {\em str(s)}.  
+of a \class{SeqPath}, just use the Python builtin \code{str(s)}.  
 Note that in most cases
 a SeqPath object does not itself store the sequence string associated with it
 but obtains it from somewhere else when the user requests it.
 
 \item
-{\em comparison and containment}: SeqPath implements the interval-ordering
+{\em comparison and containment}: \class{SeqPath}
+implements the interval-ordering
 and interval-containment relations using the standard Python order operators
 and containment operators. i.e. s<t iff s.start<t.start, and s in t iff
 t.start<=s.start and s.stop<=t.stop.
@@ -823,11 +829,11 @@ t.start<=s.start and s.stop<=t.stop.
 on opposite strands of a double-stranded nucleotide sequence.  A SeqPath object
 knows whether it is an interval on the forward or reverse strand.  Pygr provides
 a number of operations for manipulating and comparing intervals of different
-orientations.  For example, -s yields the interval of the opposite strand that
-is base-paired to interval s (i.e. this is not just the reverse-complement of s
+orientations.  For example, \code{-s} yields the interval of the opposite strand that
+is base-paired to interval s (i.e. this is not just the reverse-complement of \var{s}
 in the string 'atgc' $\rightarrow$ 'gcat' sense, but is specifically the SeqPath
 object representing the coordinate
-interval on the opposite strand that is base-paired to s).
+interval on the opposite strand that is base-paired to \var{s}).
 
 \item
 {\em schema}: a SeqPath object knows ``what sequence'' it is an interval of;
@@ -890,25 +896,41 @@ operations respectively.
 
 
 \subsubsection{Sequence class}
-The Sequence class provides a SeqPath flavor that stores a sequence string
-and identifier for this sequence.
+
+\begin{funcdesc}{sequence.Sequence}{s, id}
+  The Sequence class provides a SeqPath flavor that stores a sequence string
+  {\em s} and identifier {\em id} for this sequence.
 
 \begin{verbatim}
 from pygr import sequence
-s=sequence.Sequence('GPTPCDLMETQ','FOOG_HUMAN')
+seq=sequence.Sequence('GPTPCDLMETQ','FOOG_HUMAN')
 \end{verbatim}
+\end{funcdesc}
 
-\begin{itemize}
 
-\item    
-You can change the actual string sequence using the {\em update} method:
+\begin{funcdesc}{update}{s}
+  You can change the actual string sequence to a new string {\em s}
+  using the {\em update} method:
 
 \begin{verbatim}
-s.update('TKRRPLEDKMNEPS')
+seq.update('TKRRPLEDKMNEPS')
 \end{verbatim}
+\end{funcdesc}
 
+\begin{funcdesc}{seqtype}{}
+  returns DNA_SEQTYPE for DNA sequences, 
+  RNA_SEQTYPE for RNA, and PROTEIN_SEQTYPE for protein.
+\end{funcdesc}
+
+
+\begin{funcdesc}{reverse_complement}{s}
+  returns the reverse complement of the sequence string s.
+\end{funcdesc}
+
+
+\begin{itemize}
 \item
-{\em id}: the {\em id} attribute stores the sequence's identifier.
+\member{id}: the \member{id} attribute stores the sequence's identifier.
 
 \end{itemize}
 
@@ -923,19 +945,19 @@ Each SeqPath object has a number of attributes giving information about its
 \begin{itemize}
 
 \item    
-{\em orientation}: +1 if on the forward strand, or -1 if on the reverse strand.
+\member{orientation}: +1 if on the forward strand, or -1 if on the reverse strand.
 
 \item
-{\em path}: the top-level sequence object that this interval is part of, or self
+\member{path}: the top-level sequence object that this interval is part of, or self
 if this object is its top-level (i.e. not a slice of a larger sequence).  Note that
 all forward intervals share the same path attribute, but reverse strand intervals
 all have a path attribute that represents the entire reverse strand.
 
 \item
-{\em pathForward}: same as {\em path}, but always the forward strand sequence.
+\member{pathForward}: same as {\em path}, but always the forward strand sequence.
 
 \item
-{\em start}: start coordinate of the interval.  NB: SeqPath stores coordinates
+\member{start}: start coordinate of the interval.  NB: SeqPath stores coordinates
 relative to the start of the {\em forward} strand.  This is necessary for allowing
 resizing of the top-level SeqPath; if coordinates were relative to the end of the
 sequence, they would have to be recomputed every time the length of the sequence 
@@ -950,13 +972,13 @@ coordinate, typically requiring a computation of the sequence length.  In this
 case, the start attribute will computed automatically by SeqPath.__getattr__().
 
 \item
-{\em stop}: end coordinate of the interval.  The above comments for {\em start}
+\member{stop}: end coordinate of the interval.  The above comments for {\em start}
 apply to {\em stop}.  Note that for reverse intervals, a {\em stop} value of 0
 means the end of the reverse strand (i.e. -1 is the last nucleotide of the 
 reverse strand, and 0 is one beyond the last nucleotide of the reverse strand).
 
 \item
-{\em _abs_interval}: a tuple giving the ({\em start,stop}) coordinates of the 
+\member{_abs_interval}: a tuple giving the ({\em start,stop}) coordinates of the 
 interval on the forward strand corresponding to this interval (i.e. for a 
 forward interval, itself, or for a reverse interval, the interval that base-pairs
 to it).
@@ -969,58 +991,52 @@ There are several methods and attributes you can override to extend or customize
 the behavior of your own SeqPath-derived classes.  Typically you will derive
 either from the Sequence class, or in some cases from the SeqPath class.
 
+\begin{funcdesc}{strslice}{start, stop} 
+  called to get the string
+  sequence of the interval ({\em start, stop}).  You can provide your own strslice()
+  method to customize how sequence is stored and accessed.  For example,
+  SQLSequence.strslice() gets the sequence via a SQL query, and 
+  BlastSequence obtains it using the fastacmd -L start,stop 
+  UNIX shell command from the NCBI toolkit.
+\end{funcdesc}
+
+\begin{funcdesc}{__len__}{}
+  called to compute the length of the sequence.  You can
+  customize this to provide an efficient length method for your particular
+  sequence storage.  e.g. SQLSequence obtains it via a SQL query; BlastSequence
+  obtains it from a precomputed length index.
+  The default Sequence.__len__()
+  method computes it from len(self.seq), assuming that the sequence can be accessed
+  from the {\em seq} attribute.
+\end{funcdesc}
+
+\begin{funcdesc}{__getitem__}{slice_obj}
+  if you want to monitor or intercept slicing
+  requests on your sequence, you can do so by providing your own getitem method.
+  See seqdb.BlastSequenceCache class for an example.
+\end{funcdesc}
+
+\begin{funcdesc}{__getattr__}{attr}
+  if you subclass a \class{SeqPath}-derived class and supply a \method{__getattr__}
+  method for your subclass, it {\em must} call the parent class's 
+  \method{__getattr__}.  This is essential for ``delayed evaluation'' of
+  \member{start} and \member{stop} attributes, which are generated automatically
+  by \class{SeqPath}'s \method{__getattr__}.  If your subclass inherits from
+  more than one parent class, check whether {\em both} parents supply a 
+  \method{__getattr__}, in which case your subclass must supply a
+  \method{__getattr__} that explicitly calls both of them.  Failing to do so
+  will lead to strange bugs.
+\end{funcdesc}
+
 \begin{itemize}
-
 \item
-{\em strslice(start, stop)}: self.strslice() is called to get the string
-sequence of the interval (start,stop).  You can provide your own strslice()
-method to customize how sequence is stored and accessed.  For example,
-SQLSequence.strslice() gets the sequence via a SQL query, and 
-BlastSequence obtains it using the fastacmd -L start,stop 
-UNIX shell command from the NCBI toolkit.
-
-\item    
-{\em __len__()}: is called to compute the length of the sequence.  You can
-customize this to provide an efficient length method for your particular
-sequence storage.  e.g. SQLSequence obtains it via a SQL query; BlastSequence
-obtains it from a precomputed length index.
-The default Sequence.__len__()
-method computes it from len(self.seq), assuming that the sequence can be accessed
-from the {\em seq} attribute.
-
-\item
-{\em seq}: the Sequence class assumes that the actual sequence is stored
-on the {\em seq} attribute.  You could customize this behavior by 
-making the seq attribute a property that is computed on the fly
+\member{seq}: the Sequence class assumes that the actual sequence is stored
+on the \member{seq} attribute.  You could customize this behavior by 
+making the \member{seq} attribute a property that is computed on the fly
 by some method of your own.
 
-\item    
-{\em __getitem__(slice_obj)}: if you want to monitor or intercept slicing
-requests on your sequence, you can do so by providing your own getitem method.
-See seqdb.BlastSequenceCache class for an example.
 \end{itemize}
 
-
-\subsubsection{Methods}
-The sequence module also provides several convenience functions:
-
-\begin{itemize}
-
-\item
-{\em SeqPath.seqtype()}: returns DNA_SEQTYPE for DNA sequences, 
-RNA_SEQTYPE for RNA, and PROTEIN_SEQTYPE for protein.
-
-
-\item
-{\em guess_seqtype(s)}: based on the letter composition of
-the string s, returns DNA_SEQTYPE for DNA sequences, 
-RNA_SEQTYPE for RNA, and PROTEIN_SEQTYPE for protein.
-
-\item
-{\em SeqPath.reverse_complement(s)}: returns the reverse
-complement of the sequence string s.
-
-\end{itemize}
 
 \subsubsection{IntervalTransform}
 This class provides a mapping transform between the coordinate
@@ -1032,6 +1048,73 @@ d2=xform(s2) # MAPS s2 FROM srcPath coords to destPath coord system
 d3=xform[s2] # CLIPS s2 TO NOT EXTEND OUTSIDE srcPath, THEN XFORMS
 s3=xform.reverse(d3) # MAP BACK TO srcPath COORD SYSTEM
 \end{verbatim}
+
+\subsubsection{Seq2SeqEdge}
+This class represents a segment of alignment between two sequences.
+It is a temporary object created in association with a MSASlice
+object (see Alignment Module below).
+
+\begin{funcdesc}{__init__}{msaSlice, targetPath, sourcePath=None}
+  Create a Seq2SeqEdge for the targetPath, on the specified alignment
+  slice.  If sourcePath is None, it will be calculated automatically
+  by calling the slice's methods.
+\end{funcdesc}
+
+\begin{funcdesc}{__iter__}{sourceOnly=True, **kwargs}
+  iterate over source intervals within this segment of alignment.
+  \var{kwargs} will be passed on to the \var{msaSlice}'s 
+  \method{groupByIntervals} and \method{groupBySequences} methods.
+\end{funcdesc}
+
+\begin{funcdesc}{items}{**kwargs}
+  same as \method{__iter__}, but gets tuples of (source_interval,target_interval).
+\end{funcdesc}
+
+\begin{funcdesc}{percent_id}{}
+  Compute the percent identity between the source and target sequence
+  intervals in this segment of the alignment.
+\end{funcdesc}
+
+
+\subsubsection{LetterEdge}
+This class represents an edge from origin -> target node.
+
+\begin{funcdesc}{__iter__}{}
+  iterate over seqpos for sequences that traverse this edge.
+\end{funcdesc}
+
+\begin{funcdesc}{iteritems}{}
+  generate origin, target seqpos for sequences that traverse this edge.
+\end{funcdesc}
+
+\begin{funcdesc}{__getitem__}{seq}
+  return origin,target seqpos for sequence \var{seq};
+  raise KeyError if not in this edge
+\end{funcdesc}
+
+\begin{itemize}
+\item
+\member{seqs}: returns its sequences that traverse this edge
+\end{itemize}
+
+
+\subsubsection{Functions}
+The sequence module also provides convenience functions:
+
+\begin{funcdesc}{guess_seqtype}{s}
+  based on the letter composition of
+  the string {\em s}, returns DNA_SEQTYPE for DNA sequences, 
+  RNA_SEQTYPE for RNA, and PROTEIN_SEQTYPE for protein.
+\end{funcdesc}
+
+\begin{funcdesc}{absoluteSlice}{seq, start, stop}
+  returns the sequence interval of top-level sequence object associated
+  with \var{seq}, interpreting \var{start} and \var{stop} according to
+  the Pygr convention: a pair of positive values represents an interval
+  on the forward strand; a pair of negative values represents an
+  interval on the reverse strand (see Coordinate System, above).
+\end{funcdesc}
+
 
 
 
@@ -1056,7 +1139,7 @@ as graph-algorithms, and even graph query of alignments.
 This model has a few basic classes:
 \begin{itemize}
 \item    
-{\em MSA}: this class represents an entire alignment.  It acts as a graph whose
+\class{MSA}: this class represents an entire alignment.  It acts as a graph whose
 nodes are sequences (or sequence intervals) that are aligned, and whose edges 
 represent specific alignment relationships between specific pairs of sequences 
 (or intervals).  Specifically, it acts as a dictionary whose keys are SeqPath
@@ -1083,7 +1166,7 @@ for node in msa.letters: # GET ALL ALIGNMENT ``COLUMNS'' IN msa
 
 
 \item    
-{\em MSASlice}: this class represents a segment of alignment associated with
+\class{MSASlice}: this class represents a segment of alignment associated with
 a specific sequence interval (s1).  It acts as dictionary whose keys are sequence
 intervals s2 aligned to s1, and whose values are MSASeqEdge objects
 that represent the alignment relationship between s1 $\rightarrow$ s2.  It also 
@@ -1106,7 +1189,7 @@ regions).  This provides a general interface for group-by operations in alignmen
 query.
 
 \item    
-{\em MSASeqEdge}: this class represents a relationship between a pair of 
+\class{MSASeqEdge}: this class represents a relationship between a pair of 
 sequence intervals s1 and s2 (SeqPath objects).  It provides a mapping between
 subintervals of s1 $\rightarrow$ s2.  I.e. it acts as a dictionary 
 that accepts subintervals of s1 as keys, and maps them to aligned
@@ -1115,7 +1198,7 @@ has a {\em letters} attribute, that represents the subgraph of nodes
 associated specifically with them, and the edges that interconnect the nodes.
 
 \item    
-{\em MSANode}: this class represents a specific ``column'' in the alignment
+\class{MSANode}: this class represents a specific ``column'' in the alignment
 that aligns a set of individual letters from different sequences.  This
 corresponds to a node in the PO-MSA representation of the alignment.
 It acts as a dictionary whose keys are sequence intervals (typically only
@@ -1199,8 +1282,8 @@ sequence 0,1,2...) can be considered the index value of each alignment column.
 uses intervals, not individual letters, it takes no more memory to store
 an alignment of two 100 kb regions than it does to align two individual letters.
 This is important for scalable storage (and query) of large multi-genome
-alignments.  (Each alignment interval takes 24 bytes: five {\em int} for
-the {\em (start,stop)} pairs and target sequence ID, plus one {\em int}
+alignments.  (Each alignment interval takes 24 bytes: five \class{int} for
+the {\em (start,stop)} pairs and target sequence ID, plus one \class{int}
 for the sublist ID).
 These interval databases are stored using nested lists.  Specifically, 
 the alignment is stored as 1) a mapping of each aligned sequence interval
@@ -1212,14 +1295,14 @@ other sequences.  A nested list database is stored for {\em each} of these
 mappings (i.e. for an alignment of {\em N} sequences, there will be {\em N+1}
 nested list databases to store the MSA).  Furthermore, if the size of the LPO
 coordinate system (i.e. number of columns in its RC-MSA format)
-grows larger than the range representable by {\em int} (typically $2^{31}$  = 2 GB),
+grows larger than the range representable by \class{int} (typically $2^{31}$  = 2 GB),
 the LPO will have to be split into separate nested list databases of a size
-smaller than the maximum range representable by {\em int}.  This is necessary
+smaller than the maximum range representable by \class{int}.  This is necessary
 for handling alignments of large genomes (e.g. the human genome is approximately 3 GB).
 Pygr takes care of all this for you automatically.  Note, as an entirely separate 
 issue, that Pygr's cnestedlist
-module uses the {\em long long} data type for file offsets and
-the {\em fseeko()} POSIX interface for large file support (i.e. 64-bit
+module uses the \class{long long} data type for file offsets and
+the \function{fseeko()} POSIX interface for large file support (i.e. 64-bit
 file sizes), which is supported by current versions of Linux, Mac OS X, etc;
 otherwise, check if your filesystem supports this.
 
@@ -1230,69 +1313,71 @@ and attributes.
 
 Construction Methods:
 
-\begin{itemize}
+\begin{funcdesc}{NLMSA}{pathstem='', mode='r', seqDict=None, mafFiles=None, maxOpenFiles=1024, maxlen=None}
+  Constructor for the class.  \var{pathstem} specifies a path and filename prefix for
+  the NLMSA files (since multiple files are used to store one NLMSA, it will automatically add a
+  number of suffixes automatically to open the necessary set of files for the NLMSA).
+  \var{mode} is either ``r'' to open an existing NLMSA (from the \var{pathstem} disk files), 
+  or ``w'' to create a new one (which will be saved to the \var{pathstem} disk files).
+  \var{seqDict} specifies a dictionary which maps sequence names to actual sequence
+  objects representing those sequences.  \var{mafFiles} can be used to specify a list of
+  filenames storing a multiple sequence alignment in the UCSC MAF format.
+  \var{maxOpenFiles} limits the open file descriptors the NLMSA will use.  Since
+  each sequence has a separate nested list database file, a large multi-genome alignment
+  (with each genome containing 20 different chromosomes, say) can rapidly open a large
+  number of file descriptors.  Note: NLMSA only opens a given sequence's nested list database
+  when one of your queries actually requires access to that sequence; it then
+  keeps that file descriptor open to make subsequent queries to it fast.  If the number
+  of open file descriptors would exceed \var{maxOpenFiles}, it will close other open
+  database files, which may slow down query performance (due to having to open and close
+  databases repeatedly to process queries). \var{maxlen} specifies the maximum coordinate
+  value for an LPO database.  Its default value is 2GB, to prevent \class{int} overflow.
+  Using a smaller value can be useful, to 1) limit the size of the LPO in memory
+  during initial construction, and 2) to limit the size of LPO database files on disk
+  (if for example, your file system does not support files above some maximum size).
+  During initial construction of the NLMSA (from MAF files or user-specified interval
+  alignments), the algorithm performs a one-pass sort of the LPO intervals.  Thus,
+  this set of intervals is briefly held in RAM for this sort.  If you have insufficient
+  RAM, the construction step may raise a MemoryError.  If so, you can avoid this problem
+  by using a smaller \var{maxlen} value.
+\end{funcdesc}
 
-\item
-{\em NLMSA(pathstem='',mode='r',seqDict=None,mafFiles=None,maxOpenFiles=1024,maxlen=None)}: 
-Constructor for the class.  {\em pathstem} specifies a path and filename prefix for
-the NLMSA files (since multiple files are used to store one NLMSA, it will automatically add a
-number of suffixes automatically to open the necessary set of files for the NLMSA).
-{\em mode} is either ``r'' to open an existing NLMSA (from the {\em pathstem} disk files), 
-or ``w'' to create a new one (which will be saved to the {\em pathstem} disk files).
-{\em seqDict} specifies a dictionary which maps sequence names to actual sequence
-objects representing those sequences.  {\em mafFiles} can be used to specify a list of
-filenames storing a multiple sequence alignment in the UCSC MAF format.
-{\em maxOpenFiles} limits the open file descriptors the NLMSA will use.  Since
-each sequence has a separate nested list database file, a large multi-genome alignment
-(with each genome containing 20 different chromosomes, say) can rapidly open a large
-number of file descriptors.  Note: NLMSA only opens a given sequence's nested list database
-when one of your queries actually requires access to that sequence; it then
-keeps that file descriptor open to make subsequent queries to it fast.  If the number
-of open file descriptors would exceed {\em maxOpenFiles}, it will close other open
-database files, which may slow down query performance (due to having to open and close
-databases repeatedly to process queries). {\em maxlen} specifies the maximum coordinate
-value for an LPO database.  Its default value is 2GB, to prevent {\em int} overflow.
-Using a smaller value can be useful, to 1) limit the size of the LPO in memory
-during initial construction, and 2) to limit the size of LPO database files on disk
-(if for example, your file system does not support files above some maximum size).
-During initial construction of the NLMSA (from MAF files or user-specified interval
-alignments), the algorithm performs a one-pass sort of the LPO intervals.  Thus,
-this set of intervals is briefly held in RAM for this sort.  If you have insufficient
-RAM, the construction step may raise a MemoryError.  If so, you can avoid this problem
-by using a smaller {\em maxlen} value.
 
-\item
-{\em setitem(i1,s1)}: store an alignment interval; specifically, align the sequence
-interval {\em s1} to the LPO coordinate interval {\em i1}.  This provides a trivial
-user interface for you to build any desired alignment.  If the sequence containing
-interval {\em s1} is not already in the NLMSA, it will be added for you automatically
-(i.e. creating the necessary indexing, nested list database files, etc.).  In this
-case, the sequence must supply a unique string identifier, which will be used
-on subsequent attempts to open the NLMSA database, to match the individual sequence
-nested-list databases against corresponding sequence objects (using {\em seqDict},
-see above).
+\begin{funcdesc}{__setitem__}{i1, s1}
+  store an alignment interval; specifically, align the sequence
+  interval \var{s1} to the LPO coordinate interval \var{i1}.  This provides a trivial
+  user interface for you to build any desired alignment.  If the sequence containing
+  interval \var{s1} is not already in the NLMSA, it will be added for you automatically
+  (i.e. creating the necessary indexing, nested list database files, etc.).  In this
+  case, the sequence must supply a unique string identifier, which will be used
+  on subsequent attempts to open the NLMSA database, to match the individual sequence
+  nested-list databases against corresponding sequence objects (using {\em seqDict},
+  see above).
+\end{funcdesc}
 
-\item
-{\em build()}: to construct the final nested list databases,
-after all the desired alignment intervals have been saved (using either the
-{\em mafFiles} constructor argument, or using {\em setitem} above).  This method
-simply calls the build() method on all the constituent NLMSASequence objects
-in this alignment.
 
-\end{itemize}
+\begin{funcdesc}{build}{}
+  to construct the final nested list databases,
+  after all the desired alignment intervals have been saved (using either the
+  \var{mafFiles} constructor argument, or using \method{setitem} above).  This method
+  simply calls the build() method on all the constituent NLMSASequence objects
+  in this alignment.
+\end{funcdesc}
+
 
 Alignment Usage Methods:
+
+\begin{funcdesc}{__getitem__}{s1}
+  get the alignment slice for the sequence interval \var{s1},
+  i.e. get an NLMSASlice object representing the set of intervals aligned to \var{s1}.
+  You can also use a regular Python {\em slice} object using integer indices
+  ie. \code{nlmsa[1:45]}, in which case, it gets the NLMSA slice corresponding to that 
+  region of the LPO coordinate system.
+\end{funcdesc}
+
 \begin{itemize}
-
 \item
-{\em getitem(s1)}: get the alignment slice for the sequence interval {\em s1},
-i.e. get an NLMSASlice object representing the set of intervals aligned to {\em s1}.
-You can also use a regular Python {\em slice} object using integer indices
-ie. nlmsa[1:45], in which case, it gets the NLMSA slice corresponding to that 
-region of the LPO coordinate system.
-
-\item
-{\em seqs} attribute: This attribute provides a dictionary of the sequences in
+\member{seqs}: This attribute provides a dictionary of the sequences in
 the NLMSA, whose keys are top-level sequence objects, and whose values are
 the associated NLMSASequence object for each sequence.  Ordinarily you will have
 no need to access the NLMSASequence object directly; only do so if you know what
@@ -1305,52 +1390,128 @@ A temporary object created on-the-fly to represent (an interface to provide
 information about) the portion of the alignment associated with a specific
 sequence interval.  Specifically, it acts like a dictionary whose keys are
 sequence intervals that are aligned to this region, and whose values are
-MSASeqEdge objects providing detailed information about the alignment of
+\class{Seq2SeqEdge} objects providing detailed information about the alignment of
 the target interval (key) to the source interval (the sequence interval
 used to create the NLMSASlice in the first place).  You can use this
 dictionary interface in several ways:
 
-\begin{itemize}
 
-\item
-{\em iter(myslice)}: iterates over all sequence intervals that have
-a 1:1 mapping (i.e. a block of alignment containing no indels) to
-all or part of the source interval.
+\begin{funcdesc}{__iter__}{}
+  iterates over all sequence intervals that have
+  a 1:1 mapping (i.e. a block of alignment containing no indels) to
+  all or part of the source interval.
+\end{funcdesc}
 
-\item
-{\em iteritems()}: same keys as {\em iter}, but for each provides
-the matching source interval.
 
-\item
-{\em edges} attribute: same interval mappings as {\em iteritems}, but for
-each provides a third object, the MSASeqEdge providing detailed
-information about the alignment between the source and target intervals
-(such as percent identity, etc.).
+\begin{funcdesc}{keys}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeAll=True, ivalMethod=None, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs}
+  Provides a more general interface than {\em iter()}, with two types of 
+  group-by capabilities, ``group-by'' operations on the alignment intervals
+  contained within this slice (``horizontal'' grouping), 
+  and on the sets of sequences aligned
+  to this slice (``vertical'' grouping).
 
-\item
-{\em getitem(s1)}: treats {\em s1} as a key (target sequence
-interval), and returns an MSASeqEdge object providing detailed
-information about the alignment between this target interval
-and the source interval.
+  1. ``group-by'' operations on the alignment intervals
+  contained within this slice.  It allows the user to supply
+  various parameters for controlling when alignment intervals will be
+  merged or split in the results that it returns.  \var{maxgap} sets the
+  maximum gap size for merging two adjacent intervals.  If the target sequence
+  for the two alignment intervals has a gap longer than \var{maxgap} 
+  letters between the two alignment intervals, they will be returned as
+  separate intervals; otherwise they will be merged as a single alignment
+  region.  \var{maxinsert} sets the maximum length of insert in the target
+  sequence that allows to adjacent intervals to be merged as a single alignment
+  region in the results.  \var{mininsert} is specifically for handling
+  alignments that may have small ``cycles'' (due to slight inconsistencies
+  in the reported alignment intervals, for example, if a portion of sequence
+  can align at both the end of one interval or at the beginning of another, and
+  the intervals are actually added to the NLMSA that way, then the {\em start}
+  of the second interval will actually be {\em before} the {\em stop} of 
+  the first interval; this corresponds to a negative insert value).  A
+  \var{mininsert} value of zero (the default), prevents any such interval
+  pairs from being merged.  Giving a negative \var{mininsert} value will allow
+  interval pairs whose insert value is greater than or equal to this value, 
+  to be merged.  \var{filterSeqs}, if not None, should be a list of sequences
+  used to filter the group-by analysis; i.e. only alignment intervals 
+  containing these sequences are considered in the analysis.  \var{ivalMethod},
+  if not None, allows the user to provide a Python function that performs
+  interval grouping.  Specifically it is called as
+  \function{ivalMethod(l, ns,msaSlice=self, **kwargs)}, where \var{l} is the
+  list of intervals for NLMSASequence \var{ns} within the current slice 
+  \var{msaSlice}; all other args are passed as a dict in \var{kwargs}.
 
-\item
-{\em len(myslice)}: returns the number of distinct sequences that
-are aligned to the source interval.  {\em Note}: this is NOT necessarily 
-equal to the number of items that will be returned by the above iterators,
-since a single target sequence might have multiple 1:1 intervals of
-alignment to the source interval, due to indels.
+  2. merge groups of sequences using "vertical" group-by rules.
+  \var{seqGroups}: a list of one or more lists of sequences to group.
+  If None, the whole set of sequences will be treated as a single group.
+  Each group will be analyzed separately, as follows:
+  \var{sourceOnly}: output intervals will be reported giving only
+  the corresponding interval on the source sequence; redundant
+  output intervals (mapping to the same source interval) are
+  culled.  Has the effect of giving a single interval traversal
+  of each group.
+  \var{indelCut}: for \var{sourceOnly} mode, do not merge separate 
+  intervals that the groupByIntervals analysis separated due to an indel).
+  \var{minAligned}: the minimum number of sequences that must be aligned to
+  the source sequence for masking the output.  Regions below
+  this threshold are masked out; no intervals will be reported
+  in these regions.
+  \var{pMinAligned}: the minimum fraction of sequences (out of the
+  total in the group) that must be aligned to the source
+  sequence for masking the output.
+  \var{seqMethod}: you may supply your own function for grouping.
+  Called as \function{seqMethod(bounds,seqs,**kwargs)}, where
+  \var{bounds} is a sorted list of
+  \var{(ipos,isStart,i,ns,isIndel,(start,end,targetStart,targetEnd))}
+  and \var{seqs} is a list of sequences in the group.
+  Must return a list of \var{(sourceIval,targetIval)}.  See the docs.
 
-\end{itemize}
+\end{funcdesc}
+
+
+\begin{funcdesc}{iteritems}{**kwargs}
+  same keys as {\em iter}, but for each provides the source interval
+  to target interval mapping (\class{Seq2SeqEdge}).
+  Uses same group-by arguments as \method{keys()}.
+\end{funcdesc}
+
+
+\begin{funcdesc}{edges}{**kwargs}
+  same interval mappings as {\em iteritems}, but for
+  each provides a tuple of three objects:
+  the source interval, the corresponding target interval,
+  and the \class{Seq2SeqEdge} providing detailed
+  information about the alignment between the source and target intervals
+  (such as percent identity, etc.).
+  Uses same group-by arguments as \method{keys()}.
+\end{funcdesc}
+
+
+\begin{funcdesc}{__getitem__}{s1}
+  treats \var{s1} as a key (target sequence
+  interval), and returns an \class{Seq2SeqEdge} object providing detailed
+  information about the alignment between this target interval
+  and the source interval.
+\end{funcdesc}
+
+
+\begin{funcdesc}{__len__}{}
+  returns the number of distinct sequences that
+  are aligned to the source interval.  {\em Note}: this is NOT necessarily 
+  equal to the number of items that will be returned by the above iterators,
+  since a single target sequence might have multiple 1:1 intervals of
+  alignment to the source interval, due to indels.
+\end{funcdesc}
+
+
 
 In addition to these standard dictionary methods, NLMSASlice provides
 several additional methods and attributes:
 
-\begin{itemize}
 
+\begin{itemize}
 \item
-{\em letters} attribute: this attribute provides an interface to 
+\member{letters}: this attribute provides an interface to 
 the individual alignment columns (NLMSANode objects) containing the
-source interval, in order from {\em start} to {\em stop}.  This provides
+source interval, in order from \var{start} to \var{stop}.  This provides
 an easy way to obtain detailed information about the letter-to-letter
 alignment of different sequences within this region of the alignment.
 For details on the kinds of information you can obtain for each
@@ -1358,70 +1519,73 @@ alignment column, see NLMSANode, below.
 
 It also provides a graph interface to subset of the partial order alignment 
 graph corresponding to this slice.  For details, see NLMSASliceLetters, below.
-
-\item
-{\em split(maxgap=5, maxinsert=5, mininsert= 0, seqs=None)}: this method
-provides a way to perform ``group-by'' operations on the alignment intervals
-contained within this slice.  It breaks the current slice into subslices
-using  
-various parameters for controlling when alignment intervals will be
-merged or split in the results that it returns.  {\em maxgap} sets the
-maximum gap size for merging two adjacent intervals.  If the target sequence
-for the two alignment intervals has a gap longer than {\em maxgap} 
-letters between the two alignment intervals, they will be returned as
-separate intervals; otherwise they will be merged as a single alignment
-region.  {\em maxinsert} sets the maximum length of insert in the target
-sequence that allows to adjacent intervals to be merged as a single alignment
-region in the results.  {\em mininsert} is specifically for handling
-alignments that may have small ``cycles'' (due to slight inconsistencies
-in the reported alignment intervals, for example, if a portion of sequence
-can align at both the end of one interval or at the beginning of another, and
-the intervals are actually added to the NLMSA that way, then the {\em start}
-of the second interval will actually be {\em before} the {\em stop} of 
-the first interval; this corresponds to a negative insert value).  A
-{\em mininsert} value of zero (the default), prevents any such interval
-pairs from being merged.  Giving a negative {\em mininsert} value will allow
-interval pairs whose insert value is greater than or equal to this value, 
-to be merged.  {\em seqs}, if not None, should be a list of sequences
-used to filter the group-by analysis; i.e. only alignment intervals 
-containing these sequences are considered in the analysis.
-
-Note: the output of split() is one or more NLMSASlice objects; if the
-group-by analysis results in no splitting of the current slice, then
-it is returned unchanged (i.e. the method just returns {\em self}).
-
-\item
-{\em regions(maxgap=5, maxinsert=5, mininsert= 0, seqs=None)}: performs
-the same group-by analysis as {\em split()}, but replaces
-the source interval by the corresponding interval in the LPO.  The main
-practical consequence of this is that target sequence {\em inserts}
-are included in the resulting slice (because they are present in the LPO
-interval corresponding to the original source interval), whereas they
-were NOT included in the original slice (because they are not aligned
-to the source interval).  The main place where this matters is in graph
-traversal of the slice's {\em letters} attribute: whereas the nodes
-and edges corresponding to these inserts are not considered to be part
-of the {\em letters} graph for the original slice, they {\em are} part of the
-LPO slice.  Also, the ``source interval'' in any subsequent operations
-with the LPO slice will be LPO coordinates instead of subintervals of the
-original source sequence interval.
-
-\item
-{\em matchIntervals(seq=None)}: this method returns the set of
-1:1 match intervals for the target sequence {\em seq} (or all
-aligned sequences, if {\em seq} is None), as a dictionary
-whose keys are target sequence intervals, and whose values are
-the corresponding source sequence intervals to which they are
-aligned.
-
-\item
-{\em findSeqEnds(seq)}: returns the largest possible interval of
-{\em seq} that is aligned to this slice, i.e. it merges all 
-alignment intervals in this slice containing {\em seq}, and
-returns the merged sequence interval based on the minimum {\em start}
-value and maximum {\em stop} value found.
-
 \end{itemize}
+
+\begin{funcdesc}{split}{**kwargs}
+  this method provides a way to perform group-by operations on the slice;
+  the output of split() is one or more NLMSASlice objects; if the
+  group-by analysis results in no splitting of the current slice, then
+  it is returned unchanged (i.e. the method just returns {\em self}).
+  Uses same group-by arguments as \method{keys()}.
+  For further details on group-by operations, see \method{keys()} above.
+\end{funcdesc}
+
+\begin{funcdesc}{regions}{**kwags}
+  performs the same group-by analysis as {\em split()}, but replaces
+  the source interval by the corresponding interval in the LPO.  The main
+  practical consequence of this is that target sequence {\em inserts}
+  are included in the resulting slice (because they are present in the LPO
+  interval corresponding to the original source interval), whereas they
+  were NOT included in the original slice (because they are not aligned
+  to the source interval).  The main place where this matters is in graph
+  traversal of the slice's {\em letters} attribute: whereas the nodes
+  and edges corresponding to these inserts are not considered to be part
+  of the {\em letters} graph for the original slice, they {\em are} part of the
+  LPO slice.  Also, the ``source interval'' in any subsequent operations
+  with the LPO slice will be LPO coordinates instead of subintervals of the
+  original source sequence interval.
+  Uses same group-by arguments as \method{keys()}.
+\end{funcdesc}
+
+\begin{funcdesc}{groupByIntervals}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeAll=True, ivalMethod=None, **kwargs}
+  This method performs the interval grouping analysis for all the iterators
+  described above.  Users will not need to call it directly.  Its arguments
+  are described above (see \method{keys()}).  It returns a dictionary
+  whose keys are sequences aligned to this slice, and whose values are
+  the list of intervals produced by the group-by analysis for the corresponding
+  sequence.  The values are tuples of the form
+  \var{(source_start, source_stop, target_start, target_stop)}, showing the
+  mapping of a source sequence interval onto a target sequence interval.
+  This dictionary is the primary input to the \method{groupBySequences()}
+  method below.
+\end{funcdesc}
+
+\begin{funcdesc}{groupBySequences}{seqIntervals, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs}
+  This method performs the sequence grouping analysis for all the iterators
+  described above.  \var{seqIntervals} must be a dictionary of sequences
+  and their associated list of intervals (produced by \method{groupByIntervals()}
+  above).  It returns a list of output sequence intevals, which is either
+  a list of source sequence intervals (\var{sourceOnly} mode), or a list
+  of tuples of the form \var{(source_interval, target_interval)}.
+\end{funcdesc}
+
+
+\begin{funcdesc}{matchIntervals}{seq=None}
+  this method returns the set of
+  1:1 match intervals for the target sequence {\em seq} (or all
+  aligned sequences, if {\em seq} is None), as a dictionary
+  whose keys are target sequence intervals, and whose values are
+  the corresponding source sequence intervals to which they are
+  aligned.
+\end{funcdesc}
+
+\begin{funcdesc}{findSeqEnds}{seq}
+  returns the largest possible interval of
+  {\em seq} that is aligned to this slice, i.e. it merges all 
+  alignment intervals in this slice containing {\em seq}, and
+  returns the merged sequence interval based on the minimum {\em start}
+  value and maximum {\em stop} value found.
+\end{funcdesc}
 
 \subsubsection{NLMSASliceLetters}
 represents the {\em letters} graph of a specific NLMSASlice.  It is
@@ -1431,24 +1595,22 @@ are just returned as None -- please implement!
 
 This graph has the following methods:
 
-\begin{itemize}
+\begin{funcdesc}{__iter__}{}
+  generates all the nodes in the slice, in order from left to right.
+\end{funcdesc}
 
-\item    
-{\em iter()}: generates all the nodes in the slice, in order from
-left to right.
+\begin{funcdesc}{items}{}
+  also \method{iteritems()}. Generate the same set of nodes as above,
+  as keys, but for each also returns a value representing its outgoing
+  directed edges (see getitem, below).
+\end{funcdesc}
 
-\item    
-{\em items(), iteritems()}: generate the same set of nodes as above,
-as keys, but for each also returns a value representing its outgoing
-directed edges (see getitem, below).
-
-\item    
-{\em getitem(node)}: gets a dictionary indicating all the outgoing
-directed edges from {\em node} to subsequence nodes, whose keys are
-the target nodes, and whose edges are the 
-sequence.LetterEdge objects representing each edge.
-
-\end{itemize}
+\begin{funcdesc}{__getitem__}{node}
+  gets a dictionary indicating all the outgoing
+  directed edges from {\em node} to subsequence nodes, whose keys are
+  the target nodes, and whose edges are the 
+  \class{sequence.LetterEdge} objects representing each edge.
+\end{funcdesc}
 
 \subsubsection{NLMSANode}
 A temporary object (created on-the-fly) 
@@ -1456,48 +1618,47 @@ representing a single letter ``column'' in the alignment.  It acts like
 a container of the sequence letters aligned to the source sequence in
 this column.  It has the following methods:
 
-\begin{itemize}
+\begin{funcdesc}{__iter__}{}
+  generates all the individual sequence letters 
+  (as SeqPath intervals, presumably of length 1) that are aligned to 
+  the source sequence, in this column of the alignment.
+\end{funcdesc}
 
-\item    
-{\em iter()}: generates all the individual sequence letters 
-(as SeqPath intervals, presumably of length 1) that are aligned to 
-the source sequence, in this column of the alignment.
+    
+\begin{funcdesc}{edges}{}
+  generates the same list of of target sequence letters as
+  the iterator, but as a tuple of (target letter, source letter, edge).
+  Currently, edge is just None.
+\end{funcdesc}
 
-\item    
-{\em edges()}: generates the same list of of target sequence letters as
-the iterator, but as a tuple of (target letter, source letter, edge).
-Currently, edge is just None.
-
-\item
-{\em len()}: returns the number of distinct sequences aligned to
-the source interval, in this column.
-
-
-\end{itemize}
+\begin{funcdesc}{__len__}{}
+  returns the number of distinct sequences aligned to
+  the source interval, in this column.
+\end{funcdesc}
 
 Other, internal methods that regular users are unlikely to need:
 
-\begin{itemize}
+\begin{funcdesc}{getSeqPos}{seq}
+  returns the sequence interval of \var{seq}
+  that is aligned to this column, or raises KeyError if it is not
+  aligned here.
+\end{funcdesc}
 
-\item    
-{\em getSeqPos(seq)}: returns the sequence interval of {\em seq}
-that is aligned to this column, or raises KeyError if it is not
-aligned here.
 
-\item
-{\em getEdgeSeqs(node2)}: returns a dictionary of sequences
-that traverse the edge directly from this node to {\em node2},
-i.e. if letter {\em i} of seq is aligned to this node, then
-letter letter {\em i+1} is aligned to {\em node2}.  The
-dictionary's keys are top-level sequence objects, and its
-value for each is the letter position index {\em i} as defined above.
+\begin{funcdesc}{getEdgeSeqs}{node2}
+  returns a dictionary of sequences
+  that traverse the edge directly from this node to {\em node2},
+  i.e. if letter {\em i} of seq is aligned to this node, then
+  letter letter {\em i+1} is aligned to {\em node2}.  The
+  dictionary's keys are top-level sequence objects, and its
+  value for each is the letter position index {\em i} as defined above.
+\end{funcdesc}
 
-\item 
-{\em nodeEdges()}: returns a dictionary of the outgoing edges
-from this node, whose keys are target nodes, and whose values
-are the corresponding edge objects (of type sequence.LetterEdge).
-
-\end{itemize}
+\begin{funcdesc}{nodeEdges}{}
+  returns a dictionary of the outgoing edges
+  from this node, whose keys are target nodes, and whose values
+  are the corresponding edge objects (of type sequence.LetterEdge).
+\end{funcdesc}
 
 
 \subsubsection{NLMSASequence}
@@ -1710,21 +1871,20 @@ ptChr7=genomeUnion['panTro1.chr7'] # GET CHIMP CHROMOSOME 7
 \subsubsection{Functions}
 The seqdb module also provides several convenience functions:
 
-\begin{itemize}
+\begin{funcdesc}{read_fasta}{ifile, onlyReadOneLine=False}
+  a generator function
+  that yields tuples of \var{id,title,seq} from \var{ifile}.  
+  The \var{onlyReadOneLine} option is useful if you only want to 
+  determine the sequence type (e.g. DNA vs protein) and the
+  whole sequence might be extremely long (e.g. a genome!).
+\end{funcdesc}
 
-\item
-{\em read_fasta(ifile,onlyReadOneLine=False)}: a generator function
-that yields tuples of (id,title,seq) from ifile.  
-The {\em onlyReadOneLine} option is useful if you only want to 
-determine the sequence type (e.g. DNA vs protein) and the
-whole sequence might be extremely long (e.g. a genome!).
-
-\item
-{\em write_fasta(ofile,s,chunk=60,id=None)}: writes the sequence s
-to the output file {\em ofile}, using {\em chunk} as the line width.
-{\em id} can provide an identifier to use instead of the default s.id.
-
-\end{itemize}
+\begin{funcdesc}{write_fasta}{ofile, s, chunk=60, id=None}
+  writes the sequence \var{s}
+  to the output file \var{ofile}, using \var{chunk} as the line width.
+  \var{id} can provide an identifier to use instead of the default 
+  \code{s.id}.
+\end{funcdesc}
 
 
 
