@@ -449,22 +449,22 @@ cdef class NLMSASlice:
 
 
   ########################################### ITERATOR METHODS
-  def edges(self,**kwargs):
+  def edges(self,dummyArg=None,**kwargs):
     seqIntervals=self.groupByIntervals(**kwargs)
     ivals=self.groupBySequences(**kwargs)
     l=[]
     for ival1,ival2 in ivals:
       l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
     return l
-  def items(self,**kwargs):
+  def items(self,dummyArg=None,**kwargs):
     'get list of tuples (ival2,edge) aligned to this slice'
     l=[]
     for ival1,ival2,edge in self.edges(**kwargs):
       l.append((ival2,edge))
     return l
-  def iteritems(self,**kwargs):
+  def iteritems(self,dummyArg=None,**kwargs):
     return iter(self.items(**kwargs))
-  def keys(self,**kwargs):
+  def keys(self,dummyArg=None,**kwargs):
     seqIntervals=self.groupByIntervals(**kwargs)
     ivals=self.groupBySequences(**kwargs)
     l=[]
@@ -729,7 +729,7 @@ cdef class NLMSASlice:
     return l
             
       
-  def regions(self,**kwargs):
+  def regions(self,dummyArg=None,**kwargs):
     '''get LPO region(s) corresponding to this interval
     Same group-by rules apply here as for the split() method.'''
     cdef int i
