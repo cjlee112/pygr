@@ -116,65 +116,6 @@ class IntervalTransform(object):
 
 
 
-class S2SEEdgesDescriptor(object):
-    "list of interval matches as list of tuples (ival1,ival2,xform)"
-    def __get__(self,s2se,objtype):
-        return [(t.srcPath,t.destPath,t) for t in s2se.matches]
-
-
-
-
-class Seq2SeqEdge(object):
-    '''Maps two sequence regions onto each other, using a list
-    of scalar transformations.  Can handle indels within the
-    mapping.'''
-    edges=S2SEEdgesDescriptor()
-    def __init__(self,msaSlice,targetPath):
-        self.msaSlice=msaSlice
-        self.targetPath=targetPath
-        l=[]
-        for i2,i1 in msaSlice.matchIntervals(targetPath).iteritems():
-            i2b=i2*targetPath # INTERSECTION 
-            if i2 is not None:
-                t=IntervalTransform(i2,i1) # COMPUTE MAPPING
-                try:
-                    i1b=t[i2b] # MAP TARGET IVAL TO SOURCE
-                except IndexError: # NO OVERLAP, IGNORE
-                    continue
-                l.append(IntervalTransform(i1b,i2b)) # SAVE MAPPING
-        if len(l)==0: # NO MAPPED INTERVALS
-            raise KeyError('targetPath not aligned in msaSlice')
-        # COMPUTE MAXIMUM ALIGNED REGION OF i1 SOURCE
-        start=min([t.srcPath.start for t in l])
-        stop=max([t.srcPath.stop for t in l])
-        self.sourcePath=absoluteSlice(i1,start,stop)
-        self.matches=l # SAVE OUR INTERVAL TRANSFORMS
-
-    def __iter__(self):
-        return iter(self.matches)
-
-    def percent_id(self):
-        "calculate fractional identity for this pairwise alignment"
-        nid=0
-        start1=self.sourcePath.start
-        end1=self.sourcePath.end
-        s1=str(self.sourcePath)
-        start2=self.targetPath.start
-        end2=self.targetPath.end
-        s2=str(self.targetPath)
-        for srcPath,destPath in self.matches.items():
-            isrc=srcPath.start-start1
-            idest=destPath.start-start2
-            for i in xrange(len(srcPath)):
-                if s1[isrc+i]==s2[idest+i]:
-                    nid+=1
-        len1=end1-start1
-        len2=end2-start2
-        if len1>len2:
-            return nid/float(len1)
-        else:
-            return nid/float(len2)
-
 
 
 
@@ -636,7 +577,83 @@ class Sequence(SequenceBase):
         self.seq=s
         self.stop=len(self)
 
+class SeqFilterDict(dict):
+    '''stores a set of intervals, either on init or via self[ival]=junk;
+    self[ival] returns intersection of ival and the overlapping
+    interval in self if any; otherwise raise KeyError'''
+    def __init__(self,l=[]):
+        'accepts optional arg giving list of intervals'
+        dict.__init__(self)
+        for ival in l:
+            self[ival]=None
+    def __getitem__(self,k):
+        try:
+            ival=dict.__getitem__(self,k.path)
+        except KeyError:
+            raise KeyError('seq not in dict')
+        return k*ival # RETURN INTERSECTION OF IVALS
+    def __setitem__(self,ival,junk):
+        dict.__setitem__(self,ival.path,ival)
+    def __iter__(self):
+        return dict.itervalues(self)
 
+
+
+
+## class S2SEEdgesDescriptor(object):
+##     "list of interval matches as list of tuples (ival1,ival2,xform)"
+##     def __get__(self,s2se,objtype):
+##         return [(t.srcPath,t.destPath,t) for t in s2se.matches]
+
+
+
+
+class Seq2SeqEdge(object):
+    '''Maps two sequence regions onto each other, using a list
+    of scalar transformations.  Can handle indels within the
+    mapping.'''
+    #edges=S2SEEdgesDescriptor()
+    def __init__(self,msaSlice,targetPath,sourcePath=None):
+        self.msaSlice=msaSlice
+        self.targetPath=targetPath
+        if sourcePath is not None:
+            self.sourcePath=sourcePath
+        else:
+            ivals=self.items(mergeAll=True,sourceOnly=True)
+            try:
+                self.sourcePath=ivals[0]
+            except IndexError:
+                raise KeyError('target interval not in msaSlice!')
+
+    def items(self,**kwargs):
+        'get list of (srcPath,destPath) 1:1 matches'
+        sf=SeqFilterDict([self.targetPath])
+        si=self.msaSlice.groupByIntervals(filterSeqs=sf,**kwargs)
+        return self.msaSlice.groupBySequences(si,**kwargs)
+    def __iter__(self,sourceOnly=True,**kwargs):
+        return iter(self.items(sourceOnly=sourceOnly,**kwargs))
+
+    def percent_id(self):
+        "calculate fractional identity for this pairwise alignment"
+        nid=0
+        start1=self.sourcePath.start
+        end1=self.sourcePath.end
+        s1=str(self.sourcePath)
+        start2=self.targetPath.start
+        end2=self.targetPath.end
+        s2=str(self.targetPath)
+        for srcPath,destPath in self.items():
+            isrc=srcPath.start-start1
+            idest=destPath.start-start2
+            for i in xrange(len(srcPath)):
+                if s1[isrc+i]==s2[idest+i]:
+                    nid+=1
+        len1=end1-start1
+        len2=end2-start2
+        if len1>len2:
+            return nid/float(len1)
+        else:
+            return nid/float(len2)
 
 
 
