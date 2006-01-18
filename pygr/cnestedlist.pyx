@@ -447,13 +447,45 @@ cdef class NLMSASlice:
       free(self.seqBounds)
       self.seqBounds=NULL
 
+
+  ########################################### ITERATOR METHODS
+  def edges(self,**kwargs):
+    seqIntervals=self.groupByIntervals(**kwargs)
+    ivals=self.groupBySequences(**kwargs)
+    l=[]
+    for ival1,ival2 in ivals:
+      l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
+    return l
+  def items(self,**kwargs):
+    'get list of tuples (ival2,edge) aligned to this slice'
+    l=[]
+    for ival1,ival2,edge in self.edges(**kwargs):
+      l.append((ival2,edge))
+    return l
+  def iteritems(self,**kwargs):
+    return iter(self.items(**kwargs))
+  def keys(self,**kwargs):
+    seqIntervals=self.groupByIntervals(**kwargs)
+    ivals=self.groupBySequences(**kwargs)
+    l=[]
+    for ival1,ival2 in ivals:
+      l.append(ival2)
+    return l
+  def __iter__(self): # PYREX DOESNT ALLOW ARGS TO __iter__ !
+    return iter(self.keys())
+  def __getitem__(self,k):
+    return sequence.Seq2SeqEdge(self,k)
+  def __len__(self):
+    return self.nrealseq # NUMBER OF NON-LPO SEQUENCE/ORIS ALIGNED HERE
+
+
   ##################################### 1:1 INTERVAL METHODS
   def matchIntervals(self,seq=None):
     '''get all 1:1 match intervals in this region of alignment
     as dict.  if seq argument not None, only match intervals
     for that sequence will be included.  No clipping is performed.'''
     cdef int i,target_id
-    cdef NLMSALetters nl
+    cdef NLMSA nl
     cdef NLMSASequence ns
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     if seq is not None:
@@ -473,11 +505,11 @@ cdef class NLMSASlice:
           d[ival1]=ival2 # SAVE THE INTERVAL MATCH
     return d
 
-  ############################## INTERVAL-TO-INTERVAL EDGE METHODS
+  ############################## MAXIMUM INTERVAL METHODS
   def findSeqEnds(self,seq):
     'get maximum interval of seq aligned in this interval'
     cdef int i,ori,i_ori
-    cdef NLMSALetters nl
+    cdef NLMSA nl
     cdef NLMSASequence ns
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     ns=nl.seqs[seq] # MAKE SURE THIS IS IN OUR ALIGNMENT
@@ -494,97 +526,214 @@ cdef class NLMSASlice:
                                 self.seqBounds[i].target_stop)
     raise KeyError('seq not aligned in this interval')
 
-  property edges:
+  def generateSeqEnds(self):
     'get list of tuples (ival1,ival2,edge)'
-    def __get__(self):
-      cdef int i
-      cdef NLMSALetters nl
-      cdef NLMSASequence ns
-      nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
-      seq=self.nlmsaSequence.seq
-      l=[]
-      for i from 0 <= i <self.nseqBounds:
-        ns=nl.seqlist[self.seqBounds[i].id]
-        if ns.is_lpo: # DON'T RETURN EDGES TO LPO
-          continue
-        ival1=sequence.absoluteSlice(seq,self.seqBounds[i].start,
-                                     self.seqBounds[i].stop)
-        ival2=nl.seqInterval(self.seqBounds[i].id,
-                             self.seqBounds[i].target_start,
-                             self.seqBounds[i].target_stop)
-        l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2)))
-      return l
-  def items(self):
-    'get list of tuples (ival2,edge) aligned to this interval'
-    l=[]
-    for ival1,ival2,edge in self.edges:
-      l.append((ival2,edge))
-    return l
-  def iteritems(self):
-    return iter(self.items())
-  def __iter__(self):
-    l=[]
-    for ival1,ival2,edge in self.edges:
-      l.append(ival2)
-    return iter(l)
-  def __getitem__(self,k):
-    return sequence.Seq2SeqEdge(self,k)
-  def __len__(self):
-    return self.nrealseq # NUMBER OF NON-LPO SEQUENCE/ORIS ALIGNED HERE
-
-  ############################################## LPO REGION METHODS
-  def split(self,int maxgap=5,int maxinsert=5,int mininsert= 0,
-            seqs=None):
-    '''query method for subdividing slice via group-by rules:
-      - maxgap (=5): longest gap allowed within a region
-      - maxinsert (=5): longest insert allowed within a region
-      - mininsert (=0): should be 0, to prevent cycles within a region
-      - seqs (=None): list of sequences to apply these rules to;
-        other sequences alignment will be ignored if seqs not None'''
-    cdef int i,gap,insert,start,sliceEnd
-    cdef NLMSALetters nl
+    cdef int i
+    cdef NLMSA nl
     cdef NLMSASequence ns
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
-    filterSeqs=None
-    if seqs is not None: # BUILD FILTER SEQUENCE INDEX
-      filterSeqs={}
-      for seq in seqs: # seq NOT IN ALIGNMENT WILL RAISE KeyError
-        filterSeqs[nl.seqs[seq]]=None
-    start=self.start
+    seq=self.nlmsaSequence.seq
     l=[]
-    end={}
-    target_end={}
-    for i from 0 <= i < self.n: # SCAN ALL INTERVALS FOR INDELS
+    for i from 0 <= i <self.nseqBounds:
+      ns=nl.seqlist[self.seqBounds[i].id]
+      if ns.is_lpo: # DON'T RETURN EDGES TO LPO
+        continue
+      ival1=sequence.absoluteSlice(seq,self.seqBounds[i].start,
+                                   self.seqBounds[i].stop)
+      ival2=nl.seqInterval(self.seqBounds[i].id,
+                           self.seqBounds[i].target_start,
+                           self.seqBounds[i].target_stop)
+      l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
+    return l
+
+  ############################################## GROUP-BY METHODS
+  def groupByIntervals(self,int maxgap=0,int maxinsert=0,
+                       int mininsert= 0,filterSeqs=None,
+                       mergeAll=True,ivalMethod=None,**kwargs):
+    '''merge alignment intervals using "horizontal" group-by rules:
+      - maxgap (=0): longest gap allowed within a region
+      - maxinsert (=0): longest insert allowed within a region
+      - mininsert (=0): should be 0, to prevent cycles within a region
+      - filterSeqs (=None): dict of sequences to apply these rules to;
+        other sequences alignment will be ignored if
+        filterSeqs not None
+      - ivalMethod: a function to process the list of intervals
+        for each sequence (it can merge or split them in any way
+        it wants)'''
+    cdef int i,j,n,gap,insert,start,end,targetStart,targetEnd
+    cdef NLMSA nl
+    cdef NLMSASequence ns
+    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+    seqIntervals={}
+    for i from 0 <= i < self.n: # LIST INTERVALS FOR EACH TARGET
       ns=nl.seqlist[self.im[i].target_id] # GET TARGET SEQUENCE
-      if not ns.is_lpo and (filterSeqs is None or ns in filterSeqs):
-        try: # CHECK FOR GAP
-          gap= self.im[i].start - end[self.im[i].target_id]
-        except KeyError:
-          gap=0
-        try: # CHECK FOR INSERTION
-          insert=self.im[i].target_start \
-                  - target_end[self.im[i].target_id]
-        except KeyError:
-          insert=0
-        if gap>maxgap or insert>maxinsert or insert<mininsert:
-          sliceEnd=end[self.im[i].target_id] # SAVE NEW SUB-SLICE
-          subslice=NLMSASlice(self.nlmsaSequence,start,sliceEnd)
-          l.append(subslice)
-          start=sliceEnd # NEXT SLICE SHOULD START HERE...
-        end[self.im[i].target_id]=self.im[i].end # SAVE IVAL END
-        target_end[self.im[i].target_id]=self.im[i].target_end
-    if len(l)>0: # SINCE SPLIT, HAVE TO SAVE THE LAST SUB-SLICE
-      l.append(NLMSASlice(self.nlmsaSequence,start,self.stop))
-      return l # RETURN LIST OF SUB-SLICES
-    else:
-      return [self] # NO SUB-SLICING OCCURRED!
+      if ns.is_lpo:
+        continue
+      targetStart=self.im[i].target_start
+      targetEnd=self.im[i].target_end
+      if filterSeqs is not None: # CLIP TARGET SEQ INTERVAL
+        target=sequence.absoluteSlice(ns.seq,targetStart,targetEnd)
+        try:
+          target=filterSeqs[target] # PERFORM CLIPPING
+          targetStart=target.start  # GET COORDS OF CLIPPED REGION
+          targetEnd=target.stop
+        except KeyError: # NO OVERLAP IN filterSeqs, SO SKIP
+          continue
+      try: # ADD INTERVAL TO EXISTING LIST
+        seqIntervals[self.im[i].target_id] \
+             .append([self.im[i].start,self.im[i].end,
+                      targetStart,targetEnd])
+      except KeyError: # CREATE A NEW LIST FOR THIS TARGET
+        seqIntervals[self.im[i].target_id]= \
+           [[self.im[i].start,self.im[i].end,targetStart,targetEnd]]
+
+    for i,l in seqIntervals.iteritems(): # MERGE INTERVALS FOR EACH SEQ
+      if ivalMethod is not None: # USER-SUPPLIED GROUPING FUNCTION
+        ivalMethod(l,nl.seqlist[i].seq,msaSlice=self,maxgap=maxgap,
+                   maxinsert=maxinsert,mininsert=mininsert,
+                   filterSeqs=filterSeqs,mergeAll=mergeAll,**kwargs)
+        continue # NO NEED TO APPLY GENERIC MERGING OPERATION BELOW
+      n=0
+      for j from 1 <= j < len(l): # MERGE BY INDEL LENGTH RULES
+        gap=l[j][0]-l[n][1] # current.start - last.end
+        insert=l[j][2]-l[n][3] # current.target_start - last.target_end
+        if not mergeAll and \
+               (gap>maxgap or insert>maxinsert or insert<mininsert):
+          n=n+1 # SPLIT, SO START A NEW INTERVAL
+          if n<j: # COPY START COORDS TO NEW SLOT
+            l[n][0]=l[j][0]
+            l[n][2]=l[j][2]
+        if n<j: # COPY END COORDS TO CURRENT SLOT
+          l[n][1]=l[j][1]
+          l[n][3]=l[j][3]
+      del l[n+1:] # DELETE REMAINING UNMERGED INTERVALS
+    return seqIntervals
+
+  def groupBySequences(self,seqIntervals,sourceOnly=False,
+                       indelCut=False,seqGroups=None,minAligned=1,
+                       pMinAligned=0.,seqMethod=None,**kwargs):
+    '''merge groups of sequences using "vertical" group-by rules:
+    - seqGroups: a list of one or more lists of sequences to group.
+      Each group will be analyzed separately, as follows:
+    - sourceOnly: output intervals will be reported giving only
+      the corresponding interval on the source sequence; redundant
+      output intervals (mapping to the same source interval) are
+      culled.  Has the effect of giving a single interval traversal
+      of each group.
+    - indelCut: for sourceOnly mode, do not merge separate 
+      intervals as reported by seqIntervals (in other words,
+      that the groupByIntervals analysis separated due to an indel).
+    - minAligned: the minimum #sequences that must be aligned to
+      the source sequence for masking the output.  Regions below
+      this threshold are masked out; no intervals will be reported
+      in these regions.
+    - pMinAligned: the minimum fraction of sequences (out of the
+      total in the group) that must be aligned to the source
+      sequence for masking the output.
+    - seqMethod: you may supply your own function for grouping.
+      Called as seqMethod(bounds,seqs,**kwargs), where
+      bounds is a sorted list of
+      (ipos,isStart,i,ns,isIndel,(start,end,targetStart,targetEnd))
+      seqs is a list of sequences in the group.
+      Must return a list of (sourceIval,targetIval).  See the docs.
+    '''
+    cdef int i,j,start,end,targetStart,targetEnd,ipos
+    cdef float f
+    cdef NLMSA nl
+    cdef NLMSASequence ns
+    srcSeq=self.nlmsaSequence.seq
+    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+    if seqGroups is None:
+      seqGroups=[seqIntervals] # JUST USE THE WHOLE SET
+    result=[]
+    for seqs in seqGroups: # PROCESS EACH SEQ GROUP
+      bounds=[]
+      j=0
+      for seq in seqs: # CONSTRUCT INTERVAL BOUNDS LIST
+        ns=nl.seqs[seq]
+        try:
+          ivals=seqIntervals[ns.id]
+        except KeyError: # SEQUENCE NOT IN THIS ALIGNMENT REGION, SO SKIP
+          continue
+        isIndel=False
+        for ival in ivals:
+          bounds.append((ival[1],False,j,ns,isIndel,ival))
+          bounds.append((ival[0],True,j,ns,isIndel,ival))
+          isIndel=True
+        j=j+1 # SEQUENCE COUNTER ENSURES ORDER OF SEQS IN SORTED LIST
+      bounds.sort() # ASCENDING ORDER OF source_pos, SORT stop B4 start
+      if seqMethod is not None:
+        result=result+seqMethod(bounds,seqs,sourceOnly=sourceOnly,
+                                msaSlice=self,minAligned=minAligned,
+                                pMinAligned=pMinAligned,
+                                indelCut=indelCut,**kwargs)
+        continue # DON'T USE GENERIC GROUPING METHOD BELOW
+      seqStart={}
+      maskStart=None
+      for bound in bounds: # GENERIC GROUPING: APPLY MASKING, sourceOnly
+        ipos,isStart,j,ns,isIndel=bound[0:5]
+        if isStart: # INTERVAL START
+          seqStart[ns]=bound[5] # JUST RECORD START OF INTERVAL
+        else: # INTERVAL STOP
+          start,end,targetStart,targetEnd=bound[5]
+          if maskStart is not None and not sourceOnly: # SAVE TARGET IVAL
+            if maskStart>start: # TRUNCATE TARGET IVAL START
+              targetStart=targetStart+maskStart-start
+              start=maskStart
+            result.append((sequence.absoluteSlice(srcSeq,start,end),
+                           sequence.absoluteSlice(ns.seq,targetStart,
+                                                  targetEnd)))
+          del seqStart[ns] # REMOVE THIS SEQ FROM START DICT
+
+        f=len(seqStart) # #ALIGNED SEQS IN THIS REGION
+        if f<minAligned or f/len(seqs)<pMinAligned: # APPLY MASKING
+          if maskStart is not None:
+            if sourceOnly: # JUST SAVE MERGED SOURCE INTERVAL
+              result.append(sequence.absoluteSlice(srcSeq,maskStart,end))
+            else: # REPORT TARGET IVALS WITHIN (maskStart,end) REGION
+              for ns,(start,i,targetStart,targetEnd) \
+                      in seqStart.iteritems():
+                if maskStart>start: # TRUNCATE TARGET IVAL START
+                  targetStart=targetStart+maskStart-start
+                  start=maskStart
+                if end<i: # TRUNCATE TARGET IVAL END
+                  targetEnd=targetEnd+end-i
+                result.append((sequence.absoluteSlice(srcSeq,start,end),
+                               sequence.absoluteSlice(ns.seq,targetStart,
+                                                      targetEnd)))
+            maskStart=None # REGION NOW BELOW THRESHOLD
+        elif maskStart is None:
+          maskStart=ipos # START OF REGION ABOVE THRESHOLD
+        if maskStart is not None and sourceOnly and indelCut \
+               and isIndel and maskStart<ipos:
+          result.append(sequence.absoluteSlice(srcSeq,maskStart,ipos))
+          maskStart=ipos
+    return result
+
+
+  ############################################## LPO REGION METHODS
+  def split(self,minAligned=0,**kwargs):
+    '''Use groupByIntervals() and groupBySequences() methods to
+    divide this slice into subslices using indel rules etc.'''
+    seqIntervals=self.groupByIntervals(**kwargs)
+    kwargs['sourceOnly']=True
+    kwargs['indelCut']=True
+    ivals=self.groupBySequences(minAligned=minAligned,**kwargs)
+    l=[]
+    for ival in ivals:
+      if ival.start==self.start and ival.stop==self.stop:
+        l.append(self) # SAME INTERVAL, SO JUST RETURN self
+      else:
+        subslice=NLMSASlice(self.nlmsaSequence,ival.start,ival.stop)
+        l.append(subslice)
+    return l
             
       
   def regions(self,**kwargs):
     '''get LPO region(s) corresponding to this interval
     Same group-by rules apply here as for the split() method.'''
     cdef int i
-    cdef NLMSALetters nl
+    cdef NLMSA nl
     cdef NLMSASequence ns_lpo
     if self.nlmsaSequence.is_lpo: # ALREADY AN LPO REGION!
       return self.split(**kwargs) # JUST APPLY GROUP-BY RULES TO  self
@@ -599,6 +748,7 @@ cdef class NLMSASlice:
     if len(l)>0:
       return l
     raise ValueError('no LPO in nlmsaSlice.seqBounds?  Debug!')
+
 
   ########################################### LETTER METHODS
   property letters:
@@ -671,7 +821,7 @@ cdef class NLMSANode:
   def __new__(self,int ipos,NLMSASlice nlmsaSlice not None,
               int istart=0,int istop= -1):
     cdef int i,n
-    cdef NLMSALetters nl
+    cdef NLMSA nl
     self.nlmsaSlice=nlmsaSlice
     nl=nlmsaSlice.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     self.ipos=ipos
@@ -694,7 +844,7 @@ cdef class NLMSANode:
   def __iter__(self):
     cdef int i,j
     cdef NLMSASequence ns
-    cdef NLMSALetters nl
+    cdef NLMSA nl
     nl=self.nlmsaSlice.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     l=[]
     for i from self.istart <= i < self.istop:
@@ -759,7 +909,7 @@ cdef class NLMSANode:
     "return dict of sequences that traverse edge from self -> other"
     cdef int i
     cdef NLMSASequence ns # FIRST LOOK UP THE SEQUENCE
-    cdef NLMSALetters nl
+    cdef NLMSA nl
     nl=self.nlmsaSlice.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     d={}
     if self.id+1==other.id: #other ADJACENT IN LPO
@@ -818,7 +968,7 @@ cdef class NLMSANode:
 
 cdef class NLMSASequence:
   'sequence interface to NLMSA storage of an LPO alignment'
-  def __new__(self,NLMSALetters nl not None,filestem,seq,mode='r'):
+  def __new__(self,NLMSA nl not None,filestem,seq,mode='r'):
     self.nlmsaLetters=nl
     self.filestem=filestem
     import types
@@ -922,7 +1072,7 @@ cdef class NLMSASequence:
       if k.pathForward is self.seq:
         return NLMSASlice(self,k.start,k.stop)
     except AttributeError: pass
-    raise KeyError('key must be a sequene interval of this sequence')
+    raise KeyError('key must be a sequence interval of this sequence')
 
   def __len__(self):
     'call len(self.seq) if we have a seq.  Otherwise self.length'
@@ -960,8 +1110,8 @@ class NLMSASeqDict(dict):
 
 
 
-cdef class NLMSALetters:
-  'toplevel letter interface to NLMSA storage of an LPO alignment'
+cdef class NLMSA:
+  'toplevel interface to NLMSA storage of an LPO alignment'
   def __new__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
               maxOpenFiles=1024,maxlen=None):
     try:
