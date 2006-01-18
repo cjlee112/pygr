@@ -132,7 +132,7 @@ cdef class IntervalFileDBIterator:
   cdef int loadAll(self)
 
 
-cdef class NLMSALetters:
+cdef class NLMSA:
   cdef readonly object pathstem
   cdef readonly object seqs
   cdef readonly object seqlist
@@ -149,7 +149,7 @@ cdef class NLMSASequence:
   cdef IntervalFileDB db
   cdef FILE *build_ifile
   cdef readonly object filestem
-  cdef NLMSALetters nlmsaLetters
+  cdef NLMSA nlmsaLetters
   
   cdef int saveInterval(self,IntervalMap im[],int n,int expand_self,FILE *ifile)
 
