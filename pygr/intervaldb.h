@@ -82,13 +82,14 @@ extern IntervalIterator *reset_interval_iterator(IntervalIterator *it);
 extern IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn);
 extern int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop);
 extern IntervalMap *read_sublist(FILE *ifile,SublistHeader *subheader);
-extern IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
-					     IntervalIndex ii[],int nii,
-					     SublistHeader subheader[],int nlists,
-					     SubheaderFile *subheader_file,
-					     int ntop,int div,FILE *ifile,
-					     IntervalMap buf[],int nbuf,
-					     int *p_nreturn);
+extern int find_file_intervals(IntervalIterator *it0,int start,int end,
+			       IntervalIndex ii[],int nii,
+			       SublistHeader subheader[],int nlists,
+			       SubheaderFile *subheader_file,
+			       int ntop,int div,FILE *ifile,
+			       IntervalMap buf[],int nbuf,
+			       int *p_nreturn,IntervalIterator **it_return);
+
 extern char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
 				SublistHeader *subheader,int nlists,char filestem[]);
 extern IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
