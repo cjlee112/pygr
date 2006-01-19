@@ -440,13 +440,13 @@ int find_file_start(IntervalIterator *it,int start,int end,int isub,
 }
 
 
-IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
-				      IntervalIndex ii[],int nii,
-				      SublistHeader subheader[],int nlists,
-				      SubheaderFile *subheader_file,
-				      int ntop,int div,FILE *ifile,
-				      IntervalMap buf[],int nbuf,
-				      int *p_nreturn)
+int find_file_intervals(IntervalIterator *it0,int start,int end,
+			IntervalIndex ii[],int nii,
+			SublistHeader subheader[],int nlists,
+			SubheaderFile *subheader_file,
+			int ntop,int div,FILE *ifile,
+			IntervalMap buf[],int nbuf,
+			int *p_nreturn,IntervalIterator **it_return)
 {
   IntervalIterator *it=NULL,*it2=NULL;
   int k,ibuf=0,ori_sign=1,ov=0;
@@ -505,9 +505,10 @@ IntervalIterator *find_file_intervals(IntervalIterator *it0,int start,int end,
   reorient_intervals(ibuf,buf,ori_sign); /* REORIENT INTERVALS TO MATCH QUERY ORI */
 #endif
   *p_nreturn=ibuf; /* #INTERVALS FOUND IN THIS PASS */
-  return it; /* HAND BACK ITERATOR FOR CONTINUING THE SEARCH, IF ANY */
+  *it_return=it; /* HAND BACK ITERATOR FOR CONTINUING THE SEARCH, IF ANY */
+  return 0; /* SIGNAL THAT NO ERROR OCCURRED */
  handle_malloc_failure:
-  return NULL;
+  return -1;
 }
 
 
