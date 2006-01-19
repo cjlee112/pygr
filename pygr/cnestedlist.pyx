@@ -205,7 +205,7 @@ cdef class IntervalFileDBIterator:
     self.nhit = i+1
     return self.nhit
 
-  cdef int nextBlock(self,int *pkeep):
+  cdef int nextBlock(self,int *pkeep) except -2:
     'load one more block of overlapping intervals'
     cdef int i
     if self.it==NULL: # ITERATOR IS EXHAUSTED
@@ -214,14 +214,14 @@ cdef class IntervalFileDBIterator:
       i=self.extend(pkeep[0]) # MOVE SLICE TO THE FRONT
     else: # WE CAN USE THE WHOLE BUFFER
       i=0
-    self.it=find_file_intervals(self.it,self.start,self.end,
-                                self.db.db[0].ii,self.db.db[0].nii,
-                                self.db.db[0].subheader,self.db.db[0].nlists,
-                                &(self.db.db[0].subheader_file),
-                                self.db.db[0].ntop,self.db.db[0].div,
-                                self.db.db[0].ifile_idb,
-                                self.im_buf+i,self.nbuf-i,
-                                &(self.nhit)) # GET NEXT BUFFER CHUNK
+    find_file_intervals(self.it,self.start,self.end,
+                        self.db.db[0].ii,self.db.db[0].nii,
+                        self.db.db[0].subheader,self.db.db[0].nlists,
+                        &(self.db.db[0].subheader_file),
+                        self.db.db[0].ntop,self.db.db[0].div,
+                        self.db.db[0].ifile_idb,
+                        self.im_buf+i,self.nbuf-i,
+                        &(self.nhit),&(self.it)) # GET NEXT BUFFER CHUNK
     self.nhit=self.nhit+i # TOTAL #HITS IN THE BUFFER
     self.ihit=i # START ITERATING FROM START OF NEW HITS
     if pkeep and pkeep[0]>=0: # RESET ikeep INDEX TO START OF BUFFER
@@ -243,7 +243,7 @@ cdef class IntervalFileDBIterator:
     self.im_buf=NULL # RELEASE THIS STORAGE FROM ITERATOR; USER MUST FREE IT!
     return im # HAND BACK THE STORAGE
 
-  cdef int loadAll(self):
+  cdef int loadAll(self) except -1:
     'load all overlapping interval hits, return count of hits'
     cdef int len,ikeep
     len=1
@@ -308,12 +308,12 @@ cdef class IntervalFileDB:
     it_alloc=it
     l=[] # LIST OF RESULTS TO HAND BACK
     while it:
-      it=find_file_intervals(it,start,end,self.db[0].ii,self.db[0].nii,
-                             self.db[0].subheader,self.db[0].nlists,
-                             &(self.db[0].subheader_file),
-                             self.db[0].ntop,self.db[0].div,
-                             self.db[0].ifile_idb,im_buf,1024,
-                             &(nhit)) # GET NEXT BUFFER CHUNK
+      find_file_intervals(it,start,end,self.db[0].ii,self.db[0].nii,
+                          self.db[0].subheader,self.db[0].nlists,
+                          &(self.db[0].subheader_file),
+                          self.db[0].ntop,self.db[0].div,
+                          self.db[0].ifile_idb,im_buf,1024,
+                          &(nhit),&(it)) # GET NEXT BUFFER CHUNK
       for i from 0 <= i < nhit:
         l.append((im_buf[i].start,im_buf[i].end,im_buf[i].target_id,
                   im_buf[i].target_start,im_buf[i].target_end))
@@ -449,24 +449,24 @@ cdef class NLMSASlice:
 
 
   ########################################### ITERATOR METHODS
-  def edges(self,dummyArg=None,**kwargs):
-    seqIntervals=self.groupByIntervals(**kwargs)
-    ivals=self.groupBySequences(**kwargs)
+  def edges(self,mergeAll=False,**kwargs):
+    seqIntervals=self.groupByIntervals(mergeAll=mergeAll,**kwargs)
+    ivals=self.groupBySequences(seqIntervals,**kwargs)
     l=[]
     for ival1,ival2 in ivals:
       l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
     return l
-  def items(self,dummyArg=None,**kwargs):
+  def items(self,**kwargs):
     'get list of tuples (ival2,edge) aligned to this slice'
     l=[]
     for ival1,ival2,edge in self.edges(**kwargs):
       l.append((ival2,edge))
     return l
-  def iteritems(self,dummyArg=None,**kwargs):
+  def iteritems(self,**kwargs):
     return iter(self.items(**kwargs))
-  def keys(self,dummyArg=None,**kwargs):
-    seqIntervals=self.groupByIntervals(**kwargs)
-    ivals=self.groupBySequences(**kwargs)
+  def keys(self,mergeAll=False,**kwargs):
+    seqIntervals=self.groupByIntervals(mergeAll=mergeAll,**kwargs)
+    ivals=self.groupBySequences(seqIntervals,**kwargs)
     l=[]
     for ival1,ival2 in ivals:
       l.append(ival2)
@@ -501,7 +501,7 @@ cdef class NLMSASlice:
                                      self.im[i].target_end)
         ival2=sequence.absoluteSlice(self.nlmsaSequence.seq,
                                      self.im[i].start,self.im[i].end)
-        if ival1.orientation==seq.orientation:
+        if seq is None or ival1.orientation==seq.orientation:
           d[ival1]=ival2 # SAVE THE INTERVAL MATCH
     return d
 
@@ -650,7 +650,11 @@ cdef class NLMSASlice:
       bounds=[]
       j=0
       for seq in seqs: # CONSTRUCT INTERVAL BOUNDS LIST
-        ns=nl.seqs[seq]
+        if isinstance(seq,int): # seqIntervals USES INT INDEX VALUES
+          ns=nl.seqlist[seq]
+          seq=ns.seq
+        else: # EXPECT USER TO SUPPLY ACTUAL SEQUENCE OBJECTS
+          ns=nl.seqs[seq]
         try:
           ivals=seqIntervals[ns.id]
         except KeyError: # SEQUENCE NOT IN THIS ALIGNMENT REGION, SO SKIP
@@ -718,7 +722,8 @@ cdef class NLMSASlice:
     seqIntervals=self.groupByIntervals(**kwargs)
     kwargs['sourceOnly']=True
     kwargs['indelCut']=True
-    ivals=self.groupBySequences(minAligned=minAligned,**kwargs)
+    ivals=self.groupBySequences(seqIntervals,minAligned=minAligned,
+                                **kwargs)
     l=[]
     for ival in ivals:
       if ival.start==self.start and ival.stop==self.stop:
@@ -1178,9 +1183,9 @@ cdef class NLMSA:
 
   def __getitem__(self,k):
     'return a slice of the LPO'
-    try: # TREAT k AS A SEQUENCE INTERVAL
+    if isinstance(k,sequence.SeqPath): # TREAT k AS A SEQUENCE INTERVAL
       return NLMSASlice(self.seqs[k],k.start,k.stop)
-    except KeyError: # TREAT k AS A PYTHON SLICE OBJECT
+    try: # TREAT k AS A PYTHON SLICE OBJECT
       return NLMSASlice(self.seqlist[self.lpo_id],k.start,k.stop)
     except AttributeError:
       raise KeyError('key must be a sequence interval or python slice object')
