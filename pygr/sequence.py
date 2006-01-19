@@ -194,7 +194,10 @@ def sumSliceIndex(i,myslice,relativeToStart):
         return i+getattr(myslice,_attr)
     except AttributeError: # attr MUST NOT EXIST...
         if i is None:
-            return None
+            if hasattr(myslice,'_raw_'+attr): # FORCE getattr
+                return getattr(myslice,attr)
+            else:
+                return None
         else: # FORCE getattr
             return i+getattr(myslice,attr)
     except TypeError:
@@ -591,7 +594,10 @@ class SeqFilterDict(dict):
             ival=dict.__getitem__(self,k.path)
         except KeyError:
             raise KeyError('seq not in dict')
-        return k*ival # RETURN INTERSECTION OF IVALS
+        result=k*ival # RETURN INTERSECTION OF IVALS
+        if result is None:
+            raise KeyError # PROPER WAY TO SIGNAL KEY MAPS TO NO VALUE
+        return result
     def __setitem__(self,ival,junk):
         dict.__setitem__(self,ival.path,ival)
     def __iter__(self):
@@ -628,7 +634,8 @@ class Seq2SeqEdge(object):
     def items(self,**kwargs):
         'get list of (srcPath,destPath) 1:1 matches'
         sf=SeqFilterDict([self.targetPath])
-        si=self.msaSlice.groupByIntervals(filterSeqs=sf,**kwargs)
+        si=self.msaSlice.groupByIntervals(filterSeqs=sf,
+                                          mergeAll=False,**kwargs)
         return self.msaSlice.groupBySequences(si,**kwargs)
     def __iter__(self,sourceOnly=True,**kwargs):
         return iter(self.items(sourceOnly=sourceOnly,**kwargs))
@@ -637,10 +644,10 @@ class Seq2SeqEdge(object):
         "calculate fractional identity for this pairwise alignment"
         nid=0
         start1=self.sourcePath.start
-        end1=self.sourcePath.end
+        end1=self.sourcePath.stop
         s1=str(self.sourcePath)
         start2=self.targetPath.start
-        end2=self.targetPath.end
+        end2=self.targetPath.stop
         s2=str(self.targetPath)
         for srcPath,destPath in self.items():
             isrc=srcPath.start-start1
