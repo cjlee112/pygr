@@ -397,7 +397,8 @@ cdef class NLMSASlice:
           ns_lpo=ns.nlmsaLetters.seqlist[it.im_buf[i].target_id]
           if not ns_lpo.is_lpo:
             raise ValueError('sequence mapped to non-LPO target??')
-          ns_lpo.forceLoad()
+          if ns_lpo.db is None:
+            ns_lpo.forceLoad()
         it2=IntervalFileDBIterator(it.im_buf[i].target_start,
                                    it.im_buf[i].target_end,ns_lpo.db)
         it2.loadAll() # GET ALL OVERLAPPING INTERVALS
