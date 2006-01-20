@@ -995,25 +995,26 @@ either from the Sequence class, or in some cases from the SeqPath class.
   called to get the string
   sequence of the interval ({\em start, stop}).  You can provide your own strslice()
   method to customize how sequence is stored and accessed.  For example,
-  SQLSequence.strslice() gets the sequence via a SQL query, and 
-  BlastSequence obtains it using the fastacmd -L start,stop 
+  \method{SQLSequence.strslice()} gets the sequence via a SQL query, and 
+  \method{BlastSequence.strslice()} obtains it using the 
+  \code{fastacmd -L start,stop} 
   UNIX shell command from the NCBI toolkit.
 \end{funcdesc}
 
 \begin{funcdesc}{__len__}{}
   called to compute the length of the sequence.  You can
   customize this to provide an efficient length method for your particular
-  sequence storage.  e.g. SQLSequence obtains it via a SQL query; BlastSequence
-  obtains it from a precomputed length index.
-  The default Sequence.__len__()
-  method computes it from len(self.seq), assuming that the sequence can be accessed
-  from the {\em seq} attribute.
+  sequence storage.  e.g. \class{SQLSequence} obtains it via a SQL query; 
+  \class{BlastSequence} obtains it from a precomputed length index.
+  The default \method{Sequence.__len__()} method computes it from 
+  \code{len(self.seq)}, assuming that the sequence can be accessed
+  from the \member{seq} attribute.
 \end{funcdesc}
 
 \begin{funcdesc}{__getitem__}{slice_obj}
   if you want to monitor or intercept slicing
   requests on your sequence, you can do so by providing your own getitem method.
-  See seqdb.BlastSequenceCache class for an example.
+  See \class{seqdb.BlastSequenceCache} class for an example.
 \end{funcdesc}
 
 \begin{funcdesc}{__getattr__}{attr}
@@ -1030,7 +1031,8 @@ either from the Sequence class, or in some cases from the SeqPath class.
 
 \begin{itemize}
 \item
-\member{seq}: the Sequence class assumes that the actual sequence is stored
+\member{seq}: the \method{Sequence.strslice()} method assumes that 
+the actual sequence is stored
 on the \member{seq} attribute.  You could customize this behavior by 
 making the \member{seq} attribute a property that is computed on the fly
 by some method of your own.
@@ -1075,6 +1077,24 @@ object (see Alignment Module below).
   intervals in this segment of the alignment.
 \end{funcdesc}
 
+\subsubsection{SeqFilterDict}
+This dict-like class provides a simple way for masking a set of sequences
+to specific intervals.  It stores a specific interval for each
+sequence.  Subsequent look-up using a sequence interval as a key will
+return the intersection between that interval and the stored interval
+for that sequence in the dictionary.  If there is no overlap, it
+raises \code{KeyError}.
+
+\begin{verbatim}
+d=SeqFilterDict(seqIntervalList)
+overlap=d[ival] # RETURNS INTERSECTION OF ival AND STORED IVAL, OR KeyError
+\end{verbatim}
+
+You can pass a list of intervals to store to the class constructor (as 
+shown above).  You can also add a single interval using the syntax
+\code{d[saveInterval]=saveInterval}.  (This syntax reflects the actual
+mapping that the dictionary will perform if later called with the
+same interval).
 
 \subsubsection{LetterEdge}
 This class represents an edge from origin -> target node.
@@ -1430,9 +1450,20 @@ dictionary interface in several ways:
   \var{mininsert} value of zero (the default), prevents any such interval
   pairs from being merged.  Giving a negative \var{mininsert} value will allow
   interval pairs whose insert value is greater than or equal to this value, 
-  to be merged.  \var{filterSeqs}, if not None, should be a list of sequences
+  to be merged.  \var{filterSeqs}, if not None, should be a dict of sequences
   used to filter the group-by analysis; i.e. only alignment intervals 
-  containing these sequences are considered in the analysis.  \var{ivalMethod},
+  containing these sequences are considered in the analysis.  More
+  specifically, \var{filterSeqs} can be used to mask the group-by analysis
+  to a specific interval of a sequence, by having \var{filterSeqs}
+  return only the intersection between the interval it is passed as a key,
+  and the masking interval that it stores.  If there is no overlap, it
+  must raise \code{KeyError}.  The \class{sequence.SeqFilterDict} class
+  provides exactly this masking capability, i.e.
+\begin{verbatim}
+d=sequence.SeqFilterDict(someIntervals)
+overlap=d[ival] # RETURNS INTERSECTION BETWEEN ival AND someIntervals, OR KeyError
+\end{verbatim}
+  \var{ivalMethod},
   if not None, allows the user to provide a Python function that performs
   interval grouping.  Specifically it is called as
   \function{ivalMethod(l, ns,msaSlice=self, **kwargs)}, where \var{l} is the
@@ -1685,6 +1716,33 @@ by default on sequence.Sequence objects), that will be used.
 \subsubsection{Overview}
 
 The seqdb module provides a simple, consistent interface to sequence databases from a variety of different storage sources such as FASTA, BLAST and relational databases.  Sequence databases are modeled (like other Pygr container classes) as dictionaries, whose keys are sequence IDs and whose values are sequence objects.  Pygr sequence objects use the Python sequence protocol in all the ways you'd expect: a subinterval of a sequence object is just a Python slice (s[0:10]), which just returns a sequence object representing that interval; the reverse complement is just -s; the length of a sequence is just len(s); to obtain the actual string sequence of a sequence object is just str(s).  Pygr sequence objects work intelligently with different types of back-end storage (e.g. relational databases or BLAST databases) to efficiently access just the parts of sequence that are requested, only when an actual sequence string is needed.
+
+\subsubsection{External Requirements}
+This module makes use of several external programs:
+\begin{itemize}
+\item
+{\em NCBI toolkit}: The BLAST database functionality in this module 
+requires that the NCBI toolkit
+be installed on your system.  Specifically, some functions will call the command line
+programs \code{formatdb}, \code{fastacmd}, \code{blastall}, and \code{megablast}.
+
+\item
+{\em RepeatMasker}: the \method{BlastDB.megablast()} method calls the command line
+program \code{RepeatMasker} to mask out repetitive sequences from seeding alignments,
+but to allow extension of alignments into masked regions.
+
+\item
+{\em Python DB-API 2.0}: the \class{SQLTable} class, and dependent classes such as 
+\class{SQLSequence} and \class{StoredPathMapping}, conform to the Python DB-API 2.0.
+Typically you must supply a DB-API 2.0-compliant database cursor to the 
+\class{SQLTable} constructor.  To do so, you must have some DB-API 2.0-compliant
+module (such as \module{MySQLdb}) installed for connecting to a database server.
+\end{itemize} 
+
+If you are lacking one or more of these requirements, you can still install Pygr
+and use all Pygr functionality that does not depend on the missing requirements.
+If you try to use a function for which a requirement is missing, Pygr will raise
+an appropriate exception (e.g. unable to run \code{blastall}).
 
 \subsubsection{BlastDB}
 Interface to an existing BLAST database or FASTA sequence file; in the latter case, it will automatically construct BLAST database files for you using the NCBI tool formatdb. Here's a simple example of opening a BLAST database and searching it for matches to a specific piece of sequence:
