@@ -139,7 +139,6 @@ cdef class NLMSA:
   cdef int do_build
   cdef int lpo_id
 
-  cdef int is_lpo(self,int id)
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id)
 
 cdef class NLMSASequence:
