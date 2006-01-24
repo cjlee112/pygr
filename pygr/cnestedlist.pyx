@@ -972,9 +972,10 @@ cdef class NLMSANode:
 
 cdef class NLMSASequence:
   'sequence interface to NLMSA storage of an LPO alignment'
-  def __new__(self,NLMSA nl not None,filestem,seq,mode='r'):
+  def __new__(self,NLMSA nl not None,filestem,seq,mode='r',is_union=0):
     self.nlmsaLetters=nl
     self.filestem=filestem
+    self.is_union=is_union
     import types
     if isinstance(seq,types.StringType):
       self.name=seq # ALLOW USER TO BUILD INDEXES WITH A STRING NAME
@@ -1240,8 +1241,13 @@ cdef class NLMSA:
     cdef NLMSASequence ns
     ifile=file(self.pathstem+'NLMSAindex')
     for line in ifile:
-      id,name=line.strip().split('\t')
+      try:
+        id,name,is_union=line.strip().split('\t')
+      except ValueError:
+        id,name=line.strip().split('\t')
+        is_union=0
       id=int(id)
+      is_union=int(is_union)
       if id!=len(self.seqlist):
         raise IOError('corrupted NLMSAIndex???')
       filestem=self.pathstem+str(id)
@@ -1254,7 +1260,7 @@ cdef class NLMSA:
         except KeyError:
           raise KeyError('unable to find sequence %s in seqDict!' % name)
       # CREATE THE SEQ INTERFACE, BUT DELAY OPENING THE IntervalDBFile
-      ns=NLMSASequence(self,filestem,seq,'onDemand') # UNTIL NEEDED
+      ns=NLMSASequence(self,filestem,seq,'onDemand',is_union) # UNTIL NEEDED
       self.seqs[seq]=ns # SAVE TO OUR INDEX
       
   def newSequence(self,seq=None):
@@ -1397,9 +1403,9 @@ cdef class NLMSA:
     for ns in self.seqlist: # BUILD EACH IntervalFileDB ONE BY ONE
       ns.build()
       if ns.seq is not None:
-        ifile.write('%d\t%s\n' %(ns.id,ns.name))
+        ifile.write('%d\t%s\t%d\n' %(ns.id,ns.name,ns.is_union))
       else:
-        ifile.write('%d\t%s\n' %(ns.id,'NLMSA_LPO_Internal'))
+        ifile.write('%d\t%s\t%d\n' %(ns.id,'NLMSA_LPO_Internal',0))
     ifile.close()
     self.do_build=0
 
