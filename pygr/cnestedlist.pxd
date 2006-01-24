@@ -142,7 +142,7 @@ cdef class NLMSA:
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id)
 
 cdef class NLMSASequence:
-  cdef readonly int id,length,nbuild,is_lpo
+  cdef readonly int id,length,nbuild,is_lpo,is_union
   cdef readonly object seq
   cdef readonly object name
   cdef IntervalFileDB db
