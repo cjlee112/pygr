@@ -46,29 +46,40 @@ def writeNumToArray(n,a):
     s=str(n)
     i=n-1
     for l in s:
-        a[i]=l
+        try:
+            a[i]=l
+        except IndexError: return
+    
         i += 1
 
-def printHTML(d,ifile):
+def printHTML(d,ifile,blockStep=80):
     'print HTML view of alignment'
     reference=d[d.first]
     print >>ifile,'<HTML>\n<BODY><PRE>\n'
-    print >>ifile,'Position               '[:15],''.join(d['#'])
-    for name,s in d.items():
-        l=[]
-        for i in range(len(s)):
-            if s[i]==reference[i]:
-                l.append(s[i])
-            else:
-                l.append('<B>%s</B>' % s[i])
-        print >>ifile,(name+32*' ')[:15],''.join(l)
+    start=0
+    while start<len(reference):
+        end=start+blockStep
+        if end>len(reference):
+            end=len(reference)
+        print >>ifile,'Position               '[:15],''.join(d['#'][start:end])
+        for name,s in d.items():
+            l=[]
+            for i in range(start,end):
+                if s[i]==reference[i]:
+                    l.append(s[i])
+                else:
+                    l.append('<B>%s</B>' % s[i])
+            print >>ifile,(name+32*' ')[:15],''.join(l)
+        print >>ifile,'\n'
+        start += blockStep
+       
     print >>ifile,'</PRE></BODY></HTML>'
 
 
 
 
 
-def printClusterAlignment(cluster_id,ifile=None):
+def printClusterAlignment(cluster_id,msa,ifile=None):
     '''print alignment of a gene as text, with numbering,
     seq differences in bold.  Suitable for viewing as .txt file in a browser...'''
     if ifile is None:
@@ -89,19 +100,23 @@ def printClusterAlignment(cluster_id,ifile=None):
         g=ed0.destPath
         writeSeqToArray(start,0,g,d)
         numline=d['#']
-        i=(ed0.srcPath.start+99) - ((ed0.srcPath.start+99) % 100)
+        i=(ed0.srcPath.start+9) - ((ed0.srcPath.start+9) % 10)
         while i<ed0.srcPath.stop:
             writeNumToArray(i,numline)
-            i+=100
-        maf=MAFStoredPathMapping(g,alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
-        for ed in maf.edges(): # PRINT THE ALIGNED SEQUENCES
-            writeSeqToArray(ed.destPath.start,ed.srcPath.start - start,ed.destPath,d)
+            i+=10
+        #maf=MAFStoredPathMapping(g,alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
+        #for ed in maf.edges(): # PRINT THE ALIGNED SEQUENCES
+        alignSlice=msa[g]
+        for ival in alignSlice.keys(maxgap=10000,maxinsert=10000):
+            str(ival) # CACHE THE SEQUENCE REGIONS WE'LL BE USING...
+        for srcPath,destPath,t in alignSlice.edges():
+            writeSeqToArray(destPath.start,srcPath.start - start,destPath,d)
 ##     for e in c.exons:  # MARK THE EXONS AS WELL...
 ##         for g in cm[e]:
 ##             writeSeqToArray(start,0,g,d,'Exons')
 
 
-    printHTML(d,ifile)
+    printHTML(d,ifile,100)
 ##     print 'Position             '[:15],''.join(d['#'])
 ##     for name,l in d.items():
 ##         print (name+32*' ')[:15],''.join(l)
@@ -109,4 +124,5 @@ def printClusterAlignment(cluster_id,ifile=None):
 
 
 if __name__=='__main__':
-    printClusterAlignment('Hs.268049')
+    CHRDB=getNLMSA()
+    printClusterAlignment('Hs.3080',CHRDB)

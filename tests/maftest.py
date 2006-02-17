@@ -1,5 +1,7 @@
 
 from test import *
+from pygr.apps.leelabdb import *
+from pygr import cnestedlist
 
 # GET CONNECTIONS TO ALL OUR GENOMES
 hg17=BlastDB(localCopy('/usr/tmp/ucsc_msa/hg17','gunzip -c /data/yxing/databases/ucsc_msa/human_assembly_HG17/*.fa.gz >%s'))
@@ -18,14 +20,21 @@ for db in genomes.values(): # FORCE ALL OUR DATABASES TO USE INTERVAL CACHING
     db.seqClass=BlastSequenceCache
 
 (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna,protein,
- clusterExons,clusterSplices)=loadTestJUN03() # GET OUR USUAL SPLICE GRAPH
+ clusterExons,clusterSplices)=getSpliceGraphFromDB(spliceCalcs['HUMAN_SPLICE_03'], loadAll=False) # GET OUR USUAL SPLICE GRAPH
 ct=SQLTableMultiNoCache('GENOME_ALIGNMENT.hg17_cluster_JUN03',clusters.cursor)
 ct._distinct_key='src_id'
 cm=StoredPathMapping(ct,genomic_seq,hg17) # MAPPING OF OUR CLUSTER GENOMIC ONTO hg17
 
-alTable=SQLTable('GENOME_ALIGNMENT.haussler_align_sorted',clusters.cursor) # THE MAF ALIGNMENT TABLE
-alTable.objclass() # USE STANDARD TupleO OBJECT FOR EACH ROW
+def getAlTable(tableName='GENOME_ALIGNMENT.haussler_align_sorted',cursor=None):
+    if cursor is None:
+        cursor=clusters.cursor
+    alTable=SQLTable(tableName,cursor) # THE MAF ALIGNMENT TABLE
+    alTable.objclass() # USE STANDARD TupleO OBJECT FOR EACH ROW
+    return alTable
 
+def getNLMSA(filename='/home/alex/localdata/ucscDB/mafdb'):
+    return cnestedlist.NLMSA(filename,'r',genomeUnion)
+    
 def getClusterAlignment(cluster_id):
     c=clusters[cluster_id] # GET DATA FOR THIS CLUSTER ON chr22
     loadCluster(c,exons,splices,clusterExons,clusterSplices,spliceGraph,alt5Graph,alt3Graph)
