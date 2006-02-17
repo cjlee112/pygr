@@ -54,15 +54,28 @@ Installation
 
 Installing pygr is quite simple. 
 
-1) tar -xzvf pygr-0.1.tar.gz 
+1) tar -xzvf pygr-0.3.tar.gz 
 2) cd pygr
 3) python setup.py install 
 
 Once the test framework has completed successfully, the setup script
 will install pygr into python's respective site-packages directory. 
+If you don't want to install pygr into your system-wide site-packages,
+replace the "python setup.py install" command with
+"python setup.py build".  This will build pygr but not install it
+in site-packages.
 
 Using Pygr
 ----------
+Pygr contains several modules imported as follows:
+from pygr import seqdb # IMPORT SEQUENCE DATABASE MODULE
+
+If you did not install pygr in your system-wide site-packages, you 
+must set your PYTHONPATH to the location of your pygr build.
+For example, if your top-level pygr source directory is PYGRDIR then
+you'd type something like:
+setenv PYTHONPATH PYGRDIR/build/lib.linux-i686-2.3
+where the last directory name depends on your specific architecture.
 
 Pygr has a myriad of applications, however, providing a comprehensive 
 description of its utility is out of the scope of this document (see
