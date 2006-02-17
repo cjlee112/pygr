@@ -773,7 +773,7 @@ cdef class NLMSASlice:
 
 
 
-def advanceStartStop(NLMSASlice nlmsaSlice not None,int ipos,
+def advanceStartStop(int ipos,NLMSASlice nlmsaSlice not None,
                      int istart,int istop):
   cdef int i
   if istop>=nlmsaSlice.n:
