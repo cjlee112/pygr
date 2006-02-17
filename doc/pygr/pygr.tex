@@ -599,6 +599,39 @@ Additional examples of how to use pygr can be found in the tests/ directory with
 The following subsections provide details about how to use specific
 modules of Pygr functionality. 
 
+\subsection{Installation}
+\label{install}
+Installing pygr is quite simple:
+\begin{verbatim}
+tar -xzvf pygr-0.3.tar.gz 
+cd pygr
+python setup.py install 
+\end{verbatim}
+
+Once the test framework has completed successfully, the setup script
+will install pygr into python's respective site-packages directory. 
+
+If you don't want to install pygr into your system-wide site-packages,
+replace the "python setup.py install" command with
+\begin{verbatim}
+python setup.py build
+\end{verbatim}
+This will build pygr but not install it in site-packages.
+
+Pygr contains several modules imported as follows:
+\begin{verbatim}
+from pygr import seqdb # IMPORT SEQUENCE DATABASE MODULE
+\end{verbatim}
+
+If you did not install pygr in your system-wide site-packages, you 
+must set your PYTHONPATH to the location of your pygr build.
+For example, if your top-level pygr source directory is PYGRDIR then
+you'd type something like:
+\begin{verbatim}
+setenv PYTHONPATH PYGRDIR/build/lib.linux-i686-2.3
+\end{verbatim}
+where the last directory name depends on your specific architecture.
+
 \subsection{graphs and graph query module}
 \label{graphs-query}
 
@@ -1423,7 +1456,7 @@ dictionary interface in several ways:
 \end{funcdesc}
 
 
-\begin{funcdesc}{keys}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeAll=True, ivalMethod=None, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs}
+\begin{funcdesc}{keys}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeAll=False, ivalMethod=None, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs}
   Provides a more general interface than {\em iter()}, with two types of 
   group-by capabilities, ``group-by'' operations on the alignment intervals
   contained within this slice (``horizontal'' grouping), 
@@ -1433,7 +1466,9 @@ dictionary interface in several ways:
   1. ``group-by'' operations on the alignment intervals
   contained within this slice.  It allows the user to supply
   various parameters for controlling when alignment intervals will be
-  merged or split in the results that it returns.  \var{maxgap} sets the
+  merged or split in the results that it returns.  \var{mergeAll}
+  forces it to combine intervals of a given sequence irrespective
+  of the size of gaps or inserts separating them.  \var{maxgap} sets the
   maximum gap size for merging two adjacent intervals.  If the target sequence
   for the two alignment intervals has a gap longer than \var{maxgap} 
   letters between the two alignment intervals, they will be returned as
