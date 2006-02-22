@@ -214,3 +214,31 @@ class dictGraphFB(dictGraph):
             for i in fromNodes:
                 del self[i][node]
         dictGraph.__delitem__(self,node)
+
+
+
+def listUnion(ivals):
+    'merge all items using union operator'
+    union=None
+    for ival in ivals:
+        try:
+            union+=ival
+        except TypeError:
+            union=ival
+    return union
+
+
+class DictQueue(dict):
+    'each index entry acts like a queue; setitem PUSHES, and delitem POPS'
+    def __setitem__(self,k,val):
+        try:
+            dict.__getitem__(self,k).append(val)
+        except KeyError:
+            dict.__setitem__(self,k,[val])
+    def __getitem__(self,k):
+        return dict.__getitem__(self,k)[0]
+    def __delitem__(self,k):
+        l=dict.__getitem__(self,k)
+        del l[0]
+        if len(l)==0:
+            dict.__delitem__(self,k)
