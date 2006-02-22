@@ -658,6 +658,7 @@ cdef class NLMSASlice:
     if seqGroups is None:
       seqGroups=[seqIntervals] # JUST USE THE WHOLE SET
     result=[]
+    import mapping # GET ACCESS TO DictQueue CLASS
     for seqs in seqGroups: # PROCESS EACH SEQ GROUP
       bounds=[]
       j=0
@@ -685,7 +686,7 @@ cdef class NLMSASlice:
                                 pMinAligned=pMinAligned,
                                 indelCut=indelCut,**kwargs)
         continue # DON'T USE GENERIC GROUPING METHOD BELOW
-      seqStart=sequence.DictQueue()
+      seqStart=mapping.DictQueue()
       maskStart=None
       for bound in bounds: # GENERIC GROUPING: APPLY MASKING, sourceOnly
         ipos,isStart,j,seq,isIndel=bound[0:5]
