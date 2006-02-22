@@ -640,14 +640,16 @@ class Seq2SeqEdge(object):
     def __iter__(self,sourceOnly=True,**kwargs):
         return iter(self.items(sourceOnly=sourceOnly,**kwargs))
 
-    def percent_id(self):
+    def length(self,mode=max):
+        'get length of source vs. target interval according to mode'
+        return mode(len(self.sourcePath),len(self.targetPath))
+
+    def pIdentity(self,mode=max):
         "calculate fractional identity for this pairwise alignment"
         nid=0
         start1=self.sourcePath.start
-        end1=self.sourcePath.stop
         s1=str(self.sourcePath)
         start2=self.targetPath.start
-        end2=self.targetPath.stop
         s2=str(self.targetPath)
         for srcPath,destPath in self.items():
             isrc=srcPath.start-start1
@@ -655,13 +657,30 @@ class Seq2SeqEdge(object):
             for i in xrange(len(srcPath)):
                 if s1[isrc+i]==s2[idest+i]:
                     nid+=1
-        len1=end1-start1
-        len2=end2-start2
-        if len1>len2:
-            return nid/float(len1)
-        else:
-            return nid/float(len2)
+        return nid/float(self.length(mode))
 
+    def pAligned(self,mode=max):
+        'get fraction of aligned letters for this pairwise alignment'
+        nid=0
+        for srcPath,destPath in self.items():
+            nid+=len(destPath)
+        return nid/float(self.length(mode))
+
+
+class DictQueue(dict):
+    'each index entry acts like a queue; setitem PUSHES, and delitem POPS'
+    def __setitem__(self,k,val):
+        try:
+            dict.__getitem__(self,k).append(val)
+        except KeyError:
+            dict.__setitem__(self,k,[val])
+    def __getitem__(self,k):
+        return dict.__getitem__(self,k)[0]
+    def __delitem__(self,k):
+        l=dict.__getitem__(self,k)
+        del l[0]
+        if len(l)==0:
+            dict.__delitem__(self,k)
 
 
 # CURRENTLY UNUSED
