@@ -647,7 +647,7 @@ class MAFStoredPathMapping(PathMapping):
 
 class PrefixUnionDict(object):
     """union interface to a series of dicts, each assigned a unique prefix
-       ID 'foo.bar' --> ID 'bar' in dict f asociated with prefix 'foo'."""
+       ID 'foo.bar' --> ID 'bar' in dict f associated with prefix 'foo'."""
     def __init__(self,prefixDict,separator='.'):
         self.separator=separator
         self.prefixDict=prefixDict
@@ -660,6 +660,18 @@ class PrefixUnionDict(object):
         "for ID 'foo.bar', return item 'bar' in dict f associated with prefix 'foo'"
         (prefix,id) =k.split(self.separator)
         return self.prefixDict[prefix][id]
+
+    def __contains__(self,k):
+        "test whether ID in union; also check whether seq key in one of our DBs"
+        if isinstance(k,str):
+            (prefix,id) =k.split(self.separator)
+            return id in self.prefixDict[prefix]
+        else: # TREAT KEY AS A SEQ, CHECK IF IT IS FROM ONE OF OUR DB
+            try:
+                db=k.pathForward.db
+            except AttributeError:
+                raise AttributeError('key must be a sequence with db attribute!')
+            return db in self.dicts
 
     def __iter__(self):
         "generate union of all dicts items, each with appropriate prefix."
