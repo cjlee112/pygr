@@ -667,20 +667,6 @@ class Seq2SeqEdge(object):
         return nid/float(self.length(mode))
 
 
-class DictQueue(dict):
-    'each index entry acts like a queue; setitem PUSHES, and delitem POPS'
-    def __setitem__(self,k,val):
-        try:
-            dict.__getitem__(self,k).append(val)
-        except KeyError:
-            dict.__setitem__(self,k,[val])
-    def __getitem__(self,k):
-        return dict.__getitem__(self,k)[0]
-    def __delitem__(self,k):
-        l=dict.__getitem__(self,k)
-        del l[0]
-        if len(l)==0:
-            dict.__delitem__(self,k)
 
 
 # CURRENTLY UNUSED
