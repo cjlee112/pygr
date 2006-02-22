@@ -553,11 +553,16 @@ cdef class NLMSASlice:
   ############################################## GROUP-BY METHODS
   def groupByIntervals(self,int maxgap=0,int maxinsert=0,
                        int mininsert= 0,filterSeqs=None,
+                       mergeMost=False,maxsize=500000000,
                        mergeAll=True,ivalMethod=None,**kwargs):
     '''merge alignment intervals using "horizontal" group-by rules:
       - maxgap (=0): longest gap allowed within a region
       - maxinsert (=0): longest insert allowed within a region
       - mininsert (=0): should be 0, to prevent cycles within a region
+        use negative values to allow some overlap / cycles.
+      - maxsize: upper bound on maximum size for interval merging
+      - mergeMost: merge, but with limits (10000,10000,-10,50000)
+      - mergeAll: merge everything without any limits
       - filterSeqs (=None): dict of sequences to apply these rules to;
         other sequences alignment will be ignored if
         filterSeqs not None
@@ -566,6 +571,11 @@ cdef class NLMSASlice:
         it wants)'''
     cdef int i,j,n,gap,insert,targetStart,targetEnd
     cdef NLMSA nl
+    if mergeMost: # BE REASONABLE: DON'T MERGE A WHOLE CHROMOSOME
+      maxgap=10000
+      maxinsert=10000
+      mininsert=-10 # ALLOW SOME OVERLAP IN INTERVAL ALIGNMENTS
+      maxsize=50000
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     seqIntervals={}
     for i from 0 <= i < self.n: # LIST INTERVALS FOR EACH TARGET
@@ -600,7 +610,9 @@ cdef class NLMSASlice:
         gap=l[j][0]-l[n][1] # current.start - last.end
         insert=l[j][2]-l[n][3] # current.target_start - last.target_end
         if not mergeAll and \
-               (gap>maxgap or insert>maxinsert or insert<mininsert):
+               (gap>maxgap or insert>maxinsert or insert<mininsert
+                or l[j][1]-l[n][0]>maxsize
+                or l[j][3]-l[n][2]>maxsize):
           n=n+1 # SPLIT, SO START A NEW INTERVAL
           if n<j: # COPY START COORDS TO NEW SLOT
             l[n][0]=l[j][0]
@@ -673,7 +685,7 @@ cdef class NLMSASlice:
                                 pMinAligned=pMinAligned,
                                 indelCut=indelCut,**kwargs)
         continue # DON'T USE GENERIC GROUPING METHOD BELOW
-      seqStart={}
+      seqStart=sequence.DictQueue()
       maskStart=None
       for bound in bounds: # GENERIC GROUPING: APPLY MASKING, sourceOnly
         ipos,isStart,j,seq,isIndel=bound[0:5]
