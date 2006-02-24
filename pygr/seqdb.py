@@ -547,6 +547,28 @@ class StoredPathMapping(PathMapping):
 
 
 
+class SliceDB(dict):
+    'associates an ID with a specific slice of a specific db sequence'
+    def __init__(self,sliceDB,seqDB):
+        '''sliceDB must map identifier to a sliceInfo object;
+        sliceInfo must have name,start,stop,ori attributes;
+        seqDB must map sequence ID to a sliceable sequence object'''
+        dict.__init__(self)
+        self.sliceDB=sliceDB
+        self.seqDB=seqDB
+    def __getitem__(self,k):
+        try:
+            return dict.__getitem__(self,k)
+        except KeyError:
+            sliceInfo=self.sliceDB[k]
+            seq=self.seqDB[sliceInfo.name]
+            myslice=seq[sliceInfo.start:sliceInfo.stop]
+            if sliceInfo.ori<0:
+                myslice= -myslice
+            self[k]=myslice
+            return myslice
+
+
 class VirtualSeq(SeqPath):
     """Empty sequence object acts purely as a reference system.
     Automatically elongates if slice extends beyond current stop.
