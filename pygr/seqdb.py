@@ -670,7 +670,19 @@ class MAFStoredPathMapping(PathMapping):
 class PrefixUnionDict(object):
     """union interface to a series of dicts, each assigned a unique prefix
        ID 'foo.bar' --> ID 'bar' in dict f associated with prefix 'foo'."""
-    def __init__(self,prefixDict,separator='.'):
+    def __init__(self,prefixDict=None,separator='.',filename=None,
+                 dbClass=BlastDB):
+        '''can either be created using prefixDict, or a header file
+        for a previously created PrefixUnionDict'''
+        if filename is not None: # READ UNION HEADER FILE
+            ifile=file(filename)
+            it=iter(ifile)
+            separator=it.next()[:-1] # DROP TRAILING CR
+            prefixDict={}
+            for line in it:
+                prefix,filepath=line.split('\t')[:2]
+                prefixDict[prefix]=dbClass(filepath)
+            ifile.close()
         self.separator=separator
         self.prefixDict=prefixDict
         d={}
@@ -705,3 +717,11 @@ class PrefixUnionDict(object):
         "return fully qualified ID i.e. 'foo.bar'"
         path=path.pathForward
         return self.dicts[path.db]+self.separator+path.id
+
+    def writeHeaderFile(self,filename):
+        'save a header file for this union, to reopen later'
+        ifile=file(filename,'w')
+        print >>ifile,self.separator
+        for k,v in prefixDict.items():
+            print >>ifile,'%s\t%s\t' %(k,v.filepath)
+        ifile.close()
