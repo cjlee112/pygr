@@ -1142,7 +1142,7 @@ This class represents an edge from origin -> target node.
 
 \begin{funcdesc}{__getitem__}{seq}
   return origin,target seqpos for sequence \var{seq};
-  raise KeyError if not in this edge
+  raise \code{KeyError} if not in this edge
 \end{funcdesc}
 
 \begin{itemize}
@@ -1373,7 +1373,11 @@ Construction Methods:
   \var{mode} is either ``r'' to open an existing NLMSA (from the \var{pathstem} disk files), 
   or ``w'' to create a new one (which will be saved to the \var{pathstem} disk files).
   \var{seqDict} specifies a dictionary which maps sequence names to actual sequence
-  objects representing those sequences.  \var{mafFiles} can be used to specify a list of
+  objects representing those sequences.  If \var{seqDict} is None, the constructor
+  will look for a file \var{pathstem}\code{.seqDict} that is a \class{prefixUnionDict}
+  header file for opening all the sequence database files for you automatically.
+
+  \var{mafFiles} can be used to specify a list of
   filenames storing a multiple sequence alignment in the UCSC MAF format.
   \var{maxOpenFiles} limits the open file descriptors the NLMSA will use.  Since
   each sequence has a separate nested list database file, a large multi-genome alignment
@@ -1706,7 +1710,7 @@ Other, internal methods that regular users are unlikely to need:
 
 \begin{funcdesc}{getSeqPos}{seq}
   returns the sequence interval of \var{seq}
-  that is aligned to this column, or raises KeyError if it is not
+  that is aligned to this column, or raises \code{KeyError} if it is not
   aligned here.
 \end{funcdesc}
 
@@ -1809,7 +1813,8 @@ NamedSequence(letter_string, name) creates a new sequence object whose sequence 
 Running the db.blast(s) method searches the BLAST database for homologies to s, using NCBI BLAST.  It chooses reasonable parameters based upon the sequence types of the database and supplied query.  However, you can specify extra parameter options if you wish.  It returns a Pygr sequence mapping (multiple alignment) that represents a standard Pygr graph of alignment relationships between s and the homologies that were found.
 
 \item
-The expression m[s][myg] obtains the "edge information" for the graph relationship between the two sequence nodes s and myg.  (if there was no edge in the m graph representing a relationship between these two sequences, this would produce a KeyError).  This edge information consists of a set of interval alignment relationships (described in detail below), which are printed out in this example.
+The expression m[s][myg] obtains the "edge information" for the graph relationship between the two sequence nodes s and myg.  (if there was no edge in the m graph representing a relationship between these two sequences, this would produce a 
+\code{KeyError}).  This edge information consists of a set of interval alignment relationships (described in detail below), which are printed out in this example.
 
 \end{itemize}
 
@@ -1911,6 +1916,49 @@ for e in MAFStoredPathMapping(bcl2m,'ucsc_maf8',u).edges(): #GET ITS MULTIGENOME
 \end{verbatim}
 
 
+\subsubsection{SliceDB}
+This class enables you to apply ``slicing information'' from 
+one database to sequences from a second database.  For example,
+you could have a database that lists genes as intervals (slices)
+on genomic sequences stored in a BlastDB database.  The only
+requirements are:
+\begin{itemize}
+\item
+{\em slice database}: must accept a string identifier as a key,
+and return a slice information object as a value.
+
+\item
+{\em slice information}: a slice information object must
+have the following attributes: \member{name} gives the identifier
+of the sequence containing the slice; \member{start} and \member{stop}
+give the coordinates of the sequence interval (which should be positive
+integers following standard
+Python slice coordinate conventions); \member{ori} gives the sequence
+orientation as an integer (1 for positive orientation, -1 for
+negative orientation).
+
+\item
+{\em sequence database}: must accept a string identifier as a key,
+and return a sliceable sequence object as a value.
+
+\end{itemize}
+
+Both databases should raise \code{KeyError} for bad identifiers.
+The current \class{SliceDB} implementation caches sequence objects so
+that subsequent calls for the same identifier will not require
+repeating the database queries to the two databases.  To
+remove a sequence object from the cache, just use
+\code{del db[id]} as usual.
+
+SliceDB inherits from the builtin Python \class{dict} class,
+so all standard methods can be used.
+
+\begin{verbatim}
+db=SliceDB(sliceDB,seqDB) # CREATE OUR DATABASE
+gene=db[cluster_id] # USE IT TO GET A GENE SEQUENCE...
+\end{verbatim}
+
+
 \subsubsection{VirtualSeq}
 This class provides an empty sequence object that
 acts purely as a reference system.
@@ -1958,8 +2006,49 @@ genomes={'hg17':hg17,'mm5':mm5, 'rn3':rn3, 'canFam1':cf1, 'danRer1':dr1,
 					 # OF ALL OUR GENOMES
 genomeUnion=PrefixUnionDict(genomes)
 ptChr7=genomeUnion['panTro1.chr7'] # GET CHIMP CHROMOSOME 7
+
+if 'panTro1.chr5' in genomeUnion: # CHECK IF THIS ID IN OUR UNION
+    pass # DO SOMETHING...
+
+s= -(ptChr7[1000:2000]) # GET A BIT OF THIS SEQUENCE
+if s in genomeUnion: # THIS IS HOW TO CHECK IF s DERIVED FROM OUR UNION
+    pass # DO SOMETHING... 
 \end{verbatim}
 
+It provides a \method{__contains__} method that tests whether
+a given sequence object is derived from the \class{PrefixUnionDict}
+(see example above).  Here are some additional methods:
+
+\begin{funcdesc}{__init__}{prefixDict=None,separator='.',filename=None,dbClass=BlastDB}
+  You can create a \class{PrefixUnionDict} either using
+  a \var{prefixDict} (whose keys are string prefixes, and whose 
+  values are sequence databases), or using a previously created
+  header file \var{filename}.  
+  Using the header file, the constructor will
+  automatically open all the sequence databases for you.
+  When opening from a header file, you can also specify a
+  \var{dbClass} to be used for opening individual sequence databases
+  listed in the header file; the default is \class{BlastDB}.
+  The database class constructor must take a single argument,
+  which is the filepath for opening the database.  The 
+  \var{separator} character is used to form ``prefix.suffix''
+  identifiers.
+\end{funcdesc}
+
+\begin{funcdesc}{getName}{path}
+  For a given sequence object \var{path} derived from the union
+  (or a slice of a sequence from the union), return a string identifier
+  in the form of ``foo.bar''.
+\end{funcdesc}
+
+\begin{funcdesc}{writeHeaderFile}{filename}
+  Save a header file for this union, to reopen later.
+  It saves the separator character, and a list of prefixes
+  and filepaths to the various sequence databases (which
+  must have a \member{filepath} attribute).  This header
+  file can be used for later reopening the prefix-union
+  in a single step.
+\end{funcdesc}
 
 \subsubsection{Functions}
 The seqdb module also provides several convenience functions:
@@ -1979,10 +2068,80 @@ The seqdb module also provides several convenience functions:
   \code{s.id}.
 \end{funcdesc}
 
+\subsection{sqlgraph Module}
+\label{sqlgraph-module}
+This module provides back-end database access.
 
+\subsubsection{SQLTable}
+Provides a \class{dict}-like interface to an SQL table.  It accepts
+an identifier as a key, and returns a Python object representing
+the corresponding row in the database.  Typically, these ``row''
+objects have an \member{id} attribute that represents the
+primary key, and all column names in the SQL table can be
+used as attribute names on the row object. 
 
+This class is derived from
+the Python builtin \class{dict} class, so all standard methods 
+can be used.
 
+\begin{funcdesc}{objclass}{oclass}
+  Specify a object class to use for creating new ``row'' objects.
+  \var{oclass} must accept a single argument, a tuple object representing
+  a row in the database.  
 
+  Otherwise, the default \var{oclass} for SQLTable is
+  the \class{TupleO} class, which provides a named attribute interface
+  to the tuple values representing the row.
+\end{funcdesc}
+
+\begin{funcdesc}{load}{oclass=None}
+  Load all data from the table, using \var{oclass} as the row object
+  class if specified (otherwise use the oclass for this table).
+  All rows are loaded from the database and saved as row objects
+  in the Python dictionary of this class.
+\end{funcdesc}
+
+\begin{funcdesc}{select}{whereClause,params=None,oclass=None}
+  Generate the list of objects that satisfy the \var{whereClause}
+  via a SQL SELECT query.  This function is a generator, so you
+  use it as an iterator.  \var{params} is passed to the
+  cursor execute statement to allow additional control over
+  the query.
+\end{funcdesc}
+
+There are several variants of this class:
+\subsubsection{SQLTableNoCache}
+Provide on-the-fly access to rows in the database, 
+but never cache results.  Use this when memory constraints or other 
+considerations (for example, if the data in the database may change
+during program execution, and you want to make sure your program
+is always working with the latest version of the data) 
+make it undesirable to cache recently used row objects, as the
+standard \class{SQLTable} does.
+
+\subsubsection{SQLMultiTableNoCache}
+Drops the assumption of a one-to-one
+mapping between each key and a row object (i.e. removes the
+assertion that the key is unique, a ``primary key''), allowing
+multiple row objects to be returned for a given key.  Therefore,
+the standard \method{__getitem__} must act as a generator, returning
+an iterator for one or more row object.
+
+\subsubsection{TupleO}
+Default class for ``row objects'' returned by \class{SQLTable}.
+Provide attribute interface to a tuple.  To subclass this,
+add an \member{_attrcol} attribute
+that maps attribute names to tuple index values (integers).
+Constructor takes a single tuple argument representing a
+row in the database.
+
+\subsubsection{SQLRow}
+Default class for row objects from NoCache variants of SQLTable.
+Provides transparent interface to a row in the database: attribute access
+will be mapped to SELECT of the appropriate column, but data is not cached
+on this object.  Constructor takes two arguments: a database table
+object, and an identifier for this row.  Actual data requests will
+be relayed by \class{SQLRow} to the database table object.
 
 \subsection{Coordinator Module}
 \label{coord-module}
