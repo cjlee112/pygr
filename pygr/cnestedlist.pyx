@@ -1240,7 +1240,13 @@ cdef class NLMSA:
     self.pathstem=pathstem
     if mode=='r':
       if seqDict is None:
-        raise ValueError('you must pass a seqDict, to open for reading')
+        import seqdb
+        try: # SEE IF THERE IS A UNION HEADER FILE FOR pathstem.seqDict
+          seqDict=seqdb.PrefixUnionDict(filename=pathstem+'.seqDict')
+          self.seqDict=seqDict # SAVE FOR USER TO ACCESS...
+        except IOError:
+          raise ValueError('you must pass a seqDict, or valid header file %s'
+                           % (pathstem+'.seqDict'))
       self.read_indexes(seqDict)
     elif mode=='w':
       self.do_build=1
