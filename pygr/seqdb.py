@@ -325,7 +325,7 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
 
 class BlastDBbase(dict):
     "Container representing Blast database"
-    seqClass=BlastSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
+    seqClass=BlastSequenceCache # CLASS TO USE FOR SAVING EACH SEQUENCE
     def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None):
         "format database and build indexes if needed. Provide filepath or file object"
         if filepath is None:
@@ -722,6 +722,6 @@ class PrefixUnionDict(object):
         'save a header file for this union, to reopen later'
         ifile=file(filename,'w')
         print >>ifile,self.separator
-        for k,v in prefixDict.items():
+        for k,v in self.prefixDict.items():
             print >>ifile,'%s\t%s\t' %(k,v.filepath)
         ifile.close()
