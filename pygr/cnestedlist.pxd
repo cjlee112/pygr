@@ -136,6 +136,7 @@ cdef class NLMSA:
   cdef readonly object pathstem
   cdef readonly object seqs
   cdef readonly object seqlist
+  cdef readonly object seqDict
   cdef int do_build
   cdef int lpo_id
 
