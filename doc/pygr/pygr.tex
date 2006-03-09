@@ -322,6 +322,132 @@ save the mappings
 We assumed that mRNA_swiss would be passed as the default dataGraph, and specified directly that edge 2->3 should be looked up in swiss_features.  We then captured all the results from the GraphQuery iterator using a Python list comprehension.  Note that since the iterator returns each result in the same container (mapping object), if we want to save all the individual results we have to copy each one to a new mapping (dict) object, as illustrated in this example.
 Storing Alignments in a Relational Database
 
+\subsubsection{Example: Working with the UCSC Multigenome Alignment Data}
+
+David Haussler's group has constructed alignments of multiple genomes.  These alignments are extremely useful and interesting, but so large that it is cumbersome to work with the dataset using conventional methods.  For example, for the 8-genome alignment you have to work simultaneously with the individual genome datasets for human, chimp, mouse, rat, dog, chicken, fugu and zebrafish, as well as the huge alignment itself.  Pygr makes this quite easy.  Here we illustrate an example of mapping an alternative 3' exon, which has two alternative splice sites
+(\code{start1} and \code{start2}) and a single terminal splice site (\code{stop}).
+We use the alignment database to map each of these splice sites onto all the aligned
+genomes, and to print the percent-identity and percent-aligned for each genome,
+as well as the two nucleotides consituting the splice site itself.
+To examine the conservation of the two exonic regions (between \code{start1}
+and \code{start2}, and the adjacent region terminated by \code{stop}, 
+we print the same information for each genome's alignment to these two regions as well.
+The code first opens the alignment database.  The function (\code{getAlt3Conservation})
+obtains sequence slice objects representing the various ``sites'' to be queried.
+The actual alignment database query is performed in \code{printResults}:
+
+\begin{verbatim}
+from pygr import cnestedlist
+msa=cnestedlist.NLMSA('/usr/tmp/ucscDB/mafdb','r') # OPEN THE ALIGNMENT DB
+
+def printResults(prefix,msa,site,altID='NULL',cluster_id='NULL',dbUnion=None):
+    'get alignment of each genome to site, print %identity and %aligned'
+    for src,dest,edge in msa[site].edges(mergeMost=True): # ALIGNMENT QUERY!
+        print '%s\t%s\t%s\t%s\t%2.1f\t%2.1f\t%s\t%s' \
+              %(altID,cluster_id,prefix,dbUnion.dicts[dest.pathForward.db],
+                100.*edge.pIdentity(),100.*edge.pAligned(),src[:2],dest[:2])
+
+def getAlt3Conservation(msa,gene,start1,start2,stop,**kwargs):
+    'gene must be a slice of a sequence in our genome alignment msa'
+    ss1=gene[start1-2:start1] # USE SPLICE SITE COORDINATES
+    ss2=gene[start2-2:start2]
+    ss3=gene[stop:stop+2]
+    e1=ss1+ss2 # GET INTERVAL BETWEEN PAIR OF SPLICE SITES
+    e2=gene[max(start1,start2):stop] # GET INTERVAL BETWEEN e1 AND stop
+    zone=e1+ss3 # USE zone AS COVERING INTERVAL TO BUNDLE fastacmd REQUESTS
+    cache=msa[zone].keys(mergeMost=True) # PYGR BUNDLES REQUESTS TO MINIMIZE TRAFFIC
+    for prefix,site in [('ss1',ss1),('ss2',ss2),('ss3',ss3),('e1',e1),('e2',e2)]:
+        printResults(prefix,msa,site,dbUnion=msa.seqDict,**kwargs)
+
+# RUN A QUERY LIKE THIS...
+# getAlt3Conservation(msa,some_gene,some_start,other_start,stop)
+
+\end{verbatim}
+
+A few notes:
+
+\begin{itemize}
+
+\item
+The alignment database query is in the first line of \code{printResults()}.
+\code{msa} is the database; \code{site} is the interval query; and the
+\method{edges} methods iterates over the results, returning a tuple for
+each, consisting of a {\em source sequence} interval (i.e. an interval of
+\code{site}), a {\em destination sequence} interval (i.e. an interval in
+an aligned genome), and an {\em edge object} describing that alignment.
+We are taking advantage of Pygr's group-by operator \code{mergeMost},
+which will cause multiple intervals in a given sequence to be merged
+into a single interval that constitutes their ``union''.  Thus,
+for each aligned genome, the \code{edges} iterator will return a single
+aligned interval.  The alignment edge object provides some useful 
+conveniences, such as calculating the percent-identity between \code{src}
+and \code{dest} automatically for you.  \method{pIdentity()} computes
+the fraction of identical residues; \method{pAligned} computes the 
+fraction of {\em aligned} residues (allowing you to see if there are 
+big gaps or insertions in the alignment of this interval).  If we 
+had wanted to inspect the detailed alignment letter by letter, we
+would just iterate over the \member{letters} attribute instead of
+the \method{edges} method. (See the \class{NLMSASlice} documentation for 
+further information).
+
+\item
+\code{src[:2]} and \code{dest[:2]} print the first two nucleotides
+of the site in \code{gene} and in the aligned genome.
+
+\item
+it's worth noting that the actual sequence string comparisons are being
+done using a completely different database mechanism (NCBI's \code{fastacmd}),
+not the \code{cnestedlist} database.  Basically, each genome is being queried
+as a separate BLAST formatted database, represented in Pygr by the
+\class{BlastDB} class.  Pygr makes this complex set of multi-database
+operations more or less transparent to the user.
+For further information, see the \class{BlastDB} documentation.  
+
+\item
+The other operations here are entirely vanilla: mainly slicing a 
+\code{gene} sequence to obtain the specific sites that we want to query.
+Note: \code{gene} must itself be a slice of a sequence in our alignment, 
+or the alignment query \code{msa[site]} will raise an IndexError informing
+the user that the sequence \code{site} is not in the alignment.
+
+\item
+The only slightly interesting operation here is the use of interval
+addition to obtain the ``union'' of two intervals, e.g. \code{e1=ss1+ss2}.
+This obtains a single interval that contains both of the input intervals.
+
+\item
+When the print  statement requests str() representations of these sequence objects, Pygr uses fastacmd -L to extract just the right piece of the corresponding chromosomes from the eight BLAST databases.
+
+\end{itemize}
+
+(Actually, because of Pygr's caching / optimizations, considerably more is going on than indicated in this simplified sketch.  But you get the idea: Pygr makes it relatively effortless to work with a variety of disparate (and large) resources in an integrated way.)
+
+Here is some example output:
+\begin{verbatim}
+1       Mm.99996        ss1     hg17    50.0    100.0   AG      GG
+1       Mm.99996        ss1     canFam1 50.0    100.0   AG      GG
+1       Mm.99996        ss1     panTro1 50.0    100.0   AG      GG
+1       Mm.99996        ss1     rn3     100.0   100.0   AG      AG
+1       Mm.99996        ss2     hg17    100.0   100.0   AG      AG
+1       Mm.99996        ss2     canFam1 100.0   100.0   AG      AG
+1       Mm.99996        ss2     panTro1 100.0   100.0   AG      AG
+1       Mm.99996        ss2     rn3     100.0   100.0   AG      AG
+1       Mm.99996        ss3     hg17    100.0   100.0   GT      GT
+1       Mm.99996        ss3     canFam1 100.0   100.0   GT      GT
+1       Mm.99996        ss3     panTro1 100.0   100.0   GT      GT
+1       Mm.99996        ss3     rn3     100.0   100.0   GT      GT
+1       Mm.99996        e1      hg17    78.9    100.0   AG      GG
+1       Mm.99996        e1      canFam1 84.2    100.0   AG      GG
+1       Mm.99996        e1      panTro1 77.6    100.0   AG      GG
+1       Mm.99996        e1      rn3     97.4    98.7    AG      AG
+1       Mm.99996        e2      hg17    91.6    99.1    CC      CC
+1       Mm.99996        e2      canFam1 88.8    99.1    CC      CC
+1       Mm.99996        e2      panTro1 91.6    99.1    CC      CC
+1       Mm.99996        e2      rn3     97.2    100.0   CC      CC
+\end{verbatim}
+
+	
+\subsubsection{Persistent Alignment Storage}
 Pygr makes it easy to store alignments persistently in a relational database.  To illustrate, here we run BLAST to generate an alignment of one sequence to manyother sequences, and store it to a MySQL table test.alignment:
 
 \begin{verbatim}
@@ -484,109 +610,7 @@ client: the map_clusters() function expects an iterator as its first argument, w
 start_client_or_server(): this line automatically starts up the correct function (depending on whether this process is running as client or server).  To make a long story short, all you have to do is run the script once (as a server), and it will automatically start clients for you on free compute nodes (using ssh-agent), with reasonable load-balancing and queuing policies.  For details, see the coordinator module docs.
 \end{itemize}
 
-\subsubsection{Example: Working with the UCSC Multigenome Alignment Data}
 
-David Haussler's group has constructed alignments of multiple genomes.  These alignments are extremely useful and interesting, but so large that it is cumbersome to work with the dataset using conventional methods.  For example, for the 8-genome alignment you have to work simultaneously with the individual genome datasets for human, chimp, mouse, rat, dog, chicken, fugu and zebrafish, as well as the huge alignment itself.  Pygr makes this quite easy.  Here we illustrate an example of mapping the exons of a specific gene onto the multiple alignment, and then printing out all intervals from the different genomes that are aligned to its exons.
-
-\begin{verbatim}
-from test import * # THIS LOADS seqdb MODULE AND GIVES US ACCESS TO OUR SCHEMA.i
-..
-
-# GET CONNECTIONS TO ALL OUR GENOMES
-hg17=BlastDB(localCopy('/usr/tmp/ucsc_msa/hg17','gunzip -c /data/yxing/databases
-/ucsc_msa/human_assembly_HG17/*.fa.gz >%s'))
-mm5=BlastDB(localCopy('/usr/tmp/ucsc_msa/mm5','unzip -p /data/yxing/databases/uc
-sc_msa/MouseMM5/chromFa.zip >%s'))
-rn3=BlastDB(localCopy('/usr/tmp/ucsc_msa/rn3','unzip -p /data/yxing/databases/uc
-sc_msa/RatRn3/chromFa.zip >%s'))
-cf1=BlastDB(localCopy('/usr/tmp/ucsc_msa/cf1','unzip -p /data/genome/ucsc_msa/ca
-nFam1/chromFa.zip >%s'))
-dr1=BlastDB(localCopy('/usr/tmp/ucsc_msa/dr1','unzip -p /data/genome/ucsc_msa/da
-nRer1/chromFa.zip >%s'))
-fr1=BlastDB(localCopy('/usr/tmp/ucsc_msa/fr1','unzip -p /data/genome/ucsc_msa/fr
-1/chromFa.zip >%s'))
-gg2=BlastDB(localCopy('/usr/tmp/ucsc_msa/gg2','unzip -p /data/genome/ucsc_msa/ga
-lGal2/chromFa.zip >%s'))
-pt1=BlastDB(localCopy('/usr/tmp/ucsc_msa/pt1','unzip -p /data/yxing/databases/uc
-sc_msa/chimp_pantro1/chromFa.zip >%s'))
-
-genomes={'hg17':hg17,'mm5':mm5, 'rn3':rn3, 'canFam1':cf1, 'danRer1':dr1,
-'fr1':fr1, 'galGal2':gg2, 'panTro1':pt1} # PREFIX DICTIONARY FOR THE UNION 
-					 # OF ALL OUR GENOMES
-genomeUnion=PrefixUnionDict(genomes) # GIVES ACCESS TO ID FORMAT 'panTro1.chr7'
-for db in genomes.values(): # FORCE ALL OUR DATABASES TO USE INTERVAL CACHING
-    db.seqClass=BlastSequenceCache
-
-(clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna,protein, 
-clusterExons,clusterSplices)=loadTestJUN03() # GET OUR USUAL SPLICE GRAPH
-ct=SQLTableMultiNoCache('GENOME_ALIGNMENT.hg17_cluster_JUN03',clusters.cursor)
-ct._distinct_key='src_id'
-cm=StoredPathMapping(ct,genomic_seq,hg17) # MAPPING OF OUR CLUSTER GENOMIC ONTO 
-					  # hg17
-
-alTable=SQLTable('GENOME_ALIGNMENT.haussler_align2',clusters.cursor) # THE MAF ALIGNMENT TABLE
-alTable.objclass() # USE STANDARD TupleO OBJECT FOR EACH ROW
-
-c=clusters['Hs.10267'] # GET DATA FOR THIS CLUSTER ON chr22
-loadCluster(c,exons,splices,clusterExons,clusterSplices,spliceGraph,alt5Graph,
-	    alt3Graph)
-for e in c.exons:
-    for g in cm[e]: # GET A GENOMIC INTERVAL ALIGNED TO OUR EXON
-        print 'exon interval:',repr(g)
-        maf=MAFStoredPathMapping(g,alTable,genomeUnion) # LOAD ALIGNMENT FROM THE DATABASE
-        for ed in maf.edges(): # PRINT THE ALIGNED SEQUENCES
-            print '%s (%s)\n%s (%s)\n' % \
-	    (ed.srcPath,genomeUnion.getName(ed.srcPath.path), ed.destPath,
-            genomeUnion.getName(ed.destPath.path))
-\end{verbatim}
-
-A few notes:
-
-\begin{itemize}
-
-\item
-We instantiate BlastDB objects as interfaces to each of our eight genomes.  The localCopy() function simply "caches" a local copy of each BLAST database in /usr/tmp, autogenerating it from the source (over NFS) if needed.  This script was designed to be run in parallel on many compute nodes, so I wanted to reduce NFS traffic to the minimum by creating local copies of each BLAST database before I started using them.
-
-\item 
-Since the UCSC multigenome alignment uses a "prefix.ID" format for specifying sequences (where prefix is the name of the genome, and ID is the identifier of a specific sequence in that genome, we create a "prefix union" object that acts like a union of all eight genome databases.  That is, it will map any key of the form prefix.ID to the specific database whose name is prefix, and use it to map ID to a sequence object.  To create this, we just made a dictionary that maps our desired "prefix" name to each individual genome database, and used that to initialize a PrefixUnionDict object.  It now acts as our interface to all 8 genomes.
-
-\item
-To speed up repeated sequence access requests, we force our genome database objects to use the BlastSequenceCache class as our sequence object class.  This implements smart bundling and caching of requests, so that multiple requests to the same region of the genome will be combined into a single query for the superinterval containing the individual requests, which then are simply accessed from this cache.
-
-\item
-To make our job a little harder, let's imagine that the exons we want to map were originally annotated on a different version of the human genome than the version (hg17) that is included in the UCSC alignment.  That means we first have to map each exon onto the correct coordinates in hg17 before we can even query the alignment.  That mapping is taken care of by our cm StoredPathMapping (which if you're curious was generated and saved to a MySQL database in the previous example).  To make a long story short, once we have an exon e, its mapping onto the hg17 genome is just cm[e].
-
-\item
-The UCSC multigenome alignment (itself about 24 GB in size) was parsed using a simple Pygr script written by Alex Alekseyenko, and stored as a StoredPathMapping in a MySQL database table GENOME_ALIGNMENT.hassler_align2.  This data is a bit more complicated than a standard Pygr alignment, because it maps each sequence not to another sequence, but to UCSC's "internal alignment coordinate" system.  To make a long story short, we wrote a subclass MAFStoredPathMapping that simply hides this "intermediate step" from the user; it acts like a normal Pygr PathMapping, mapping an input sequence to the set of other sequence intervals that are aligned to it.  Also, crucial for working with huge sequences (entire chromosomes, in this case), MAFStoredPathMapping allows you to specify exactly what part of the alignment database you want to fetch, by simply specifying a part of a sequence to map.  MAFStoredPathMapping takes three arguments: the sequence interval whose alignment you want to fetch; the database table object to fetch it from; and the sequence database in which to look up all the sequence identifiers (in this case we used our genomeUnion).
-
-\item
-Once we have our mapping object, we just use it like any Pygr alignment object, for example printing out all the intervals of sequence from other genomes that are aligned to our exons, as illustrated here. 
-
-\end{itemize}
-Running this on the whole gene (outputting the actual sequences of about a hundred aligned intervals), exon by exon, takes about a minute.  After importing this test script (from maftest import *), you can very easily query alignments for other genes or regions in the interactive python interpreter.  As the code promptly spits our various aligned intervals of sequence from chimp, chicken or fish, consider the wide variety of resources that Pygr is marshalling for you behind its simple front-end interface.  For every query you perform:
-
-\begin{itemize}
-
-\item
-your exon sequence (stored in a MySQL database) is mapped to hg17 (BLAST database) using a MySQL database (cm). 
-
-\item
-the resulting hg17 intervals are then queried against the UCSC multigenome alignment, stored in a MySQL database (even just searching this 24GB database with decent speed requires careful indexing). 
-
-\item
-This yields UCSC's "internal coordinates" (virtual sequences, if you will) which are then themselves searched against the multigenome alignment (in the same MySQL database) to obtain output genome alignment interval information.
-
-\item
-Pygr turns these intervals into sequence objects that link to the eight genome databases (each a large BLAST database).
-
-\item
-When the print  statement requests str() representations of these sequence objects, Pygr uses fastacmd -L to extract just the right piece of the corresponding chromosomes from the eight BLAST databases.
-
-\end{itemize}
-
-(Actually, because of Pygr's caching / optimizations, considerably more is going on than indicated in this simplified sketch.  But you get the idea: Pygr makes it relatively effortless to work with a variety of disparate (and large) resources in an integrated way.)
-
-	
 \subsubsection{More examples}
 \label{more-exam}
 
