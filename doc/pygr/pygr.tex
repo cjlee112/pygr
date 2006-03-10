@@ -1129,9 +1129,16 @@ object (see Alignment Module below).
   same as \method{__iter__}, but gets tuples of (source_interval,target_interval).
 \end{funcdesc}
 
-\begin{funcdesc}{percent_id}{}
+\begin{funcdesc}{pIdentity}{}
   Compute the percent identity between the source and target sequence
   intervals in this segment of the alignment.
+\end{funcdesc}
+
+\begin{funcdesc}{pAligned}{}
+  Compute the percent alignment between the source and target sequence
+  intervals in this segment of the alignment, i.e. the fraction of
+  residues that are actually aligned as opposed to gaps / insertions,
+  in the two intervals.
 \end{funcdesc}
 
 \subsubsection{SeqFilterDict}
