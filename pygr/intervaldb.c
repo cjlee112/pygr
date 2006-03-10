@@ -84,6 +84,117 @@ int sublist_qsort_cmp(const void *void_a,const void *void_b)
 SublistHeader *build_nested_list(IntervalMap im[],int n,
 				 int *p_n,int *p_nlists)
 {
+  int i=0,parent,nlists=1,isublist=0,total=0,temp=0;
+  SublistHeader *subheader=NULL;
+  
+  qsort(im,n,sizeof(IntervalMap),im_qsort_cmp); /* SORT BY start, CONTAINMENT */
+  nlists=1;
+  for(i=1;i<n;++i){
+	 if(!(END_POSITIVE(im[i])>END_POSITIVE(im[i-1]) /* i NOT CONTAINED */
+			|| (END_POSITIVE(im[i])==END_POSITIVE(im[i-1]) /* SAME INTERVAL! */
+				 && START_POSITIVE(im[i])==START_POSITIVE(im[i-1])))){
+		nlists++;
+		//		printf("%d (%d,%d) -> (%d,%d) %d\n", nlists, im[i-1].start,im[i-1].end, im[i].start,im[i].end,i);
+	 }
+  }
+  
+  //  printf("%d lists?!\n", nlists);
+  *p_nlists=nlists-1;
+  
+  if(nlists==1){
+	 *p_n=n;
+	 return NULL;
+  }
+  
+  CALLOC(subheader,nlists+1,SublistHeader); /* SUBLIST HEADER INDEX */
+  
+  im[0].sublist=0;
+  subheader[0].start=-1;
+  subheader[0].len=1;
+  parent=0;
+  nlists=1;
+  isublist=1;
+  for(i=1;i<n;){
+	 if(isublist && (END_POSITIVE(im[i])>END_POSITIVE(im[parent]) /* i NOT CONTAINED */
+						  || (END_POSITIVE(im[i])==END_POSITIVE(im[parent]) /* SAME INTERVAL! */
+								&& START_POSITIVE(im[i])==START_POSITIVE(im[parent])))){
+		subheader[isublist].start=subheader[im[parent].sublist].len-1; /* RECORD PARENT RELATIVE POSITION */
+		isublist=im[parent].sublist;
+		parent=subheader[im[parent].sublist].start;
+	 }
+	 else{
+		if(subheader[isublist].len==0){
+		  nlists++;
+		}
+		subheader[isublist].len++;
+		im[i].sublist=isublist;
+		parent=i;
+		isublist=nlists;
+		subheader[isublist].start=parent;
+		i++;
+	 }
+  }
+  
+  while(isublist>0){ /* pop remaining stack */
+	 subheader[isublist].start=subheader[im[parent].sublist].len-1; /* RECORD PARENT RELATIVE POSITION */
+	 isublist=im[parent].sublist;
+	 parent=subheader[im[parent].sublist].start;
+  }
+
+  *p_n=subheader[0].len;
+
+  total=0;
+  for(i=0;i<nlists+1;++i){
+	 temp=subheader[i].len;
+	 subheader[i].len=total;
+	 total+=temp;
+  };
+
+  /* SUBHEADER.LEN IS NOW START OF THE SUBLIST */
+
+  for(i=1;i<n;i+=1){
+	 if(im[i].sublist>im[i-1].sublist){
+		subheader[im[i].sublist].start+=subheader[im[i-1].sublist].len;
+	 }
+  }
+
+  /* SUBHEADER.START IS NOW ABS POSITION OF PARENT */
+
+  qsort(im,n,sizeof(IntervalMap),sublist_qsort_cmp);
+  /* AT THIS POINT SUBLISTS ARE GROUPED TOGETHER, READY TO PACK */
+
+  isublist=0;
+  subheader[0].start=0;
+  subheader[0].len=0;
+  for(i=0;i<n;++i){
+	 if(im[i].sublist>isublist){
+		//		printf("Entering sublist %d (%d,%d)\n", im[i].sublist, im[i].start,im[i].end);
+		isublist=im[i].sublist;
+		parent=subheader[isublist].start;
+		//		printf("Parent (%d,%d) is at %d, list start is at %d\n", im[parent].start, im[parent].end, subheader[isublist].start,i);
+		im[parent].sublist=isublist-1;
+		subheader[isublist].len=0;
+		subheader[isublist].start=i;
+	 }
+	 subheader[isublist].len++;
+	 im[i].sublist=-1;
+  };
+
+  nlists--;
+  memmove(subheader,subheader+1,nlists*sizeof(SublistHeader));
+
+  return subheader;
+ handle_malloc_failure:
+  /* FREE ANY MALLOCS WE PERFORMED*/
+  FREE(subheader);
+  return NULL;
+}
+
+
+
+SublistHeader *build_nested_list_dynamic(IntervalMap im[],int n,
+				 int *p_n,int *p_nlists)
+{
   int i=0,j,k,parent,nsub=0,nlists=0;
   IntervalMap *imsub=NULL;
   SublistHeader *subheader=NULL;
