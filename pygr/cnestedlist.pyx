@@ -281,12 +281,12 @@ cdef class IntervalFileDBIterator:
     cdef IntervalMap *new_buf
     if src is None:
       raise ValueError('src is None!  Debug!!')
-    if src.nhit>self.nbuffer: # NEED TO EXPAND OUR BUFFER
+    if src.nhit>self.nbuf: # NEED TO EXPAND OUR BUFFER
       new_buf=<IntervalMap *>realloc(self.im_buf,src.nhit*sizeof(IntervalMap))
       if new_buf==NULL:
         raise MemoryError('out of memory')
       self.im_buf=new_buf # RECORD NEW BUFFER LOCATION AND SIZE
-      self.nbuffer=src.nhit
+      self.nbuf=src.nhit
     self.nhit=src.nhit # COPY ARRAY AND SET CORRECT SIZE
     if src.nhit>0: # ONLY COPY IF NON-EMPTY
       memcpy(self.im_buf,src.im_buf,src.nhit*sizeof(IntervalMap))
