@@ -155,7 +155,7 @@ cdef class IntervalDB:
 
 
 cdef class IntervalFileDBIterator:
-  def __new__(self,int start,int end,IntervalFileDB db not None,
+  def __new__(self,int start,int end,IntervalFileDB db=None,
               int nbuffer=1024):
     self.it=interval_iterator_alloc()
     self.it_alloc=self.it
@@ -165,8 +165,18 @@ cdef class IntervalFileDBIterator:
     self.im_buf=interval_map_alloc(nbuffer)
     self.nbuf=nbuffer
 
-  def __iter__(self):
-    return self
+  cdef int restart(self,int start,int end,IntervalFileDB db) except -2:
+    'reuse this iterator for another search without reallocing memory'
+    self.nhit=0 # FLUSH ANY EXISTING DATA
+    self.start=start
+    self.end=end
+    self.db=db
+    return 0
+
+  cdef int reset(self) except -2:
+    'flush the buffer so we can reuse this iterator'
+    self.nhit=0
+    return 0
 
   cdef int extend(self,int ikeep):
     'expand the buffer if necessary, keeping elements [ikeep:nbuf]'
@@ -208,6 +218,8 @@ cdef class IntervalFileDBIterator:
   cdef int nextBlock(self,int *pkeep) except -2:
     'load one more block of overlapping intervals'
     cdef int i
+    if self.db is None:
+      raise IOError('Iterator has no database!  Please provide a db argument.')
     if self.it==NULL: # ITERATOR IS EXHAUSTED
       return -1
     if pkeep and pkeep[0]>=0 and pkeep[0]<self.nhit: #MUST KEEP [ikeep:] SLICE
@@ -263,6 +275,50 @@ cdef class IntervalFileDBIterator:
       return i
     else: # BUFFER WAS EMPTY, NO HITS TO ITERATE OVER...
       return -1
+
+  cdef int copy(self,IntervalFileDBIterator src):
+    'copy items from src to this iterator buffer'
+    cdef IntervalMap *new_buf
+    if src is None:
+      raise ValueError('src is None!  Debug!!')
+    if src.nhit>self.nbuffer: # NEED TO EXPAND OUR BUFFER
+      new_buf=<IntervalMap *>realloc(self.im_buf,src.nhit*sizeof(IntervalMap))
+      if new_buf==NULL:
+        raise MemoryError('out of memory')
+      self.im_buf=new_buf # RECORD NEW BUFFER LOCATION AND SIZE
+      self.nbuffer=src.nhit
+    self.nhit=src.nhit # COPY ARRAY AND SET CORRECT SIZE
+    if src.nhit>0: # ONLY COPY IF NON-EMPTY
+      memcpy(self.im_buf,src.im_buf,src.nhit*sizeof(IntervalMap))
+    return 0
+
+  def mergeSeq(self):
+    'merge intervals into single interval per sequence orientation'
+    cdef int i,j,n,id
+    if self.nhit<=0: # NOTHING TO MERGE, SO JUST RETURN
+      return 0
+    qsort(self.im_buf,self.nhit,sizeof(IntervalMap),target_qsort_cmp) # ORDER BY id,start
+    n=0
+    id= -1
+    for i from 0 <= i < self.nhit:
+      if self.im_buf[i].target_id!=id or (self.im_buf[j].target_start<0 and
+                                          self.im_buf[i].target_start>=0):
+        if id>=0: # WE NEED TO SAVE PREVIOUS INTERVAL
+          if n<j: # COPY MERGED INTERVAL TO COMPACTED LOCATION
+            memcpy(self.im_buf+n,self.im_buf+j,sizeof(IntervalMap))
+          n=n+1
+        j=i # RECORD THIS AS START OF THE NEW SEQUENCE / ORIENTATION
+        id=self.im_buf[i].target_id
+      elif self.im_buf[i].target_end>self.im_buf[j].target_end:
+        self.im_buf[j].target_end=self.im_buf[i].target_end # EXPAND THIS INTERVAL
+        self.im_buf[j].end=self.im_buf[i].end # COPY SOURCE SEQ COORDS AS WELL
+    if n<j: # COPY LAST MERGED INTERVAL TO COMPACTED LOCATION
+      memcpy(self.im_buf+n,self.im_buf+j,sizeof(IntervalMap))
+    self.nhit=n+1 # TOTAL #MERGED INTERVALS
+    return self.nhit
+
+  def __iter__(self):
+    return self
 
   # PYTHON VERSION OF next RETURNS HIT AS A TUPLE
   def __next__(self): # PYREX USES THIS NON-STANDARD NAME INSTEAD OF next()!!!
@@ -364,7 +420,7 @@ cdef class NLMSASlice:
     cdef NLMSASequence ns_lpo
     cdef IntervalFileDBIterator it,it2
     cdef IntervalMap *im,*im2
-    cdef IDInterval *iv
+
     if seq is None: # GET FROM NLMSASequence
       seq=ns.seq
     if id<0:
@@ -377,6 +433,7 @@ cdef class NLMSASlice:
     self.seq=seq
     if ns.db is None:
       ns.forceLoad()
+    it2=None
     it=IntervalFileDBIterator(start+offset,stop+offset,ns.db)
     n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
     if n<=0:
@@ -392,12 +449,7 @@ cdef class NLMSASlice:
         it.im_buf[i].target_start=it.im_buf[i].target_start \
                                  +start-it.im_buf[i].start
         it.im_buf[i].start=start
-    nseq=len(ns.nlmsaLetters.seqlist)
-    iv=interval_id_alloc(nseq) # BOUNDS RECORDING
-    for i from 0 <= i < n: # GET EACH SEQ'S BOUNDS, INCLUDING LPO
-      interval_id_union(it.im_buf[i].target_id,it.im_buf[i].start,
-                        it.im_buf[i].end,it.im_buf[i].target_start,
-                        it.im_buf[i].target_end,iv,2*nseq) # RECORD BOUNDS
+        
     if not ns.is_lpo: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
       ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id] # DEFAULT LPO
       if ns_lpo.db is None:
@@ -409,12 +461,16 @@ cdef class NLMSASlice:
             raise ValueError('sequence mapped to non-LPO target??')
           if ns_lpo.db is None:
             ns_lpo.forceLoad()
-        it2=IntervalFileDBIterator(it.im_buf[i].target_start,
-                                   it.im_buf[i].target_end,ns_lpo.db)
+        if it2 is None: # NEED TO ALLOCATE NEW ITERATOR
+          it2=IntervalFileDBIterator(it.im_buf[i].target_start,
+                                     it.im_buf[i].target_end,ns_lpo.db)
+        else: # JUST REUSE THIS ITERATOR WITHOUT REALLOCING MEMORY
+          it2.restart(it.im_buf[i].target_start,
+                      it.im_buf[i].target_end,ns_lpo.db)
         it2.loadAll() # GET ALL OVERLAPPING INTERVALS
-        im2=it2.getIntervalMap() # RELEASE ARRAY FROM THIS ITERATOR
-        if im2==NULL: # NO HITS, SO TRY THE NEXT INTERVAL???
+        if it2.nhit<=0: # NO HITS, SO TRY THE NEXT INTERVAL???
           continue
+        im2=it2.im_buf # ARRAY FROM THIS ITERATOR
         for j from 0 <= j < it2.nhit: # MAP EACH INTERVAL BACK TO ns
           if im2[j].target_id==id: # DISCARD SELF-MATCH
             continue
@@ -432,19 +488,18 @@ cdef class NLMSASlice:
           stop2=im2[j].target_start+end_min-im2[j].start
           it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
           assert ns_lpo.id!=im2[j].target_id
-          interval_id_union(im2[j].target_id,istart,istop,
-                            start2,stop2,iv,2*nseq) # RECORD BOUNDS
-        free(im2) # FREE THE MAP OURSELVES, SINCE RELEASED FROM it2
+
+    it2.copy(it) # COPY FULL SET OF SAVED INTERVALS
+    self.nseqBounds=it2.mergeSeq() # MERGE TO ONE INTERVAL PER SEQUENCE ORIENTATION
+    self.seqBounds=it2.getIntervalMap() # SAVE SORTED ARRAY & DETACH FROM ITERATOR
 
     self.im=it.getIntervalMap() # RELEASE THIS ARRAY FROM THE ITERATOR
     self.n=it.nhit # TOTAL #INTERVALS SAVED FROM JOIN
     qsort(self.im,self.n,sizeof(IntervalMap),imstart_qsort_cmp) # ORDER BY start
-    n=2*nseq
-    self.seqBounds=interval_id_compact(iv,&n) # SHRINK THE LIST TO ELIMINATE EMPTY ENTRIES
-    self.nseqBounds=n
+
     n=0
     for i from 0 <= i < self.nseqBounds: # COUNT NON-LPO SEQUENCES
-      if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].id):
+      if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].target_id):
         n=n+1
     self.nrealseq=n # SAVE THE COUNT
 
@@ -514,24 +569,37 @@ cdef class NLMSASlice:
     return l
 
   ############################## MAXIMUM INTERVAL METHODS
+  cdef int findSeqBounds(self,int id,int ori):
+    'find the specified sequence / orientation using binary search'
+    cdef int left,right,mid
+    left=0
+    right=self.nseqBounds
+    while left<right:
+      mid=(left+right)/2
+      if self.seqBounds[mid].target_id<id:
+        left=mid+1
+      elif self.seqBounds[mid].target_id>id:
+        right=mid
+      elif ori>0 and seqBounds[mid].target_start<0:
+        left=mid+1
+      elif ori<0 and seqBounds[mid].target_start>=0:
+        right=mid
+      else: # MATCHES BOTH id AND ori
+        return mid
+    return -1 # FAILED TO FIND id,ori MATCH
+  
   def findSeqEnds(self,seq):
     'get maximum interval of seq aligned in this interval'
-    cdef int i,ori,i_ori,id
+    cdef int i,id
     cdef NLMSA nl
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     id=nl.seqs.getID(seq) # CHECK IF IN OUR ALIGNMENT
-    ori=seq.orientation # GET ITS ORIENTATION
-    for i from 0 <= i <self.nseqBounds:
-      if self.seqBounds[i].id==id: # FOUND OUR SEQUENCE
-        if self.seqBounds[i].target_start<0:
-          i_ori= -1
-        else:
-          i_ori=1
-        if i_ori==ori: # AND THE ORIENTATIONS MATCH
-          return nl.seqInterval(self.seqBounds[i].id,
-                                self.seqBounds[i].target_start,
-                                self.seqBounds[i].target_stop)
-    raise KeyError('seq not aligned in this interval')
+    i=self.findSeqBounds(id,seq.orientation) # FIND THIS id,ORIENTATION
+    if i<0: # NOT FOUND!
+      raise KeyError('seq not aligned in this interval')
+    return nl.seqInterval(self.seqBounds[i].target_id,
+                          self.seqBounds[i].target_start,
+                          self.seqBounds[i].target_end)
 
   def generateSeqEnds(self):
     'get list of tuples (ival1,ival2,edge)'
@@ -540,13 +608,13 @@ cdef class NLMSASlice:
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     l=[]
     for i from 0 <= i <self.nseqBounds:
-      if nl.seqlist.is_lpo(self.seqBounds[i].id):
+      if nl.seqlist.is_lpo(self.seqBounds[i].target_id):
         continue  # DON'T RETURN EDGES TO LPO
       ival1=sequence.absoluteSlice(self.seq,self.seqBounds[i].start,
-                                   self.seqBounds[i].stop)
-      ival2=nl.seqInterval(self.seqBounds[i].id,
+                                   self.seqBounds[i].end)
+      ival2=nl.seqInterval(self.seqBounds[i].target_id,
                            self.seqBounds[i].target_start,
-                           self.seqBounds[i].target_stop)
+                           self.seqBounds[i].target_end)
       l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
     return l
 
@@ -760,10 +828,10 @@ cdef class NLMSASlice:
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     l=[]
     for i from 0 <= i <self.nseqBounds:
-      ns_lpo=nl.seqlist[self.seqBounds[i].id]
+      ns_lpo=nl.seqlist[self.seqBounds[i].target_id]
       if ns_lpo.is_lpo: # ADD ALL LPO INTERVALS ALIGNED HERE
         subslice=NLMSASlice(ns_lpo,self.seqBounds[i].target_start,
-                            self.seqBounds[i].target_stop)
+                            self.seqBounds[i].target_end)
         l=l+subslice.split(**kwargs) # APPLY GROUP-BY RULES
     if len(l)>0:
       return l
@@ -1224,6 +1292,75 @@ class NLMSASeqDict(dict):
 
 
 
+
+cdef class FilePtrPool:
+  def __new__(self,char *mode='r',int maxfile=1024,int nalloc=4096):
+    self.maxfile=maxfile
+    self.nalloc=nalloc
+    self.npool=0
+    self.pool=<FilePtrRecord *>calloc(nalloc,sizeof(FilePtrRecord))
+    self.mode=strdup(mode)
+    if self.pool==NULL or self.mode==NULL:
+      raise MemoryError
+    self.head= -1
+    self.tail= -1
+
+  cdef int open(self,int id,char *filename):
+    if id>=self.nalloc: # NEED TO EXPAND STORAGE
+      pass
+    if self.pool[id].filename:
+      raise KeyError('already opened this pool ID!  debug!')
+    self.pool[id].filename=strdup(filename)
+    if self.pool[id].filename==NULL:
+      raise MemoryError
+    self.pool[id].left= -1 # INITIALLY NOT IN POOL LINK LIST
+    self.pool[id].right= -1
+    return 0
+
+  cdef FILE *ifile(self,int id):
+    if id<0 or id>=self.npool or self.pool[id].filename==NULL:
+      raise IndexError('invalid ID: no such FilePoolRecord')
+    if self.pool[id].ifile==NULL: # NEED TO OPEN THIS RECORD
+      if self.npool>=self.maxfile: # NEED TO CLOSE tail FilePtrRecord
+        if self.tail<=0:
+          raise IndexError('bad tail value!  debug!')
+        fclose(self.pool[self.tail].ifile)
+        self.pool[self.tail].ifile=NULL
+        self.tail=self.pool[self.tail].left
+      self.pool[id].ifile=fopen(self.pool[id].filename,self.mode)
+    if self.head==id: # ALREADY AT THE HEAD, SO NO NEED TO MOVE IT
+      return self.pool[id].ifile
+    if self.pool[id].left>=0:
+      self.pool[self.pool[id].left].right=self.pool[id].right # UNLINK
+    if self.pool[id].right>=0:
+      self.pool[self.pool[id].right].left=self.pool[id].left # UNLINK
+    if self.tail==id: # UPDATE NEW tail
+      self.tail=self.pool[id].left
+    elif self.tail<0: # THERE IS NO TAIL
+      self.tail=id # SO THIS BECOMES THE NEW TAIL
+    self.pool[id].right=self.head  # PLACE IN FRONT OF head
+    self.pool[id].left= -1
+    if self.head>=0:
+      self.pool[head].left=id
+    self.head=id # IT BECOMES THE NEW head
+    return self.pool[id].ifile
+
+  cdef int close(self,int id):
+    return -1 # THIS IS JUST A STUB!  PUT REAL CODE HERE!!!
+
+  def __dealloc__(self):
+    'remember: dealloc cannot call other methods!'
+    cdef int i
+    if self.pool:
+      for i from 0 <= i < self.npool:
+        if self.pool[i].ifile: # CLOSE FILE DESCRIPTOR
+          fclose(self.pool[i].ifile)
+        if self.pool[i].filename: # DUMP FILE STRINGS
+          free(self.pool[i].filename)
+      free(self.pool)
+      self.pool=NULL
+    if self.mode:
+      free(self.mode)
 
 
 cdef class NLMSA:
