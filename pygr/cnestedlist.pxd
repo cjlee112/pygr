@@ -7,6 +7,7 @@ cdef extern from "string.h":
 cdef extern from "stdlib.h":
   void free(void *)
   void *malloc(size_t)
+  void *calloc(size_t,size_t)
   void *realloc(void *,size_t)
   int c_abs "abs" (int)
   void qsort(void *base, size_t nmemb, size_t size,
@@ -24,6 +25,7 @@ cdef extern from "stdio.h":
 cdef extern from "string.h":
   int strncmp(char *s1,char *s2,size_t len)
   char *strcpy(char *dest,char *src)
+  char *strdup(char *)
 
 cdef extern from "intervaldb.h":
   ctypedef struct IntervalMap:
@@ -59,14 +61,16 @@ cdef extern from "intervaldb.h":
   ctypedef struct IntervalIterator:
     pass
 
-  ctypedef struct IDInterval:
-    int id
-    int start
-    int stop
-    int target_start
-    int target_stop
+  ctypedef struct FilePtrRecord:
+    FILE *ifile
+    int left
+    int right
+    int ihead
+    char *filename
+
 
   int imstart_qsort_cmp(void *void_a,void *void_b)
+  int target_qsort_cmp(void *void_a,void *void_b)
   IntervalMap *read_intervals(int n,FILE *ifile) except NULL
   SublistHeader *build_nested_list(IntervalMap im[],int n,int *p_n,int *p_nlists) except NULL
   IntervalMap *interval_map_alloc(int n) except NULL
@@ -80,9 +84,6 @@ cdef extern from "intervaldb.h":
   int find_file_intervals(IntervalIterator *it0,int start,int end,IntervalIndex ii[],int nii,SublistHeader subheader[],int nlists,SubheaderFile *subheader_file,int ntop,int div,FILE *ifile,IntervalMap buf[],int nbuf,int *p_nreturn,IntervalIterator **it_return) except -1
   int write_padded_binary(IntervalMap im[],int n,int div,FILE *ifile)
   int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
-  IDInterval *interval_id_alloc(int n) except NULL
-  int interval_id_union(int id,int start,int stop,int target_start,int target_stop,IDInterval iv[],int n)
-  IDInterval *interval_id_compact(IDInterval iv[],int *p_n) except NULL
 
 
 cdef extern from "apps/maf2nclist.h":
@@ -123,6 +124,8 @@ cdef class IntervalFileDBIterator:
   cdef int ihit,nhit,start,end,nbuf
   cdef IntervalFileDB db
 
+  cdef int restart(self,int start,int end,IntervalFileDB db) except -2
+  cdef int reset(self) except -2
   cdef int cnext(self,int *pkeep)
   cdef int extend(self,int ikeep)
   cdef int saveInterval(self,int start,int end,int target_id,
@@ -130,6 +133,18 @@ cdef class IntervalFileDBIterator:
   cdef int nextBlock(self,int *pkeep) except -2
   cdef IntervalMap *getIntervalMap(self)
   cdef int loadAll(self) except -1
+  cdef int copy(self,IntervalFileDBIterator src)
+
+
+cdef class FilePtrPool:
+  cdef FilePtrRecord *pool
+  cdef int npool,maxfile,nalloc,head,tail
+  cdef char *mode
+
+  cdef int open(self,int id,char *filename)
+  cdef FILE *ifile(self,int id)
+  cdef int close(self,int id)
+
 
 
 cdef class NLMSA:
@@ -157,9 +172,11 @@ cdef class NLMSASlice:
   cdef readonly start,stop,id
   cdef int n,nseqBounds,nrealseq,offset
   cdef IntervalMap *im
-  cdef IDInterval *seqBounds
+  cdef IntervalMap *seqBounds
   cdef readonly NLMSASequence nlmsaSequence
   cdef readonly object seq
+
+  cdef int findSeqBounds(self,int id,int ori)
 
 cdef class NLMSASliceLetters:
   cdef readonly NLMSASlice nlmsaSlice
