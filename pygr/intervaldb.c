@@ -65,7 +65,7 @@ int im_qsort_cmp(const void *void_a,const void *void_b)
 
 
 int sublist_qsort_cmp(const void *void_a,const void *void_b)
-{
+{ /* SORT IN SUBLIST ORDER, SECONDARILY BY start */
   IntervalMap *a=(IntervalMap *)void_a,*b=(IntervalMap *)void_b;
   if (a->sublist<b->sublist)
     return -1;
@@ -74,6 +74,23 @@ int sublist_qsort_cmp(const void *void_a,const void *void_b)
   else if (a->start < b->start)
     return -1;
   else if (a->start > b->start)
+    return 1;
+  else
+    return 0;
+}
+
+
+
+int target_qsort_cmp(const void *void_a,const void *void_b)
+{ /* SORT IN target_id ORDER, SECONDARILY BY target_start */
+  IntervalMap *a=(IntervalMap *)void_a,*b=(IntervalMap *)void_b;
+  if (a->target_id<b->target_id)
+    return -1;
+  else if (a->target_id>b->target_id)
+    return 1;
+  else if (a->target_start < b->target_start)
+    return -1;
+  else if (a->target_start > b->target_start)
     return 1;
   else
     return 0;
@@ -90,72 +107,73 @@ SublistHeader *build_nested_list(IntervalMap im[],int n,
   qsort(im,n,sizeof(IntervalMap),im_qsort_cmp); /* SORT BY start, CONTAINMENT */
   nlists=1;
   for(i=1;i<n;++i){
-	 if(!(END_POSITIVE(im[i])>END_POSITIVE(im[i-1]) /* i NOT CONTAINED */
-			|| (END_POSITIVE(im[i])==END_POSITIVE(im[i-1]) /* SAME INTERVAL! */
-				 && START_POSITIVE(im[i])==START_POSITIVE(im[i-1])))){
-		nlists++;
-		//		printf("%d (%d,%d) -> (%d,%d) %d\n", nlists, im[i-1].start,im[i-1].end, im[i].start,im[i].end,i);
-	 }
+    if(!(END_POSITIVE(im[i])>END_POSITIVE(im[i-1]) /* i NOT CONTAINED */
+	 || (END_POSITIVE(im[i])==END_POSITIVE(im[i-1]) /* SAME INTERVAL! */
+	     && START_POSITIVE(im[i])==START_POSITIVE(im[i-1])))){
+      nlists++;
+/*       printf("%d (%d,%d) -> (%d,%d) %d\n", nlists, im[i-1].start, */
+/* 	     im[i-1].end, im[i].start,im[i].end,i); */
+    }
   }
   
-  //  printf("%d lists?!\n", nlists);
+/*   printf("%d lists?!\n", nlists); */
   *p_nlists=nlists-1;
   
   if(nlists==1){
-	 *p_n=n;
-	 return NULL;
+    *p_n=n;
+    return NULL;
   }
   
   CALLOC(subheader,nlists+1,SublistHeader); /* SUBLIST HEADER INDEX */
   
   im[0].sublist=0;
-  subheader[0].start=-1;
+  subheader[0].start= -1;
   subheader[0].len=1;
   parent=0;
   nlists=1;
   isublist=1;
   for(i=1;i<n;){
-	 if(isublist && (END_POSITIVE(im[i])>END_POSITIVE(im[parent]) /* i NOT CONTAINED */
-						  || (END_POSITIVE(im[i])==END_POSITIVE(im[parent]) /* SAME INTERVAL! */
-								&& START_POSITIVE(im[i])==START_POSITIVE(im[parent])))){
-		subheader[isublist].start=subheader[im[parent].sublist].len-1; /* RECORD PARENT RELATIVE POSITION */
-		isublist=im[parent].sublist;
-		parent=subheader[im[parent].sublist].start;
-	 }
-	 else{
-		if(subheader[isublist].len==0){
-		  nlists++;
-		}
-		subheader[isublist].len++;
-		im[i].sublist=isublist;
-		parent=i;
-		isublist=nlists;
-		subheader[isublist].start=parent;
-		i++;
-	 }
+    if(isublist && (END_POSITIVE(im[i])>END_POSITIVE(im[parent]) /* i NOT CONTAINED */
+		    || (END_POSITIVE(im[i])==END_POSITIVE(im[parent]) /* SAME INTERVAL! */
+			&& START_POSITIVE(im[i])==START_POSITIVE(im[parent])))){
+      subheader[isublist].start=subheader[im[parent].sublist].len-1; /* RECORD PARENT RELATIVE POSITION */
+      isublist=im[parent].sublist;
+      parent=subheader[im[parent].sublist].start;
+    }
+    else{
+      if(subheader[isublist].len==0){
+	nlists++;
+      }
+      subheader[isublist].len++;
+      im[i].sublist=isublist;
+      parent=i;
+      isublist=nlists;
+      subheader[isublist].start=parent;
+      i++;
+    }
   }
   
   while(isublist>0){ /* pop remaining stack */
-	 subheader[isublist].start=subheader[im[parent].sublist].len-1; /* RECORD PARENT RELATIVE POSITION */
-	 isublist=im[parent].sublist;
-	 parent=subheader[im[parent].sublist].start;
+    subheader[isublist].start=subheader[im[parent].sublist].len-1; /* RECORD PARENT RELATIVE POSITION */
+    isublist=im[parent].sublist;
+    parent=subheader[im[parent].sublist].start;
   }
 
   *p_n=subheader[0].len;
 
   total=0;
   for(i=0;i<nlists+1;++i){
-	 temp=subheader[i].len;
-	 subheader[i].len=total;
-	 total+=temp;
+    temp=subheader[i].len;
+    subheader[i].len=total;
+    total+=temp;
   };
 
   /* SUBHEADER.LEN IS NOW START OF THE SUBLIST */
 
   for(i=1;i<n;i+=1){
-	 if(im[i].sublist>im[i-1].sublist){
-		subheader[im[i].sublist].start+=subheader[im[i-1].sublist].len;
-	 }
+    if(im[i].sublist>im[i-1].sublist){
+      subheader[im[i].sublist].start+=subheader[im[i-1].sublist].len;
+    }
   }
 
   /* SUBHEADER.START IS NOW ABS POSITION OF PARENT */
@@ -167,18 +185,19 @@ SublistHeader *build_nested_list(IntervalMap im[],int n,
   subheader[0].start=0;
   subheader[0].len=0;
   for(i=0;i<n;++i){
-	 if(im[i].sublist>isublist){
-		//		printf("Entering sublist %d (%d,%d)\n", im[i].sublist, im[i].start,im[i].end);
-		isublist=im[i].sublist;
-		parent=subheader[isublist].start;
-		//		printf("Parent (%d,%d) is at %d, list start is at %d\n", im[parent].start, im[parent].end, subheader[isublist].start,i);
-		im[parent].sublist=isublist-1;
-		subheader[isublist].len=0;
-		subheader[isublist].start=i;
-	 }
-	 subheader[isublist].len++;
-	 im[i].sublist=-1;
-  };
+    if(im[i].sublist>isublist){
+/*       printf("Entering sublist %d (%d,%d)\n", im[i].sublist, im[i].start,im[i].end); */
+      isublist=im[i].sublist;
+      parent=subheader[isublist].start;
+/*       printf("Parent (%d,%d) is at %d, list start is at %d\n",  */
+/* 	     im[parent].start, im[parent].end, subheader[isublist].start,i); */
+      im[parent].sublist=isublist-1;
+      subheader[isublist].len=0;
+      subheader[isublist].start=i;
+    }
+    subheader[isublist].len++;
+    im[i].sublist= -1;
+  }
 
   nlists--;
   memmove(subheader,subheader+1,nlists*sizeof(SublistHeader));
@@ -876,66 +895,4 @@ int free_interval_dbfile(IntervalDBFile *db_file)
 
 
 
-
-IDInterval *interval_id_alloc(int n)
-{
-  IDInterval *iv=NULL;
-  n*=2; /* DOUBLE STORAGE FOR + AND - ORIENTATIONS */
-  if (n<=0)
-    return NULL;
-  CALLOC(iv,n,IDInterval);
-  iv[0].id=iv[1].id= -1; /* ENSURE THAT iv[i].id != i/2 FOR ALL i */
-  return iv;
- handle_malloc_failure:
-  return NULL;
-}
-
-int interval_id_union(int id,int start,int stop,
-		      int target_start,int target_stop,
-		      IDInterval iv[],int n)
-{
-  int i;
-  i=id*2; /* STORE BOTH FORWARD AND REVERSE ORI FOR EACH SEQ */
-  if (start<0)  /* STORE REVERSE ORIENTATION SEPARATELY FROM FORWARD */
-    i+=1; 
-  if (i>=n) /* OUT OF BOUNDS! */
-    return -1; 
-  if (iv[i].id!=id) { /* NEW ENTRY, SO STORE IT*/
-    iv[i].id=id;
-    iv[i].start=start;
-    iv[i].stop=stop;
-    iv[i].target_start=target_start;
-    iv[i].target_stop=target_stop;
-  }
-  else {
-    if (target_start<iv[i].target_start) {
-      iv[i].start=start;
-      iv[i].target_start=target_start;
-    }
-    if (target_stop>iv[i].target_stop) {
-      iv[i].stop=stop;
-      iv[i].target_stop=target_stop;
-    }
-  }
-  return 0;
-}
-
-IDInterval *interval_id_compact(IDInterval iv[],int *p_n)
-{
-  int i,n=0;
-  for (i=0;i< *p_n;i++) {
-    if (iv[i].id== i/2) { /* VALID INTERVAL, KEEP IT */
-      if (n<i) /* COPY TO NEW COMPACTED LOCATION */
-	memcpy(iv+n,iv+i,sizeof(IDInterval));
-      n++;
-    }
-  }
-  if (n < *p_n) {
-    REALLOC(iv,n,IDInterval); /* SHRINK THE ARRAY */
-    *p_n = n; /* HAND BACK NEW SIZE TO CALLER */
-  }
-  return iv;
- handle_malloc_failure:
-  return NULL;
-}
 
