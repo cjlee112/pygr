@@ -100,6 +100,18 @@ def read_fasta_lengths(ifile):
 
 def store_seqlen_dict(d,ifile,idFilter=None):
     "store sequence lengths in a dictionary"
+    try: # TRY TO USE OUR FAST COMPILED PARSER
+        import seqfmt
+        if idFilter is None:
+            try: # NEED TO GET THE FILENAME...
+                filename=ifile.name
+            except AttributeError:
+                pass
+            else: # USE THE FAST PARSER
+                return seqfmt.read_fasta_lengths(d,filename)
+    except ImportError:
+        pass
+    
     if idFilter is not None: # HAVE TO CLEAN UP BLAST'S MESSY IDs
         for id,seqLength in read_fasta_lengths(ifile):
             d[idFilter(id)]=seqLength # SAVE TO DICTIONARY
@@ -292,6 +304,8 @@ def read_interval_alignment(ofile,srcSet,destSet,al=None):
 
 def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
+    if not seqDB.blastReady: # HAVE TO BUILD THE formatdb FILES...
+        seqDB.formatdb()
     ifile,ofile=os.popen2(cmd)
     if seqString is None:
         seqString=seq
@@ -323,10 +337,18 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
     return seq_masked
 
 
+class BlastDBinverse(object):
+    'implements trivial inverse mapping seq --> id'
+    def __init__(self,db):
+        self.db=db
+    def __getitem__(self,seq):
+        return seq.pathForward.id
+
 class BlastDBbase(dict):
     "Container representing Blast database"
     seqClass=BlastSequenceCache # CLASS TO USE FOR SAVING EACH SEQUENCE
-    def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None):
+    def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
+                 blastReady=False):
         "format database and build indexes if needed. Provide filepath or file object"
         if filepath is None:
             try:
@@ -349,20 +371,33 @@ class BlastDBbase(dict):
                 store_seqlen_dict(self.seqLenDict,ifile,idFilter)
                 self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
                 self.seqLenDict=shelve.open(filepath+'.seqlen','r') # REOPEN IT READ-ONLY
-        # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
+        
+        self.checkdb() # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
+        if not self.blastReady and blastReady: # FORCE CONSTRUCTION OF BLAST DB
+            self.formatdb()
+        if ifile is not None: # NOW THAT WE'RE DONE CONSTRUCTING, CLOSE THE FILE OBJECT
+            ifile.close() # THIS SIGNALS WE'RE COMPLETELY DONE CONSTRUCTING THIS RESOURCE
+
+    def checkdb(self):
+        'check whether BLAST index files ready for use; return self.blastReady status'
         if not os.access(filepath+'.nsd',os.R_OK) \
                and not os.access(filepath+'.psd',os.R_OK) \
                and not os.access(filepath+'.00.nsd',os.R_OK) \
                and not os.access(filepath+'.00.psd',os.R_OK):
-            # ATTEMPT TO BUILD BLAST DATABASE & INDEXES
-            cmd='formatdb -i %s -o T' % filepath
-            if self._seqtype!=PROTEIN_SEQTYPE:
-                cmd += ' -p F' # SPECIAL FLAG REQUIRED FOR NUCLEOTIDE SEQS
-            print 'Building index:',cmd
-            if os.system(cmd)!=0: # BAD EXIT CODE, SO COMMAND FAILED
-                raise OSError('command %s failed' % cmd)
-        if ifile is not None: # NOW THAT WE'RE DONE CONSTRUCTING, CLOSE THE FILE OBJECT
-            ifile.close() # THIS SIGNALS WE'RE COMPLETELY DONE CONSTRUCTING THIS RESOURCE
+            self.blastReady=False
+        else:
+            self.blastReady=True
+        return self.blastReady
+
+    def formatdb(self):
+        'ATTEMPT TO BUILD BLAST DATABASE & INDEXES'
+        cmd='formatdb -i %s -o T' % self.filepath
+        if self._seqtype!=PROTEIN_SEQTYPE:
+            cmd += ' -p F' # SPECIAL FLAG REQUIRED FOR NUCLEOTIDE SEQS
+        print 'Building index:',cmd
+        if os.system(cmd)!=0: # BAD EXIT CODE, SO COMMAND FAILED
+            raise OSError('command %s failed' % cmd)
+        self.blastReady=True
 
     def set_seqtype(self):
         "Determine whether this database is DNA or protein"
@@ -389,10 +424,22 @@ class BlastDBbase(dict):
             cmd='fastacmd -D -d '+self.filepath
             return os.popen(cmd),NCBI_ID_PARSER #BLAST ADDS lcl| TO id
 
+    def __invert__(self):
+        try:
+            return self._inverse
+        except AttributeError:
+            self._inverse=BlastDBinverse(self)
+            return self._inverse
+
     def __iter__(self):
         'generate all IDs in this database'
         for id in self.seqLenDict:
             yield id
+
+    def iteritems(self):
+        'generate all IDs in this database'
+        for id in self.seqLenDict:
+            yield id,self[id]
 
     def __len__(self):
         "number of total entries in this database"
@@ -667,6 +714,16 @@ class MAFStoredPathMapping(PathMapping):
                     yield IntervalTransform(e.reverse(e2.srcPath),e2.destPath)
 
 
+class PrefixDictInverse(object):
+    def __init__(self,db):
+        self.db=db
+    def __getitem__(self,seq):
+        try:
+            return self.db.dicts[seq.pathForward.db] \
+                   +self.db.separator+seq.pathForward.id
+        except KeyError:
+            raise KeyError('seq not in PrefixUnionDict')
+
 class PrefixUnionDict(object):
     """union interface to a series of dicts, each assigned a unique prefix
        ID 'foo.bar' --> ID 'bar' in dict f associated with prefix 'foo'."""
@@ -708,10 +765,22 @@ class PrefixUnionDict(object):
             return db in self.dicts
 
     def __iter__(self):
-        "generate union of all dicts items, each with appropriate prefix."
+        "generate union of all dicts IDs, each with appropriate prefix."
         for p,d in self.prefixDict.items():
             for id in d:
                 yield p+self.separator+id
+    
+    def iteritems(self):
+        "generate union of all dicts items, each id with appropriate prefix."
+        for p,d in self.prefixDict.items():
+            for id,seq in d.iteritems():
+                yield p+self.separator+id,seq
+
+    def iteritemlen(self):
+        "generate union of all dicts item lengths, each id with appropriate prefix."
+        for p,d in self.prefixDict.items():
+            for id,l in d.seqLenDict.iteritems():
+                yield p+self.separator+id,l
 
     def getName(self,path):
         "return fully qualified ID i.e. 'foo.bar'"
@@ -725,3 +794,16 @@ class PrefixUnionDict(object):
         for k,v in self.prefixDict.items():
             print >>ifile,'%s\t%s\t' %(k,v.filepath)
         ifile.close()
+
+    def __invert__(self):
+        try:
+            return self._inverse
+        except AttributeError:
+            self._inverse=PrefixDictInverse(self)
+            return self._inverse
+    def __len__(self):
+        "number of total entries in this database"
+        n=0
+        for db in self.dicts:
+            n+=len(db)
+        return n
