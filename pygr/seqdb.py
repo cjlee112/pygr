@@ -380,10 +380,10 @@ class BlastDBbase(dict):
 
     def checkdb(self):
         'check whether BLAST index files ready for use; return self.blastReady status'
-        if not os.access(filepath+'.nsd',os.R_OK) \
-               and not os.access(filepath+'.psd',os.R_OK) \
-               and not os.access(filepath+'.00.nsd',os.R_OK) \
-               and not os.access(filepath+'.00.psd',os.R_OK):
+        if not os.access(self.filepath+'.nsd',os.R_OK) \
+               and not os.access(self.filepath+'.psd',os.R_OK) \
+               and not os.access(self.filepath+'.00.nsd',os.R_OK) \
+               and not os.access(self.filepath+'.00.psd',os.R_OK):
             self.blastReady=False
         else:
             self.blastReady=True
