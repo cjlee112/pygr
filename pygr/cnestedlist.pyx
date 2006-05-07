@@ -1184,8 +1184,8 @@ cdef class NLMSASequence:
 
 
 class NLMSASeqList(list):
-  def __init__(self):
-    list.__init__(self,nlmsaSeqDict)
+  def __init__(self,nlmsaSeqDict):
+    list.__init__(self)
     self.nlmsaSeqDict=nlmsaSeqDict
   def __getitem__(self,nlmsaID):
     'return NLMSASequence for a given nlmsa_id'
