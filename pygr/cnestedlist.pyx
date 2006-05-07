@@ -1373,16 +1373,16 @@ cdef class NLMSA:
       maxlen=sys.maxint-65536 # MAXIMUM VALUE REPRESENTABLE BY int
     self.maxlen=maxlen
     self.inlmsa=nPad
+    self.seqDict=seqDict # SAVE FOR USER TO ACCESS...
     if mode=='r':
-      if seqDict is None:
+      if self.seqDict is None:
         import seqdb
         try: # SEE IF THERE IS A UNION HEADER FILE FOR pathstem.seqDict
-          seqDict=seqdb.PrefixUnionDict(filename=pathstem+'.seqDict')
-          self.seqDict=seqDict # SAVE FOR USER TO ACCESS...
+          self.seqDict=seqdb.PrefixUnionDict(filename=pathstem+'.seqDict')
         except IOError:
           raise ValueError('you must pass a seqDict, or valid header file %s'
                            % (pathstem+'.seqDict'))
-      self.read_indexes(seqDict)
+      self.read_indexes(self.seqDict)
     elif mode=='w':
       self.do_build=1
       self.newSequence()
