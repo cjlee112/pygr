@@ -7,6 +7,85 @@ int seqnameID_qsort_cmp(const void *void_a,const void *void_b)
   return strcmp(((SeqNameID_T *)void_a)->p,((SeqNameID_T *)void_b)->p);
 }
 
+int seqidmap_qsort_cmp(const void *void_a,const void *void_b)
+{ /* SORT IN ORDER OF id */
+  SeqIDMap *a=(SeqIDMap *)void_a,*b=(SeqIDMap *)void_b;
+  return strcmp(a->id,b->id);
+}
+
+
+
+int findseqID(char seqName[],SeqIDMap seqidmap[],int r)
+{
+  int i,l=0,mid;
+  while (l<r) { /* TRY FINDING IT USING BINARY SEARCH */
+    mid=(l+r)/2;
+    i=strcmp(seqidmap[mid].id,seqName);
+    if (i==0) /* FOUND IT */
+      return mid;
+    else if (i<0) /* seqidmap[mid] < seqName */
+      l=mid+1;
+    else /* seqName < seqidmap[mid] */
+      r=mid;
+  }
+  return -1;
+}
+
+
+
+
+int save_interval(IntervalMap *im,int start,int stop,int iseq,int istart,int istop)
+{
+  im->start=start;
+  im->end=stop;
+  im->target_id=iseq;
+  im->target_start=istart;
+  im->target_end=istop;
+  im->sublist= -1; /* DEFAULT VALUE */
+  return 1;
+}
+
+
+int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
+		  int lpoStart,int *p_block_len,FILE *ifile,int maxseq)
+{
+  int i,start,seqStart,rev,junk,iseq,max_len=0,seqLength;
+  char *p,tmp[32768],seq[32768],prefix[8],seqName[64],oriFlag[8];
+  for (p=fgets(tmp,32767,ifile);
+       p && 7==sscanf(tmp,"%2s %s %d %d %2s %d %s",prefix,seqName,&seqStart,&junk,
+		      oriFlag,&seqLength,seq) && 's'==prefix[0] && '\0'==prefix[1];
+       p=fgets(tmp,32767,ifile)) {
+/*     printf("\tALIGN: %s,%s,%d,%d,%s,%d,%s\n",prefix,seqName,seqStart,junk,oriFlag,junk,seq); */
+    iseq=findseqID(seqName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
+    if (iseq<0) return -1;  /* ERROR: RAN OUT OF SPACE!!! */
+    if (0==strcmp("-",oriFlag))
+      seqStart= -(seqLength-seqStart); /* CALCULATE NEGATIVE INDEX INDICATING REVERSE STRAND*/
+    i=0;
+    while (seq[i]) {
+      while ('-'==seq[i]) i++; /* SKIP GAP REGIONS */
+      if (seq[i]==0) break; /* END OF SEQUENCE */
+      for (start=i;seq[i] && seq[i]!='-';i++); /* GET A SEQUENCE INTERVAL */
+/*       printf("\t\t%d,%d\n",start,i); */
+      if (n>=maxseq) return -1; /* ERROR: RAN OUT OF SPACE!!! */
+      save_interval(im+n,lpoStart+start,lpoStart+i,iseq,seqStart,seqStart+i-start);
+      n++;
+      seqStart += i-start;
+    }
+    if (i>max_len) /* RECORD MAXIMUM seq LENGTH */
+      max_len = i;
+  }
+/*   printf("readMAFrecord: %d hits\n",n); */
+  if (p_block_len)
+    *p_block_len = max_len;
+  return n;
+}
+
+
+
+
+
+#ifdef SOURCE_EXCLUDED
+/* OLD, PRE-UNION VERSION */
 
 int findseqname(char seqName[],SeqNameID_T seqnames[],int nseq0,int *p_nseq1,
 		int maxseq)
@@ -45,17 +124,6 @@ void free_seqnames(SeqNameID_T seqnames[],int n)
 }
 
 
-int save_interval(IntervalMap *im,int start,int stop,int iseq,int istart,int istop)
-{
-  im->start=start;
-  im->end=stop;
-  im->target_id=iseq;
-  im->target_start=istart;
-  im->target_end=istop;
-  im->sublist= -1; /* DEFAULT VALUE */
-  return 1;
-}
-
 
 int readMAFrecord(IntervalMap im[],int n,SeqNameID_T seqnames[],int nseq0,int *p_nseq1,
 		  int lpoStart,int *p_block_len,FILE *ifile,int maxseq)
@@ -90,3 +158,4 @@ int readMAFrecord(IntervalMap im[],int n,SeqNameID_T seqnames[],int nseq0,int *p
     *p_block_len = max_len;
   return n;
 }
+#endif
