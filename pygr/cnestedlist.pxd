@@ -69,6 +69,7 @@ cdef extern from "intervaldb.h":
     char *filename
 
 
+
   int imstart_qsort_cmp(void *void_a,void *void_b)
   int target_qsort_cmp(void *void_a,void *void_b)
   IntervalMap *read_intervals(int n,FILE *ifile) except NULL
@@ -90,10 +91,17 @@ cdef extern from "apps/maf2nclist.h":
   ctypedef struct SeqNameID_T:
     char *p
     int id
-  cdef int readMAFrecord(IntervalMap im[],int n,SeqNameID_T seqnames[],
-                         int nseq0,int *p_nseq1,int lpoStart,
-		         int *block_len,FILE *ifile,int maxseq)
-  cdef int seqnameID_qsort_cmp(void *void_a,void *void_b)
+  ctypedef struct SeqIDMap:
+    char *id
+    int length
+    int ns_id
+    int offset
+    int nlmsa_id
+
+  int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
+                    int lpoStart,int *p_block_len,FILE *ifile,int maxseq)
+  int seqnameID_qsort_cmp(void *void_a,void *void_b)
+  int seqidmap_qsort_cmp(void *void_a,void *void_b)
   void free_seqnames(SeqNameID_T seqnames[],int n)
 
 
@@ -154,6 +162,7 @@ cdef class NLMSA:
   cdef readonly object seqDict
   cdef int do_build
   cdef int lpo_id
+  cdef readonly int maxlen,inlmsa
 
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id)
 
