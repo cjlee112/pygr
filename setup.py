@@ -111,6 +111,8 @@ def runSetup(script_args=None):
       else:
          print 'Generating C code using pyrexc: cdict.c...'
          exit_status=os.system('cd pygr;pyrexc cnestedlist.pyx') # COMPILE PYREX cnestedlist
+         print 'Generating C code using pyrexc: seqfmt.c...'
+         exit_status=os.system('cd pygr;pyrexc seqfmt.pyx') # COMPILE PYREX cnestedlist
 
 
    if buildExtensions:
@@ -118,7 +120,8 @@ def runSetup(script_args=None):
       cnestedlist_module = Extension('pygr.cnestedlist',
                                      sources = ['pygr/intervaldb.c', 'pygr/cnestedlist.c',
                                                 'pygr/apps/maf2nclist.c'])
-      metadata['ext_modules'] = [cdict_module,cnestedlist_module]
+      seqfmt_module = Extension('pygr.seqfmt',sources = ['pygr/seqfmt.c'])
+      metadata['ext_modules'] = [cdict_module,cnestedlist_module,seqfmt_module]
 
    setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
 
