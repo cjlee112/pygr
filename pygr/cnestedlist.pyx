@@ -1523,9 +1523,8 @@ cdef class NLMSA:
               seqidmap[j].offset=ns.length
               self.inlmsa=self.inlmsa+1 # ADVANCE SEQUENCE ID COUNTER
               ns.length=ns.length+seqidmap[j].length # EXPAND UNION SIZE
-            im_ns[i]=seqidmap[j].ns_id # RECORD THE NLMSA ID OF THE UNION 
-            im[i].target_id=seqidmap[j].nlmsa_id # USE THE CORRECT
               
+            im[i].target_id=seqidmap[j].nlmsa_id # USE THE CORRECT ID
             if im[i].target_start<0: # OFFSET REVERSE ORI
               im_tmp.start= -seqidmap[j].offset+im[i].target_start
               im_tmp.end=   -seqidmap[j].offset+im[i].target_end
