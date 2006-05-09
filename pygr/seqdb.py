@@ -233,7 +233,6 @@ class FileDBSequence(BlastSequenceBase):
         except AttributeError:
             ifile=file(self.db.filepath+'.pureseq')
             self.db._pureseq=ifile
-        print 'seek',self.id,self.db.seqLenDict[self.id][1],start
         ifile.seek(self.db.seqLenDict[self.id][1]+start)
         return ifile.read(end-start)
     
