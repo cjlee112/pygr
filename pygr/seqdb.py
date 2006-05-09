@@ -102,13 +102,22 @@ def store_seqlen_dict(d,ifile,idFilter=None):
     "store sequence lengths in a dictionary"
     try: # TRY TO USE OUR FAST COMPILED PARSER
         import seqfmt
-        if idFilter is None:
-            try: # NEED TO GET THE FILENAME...
-                filename=ifile.name
-            except AttributeError:
-                pass
-            else: # USE THE FAST PARSER
+        try: # NEED TO GET THE FILENAME...
+            filename=ifile.name
+        except AttributeError:
+            pass
+        else: # USE THE FAST PARSER
+            if idFilter is None: # LET C FUNC WRITE DIRECTLY TO d
                 return seqfmt.read_fasta_lengths(d,filename)
+            class dictwrapper(object):
+                def __init__(self,idFilter,d):
+                    self.d=d
+                    self.idFilter=idFilter
+                def __setitem__(self,k,v):
+                    id=self.idFilter(k)
+                    self.d[id]=v
+            dw=dictwrapper(idFilter,d) # FORCE C FUNC TO WRITE TO WRAPPER...
+            return seqfmt.read_fasta_lengths(dw,filename)
     except ImportError:
         pass
     
@@ -205,7 +214,29 @@ class BlastSequence(BlastSequenceBase):
     "Rely on seqLenDict to give fast access to sequence lengths"
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
-        return self.db.seqLenDict[self.id]
+        return self.db.seqLenDict[self.id][0]
+
+class FileDBSeqDescriptor(object):
+    "Get sequence from a concatenated pureseq database for obj.id"
+    def __get__(self,obj,objtype):
+        return obj.strslice(0,obj.db.seqLenDict[obj.id][0])
+
+class FileDBSequence(BlastSequenceBase):
+    seq=FileDBSeqDescriptor()
+    def __len__(self):
+        "Use persistent storage of sequence lengths to avoid reading whole sequence"
+        return self.db.seqLenDict[self.id][0]
+    def strslice(self,start,end):
+        "Efficient access to slice of a sequence, useful for huge contigs"
+        try:
+            ifile=self.db._pureseq
+        except AttributeError:
+            ifile=file(self.db.filepath+'.pureseq')
+            self.db._pureseq=ifile
+        print 'seek',self.id,self.db.seqLenDict[self.id][1],start
+        ifile.seek(self.db.seqLenDict[self.id][1]+start)
+        return ifile.read(end-start)
+    
 
 class BlastSequenceCache(BlastSequence):
     """represents a sequence, with interval caching
@@ -346,7 +377,7 @@ class BlastDBinverse(object):
 
 class BlastDBbase(dict):
     "Container representing Blast database"
-    seqClass=BlastSequenceCache # CLASS TO USE FOR SAVING EACH SEQUENCE
+    seqClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
                  blastReady=False):
         "format database and build indexes if needed. Provide filepath or file object"
@@ -737,7 +768,7 @@ class PrefixUnionDict(object):
             separator=it.next()[:-1] # DROP TRAILING CR
             prefixDict={}
             for line in it:
-                prefix,filepath=line.split('\t')[:2]
+                prefix,filepath=line.strip().split('\t')[:2]
                 prefixDict[prefix]=dbClass(filepath)
             ifile.close()
         self.separator=separator
@@ -780,7 +811,7 @@ class PrefixUnionDict(object):
         "generate union of all dicts item lengths, each id with appropriate prefix."
         for p,d in self.prefixDict.items():
             for id,l in d.seqLenDict.iteritems():
-                yield p+self.separator+id,l
+                yield p+self.separator+id,l[0]
 
     def getName(self,path):
         "return fully qualified ID i.e. 'foo.bar'"
