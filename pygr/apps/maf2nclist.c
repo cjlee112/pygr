@@ -49,7 +49,7 @@ int save_interval(IntervalMap *im,int start,int stop,int iseq,int istart,int ist
 int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
 		  int lpoStart,int *p_block_len,FILE *ifile,int maxseq)
 {
-  int i,start,seqStart,junk,iseq,max_len=0,seqLength,newline=1,l,extend=0;
+  int i,start,seqStart,junk,iseq= -1,max_len=0,seqLength,newline=1,l,extend=0;
   char *p,tmp[32768],seq[32768],prefix[8],seqName[64],oriFlag[8];
   while ((p=fgets(tmp,32767,ifile))) {
     l=strlen(tmp);
@@ -59,7 +59,7 @@ int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
 /* 	printf("%s,%d,%s,%d\n",seqName,seqStart,oriFlag,seqLength); */
 	iseq=findseqID(seqName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
 	if (iseq<0) 
-	  return -1;  /* ERROR: RAN OUT OF SPACE!!! */
+	  fprintf(stderr," *** WARNING: Unknown sequence %s ignored...\n",seqName);
 	if (0==strcmp("-",oriFlag))
 	  seqStart= -(seqLength-seqStart); /* CALCULATE NEGATIVE INDEX INDICATING REVERSE STRAND*/
 	extend=0; /* START OF A NEW LPO LINE */
@@ -72,6 +72,9 @@ int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
       newline=1;
     else
       newline=0;
+
+    if (iseq<0)  /* IGNORE UNKNOWN SEQUENCES */
+      continue; 
 
 /*     printf("\tALIGN: %s,%s,%d,%d,%s,%d,%s\n",prefix,seqName,seqStart,junk,oriFlag,junk,seq); */
     i=0;
