@@ -431,11 +431,13 @@ cdef class NLMSASlice:
     self.start=start
     self.stop=stop
     self.id=id
-    self.offset=offset
+    self.offset=offset # ALWAYS STORE offset IN POSITIVE ORIENTATION
     self.seq=seq
     if ns.db is None:
       ns.forceLoad()
     it2=None
+    if start<0: # NEED TO TRANSLATE OFFSETS TO MINUS ORIENTATION
+      offset= -offset
     it=IntervalFileDBIterator(start+offset,stop+offset,ns.db)
     n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
     if n<=0:
