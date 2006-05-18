@@ -446,6 +446,70 @@ Here is some example output:
 1       Mm.99996        e2      rn3     97.2    100.0   CC      CC
 \end{verbatim}
 
+\subsubsection{Building an Alignment Database from MAF files}
+UCSC has defined a new file format for large multigenome alignment,
+called MAF.  Pygr provides high-performance utilities for reading
+MAF alignment files and building a disk-based NLMSA alignment database.
+(These utilities are written in C for performance).  Here's an
+example of building an alignment database from scratch using a
+set of MAF files stored in a directory called \code{maf/}:
+
+\begin{verbatim}
+import os
+from pygr import cnestedlist,seqdb
+
+genomes={'hg17':'hg17','mm5':'mm5', 'rn3':'rn3', 'canFam1':'cf1', 
+         'danRer1':'dr1', 'fr1':'fr1','galGal2':'gg2', 'panTro1':'pt1'}
+for k,v in genomes.items(): # PREFIX DICTIONARY FOR UNION OF GENOMES
+    genomes[k]=seqdb.BlastDB(v) # USE v AS FILENAME FOR FASTA FILE
+genomeUnion=seqdb.PrefixUnionDict(genomes) # CREATE UNION OF THESE DBs
+# CREATE NLMSA DATABASE ucsc8 ON DISK, FROM MAF FILES IN maf/
+msa=cnestedlist.NLMSA('ucsc8','w',genomeUnion,os.listdir('maf'))
+\end{verbatim}
+
+The only real work here is due to the fact that UCSC's MAF files
+use a {\em prefix.suffix} notation for identifying specific sequences,
+where {\em prefix} gives the name of the genome, and {\em suffix}
+gives the identifier of the sequence in that genome database.
+Here we use Pygr's \class{PrefixUnionDict} class to wrap the 
+set of genome databases in a dict-like interface that accepts
+string keys of the form {\em prefix.suffix} and returns the
+right sequence object from the right genome database.  As an
+added twist, the genome names in the MAF files match the
+filenames of the associated genome databases in most cases, but
+not all, so we have to create an initial dictionary giving the
+correct mapping.  Actually building the NLMSA requires just one
+line, but actually a number of steps are happening behind the
+scenes:
+\begin{itemize}
+\item If you have never opened \class{BlastDB} objects for these genome
+databases before, \class{BlastDB} will initialize each one.  This means
+two things.  First, it builds an index of all the sequences and their 
+lengths.  This is essential for combining the
+large numbers of sequences in these databases into 
+``unified'' coordinate systems in the NLMSA (otherwise there would
+have to be a separate database file for each individual sequence).
+Second, it saves the sequences to a simple indexed file format that
+allows Pygr to retrieve individual sequence fragments quickly and
+efficiently.  We got tired of NCBI \code{fastacmd}'s horrible
+memory requirements and slow speed, so we implemented fast sequence
+indexing.
+
+\item \class{NLMSA} reads each MAF file and divides the interval
+alignment data into one or more coordinate systems created 
+on-the-fly (for efficient memory usage, NLMSA uses \class{int}
+coordinates (32-bit), which has a maximum size of approximately
+2 billion.  This is too small even for a single genome like human;
+\class{NLMSA} automatically splits the database into as many
+coordinate systems are needed to represent the alignment.
+Each coordinate system has its own database file on disk.
+
+\item After it has finished reading the MAF data, \class{NLMSA}
+begins to build the database indexes for each coordinate 
+system.  Computationally, this operation is equivalent to
+a {\em sort}.  Once the indexes are built, the database is
+ready for use.
+\end{itemize}
 	
 \subsubsection{Persistent Alignment Storage}
 Pygr makes it easy to store alignments persistently in a relational database.  To illustrate, here we run BLAST to generate an alignment of one sequence to manyother sequences, and store it to a MySQL table test.alignment:
@@ -1397,7 +1461,7 @@ and attributes.
 
 Construction Methods:
 
-\begin{funcdesc}{NLMSA}{pathstem='', mode='r', seqDict=None, mafFiles=None, maxOpenFiles=1024, maxlen=None}
+\begin{funcdesc}{NLMSA}{pathstem='', mode='r', seqDict=None, mafFiles=None, maxOpenFiles=1024, maxlen=None, nPad=1000000, maxint=41666666}
   Constructor for the class.  \var{pathstem} specifies a path and filename prefix for
   the NLMSA files (since multiple files are used to store one NLMSA, it will automatically add a
   number of suffixes automatically to open the necessary set of files for the NLMSA).
@@ -1428,6 +1492,16 @@ Construction Methods:
   this set of intervals is briefly held in RAM for this sort.  If you have insufficient
   RAM, the construction step may raise a MemoryError.  If so, you can avoid this problem
   by using a smaller \var{maxlen} value.
+  The \var{maxint} option provides another way of limiting the size of LPO
+  databases.  It specifies the maximum number of intervals to store per database.
+  Since each interval takes 24 bytes, the default setting limits each LPO to
+  a total size of 1 GB.  Note that the current NLMSA construction algorithm
+  requires loading each database index into memory as one-time operation
+  during construction.  If your NLMSA build fails due to running out of memory,
+  simply reduce this value.
+  The \var{nPad} option sets the maximum number of LPO coordinate systems
+  (specifically, the offset for the start of real sequence IDs in the NLMSA
+  sequence index).  You are unlikely to need to change this default value.
 \end{funcdesc}
 
 
@@ -1849,46 +1923,91 @@ The expression m[s][myg] obtains the "edge information" for the graph relationsh
 
 \end{itemize}
 
-Additional options for constructing a BlastDB:
+Options for constructing a BlastDB:
 
-\begin{itemize}
+\begin{funcdesc}{BlastDB}{filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
+                 blastReady=False}
+  Open a sequence file as a ``database'' object, giving the user access to its sequences,
+  easy searching via \code{blast} or \code{megablast}, etc.
+  \var{skipSeqLenDict} prevents construction of a sequence length index file 
+  (which will be named ``{\em filepath}.\code{seqlen}'') and a fast
+  sequence access file (which will be named ``{\em filepath}.\code{pureseq}'').
+  Setting this option to \code{True} can be useful if you either wish to
+  speed up initial opening of the BlastDB (note: construction of these indexes is
+  only a one-time event) or avoid the extra disk space required by these indexes.
+  {\em Explanation}: To facilitate the rapid creation of sequence objects (which requires the length of the sequence), it creates a sequence length index (as a Python shelve).  This enables it to avoid actually loading the sequence string into memory each time a sequence object is created; instead it just looks up the sequence length.  While this speeds up access to genomic sequence databases (where each sequence tends to be extremely long), this initial step may be slow for databases of short sequences.  Setting \var{skipSeqLenDict} option to \code{True}, will prevent construction of this sequence length index.
+  \var{ifile} lets you open the database directly from a file object rather
+  than a filename.  If you have a file object, you can pass it directly to BlastDB instead of a filepath.  NB: the BlastDB() constructor will close ifile when it is done reading from the file object.
+  \var{idFilter} allows you to provide a function for re-mapping the FASTA sequence
+  identifiers read from the sequence file.  This can be useful in the case of
+  NCBI FASTA files, since NCBI often treats the sequence ID as a ``blob'' into
+  which any number of database fields can be stuffed, rather than a true ID.
+  \var{blastReady} option specifies whether BLAST index files should be automatically
+  constructed (using \code{formatdb}).  Note, if you attempt to run the \code{blast}()
+  method, it will automatically create the index files for you if they are missing.
+\end{funcdesc}
 
-\item
-skipSeqLenDict: To facilitate the rapid creation of sequence objects (which requires the length of the sequence), it also creates a sequence length index (based on the filepath, in this case 'sp.seqlen' as a Python shelve).  This enables it to avoid actually loading the sequence string into memory each time a sequence object is created; instead it just looks up the sequence length.  While this speeds up access to genomic sequence databases (where each sequence tends to be extremely long), it is unnecessary and slow for databases of short sequences.  Setting skipSeqLenDict option to True, will prevent construction of this sequence length index.
-
-\item
-ifile: if you have a file object, you can pass it directly to BlastDB instead of a filepath.  NB: the BlastDB() constructor will close ifile when it is done reading from the file object.
-
-\end{itemize}
 Useful methods:
 
+\begin{funcdesc}{iter}{}
+  iterate over all IDs in the BLAST database.
+\end{funcdesc}
+
+\begin{funcdesc}{len}{}
+  returns number of sequences in the BLAST database.
+\end{funcdesc}
+
+\begin{funcdesc}{blast}{seq,al=None,blastpath='blastall',blastprog=None,expmax=0.001,maxseq=None}
+  run a BLAST search on sequence object seq.  Maxseq will limit the number of returned hits to the best maxseq hits. 
+\end{funcdesc}
+
+\begin{funcdesc}{megablast}{seq,al=None,blastpath='megablast',expmax=1e-20,maxseq=None,minIdentity
+=None,maskOpts='-U T -F m',rmOpts=''}
+  first performs repeat masking on the sequence by converting repeats to lowercase,
+  then runs megablast with command line options to prevent seeding new alignments
+  within repeats, but allowing extension 
+  of alignments into repeats.  minIdentity should be a number (maximum value, 100)
+  indicating the minimum percent identity for hits to be returned.
+\end{funcdesc}
+
+\begin{funcdesc}{__invert__}{}
+  The invert operator (~, the ``tilde'' character) 
+  enables reverse-mapping of sequence objects to their string ID.
+\begin{verbatim}
+id=(~db)[seq] # GET IDENTIFIER FOR THIS SEQUENCE FROM ITS DATABASE
+\end{verbatim}
+\end{funcdesc}
+
+
+Useful attributes:
 \begin{itemize}
 
 \item
-iter(): iterate over all IDs in the BLAST database.
+\member{seqClass}: the object class to use for instantiating new sequence objects from this BLAST database.  You can set this to create customized sequence behaviors.
 
-\item
-len(): number of sequences in the BLAST database.
+\end{itemize}
 
-\item 
-blast(seq,al=None,blastpath='blastall',blastprog=None,expmax=0.001,maxseq=None): run a BLAST search on sequence object seq.  Maxseq will limit the number of returned hits to the best maxseq hits. 
- 
-\item
-megablast(seq,al=None,blastpath='megablast',expmax=1e-20,maxseq=None,minIdentity
-=None,maskOpts='-U T -F m',rmOpts=''): first performs repeat masking on the sequ
-ence by converting repeats to lowercase, then runs megablast with command line o
-ptions to prevent seeding new alignments within repeats, but allowing extension 
-of alignments into repeats.  minIdentity should be a number (maximum value, 100)indicating the minimum percent identity for hits to be returned.
-
-Useful attributes:
-
-\item
-seqClass: the object class to use for instantiating new sequence objects from this BLAST database.  You can set this to create customized sequence behaviors.
+\subsubsection{FileDBSequence}
+The default class for sequence objects returned from BlastDB.  It provides efficient,
+fast access to sequence slices (subsequences).  When the BlastDB is initially opened,
+Pygr constructs a length and offset index that enables FileDBSequence to \code{seek()}
+to the correct location for any substring of the sequence.  This is a newly implemented
+class to be released in Pygr 0.4.
 
 \subsubsection{BlastSequence}
 
-The default class for sequence objects returned from BlastDB.  It has several optimizations for working with BLAST databases:
+This was previously the default class for sequence objects returned from BlastDB,
+but has been deprecated because we found that NCBI \code{fastacmd} was much too slow
+and consumed enormous amounts of memory.  \class{BlastSequence} relies on
+\code{fastacmd} for ``fast'' access to individual sequence slices.  The advantage is
+that it only requires BLAST database files (produced by Pygr using \code{formatdb}),
+whereas the new \class{FileDBSequence} requires a specially indexed sequence file
+(constructed by default by BlastDB), which may be a disadvantage if you are low
+on disk space.
 
+\class{BlastSequence} has several optimizations for working with BLAST databases:
+
+\begin{itemize}
 \item
 it uses the NCBI tool fastacmd to retrieve sequence efficiently from a BLAST database, when your program requests an actual string of sequence text.  Moreover, for subintervals (slices) of the sequence, it uses fastacmd's -L option to request just the desired subinterval of the sequence, rather than the whole sequence.  This makes it efficient for requesting specific intervals of large genomic contigs.  Basically, just use Python slicing and str() methods on sequence objects, and subsequences will be obtained in an efficient manner.
 
@@ -1932,7 +2051,7 @@ we create a subclass of ProteinSQLSequence to show how Python makes it easy to c
 next we call the protein.objclass() method to inform the table object that it should use our new class for instantiating any row objects for this table.  It will call this class with the usual SQLRow contructor arguments (table, id).
 \end{itemize}
 
-\subsubsection{Sequence Alignment}
+\subsubsection{StoredPathMapping}
 
 A second major area in Pygr is representation and query of multiple sequence alignment databases in a way that is scalable to whole genomes.  We have previously showed (in our work on Partial Order Alignment) that graphs provide both a compact and algorithmically powerful way to store alignments.  Combining this with "interval alignment" makes it scalable and gives a simple interface.  In Pygr, alignments are just another kind of graph, whose nodes are sequence intervals, and edges are alignment relations.  This provides a general-purpose facility for working with sets of sequence intervals, sequence annotation databases, and multiple sequence alignments, all queryable via Pygr graph queries.  We have implemented different container subclasses to work with these data in memory or to work transparently with data stored in relational databases.  The consistency and simplicity of the Pygr framework makes it a good interface both to run external tools like BLAST, and to store or query the results in persistent storage like a MySQL database.
 
@@ -1946,6 +2065,11 @@ for e in MAFStoredPathMapping(bcl2m,'ucsc_maf8',u).edges(): #GET ITS MULTIGENOME
    print str(e.srcPath),str(e.destPath) # PRINT THE ACTUAL ALIGNED SEQUENCE INTERVALS
 \end{verbatim}
 
+Note: {\em We will be unifying all sequence alignment functionality under the 
+NLMSA interface design sometime in the near future.  Specifically, the
+\class{PathMapping} and related classes, while similar to \class{NLMSA},
+will be replaced with interfaces that are identical to the \class{NLMSA}
+interface.}
 
 \subsubsection{SliceDB}
 This class enables you to apply ``slicing information'' from 
@@ -2066,10 +2190,22 @@ a given sequence object is derived from the \class{PrefixUnionDict}
   identifiers.
 \end{funcdesc}
 
-\begin{funcdesc}{getName}{path}
-  For a given sequence object \var{path} derived from the union
+\begin{funcdesc}{__invert__}{}
+  The invert operator (~, the ``tilde'' character) 
+  enables reverse-mapping of sequence objects to their string ID.
+  This is the recommended way to get the ``fully qualified sequence ID'', i.e. with
+  the appropriate prefix prepended. 
+\begin{verbatim}
+id=(~db)[seq] # GET PROPERLY PREFIXED-IDENTIFIER FOR THIS SEQUENCE
+\end{verbatim}
+  For a given sequence object \var{seq} derived from the union
   (or a slice of a sequence from the union), return a string identifier
-  in the form of ``foo.bar''.
+  in the form of ``foo.bar''.  
+\end{funcdesc}
+
+\begin{funcdesc}{getName}{path}
+  This method is deprecated; instead use the \method{__invert__} operator
+  above.
 \end{funcdesc}
 
 \begin{funcdesc}{writeHeaderFile}{filename}
