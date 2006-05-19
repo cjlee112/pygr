@@ -625,24 +625,22 @@ class StoredPathMapping(PathMapping):
 
 class SliceDB(dict):
     'associates an ID with a specific slice of a specific db sequence'
-    def __init__(self,sliceDB,seqDB,convention=0):
+    def __init__(self,sliceDB,seqDB,leftOffset=0,rightOffset=0):
         '''sliceDB must map identifier to a sliceInfo object;
         sliceInfo must have name,start,stop,ori attributes;
         seqDB must map sequence ID to a sliceable sequence object'''
         dict.__init__(self)
         self.sliceDB=sliceDB
         self.seqDB=seqDB
-        self.convention=convention
+        self.leftOffset=leftOffset
+        self.rightOffset=rightOffset
     def __getitem__(self,k):
         try:
             return dict.__getitem__(self,k)
         except KeyError:
             sliceInfo=self.sliceDB[k]
             seq=self.seqDB[sliceInfo.name]
-            if sliceInfo.ori > 0:
-                myslice=seq[sliceInfo.start-self.convention:sliceInfo.stop]
-            else:
-                myslice=seq[sliceInfo.start:sliceInfo.stop] #+self.convention]
+            myslice=seq[sliceInfo.start-self.leftOffset:sliceInfo.stop+self.rightOffset]
             if sliceInfo.ori<0:
                 myslice= -myslice
             self[k]=myslice
