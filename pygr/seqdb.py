@@ -71,6 +71,7 @@ def read_fasta(ifile,onlyReadOneLine=False):
         if '>'==line[0]:
             if id!=None and len(seq)>0:
                 yield id,title,seq
+                seq = ''
             id=line[1:].split()[0]
             title=line[len(id)+2:]
         elif id!=None: # READ SEQUENCE
@@ -225,7 +226,8 @@ class FileDBSequence(BlastSequenceBase):
     seq=FileDBSeqDescriptor()
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
-        return self.db.seqLenDict[self.id][0]
+        #return self.db.seqLenDict[self.id][0]
+        return self.db.seqLenDict[self.id]
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         try:
