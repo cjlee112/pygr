@@ -642,7 +642,7 @@ class SliceDB(dict):
             if sliceInfo.ori > 0:
                 myslice=seq[sliceInfo.start-self.convention:sliceInfo.stop]
             else:
-                myslice=seq[sliceInfo.start:sliceInfo.stop+self.convention]
+                myslice=seq[sliceInfo.start:sliceInfo.stop] #+self.convention]
             if sliceInfo.ori<0:
                 myslice= -myslice
             self[k]=myslice
