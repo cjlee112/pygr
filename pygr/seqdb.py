@@ -226,8 +226,7 @@ class FileDBSequence(BlastSequenceBase):
     seq=FileDBSeqDescriptor()
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
-        #return self.db.seqLenDict[self.id][0]
-        return self.db.seqLenDict[self.id]
+        return self.db.seqLenDict[self.id][0]
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         try:
