@@ -624,8 +624,34 @@ class StoredPathMapping(PathMapping):
     # NEED TO ADD APPROPRIATE HOOKS FOR __iter__, items(), ETC.
 
 
+class SliceDB(dict):
+    'associates an ID with a specific slice of a specific db sequence'
+    def __init__(self,sliceDB,seqDB,convention=0):
+        '''sliceDB must map identifier to a sliceInfo object;
+        sliceInfo must have name,start,stop,ori attributes;
+        seqDB must map sequence ID to a sliceable sequence object'''
+        dict.__init__(self)
+        self.sliceDB=sliceDB
+        self.seqDB=seqDB
+        self.convention=convention
+    def __getitem__(self,k):
+        try:
+            return dict.__getitem__(self,k)
+        except KeyError:
+            sliceInfo=self.sliceDB[k]
+            seq=self.seqDB[sliceInfo.name]
+            if sliceInfo.ori > 0:
+                myslice=seq[sliceInfo.start-self.convention:sliceInfo.stop]
+            else:
+                myslice=seq[sliceInfo.start:sliceInfo.stop+self.convention]
+            if sliceInfo.ori<0:
+                myslice= -myslice
+            self[k]=myslice
+            return myslice
 
 
+
+"""
 class SliceDB(dict):
     'associates an ID with a specific slice of a specific db sequence'
     def __init__(self,sliceDB,seqDB):
@@ -646,6 +672,8 @@ class SliceDB(dict):
                 myslice= -myslice
             self[k]=myslice
             return myslice
+
+"""
 
 
 class VirtualSeq(SeqPath):
