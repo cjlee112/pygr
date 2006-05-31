@@ -1,4 +1,4 @@
-from seqref import *
+from pygr.apps.seqref import *
 
 def runTest():
     """Tests for ReferenceSequence and UnkSequence classes """
@@ -20,3 +20,6 @@ def runTest():
     
     for i in ivals:
         print repr(i),ref[i],repr(ref[i])
+
+if __name__ == "__main__":
+    runTest()

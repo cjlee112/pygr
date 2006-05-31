@@ -1,6 +1,6 @@
 import MySQLdb
 import os
-from pygr.apps.splicegraph import *
+from splicegraph_jan06 import *
 
 spliceCalcs={'hg17_JAN06':
              TableGroup(db='SPLICE_JAN06',suffix='hg17',clusters='cluster_hg17',
@@ -17,9 +17,8 @@ spliceCalcs={'hg17_JAN06':
 
 def getUserCursor(db):
     'get a cursor as the current user'
-    db=MySQLdb.connect(db=db,read_default_file=os.environ['HOME']+'.my.cnf',compress=True)
+    db=MySQLdb.connect(db=db,read_default_file=os.environ['HOME']+'/.my.cnf',compress=True)
     return db.cursor()
-
              
 def getSpliceGraphFromDB(dbgroup,loadAll=False):
     """load data from MySQL using the designated database table group.
@@ -39,7 +38,6 @@ def getSpliceGraphFromDB(dbgroup,loadAll=False):
     # LOAD DATA & BUILD THE SPLICE GRAPH
     return loadSpliceGraph(tables,dbgroup.clusters,dbgroup.exons,dbgroup.splices,
                            dbgroup.genomic,dbgroup.mrna,dbgroup.protein,loadAll)
-
 
 def localCopy(localFile,cpCommand):
     'if not already present on local file location, run cpCommand'
