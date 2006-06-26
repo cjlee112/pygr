@@ -150,7 +150,7 @@ cdef class IntervalDB:
     self.subheader=NULL
     self.im=NULL
 
-    
+    return None
 
 
 
@@ -1123,6 +1123,7 @@ cdef class NLMSASequence:
     db.buildFromUnsortedFile(filename,self.nbuild) # BUILD FROM .build
     db.write_binaries(self.filestem) # SAVE AS IntervalDBFile
     db.close() # DUMP NESTEDLIST FROM MEMORY
+    del db # add for debugging
     import os
     os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
     self.db.open(self.filestem) # NOW OPEN THE IntervalDBFile
