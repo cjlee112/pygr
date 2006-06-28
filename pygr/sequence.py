@@ -634,7 +634,8 @@ class Seq2SeqEdge(object):
     def items(self,**kwargs):
         'get list of (srcPath,destPath) 1:1 matches'
         sf=SeqFilterDict([self.targetPath])
-        si=self.msaSlice.groupByIntervals(filterSeqs=sf,**kwargs)
+        si=self.msaSlice.groupByIntervals(filterSeqs=sf,
+                                          mergeAll=False,**kwargs)
         return self.msaSlice.groupBySequences(si,**kwargs)
     def __iter__(self,sourceOnly=True,**kwargs):
         return iter(self.items(sourceOnly=sourceOnly,**kwargs))
