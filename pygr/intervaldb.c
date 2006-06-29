@@ -97,7 +97,6 @@ int target_qsort_cmp(const void *void_a,const void *void_b)
 }
 
 
-
 SublistHeader *build_nested_list(IntervalMap im[],int n,
 				 int *p_n,int *p_nlists)
 {
@@ -121,7 +120,8 @@ SublistHeader *build_nested_list(IntervalMap im[],int n,
   
   if(nlists==1){
     *p_n=n;
-    return NULL;
+    CALLOC(subheader,1,SublistHeader); /* RETURN A DUMMY ARRAY, SINCE NULL RETURN IS ERROR CODE */
+    return subheader;
   }
   
   CALLOC(subheader,nlists+1,SublistHeader); /* SUBLIST HEADER INDEX */
@@ -275,11 +275,13 @@ SublistHeader *build_nested_list_dynamic(IntervalMap im[],int n,
     for (i=0;i<nlists;i++) /* ADJUST start ADDRESSES FOR SHIFT*/
       subheader[i].start += j; 
     FREE(imsub);
-	 *p_n = j; /* COPY THE COMPRESSED LIST SIZES BACK TO CALLER*/
+    *p_n = j; /* COPY THE COMPRESSED LIST SIZES BACK TO CALLER*/
   }
-  else 
-	 *p_n = n;
-  *p_nlists=nlists;
+  else {  /* NO SUBLISTS: HANDLE THIS CASE CAREFULLY */
+    *p_n = n;
+    CALLOC(subheader,1,SublistHeader); /* RETURN A DUMMY ARRAY, SINCE NULL RETURN IS ERROR CODE */
+  }
+  *p_nlists=nlists; /* RETURN COUNT OF NUMBER OF SUBLISTS */
   return subheader;
  handle_malloc_failure:
   FREE(imsub);  /* FREE ANY MALLOCS WE PERFORMED*/
