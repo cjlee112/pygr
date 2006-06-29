@@ -631,11 +631,11 @@ class Seq2SeqEdge(object):
             except IndexError:
                 raise KeyError('target interval not in msaSlice!')
 
-    def items(self,**kwargs):
+    def items(self,mergeAll=False,**kwargs):
         'get list of (srcPath,destPath) 1:1 matches'
         sf=SeqFilterDict([self.targetPath])
         si=self.msaSlice.groupByIntervals(filterSeqs=sf,
-                                          mergeAll=False,**kwargs)
+                                          mergeAll=mergeAll,**kwargs)
         return self.msaSlice.groupBySequences(si,**kwargs)
     def __iter__(self,sourceOnly=True,**kwargs):
         return iter(self.items(sourceOnly=sourceOnly,**kwargs))
