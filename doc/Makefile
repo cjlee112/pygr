@@ -2,7 +2,7 @@ PWD=$(shell pwd)
 PYTHON=$(shell python)
 TEXINPUTS=$(PWD)/commontex:
 
-MKHOWTO=   TEXINPUTS=$(TEXINPUTS) $(PYHTON) $(PWD)/tools/mkhowto
+MKHOWTO=   TEXINPUTS=$(TEXINPUTS) $(PWD)/tools/mkhowto
 MKHTML = $(MKHOWTO) --html --about html/stdabout.dat \
                 --iconserver icons --favicon icons/pyfav.png \
                 --address $(PYTHONDOCS) 
