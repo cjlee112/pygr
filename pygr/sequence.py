@@ -644,7 +644,7 @@ class Seq2SeqEdge(object):
         'get length of source vs. target interval according to mode'
         return mode(len(self.sourcePath),len(self.targetPath))
 
-    def pIdentity(self,mode=max):
+    def pIdentity(self,mode=max,trapOverflow=True):
         "calculate fractional identity for this pairwise alignment"
         nid=0
         start1=self.sourcePath.start
@@ -657,14 +657,22 @@ class Seq2SeqEdge(object):
             for i in xrange(len(srcPath)):
                 if s1[isrc+i]==s2[idest+i]:
                     nid+=1
-        return nid/float(self.length(mode))
+        x=nid/float(self.length(mode))
+        if trapOverflow and x>1.:
+            raise ValueError('''pIdentity overflow due to multiple hits (see docs)?
+            To avoid this error message, use trapOverflow=False option.''')
+        return x
 
-    def pAligned(self,mode=max):
+    def pAligned(self,mode=max,trapOverflow=True):
         'get fraction of aligned letters for this pairwise alignment'
         nid=0
         for srcPath,destPath in self.items():
             nid+=len(destPath)
-        return nid/float(self.length(mode))
+        x=nid/float(self.length(mode))
+        if trapOverflow and x>1.:
+            raise ValueError('''pAligned overflow due to multiple hits (see docs)?
+            To avoid this error message, use trapOverflow=False option.''')
+        return x
 
 
 
