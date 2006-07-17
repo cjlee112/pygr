@@ -1,3 +1,4 @@
+from __future__ import generators
 import math
 
 # AUTHORS: zfierstadt, leec

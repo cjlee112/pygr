@@ -21,6 +21,13 @@ def runTests():
    sys.path.append(testdir)
    os.environ['PYGRPATH'] = os.path.join(os.getcwd(),"pygr")
 
+   # version check
+   v1, v2 = sys.version_info[:2]
+   if v1 < 2:
+      raise 'pygr does not support python 1.x'
+   if v1 == 2 and v2 < 2:
+      raise 'pygr does not support python2.1 or earlier version'
+
    try:
       import test_loader
    except ImportError:
@@ -71,9 +78,9 @@ metadata = {
     'license': "GPL",
     'platforms': "ALL",
     'url': "http://sourceforge.net/projects/pygr",
-    'download_url': "http://prdownloads.sourceforge.net/pygr/" \
-                    "pygr-%s.tar.gz" % version, 
-    'classifiers': [ c for c in classifiers.split('\n') if c ],
+    #'download_url': "http://prdownloads.sourceforge.net/pygr/" \
+    #                "pygr-%s.tar.gz" % version, 
+    #'classifiers': [ c for c in classifiers.split('\n') if c ],
 
     'py_modules': [
 	"pygr/__init__",
@@ -95,8 +102,12 @@ metadata = {
 	"pygr/apps/splicegraph",
         "pygr/apps/maf2VSgraph",
         ]
-
    }
+
+v1, v2 = sys.version_info[:2]
+if v1 >= 2 and v2 > 2:
+    metadata['download_url'] = "http://prdownloads.sourceforge.net/pygr/pygr-%s.tar.gz" % version
+    metadata['classifiers'] = [ c for c in classifiers.split('\n') if c ]
 
 def runSetup(script_args=None):
    buildExtensions=True

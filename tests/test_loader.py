@@ -5,6 +5,7 @@
 # forward stdout to <leec@chem.ucla.edu> so issues can
 # can be addressed in a timely fashion. Thank you!
 
+from __future__ import generators
 import os
 import sys
 import re

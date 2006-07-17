@@ -1,3 +1,4 @@
+from __future__ import generators
 from seqref import *
 from pygr.seqdb import *
 import string 

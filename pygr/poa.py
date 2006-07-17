@@ -1,4 +1,5 @@
 
+from __future__ import generators
 import types
 from mapping import *
 from sequence import *

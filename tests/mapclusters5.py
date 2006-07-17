@@ -1,4 +1,5 @@
 
+from __future__ import generators
 from pygr.leelabdb import *
 import pygr.coordinator
 

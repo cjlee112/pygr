@@ -1,5 +1,6 @@
 
 
+from __future__ import generators
 from mapping import *
 
 

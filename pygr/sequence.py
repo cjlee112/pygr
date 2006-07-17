@@ -1,4 +1,5 @@
 
+from __future__ import generators
 import types
 from sequtil import *
 
@@ -502,7 +503,8 @@ class SeqPath(object):
                  'A':'T', 'C':'G', 'G':'C', 'T':'A', 'U':'A', 'N':'N'}
     def reverse_complement(self,s):
         'get reverse complement of a string s'
-        return ''.join([self._complement.get(c,c) for c in s[::-1]])
+        #return ''.join([self._complement.get(c,c) for c in s[::-1]])
+        return ''.join([self._complement.get(s[i],s[i]) for i in range(len(s) -1, -1, -1)])
 
     def seqtype(self):
         "Get the sequence type for this sequence"

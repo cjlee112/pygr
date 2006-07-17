@@ -1,3 +1,4 @@
+from __future__ import generators
 from pygr.poa import *
 #from pathquery import *
 

@@ -1,5 +1,6 @@
 
 
+from __future__ import generators
 from schema import *
 
 class PathList(list):
