@@ -636,9 +636,16 @@ class Seq2SeqEdge(object):
     def items(self,mergeAll=False,**kwargs):
         'get list of (srcPath,destPath) 1:1 matches'
         sf=SeqFilterDict([self.targetPath])
-        si=self.msaSlice.groupByIntervals(filterSeqs=sf,
+        si=self.msaSlice.groupByIntervals(filterSeqs=sf, # MASK TO targetPath
                                           mergeAll=mergeAll,**kwargs)
-        return self.msaSlice.groupBySequences(si,**kwargs)
+        l=self.msaSlice.groupBySequences(si,**kwargs)
+        i=0
+        while i<len(l): # CHECK FOR HITS OUTSIDE self.sourcePath
+            if l[i][0] not in self.sourcePath: # SCREEN OUT INAPPROPRIATE HITS
+                del l[i]
+            else: # ADVANCE TO NEXT HIT
+                i+=1
+        return l
     def __iter__(self,sourceOnly=True,**kwargs):
         return iter(self.items(sourceOnly=sourceOnly,**kwargs))
 
@@ -650,9 +657,9 @@ class Seq2SeqEdge(object):
         "calculate fractional identity for this pairwise alignment"
         nid=0
         start1=self.sourcePath.start
-        s1=str(self.sourcePath)
+        s1=str(self.sourcePath).upper()
         start2=self.targetPath.start
-        s2=str(self.targetPath)
+        s2=str(self.targetPath).upper()
         for srcPath,destPath in self.items():
             isrc=srcPath.start-start1
             idest=destPath.start-start2
@@ -664,6 +671,62 @@ class Seq2SeqEdge(object):
             raise ValueError('''pIdentity overflow due to multiple hits (see docs)?
             To avoid this error message, use trapOverflow=False option.''')
         return x
+
+    def longestSegment(self,segment,pIdentityMin=.9,minAlignSize=1,
+                       mode=max,**kwargs):
+        besthit=None
+        for i in xrange(len(segment)):
+            ni=0 # IDENTITY COUNT 
+            nm=0 # MISMATCH COUNT
+            for j in xrange(i,-1,-1):
+                ni+=segment[j][2]
+                l=mode(segment[i][0]+segment[i][2]-segment[j][0],
+                       segment[i][1]+segment[i][2]-segment[j][1])
+                pIdentity=float(ni)/l
+                if pIdentity>=pIdentityMin and (besthit is None or ni+nm>besthit[4]):
+                    besthit=(segment[j][0],segment[i][0]+segment[i][2],
+                             segment[j][1],segment[i][1]+segment[i][2],ni+nm)
+                nm+=segment[j][3]
+        if besthit[4]>=minAlignSize:
+            print 'longestSegment',minAlignSize,besthit
+            return besthit[:4]
+        else:
+            return None
+
+    def conservedSegment(self,**kwargs):
+        "calculate fractional identity for this pairwise alignment"
+        start1=self.sourcePath.start
+        s1=str(self.sourcePath).upper()
+        start2=self.targetPath.start
+        s2=str(self.targetPath).upper()
+        i1=None
+        segment=[]
+        n=0
+        for srcPath,destPath in self.items(): # FIND UNBROKEN IDENTITY SEGMENTS
+            isrc=srcPath.start-start1
+            idest=destPath.start-start2
+            for i in xrange(len(srcPath)):
+                if s1[isrc+i]==s2[idest+i]: # EXACT MATCH
+                    if i1 is None: # START NEW IDENTITY-SEGMENT
+                        seg1,i1=isrc+i,isrc+i
+                        seg2,i2=idest+i,idest+i
+                    elif i1+1!=isrc+i or i2+1!=idest+i: # NOT CONTIGUOUS, SO BREAK
+                        segment.append((seg1+start1,seg2+start2,i1+1-seg1,n))
+                        n=0 # RESET MISMATCH COUNT
+                        seg1,i1=isrc+i,isrc+i
+                        seg2,i2=idest+i,idest+i
+                    else:
+                        i1=isrc+i
+                        i2=idest+i
+                else: # MISMATCH
+                    if i1 is not None: # BREAK PREVIOUS SEGMENT
+                        segment.append((seg1+start1,seg2+start2,i1+1-seg1,n))
+                        i1=None
+                        n=0 # RESET MISMATCH COUNT
+                    n+=1 # COUNT MISMATCH
+        if i1 is not None:
+            segment.append((seg1+start1,seg2+start2,i1+1-seg1,n))
+        return self.longestSegment(segment,**kwargs)
 
     def pAligned(self,mode=max,trapOverflow=True):
         'get fraction of aligned letters for this pairwise alignment'
