@@ -640,8 +640,11 @@ cdef class NLMSASlice:
         filterSeqs not None
       - ivalMethod: a function to process the list of intervals
         for each sequence (it can merge or split them in any way
-        it wants)'''
-    cdef int i,j,n,gap,insert,targetStart,targetEnd
+        it wants)
+      - pAlignedMin: a fractional minimum alignment threshold e.g. (0.9)
+      - pIdentityMin: a fractional minimum identity threshold e.g. (0.9)
+      '''
+    cdef int i,j,n,gap,insert,targetStart,targetEnd,targetID,start,end
     cdef NLMSA nl
     if mergeMost: # BE REASONABLE: DON'T MERGE A WHOLE CHROMOSOME
       maxgap=10000
@@ -653,23 +656,26 @@ cdef class NLMSASlice:
     for i from 0 <= i < self.n: # LIST INTERVALS FOR EACH TARGET
       if nl.seqlist.is_lpo(self.im[i].target_id):
         continue # IT IS AN LPO, SO SKIP IT
+      start=self.im[i].start
+      end=self.im[i].end
       targetStart=self.im[i].target_start
       targetEnd=self.im[i].target_end
       if filterSeqs is not None: # CLIP TARGET SEQ INTERVAL
         target=nl.seqInterval(self.im[i].target_id,targetStart,targetEnd)
         try:
           target=filterSeqs[target] # PERFORM CLIPPING
-          targetStart=target.start  # GET COORDS OF CLIPPED REGION
+          start=start+target.start-targetStart # CLIP SOURCE SEQUENCE
+          end=end+target.stop-targetEnd
+          targetStart=target.start  # GET COORDS OF CLIPPED TARGET
           targetEnd=target.stop
         except KeyError: # NO OVERLAP IN filterSeqs, SO SKIP
           continue
       try: # ADD INTERVAL TO EXISTING LIST
         seqIntervals[self.im[i].target_id] \
-             .append([self.im[i].start,self.im[i].end,
-                      targetStart,targetEnd])
+             .append([start,end,targetStart,targetEnd])
       except KeyError: # CREATE A NEW LIST FOR THIS TARGET
         seqIntervals[self.im[i].target_id]= \
-           [[self.im[i].start,self.im[i].end,targetStart,targetEnd]]
+           [[start,end,targetStart,targetEnd]]
 
     for i,l in seqIntervals.iteritems(): # MERGE INTERVALS FOR EACH SEQ
       if ivalMethod is not None: # USER-SUPPLIED GROUPING FUNCTION
@@ -693,7 +699,58 @@ cdef class NLMSASlice:
           l[n][1]=l[j][1]
           l[n][3]=l[j][3]
       del l[n+1:] # DELETE REMAINING UNMERGED INTERVALS
+    # SEQUENCE MASKING BY CONSERVATION OR %ALIGNED CONSTRAINT
+    if 'pAlignedMin' in kwargs or 'pIdentityMin' in kwargs or \
+           'minAlignSize' in kwargs or 'maxAlignSize' in kwargs:
+      self.filterIvalConservation(seqIntervals,**kwargs)
     return seqIntervals
+
+  def conservationFilter(self,seq,m,pIdentityMin=None,
+                         minAlignSize=None,maxAlignSize=None,**kwargs):
+    if minAlignSize is not None and m[1]-m[0]<minAlignSize:
+      return None
+    if maxAlignSize is not None and m[1]-m[0]>maxAlignSize:
+      return None
+    seqEdge=sequence.Seq2SeqEdge(self,sequence.absoluteSlice(seq,m[2],m[3]),
+                                 sequence.absoluteSlice(self.seq,m[0],m[1]))
+    if pIdentityMin is not None:
+      return seqEdge.conservedSegment(pIdentityMin=pIdentityMin,
+                                      minAlignSize=minAlignSize,**kwargs)
+    return m
+##     if pAlignedMin is not None and seqEdge.pAligned()<pAlignedMin:
+##       return False # INTERVAL FAILED ALIGNMENT THRESHOLD, SO REMOVE IT
+##     if pIdentityMin is not None and seqEdge.pIdentity()<pIdentityMin:
+##       return False # INTERVAL FAILED CONSERVATION THRESHOLD, SO REMOVE IT
+##     return True
+
+  def filterIvalConservation(self,seqIntervals,pIdentityMin=None,
+                             filterFun=None,**kwargs):
+    cdef int i,j,targetID
+    cdef NLMSA nl
+    import types
+    if filterFun is None:
+      filterFun=self.conservationFilter
+    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+    pIdentityMin0=pIdentityMin
+    for targetID,l in seqIntervals.items(): # MERGE INTERVALS FOR EACH SEQ
+      seq=nl.seqlist.getSeq(targetID) # GET THE SEQUENCE OBJECT
+      if not isinstance(pIdentityMin0,types.FloatType):
+        try:
+          pIdentityMin=pIdentityMin0[seq] # LOOK UP DESIRED IDENTITY FOR THIS SEQ
+        except KeyError:
+          del seqIntervals[targetID] # SO REMOVE TARGET ENTIRELY
+          continue # NO NEED TO PROCESS THIS TARGET ANY FURTHER
+      j=0
+      for i from 0 <= i <len(l): # CHECK EACH INTERVAL FOR CONSERVATION THRESHOLD
+        newIval=filterFun(seq,l[i],pIdentityMin=pIdentityMin,**kwargs)
+        if newIval is None:
+          continue # l[i] FAILED FILTER CRITERIA, SO SKIP IT
+        l[j]=newIval # COMPACT THE ARRAY: KEEP newIval IN LOCATION j
+        j=j+1 # KEEP THIS ARRAY ENTRY, SO INCREMENT COUNT OF ENTRIES
+      if j==0: # NO INTERVALS FOR THIS SEQUENCE SURVIVED MASKING
+        del seqIntervals[targetID] # SO REMOVE TARGET ENTIRELY
+      elif j<i: # SOME INTERVALS REMOVED, SO SHRINK ITS LIST
+        del l[j:] # JUST TRUNCATE THE LIST TO ENTRIES THAT PASSED
 
   def groupBySequences(self,seqIntervals,sourceOnly=False,
                        indelCut=False,seqGroups=None,minAligned=1,
@@ -1123,7 +1180,6 @@ cdef class NLMSASequence:
     db.buildFromUnsortedFile(filename,self.nbuild) # BUILD FROM .build
     db.write_binaries(self.filestem) # SAVE AS IntervalDBFile
     db.close() # DUMP NESTEDLIST FROM MEMORY
-    del db # add for debugging
     import os
     os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
     self.db.open(self.filestem) # NOW OPEN THE IntervalDBFile
