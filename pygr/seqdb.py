@@ -782,6 +782,34 @@ class PrefixDictInverse(object):
         except KeyError:
             raise KeyError('seq not in PrefixUnionDict')
 
+
+class PrefixUnionMemberDict(dict):
+    'd[prefix]=value; d[k] returns value if k is a member of prefix'
+    def __init__(self,puDict,default=None,attrMethod=lambda x:x.pathForward.db):
+        dict.__init__(self)
+        self.puDict=puDict
+        self._attrMethod=attrMethod
+        if default is not None:
+            self.default=default
+    def possibleKeys(self):
+        for k in self.puDict.prefixDict:
+            yield k
+    def __setitem__(self,k,v):
+        try:
+            dict.__setitem__(self,self.puDict.prefixDict[k],v)
+        except KeyError:
+            raise KeyError('key must be a valid union prefix string!')
+    def __getitem__(self,k):
+        try:
+            return dict.__getitem__(self,self._attrMethod(k))
+        except AttributeError:
+            raise TypeError('wrong key type? _attrMethod() failed.')
+        except KeyError:
+            try: # RETURN A DEFAULT VALUE IF WE HAVE ONE
+                return self.default
+            except AttributeError:
+                raise KeyError('key not a member of this union!')
+
 class PrefixUnionDict(object):
     """union interface to a series of dicts, each assigned a unique prefix
        ID 'foo.bar' --> ID 'bar' in dict f associated with prefix 'foo'."""
@@ -792,7 +820,7 @@ class PrefixUnionDict(object):
         if filename is not None: # READ UNION HEADER FILE
             ifile=file(filename)
             it=iter(ifile)
-            separator=it.next()[:-1] # DROP TRAILING CR
+            separator=it.next().strip('\r\n') # DROP TRAILING CR
             prefixDict={}
             for line in it:
                 prefix,filepath=line.strip().split('\t')[:2]
@@ -844,6 +872,10 @@ class PrefixUnionDict(object):
         "return fully qualified ID i.e. 'foo.bar'"
         path=path.pathForward
         return self.dicts[path.db]+self.separator+path.id
+
+    def newMemberDict(self,**kwargs):
+        'return a new member dictionary (empty)'
+        return PrefixUnionMemberDict(self,**kwargs)
 
     def writeHeaderFile(self,filename):
         'save a header file for this union, to reopen later'
