@@ -338,7 +338,7 @@ The actual alignment database query is performed in \code{printResults}:
 
 \begin{verbatim}
 from pygr import cnestedlist
-msa=cnestedlist.NLMSA('/usr/tmp/ucscDB/mafdb','r') # OPEN THE ALIGNMENT DB
+msa=cnestedlist.NLMSA('/usr/tmp/ucscDB/mafdb') # OPEN THE ALIGNMENT DB
 
 def printResults(prefix,msa,site,altID='NULL',cluster_id='NULL',dbUnion=None):
     'get alignment of each genome to site, print %identity and %aligned'
@@ -391,14 +391,30 @@ the \method{edges} method. (See the \class{NLMSASlice} documentation for
 further information).
 
 \item
+Pygr provides convenient query options for specifying precisely how regions
+of alignment should be ``grouped'' together (e.g. treat alignment intervals
+separated by indels up to a certain size as being a {\em single} alignment
+region) or filtered (e.g. require a certain level of conservation over some
+minimum size of alignment region).  Here's an example:
+\begin{verbatim}
+results=msa[site].edges(maxgap=1,maxinsert=1,
+                        minAlignSize=14,pIdentityMin=0.9)
+\end{verbatim}
+This example groups together any number of alignment intervals separated by indels
+of at most one in length, and then filters these alignment regions to
+just those (sub)regions that have at least 90\% sequence identity over
+a region of at least 14 residues in length.
+
+\item
 \code{src[:2]} and \code{dest[:2]} print the first two nucleotides
 of the site in \code{gene} and in the aligned genome.
 
 \item
 it's worth noting that the actual sequence string comparisons are being
-done using a completely different database mechanism (NCBI's \code{fastacmd}),
+done using a completely different database mechanism (either Pygr's
+simple \code{pureseq} text format, or (before release 0.5) NCBI's \code{fastacmd}),
 not the \code{cnestedlist} database.  Basically, each genome is being queried
-as a separate BLAST formatted database, represented in Pygr by the
+as a separate sequence database, represented in Pygr by the
 \class{BlastDB} class.  Pygr makes this complex set of multi-database
 operations more or less transparent to the user.
 For further information, see the \class{BlastDB} documentation.  
@@ -1210,6 +1226,14 @@ object (see Alignment Module below).
   in the two intervals.
 \end{funcdesc}
 
+\begin{funcdesc}{conservedSegment}{pIdentityMin=.9,minAlignSize=1,mode=max}
+  Return the longest alignment interval (possibly including gaps) with
+  a \%identity fraction higher than \var{pIdentityMin}.  If there is no
+  such interval, or the longest such interval
+  is shorter than \var{minAlignSize}, it returns \var{None}.  The interval
+  is returned as a tuple of integers \code{(srcStart,srcEnd,destStart,destEnd)}.
+\end{funcdesc}
+
 {\em Warning}: if your query sequence has multiple mappings in the alignment
 (i.e. it is aligned to two or more different regions in the alignment),
 \method{pIdentity}() and \method{pAligned}() may return fractions larger
@@ -1223,9 +1247,10 @@ individually for each specific mapping.  For more
 background on this problem, see ``Multiple Mappings'', below.
 
 Note that the presence of multiple mappings is {\em not} a Pygr bug,
-but simply reflects the alignment data loaded into Pygr; if the input
-alignment contains multiple mappings, there is nothing that Pygr can
-do to make this problem magically vanish.
+but simply reflects the alignment data loaded into Pygr.  \class{Seq2SeqEdge}
+should be able to avoid this problem mostly, beginning with release 0.6.
+(It tries to screen out hits not consistent with the specific region-region
+mapping stored with this edge).
 
 \subsubsection{SeqFilterDict}
 This dict-like class provides a simple way for masking a set of sequences
@@ -1630,7 +1655,7 @@ dictionary interface in several ways:
 \end{funcdesc}
 
 
-\begin{funcdesc}{keys}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeAll=False, ivalMethod=None, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs}
+\begin{funcdesc}{keys}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeAll=False, minAlignSize=None, pIdentityMin=None, ivalMethod=None, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0.,seqMethod=None, **kwargs}
   Provides a more general interface than {\em iter()}, with two types of 
   group-by capabilities, ``group-by'' operations on the alignment intervals
   contained within this slice (``horizontal'' grouping), 
@@ -1672,6 +1697,16 @@ dictionary interface in several ways:
 d=sequence.SeqFilterDict(someIntervals)
 overlap=d[ival] # RETURNS INTERSECTION BETWEEN ival AND someIntervals, OR KeyError
 \end{verbatim}
+  \var{minAlignSize} if not None, sets a minimum size for filtering the resulting
+  alignment regions.  Regions smaller than the specified size will be culled
+  from the output.  
+  \var{pIdentityMin} if not None, sets a minimum fractional sequence identity
+  for filtering the resulting alignment regions.  Regions with lower levels
+  of identity will be clipped from the output.  Specifically, within each
+  region, the largest contiguous segment (possibly including indels, if
+  permitted by \var{maxgap} and \var{maxinsert}) whose sequence identity is above the
+  threshold will be returned (but only if it is larger than \var{minAlignSize}
+  if set).  
   \var{ivalMethod},
   if not None, allows the user to provide a Python function that performs
   interval grouping.  Specifically it is called as
@@ -1798,6 +1833,27 @@ graph corresponding to this slice.  For details, see NLMSASliceLetters, below.
   mapping of a source sequence interval onto a target sequence interval.
   This dictionary is the primary input to the \method{groupBySequences()}
   method below.
+\end{funcdesc}
+
+\begin{funcdesc}{filterIvalConservation}{seqIntervals,pIdentityMin=None,filterFun=None,**kwargs}
+  This method is used by \method{groupByIntervals}() to filter the results
+  using the specified \var{filterFun} filter function, which should either
+  return \var{None} if the specified alignment region does not pass the filter,
+  or return the filtered interval.  For an example
+  filter function, see \method{conservationFilter}, which is used by default 
+  in \method{filterIvalConservation}.  \var{seqIntervals} must be passed in
+  the same format as expected by \method{groupBySequences}; it is modified in
+  place by \method{filterIvalConservation}, which always returns \var{None}.
+\end{funcdesc}
+
+\begin{funcdesc}{conservationFilter}{seq,m,pIdentityMin=None,minAlignSize=None,maxAlignSize=None,**kwargs}
+  Tests an alignment mapping \var{m} for the specified size and sequence 
+  identity criteria.  Returns the (possibly clipped) interval \var{m} if
+  the criteria are met, and \var{None} if the criteria are not met.  \var{m}
+  is expected to be a tuple of integers \code{(srcStart,srcEnd,destStart,destEnd)}.
+  \var{seq} must be the destination sequence object (sliceable by the destination
+  interval coordinates).  The conservation criteria and clipping are performed
+  using \method{Seq2SeqEdge.conservedSegment}().
 \end{funcdesc}
 
 \begin{funcdesc}{groupBySequences}{seqIntervals, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs}
@@ -2281,6 +2337,42 @@ id=(~db)[seq] # GET PROPERLY PREFIXED-IDENTIFIER FOR THIS SEQUENCE
   file can be used for later reopening the prefix-union
   in a single step.
 \end{funcdesc}
+
+\begin{funcdesc}{newMemberDict}{}
+  Returns a new member dictionary for testing membership in
+  the distinct prefix groups.  See \class{PrefixUnionMemberDict}.
+\end{funcdesc}
+
+\subsubsection{PrefixUnionMemberDict}
+Implements membership testing on distinct prefix groups.  Specifically,
+you can bind a given prefix to a value
+\begin{verbatim}
+d['prefix1']=value
+\end{verbatim}
+then test whether a given object \var{k} is a member of any of the
+prefix groups in the dictionary:
+\begin{verbatim}
+v=d[k] # raises KeyError if k not a member of 'prefix1' or other prefix group in d
+\end{verbatim}
+
+\begin{funcdesc}{__init__}{puDict,default=None,attrMethod=lambda x:x.pathForward.db}
+  \var{puDict} must be a \class{PrefixUnionDict}, whose prefix groups constitute the
+  allowed possible key groups for this membership dictionary.  \var{default}
+  provides a default value to apply to any key whose prefix has not been explicitly
+  given a value in this dictionary.  If no \var{default} is set, this dictionary
+  will raise a \code{KeyError} for any key whose prefix has not been 
+  explicitly given a value in this dictionary.
+  \var{attrMethod} specifies a method for obtaining
+  the actual prefix container object from a given member key object.  The default
+  \var{attrMethod} treats the key as a sequence object and tries to determine what
+  database container it is from.
+\end{funcdesc}
+
+\begin{funcdesc}{possibleKeys}{}
+  Returns an iterator for the key values (prefix strings) that are allowed for 
+  this dictionary, obtained from the bound \class{PrefixUnionDict}.
+\end{funcdesc}
+
 
 \subsubsection{Functions}
 The seqdb module also provides several convenience functions:
