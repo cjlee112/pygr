@@ -47,25 +47,41 @@ int save_interval(IntervalMap *im,int start,int stop,int iseq,int istart,int ist
 
 
 int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
-		  int lpoStart,int *p_block_len,FILE *ifile,int maxseq)
+		  int lpoStart,int *p_block_len,FILE *ifile,int maxseq,
+		  long long linecode_count[],int *p_has_continuation)
 {
   int i,start,seqStart,junk,iseq= -1,max_len=0,seqLength,newline=1,l,extend=0;
-  char *p,tmp[32768],seq[32768],prefix[8],seqName[64],oriFlag[8];
+  unsigned char tmp[32768]; /* MUST USE UNSIGNED ARITHMETIC FOR linecode_count[] INDEXING! */
+  char *p,seq[32768],prefix[8],seqName[64],oriFlag[8];
+  if (p_has_continuation) /* DEFAULT: NO CONTINUATION */
+    *p_has_continuation = 0;
   while ((p=fgets(tmp,32767,ifile))) {
     l=strlen(tmp);
     if (newline ) {
-      if (7==sscanf(tmp,"%2s %63s %d %d %2s %d %s",prefix,seqName,&seqStart,&junk,
-		    oriFlag,&seqLength,seq) && 's'==prefix[0] && '\0'==prefix[1]) {
-/* 	printf("%s,%d,%s,%d\n",seqName,seqStart,oriFlag,seqLength); */
-	iseq=findseqID(seqName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
-	if (iseq<0) 
-	  fprintf(stderr," *** WARNING: Unknown sequence %s ignored...\n",seqName);
-	if (0==strcmp("-",oriFlag))
-	  seqStart= -(seqLength-seqStart); /* CALCULATE NEGATIVE INDEX INDICATING REVERSE STRAND*/
-	extend=0; /* START OF A NEW LPO LINE */
+      if ('s'==tmp[0] && isspace(tmp[1])) { /* READ SEQUENCE ALIGNMENT LINE */
+	if (7==sscanf(tmp,"%2s %63s %d %d %2s %d %s",prefix,seqName,&seqStart,&junk,
+		      oriFlag,&seqLength,seq)) {
+	  /* 	printf("%s,%d,%s,%d\n",seqName,seqStart,oriFlag,seqLength); */
+	  iseq=findseqID(seqName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
+	  if (iseq<0) 
+	    fprintf(stderr," *** WARNING: Unknown sequence %s ignored...\n",seqName);
+	  if (0==strcmp("-",oriFlag))
+	    seqStart= -(seqLength-seqStart); /* CALCULATE NEGATIVE INDEX INDICATING REVERSE STRAND*/
+	  extend=0; /* START OF A NEW LPO LINE */
+	}
+	else /* WRONG FORMAT??!? COMPLAIN TO THE USER */
+	  fprintf(stderr," *** WARNING: Incorrectly formated alignment line ignored:\n%s\n",
+		  tmp);
       }
-      else
+      else if ('a'==tmp[0]) { /* START OF A NEW ALIGNMENT BLOCK */
+	if (p_has_continuation) /* RETURN SIGNAL THAT THIS IS A NEW CONTINUATION */
+	  *p_has_continuation = 1;
 	break;
+      }
+      else if (linecode_count) { /* COUNT UNEXPECTED LINES OF DIFFERENT TYPES */
+	linecode_count[tmp[0]]++;
+	iseq= -1; /* DO NOT PROCESS THIS LINE AS SEQUENCE ALIGNMENT LINE! */
+      }
     }
 
     if (tmp[l-1]=='\n') /* CHECK FOR START OF NEW LINE FOLLOWING...*/
