@@ -3,6 +3,7 @@ cdef extern from "string.h":
   ctypedef int size_t
   void *memcpy(void *dst,void *src,size_t len)
   void *memmove(void *dst,void *src,size_t len)
+  void *memset(void *b,int c,size_t len)
 
 cdef extern from "stdlib.h":
   void free(void *)
@@ -100,7 +101,8 @@ cdef extern from "apps/maf2nclist.h":
     int nlmsa_id
 
   int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
-                    int lpoStart,int *p_block_len,FILE *ifile,int maxseq)
+                    int lpoStart,int *p_block_len,FILE *ifile,int maxseq,
+                    long long linecode_count[],int *p_has_continuation)
   int seqnameID_qsort_cmp(void *void_a,void *void_b)
   int seqidmap_qsort_cmp(void *void_a,void *void_b)
   void free_seqnames(SeqNameID_T seqnames[],int n)

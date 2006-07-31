@@ -1528,13 +1528,16 @@ cdef class NLMSA:
     cdef IntervalMap im[4096],im_tmp
     cdef NLMSASequence ns_lpo,ns # ns IS OUR CURRENT UNION
     cdef FILE *build_ifile[4096]
-    cdef int nbuild[4096]
+    cdef int nbuild[4096],has_continuation
+    cdef long long linecode_count[256]
 
     ns_lpo=self.seqlist[self.lpo_id] # OUR INITIAL LPO
     self.seqname_alloc(seqnames,ns_lpo.id)
     nseq=1
     nseq0=1
     nseq1=1
+    memset(linecode_count,0,sizeof(linecode_count))
+    has_continuation=0
 
     nseq0=len(self.seqDict) # GET TOTAL #SEQUENCES IN ALL DATABASES
     seqidmap=<SeqIDMap *>calloc(nseq0,sizeof(SeqIDMap)) # ALLOCATE ARRAY
@@ -1557,9 +1560,9 @@ cdef class NLMSA:
         raise IOError('%s: not a MAF file? Bad format.' % filename)
       p=fgets(tmp,32767,ifile) # READ THE FIRST LINE OF THE MAF FILE
       while p: # GOT ANOTHER LINE TO PROCESS
-        if 0==strncmp(tmp,a_header,2): # ALIGNMENT HEADER: READ ALIGNMENT
+        if has_continuation or 0==strncmp(tmp,a_header,2): # ALIGNMENT HEADER: READ ALIGNMENT
           n=readMAFrecord(im,0,seqidmap,nseq0,ns_lpo.length, # READ ONE MAF BLOCK
-                          &block_len,ifile,4096)
+                          &block_len,ifile,4096,linecode_count,&has_continuation)
           if n<0: # UNRECOVERABLE ERROR OCCURRED...
             raise ValueError('MAF block too long!  Increase max size')
           elif n==0:
@@ -1610,6 +1613,10 @@ cdef class NLMSA:
         p=fgets(tmp,32767,ifile) # TRY TO READ ANOTHER LINE...
       fclose(ifile) # CLOSE THIS MAF FILE
 ##     print 'nbuild[0]',ns_lpo.nbuild
+    for i from 0 <= i <256: # PRINT WARNINGS ABOUT NON-ALIGNMENT LINES
+      if linecode_count[i]>0:
+        print "warning: non-alignment text lines ignored: prefix %s, count %d" \
+              % (chr(i),linecode_count[i])
     for i from 0 <= i <nseq0: # INDEX SEQUENCES THAT WERE ALIGNED
       if seqidmap[i].nlmsa_id>0: # ALIGNED, SO RECORD IT
         self.seqs.saveSeq(seqidmap[i].id,seqidmap[i].ns_id,seqidmap[i].offset,

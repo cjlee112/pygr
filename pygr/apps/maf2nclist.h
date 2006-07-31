@@ -16,7 +16,8 @@ typedef struct {
 
 
 extern int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
-		  int lpoStart,int *p_block_len,FILE *ifile,int maxseq)
+			 int lpoStart,int *p_block_len,FILE *ifile,int maxseq,
+			 long long linecode_count[],int *p_has_continuation)
      ;
 
 extern int seqnameID_qsort_cmp(const void *void_a,const void *void_b)
