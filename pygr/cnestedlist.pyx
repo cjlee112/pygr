@@ -1610,7 +1610,8 @@ cdef class NLMSA:
 
           ns_lpo.saveInterval(im,n,1,ns_lpo.build_ifile) # SAVE LPO -> SEQ
           ns_lpo.nbuild=ns_lpo.nbuild+n # INCREMENT COUNT OF SAVED INTERVALS
-        p=fgets(tmp,32767,ifile) # TRY TO READ ANOTHER LINE...
+        if not has_continuation:
+          p=fgets(tmp,32767,ifile) # TRY TO READ ANOTHER LINE...
       fclose(ifile) # CLOSE THIS MAF FILE
 ##     print 'nbuild[0]',ns_lpo.nbuild
     for i from 0 <= i <256: # PRINT WARNINGS ABOUT NON-ALIGNMENT LINES
