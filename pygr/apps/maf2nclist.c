@@ -84,7 +84,7 @@ int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
       }
     }
 
-    if (tmp[l-1]=='\n') /* CHECK FOR START OF NEW LINE FOLLOWING...*/
+    if (tmp[l-1]=='\n' || tmp[l-1]=='\r') /* CHECK FOR START OF NEW LINE FOLLOWING...*/
       newline=1;
     else
       newline=0;
