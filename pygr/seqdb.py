@@ -5,6 +5,30 @@ from sqlgraph import *
 from poa import *
 from parse_blast import *
 
+
+def tryPathList(filepath,pathlist,mode='r'):
+    'return successful path based on trying pathlist locations'
+    def tryopen(mypath):
+        myfile=file(mypath,mode)
+        myfile.close()
+        return mypath
+    try: # JUST TRY filepath
+        return tryopen(filepath)
+    except IOError:
+        pass
+    if pathlist is None: # TREAT AS EMPTY LIST
+        pathlist=[]
+    import os.path
+    b=os.path.basename(filepath)
+    for s in pathlist: # NOW TRY EACH DIRECTORY IN pathlist
+        try:
+            return tryopen(os.path.join(s,b))
+        except IOError:
+            pass
+    raise IOError('unable to open %s from any location in %s'
+                  %(filepath,pathlist))
+
+
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
     def __init__(self,table,id):
@@ -814,7 +838,7 @@ class PrefixUnionDict(object):
     """union interface to a series of dicts, each assigned a unique prefix
        ID 'foo.bar' --> ID 'bar' in dict f associated with prefix 'foo'."""
     def __init__(self,prefixDict=None,separator='.',filename=None,
-                 dbClass=BlastDB):
+                 dbClass=BlastDB,trypath=None):
         '''can either be created using prefixDict, or a header file
         for a previously created PrefixUnionDict'''
         if filename is not None: # READ UNION HEADER FILE
@@ -824,7 +848,12 @@ class PrefixUnionDict(object):
             prefixDict={}
             for line in it:
                 prefix,filepath=line.strip().split('\t')[:2]
-                prefixDict[prefix]=dbClass(filepath)
+                try:
+                    prefixDict[prefix]=dbClass(tryPathList(filepath,trypath))
+                except IOError:
+                    raise IOError('''unable to open database %s: check path or privileges.
+Set trypath to give a list of directories to search.'''
+                                  % filepath)
             ifile.close()
         self.separator=separator
         self.prefixDict=prefixDict
