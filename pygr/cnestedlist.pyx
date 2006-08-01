@@ -1420,7 +1420,8 @@ cdef class FilePtrPool:
 cdef class NLMSA:
   'toplevel interface to NLMSA storage of an LPO alignment'
   def __new__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
-              maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666):
+              maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666,
+              trypath=None):
     try:
       import resource # WE MAY NEED TO OPEN A LOT OF FILES...
       resource.setrlimit(resource.RLIMIT_NOFILE,(maxOpenFiles,-1))
@@ -1439,7 +1440,8 @@ cdef class NLMSA:
       if self.seqDict is None:
         import seqdb
         try: # SEE IF THERE IS A UNION HEADER FILE FOR pathstem.seqDict
-          self.seqDict=seqdb.PrefixUnionDict(filename=pathstem+'.seqDict')
+          self.seqDict=seqdb.PrefixUnionDict(filename=pathstem+'.seqDict',
+                                             trypath=trypath)
         except IOError:
           raise ValueError('you must pass a seqDict, or valid header file %s'
                            % (pathstem+'.seqDict'))
