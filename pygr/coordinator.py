@@ -11,17 +11,22 @@ def get_hostname(host=None):
     import socket
     if host is None:
         host=socket.gethostname()
-    return socket.gethostbyaddr(host)[0]
+    try:
+        return socket.gethostbyaddr(host)[0]
+    except socket.herror: # DNS CAN'T RESOLVE HOSTNAME
+        return host # JUST USE HOSTNAME AS REPORTED BY gethostname()
 
-def get_server(host,port):
+def get_server(host,port,logRequests=False):
     "start xmlrpc server on requested host:port"
     import SimpleXMLRPCServer
     import socket
+    if host is None: # FOR CREATING XMLRPC SERVER, USE localhost BY DEFAULT
+        host='localhost'
     maxport=port+50
     while port<maxport:
         try: # TRY TO FIND AN OPEN PORT
             server=SimpleXMLRPCServer.SimpleXMLRPCServer((host,port),
-                                                         logRequests=False)
+                                                         logRequests=logRequests)
             break
         except socket.error: # KEEP TRYING MORE PORTS
             port += 1
@@ -189,7 +194,34 @@ class CoordinatorInfo(object):
 class HostInfo(ObjectFromString):
     _attrtype={'maxload':float}
 
-
+class XMLRPCServerBase(object):
+    xmlrpc_methods={'methodCall':0}
+    max_tb=10
+    _dispatch=safe_dispatch # RESTRICT XMLRPC TO JUST THE METHODS LISTED ABOVE
+    def __init__(self,name,host=None,port=5000,logRequests=False):
+        self.name=name
+        self.server,self.port = get_server(host,port,logRequests)
+        self.server.register_instance(self)
+        self.objDict={}
+    def __setitem__(self,name,obj):
+        'add a new object to serve'
+        self.objDict[name]=obj
+    def __delitem__(self,name):
+        del self.objDict[name]
+    def methodCall(self,objname,methodname,args):
+        'run the named method on the named object and return its result'
+        try:
+            obj=self.objDict[objname]
+            if methodname in obj.xmlrpc_methods:
+                m=getattr(obj,methodname)
+        except KeyError,AttributeError:
+            return '' # RETURN FAILURE CODE
+        return m(*args) # RUN THE OBJECT METHOD
+    def serve_forever(self):
+        'launch the XMLRPC service.  Never exits.'
+        detach_as_demon_process(rc_server)
+        serve_forever(self)
+        
 class ResourceController(object):
     """Centralized controller for getting resources and rules for
     making them.
