@@ -926,3 +926,54 @@ Set trypath to give a list of directories to search.'''
         for db in self.dicts:
             n+=len(db)
         return n
+
+
+class BlastDBXMLRPC(BlastDB):
+    xmlrpc_methods={"getSeqLen":0,"strslice":0}
+    def getSeqLen(self,id):
+        try:
+            return len(self[id]) 
+        except KeyError:
+            return -1  # SEQUENCE OBJECT DOES NOT EXIST
+    def strslice(self,id,start,stop):
+        'return string sequence for specified interval in the specified sequence'
+        if start<0: # HANDLE NEGATIVE ORIENTATION
+            return str((-(self[id]))[-stop:-start])
+        else: # POSITIVE ORIENTATION
+            return str(self[id][start:stop])
+
+
+
+    
+class XMLRPCSequence(SequenceBase):
+    "Represents a sequence in a blast database, w/o keeping seq in memory"
+    def __init__(self,db,id,length):
+        self.db=db
+        self.id=id
+        self.length=length
+        SequenceBase.__init__(self)
+    def strslice(self,start,end):
+        "Efficient access to slice of a sequence, useful for huge contigs"
+        return self.db.strslice(self.id,start,end)
+    def __len__(self):
+        return self.length
+
+class XMLRPCSequenceDB(dict):
+    def __init__(self,url,name):
+        import xmlrpclib
+        self.server=xmlrpclib.ServerProxy(url)
+        self.url=url
+        self.name=name
+    def __getitem__(self,id):
+        try:
+            return dict.__getitem__(self,id)
+        except:
+            pass
+        l=self.server.methodCall(self.name,'getSeqLen',[id])
+        if l>0:
+            s=XMLRPCSequence(self,id,l)
+            self[id]=s
+            return s
+        raise KeyError('%s not in this database' % id)
+    def strslice(self,id,start,stop):
+        return self.server.methodCall(self.name,'strslice',(id,start,stop))
