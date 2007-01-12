@@ -400,7 +400,21 @@ class BlastDBinverse(object):
     def __getitem__(self,seq):
         return seq.pathForward.id
 
-class BlastDBbase(dict):
+class SeqDBbase(dict):
+    def __invert__(self):
+        'keep a reference to an inverse mapping'
+        try:
+            return self._inverse
+        except AttributeError:
+            self._inverse=BlastDBinverse(self)
+            return self._inverse
+    def __hash__(self):
+        'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
+        return id(self)
+
+
+
+class BlastDBbase(SeqDBbase):
     "Container representing Blast database"
     seqClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
@@ -480,12 +494,6 @@ class BlastDBbase(dict):
             cmd='fastacmd -D -d '+self.filepath
             return os.popen(cmd),NCBI_ID_PARSER #BLAST ADDS lcl| TO id
 
-    def __invert__(self):
-        try:
-            return self._inverse
-        except AttributeError:
-            self._inverse=BlastDBinverse(self)
-            return self._inverse
 
     def __iter__(self):
         'generate all IDs in this database'
@@ -500,9 +508,6 @@ class BlastDBbase(dict):
     def __len__(self):
         "number of total entries in this database"
         return len(self.seqLenDict)
-
-    def __hash__(self): # TO ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...
-        return id(self)
 
     def __getitem__(self,id):
         "Get sequence matching this ID, using dict as local cache"
@@ -958,10 +963,11 @@ class XMLRPCSequence(SequenceBase):
     def __len__(self):
         return self.length
 
-class XMLRPCSequenceDB(dict):
+class XMLRPCSequenceDB(SeqDBbase):
     def __init__(self,url,name):
-        import xmlrpclib
-        self.server=xmlrpclib.ServerProxy(url)
+        dict.__init__(self)
+        import coordinator
+        self.server=coordinator.get_connection(url)
         self.url=url
         self.name=name
     def __getitem__(self,id):
