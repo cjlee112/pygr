@@ -36,15 +36,46 @@ def get_server(host,port,logRequests=False):
     return server,port
 
 
+class XMLRPCClientObject(object):
+    'provides object proxy for remote object, with methods that mirror its xmlrpc_methods'
+    def __init__(self,server,name,methodDict):
+        self.name=name
+        self.server=server
+        import new
+        class methodcall(object):
+            def __init__(self,name):
+                self.name=name
+            def __call__(self,obj,*args):
+                return obj.server.server.methodCall(obj.name,self.name,args)
+        for methodName in methodDict: # CREATE METHODS TO ACCESS REMOTE OBJECT'S METHODS
+            setattr(self,methodName,new.instancemethod(methodcall(methodName),self,self.__class__))
+
+class XMLRPCClient(dict):
+    'interface to XMLRPC server serving multiple named objects'
+    def __init__(self,url):
+        self.server=xmlrpclib.ServerProxy(url)
+    def __getitem__(self,name):
+        'get connection to the named server object'
+        try:
+            return dict.__getitem__(self,name)
+        except KeyError:
+            methodDict=self.server.objectInfo(name) # GET INFO ABOUT REQUESTED OBJECT
+            import types
+            if isinstance(methodDict,types.StringType):
+                raise KeyError(methodDict) # RETURNED VALUE IS ERROR MESSAGE!
+            v=XMLRPCClientObject(self,name,methodDict)
+            self[name]=v # SAVE THIS OBJECT INTO OUR DICTIONARY
+            return v
+
 class ConnectionDict(dict):
     'ensure that multiple requests for the same connection use same ServerProxy'
-    def __call__(self,url):
+    def __call__(self,url,name):
         try:
-            return self[url]
+            s=self[url] # REUSE EXISTING CONNECTION TO THE SERVER
         except KeyError:
-            c=xmlrpclib.ServerProxy(url)
-            self[url]=c
-            return c
+            s=XMLRPCClient(url) # GET NEW CONNECTION TO THE SERVER
+            self[url]=s # CACHE THIS CONNECTION
+        return s[name] # GET THE REQUESTED OBJECT PROXY FROM THE SERVER
 
 get_connection=ConnectionDict() # THIS RETURNS SAME ServerProxy FOR SAME url
 
@@ -209,7 +240,7 @@ class HostInfo(ObjectFromString):
 
 class XMLRPCServerBase(object):
     'Base class for creating an XMLRPC server for multiple objects'
-    xmlrpc_methods={'methodCall':0,'objectList':0}
+    xmlrpc_methods={'methodCall':0,'objectList':0,'objectInfo':0}
     max_tb=10
     _dispatch=safe_dispatch # RESTRICT XMLRPC TO JUST THE METHODS LISTED ABOVE
     def __init__(self,name,host=None,port=5000,logRequests=False):
@@ -223,8 +254,14 @@ class XMLRPCServerBase(object):
     def __delitem__(self,name):
         del self.objDict[name]
     def objectList(self):
-        'get list of named objects in this server'
-        return [name for name in self.objDict]
+        'get list of named objects in this server: [(name,methodDict),...]'
+        return [(name,obj.xmlrpc_methods) for (name,obj) in self.objDict.items()]
+    def objectInfo(self,objname):
+        'get dict of methodnames on the named object'
+        try:
+            return self.objDict[objname].xmlrpc_methods
+        except KeyError:
+            return 'error: server has no object named %s' % objname
     def methodCall(self,objname,methodname,args):
         'run the named method on the named object and return its result'
         try:
