@@ -15,11 +15,12 @@ class NLMSAServer(cnestedlist.NLMSA):
             return ''  # FAILURE CODE
         ivals=myslice.rawIvals() # GET RAW INTERVAL DATA
         d={}
-        for v in ivals:
-            id=v[2]
-            if not self.seqlist.is_lpo(id): 
+        d[nlmsa_id]=self.seqs.IDdict[str(nlmsa_id)] # SAVE INDEX INFO FOR SOURCE SEQ
+        for v in ivals: # SAVE INDEX INFO FOR TARGET SEQS
+            id=v[2] # target_id NLMSA_ID
+            if not self.seqlist.is_lpo(id): # ONLY NON-LPO SEQS STORED IN THIS INDEX
                 d[id]=self.seqs.IDdict[str(id)]
-        l=[(key,val) for key,val in d.items()]
+        l=[(key,val) for key,val in d.items()] # XMLRPC CAN'T HANDLE int DICT, SO USE LIST
         return nlmsa_id,ivals,l # LIST OF ALIGNED IVALS, LIST OF (nlmsa_id,(seqID,nsID))
     def getInfo(self):
         'return list of tuples describing NLMSASequences in this NLMSA'
@@ -33,8 +34,8 @@ class NLMSAClient(cnestedlist.NLMSA):
     'client for accessing NLMSAServer via XMLRPC'
     def __init__(self,url,name,**kwargs):
         cnestedlist.NLMSA.__init__(self,mode='xmlrpc',**kwargs)
-        import xmlrpclib
-        self.server=xmlrpclib.ServerProxy(url) # GET CONNECTION TO THE SERVER
+        import coordinator
+        self.server=coordinator.get_connection(url) # GET CONNECTION TO THE SERVER
         self.url=url
         self.name=name
         l=self.server.methodCall(self.name,'getInfo',[]) # READ NS INFO TABLE
