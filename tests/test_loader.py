@@ -57,7 +57,7 @@ class TestMain(object):
          else:
             raise ImportError("Unable to load unittest module.")
       
-   def __debug__(self):
+   def debug(self):
       print "SYS PATH: " + str(self.path) 
       print "environ: " + str(self.environ)
       print self.linesep + "linesep: " + str(self.linesep)
