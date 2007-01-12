@@ -1144,12 +1144,15 @@ cdef class NLMSANode:
 
 cdef class NLMSASequence:
   'sequence interface to NLMSA storage of an LPO alignment'
-  def __new__(self,NLMSA nl not None,filestem,seq,mode='r',is_union=0):
+  def __new__(self,NLMSA nl not None,filestem,seq,mode='r',is_union=0,
+              length=None):
     self.nlmsaLetters=nl
     self.filestem=filestem
     self.is_union=is_union
     self.is_lpo=0 # DEFAULT: NOT AN LPO
     self.seq=seq
+    if length is not None: # ALLOW USER TO SUPPLY A LENGTH FOR THIS COORD SYSTEM
+      self.length=length
     import types
     if isinstance(seq,types.StringType):
       self.name=seq # ALLOW USER TO BUILD INDEXES WITH A STRING NAME
