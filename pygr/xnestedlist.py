@@ -35,17 +35,16 @@ class NLMSAClient(cnestedlist.NLMSA):
     def __init__(self,url,name,**kwargs):
         cnestedlist.NLMSA.__init__(self,mode='xmlrpc',**kwargs)
         import coordinator
-        self.server=coordinator.get_connection(url) # GET CONNECTION TO THE SERVER
+        self.server=coordinator.get_connection(url,name) # GET CONNECTION TO THE SERVER
         self.url=url
         self.name=name
-        l=self.server.methodCall(self.name,'getInfo',[]) # READ NS INFO TABLE
+        l=self.server.getInfo() # READ NS INFO TABLE
         for nsID,is_lpo,nsLength,is_union in l:
             ns=cnestedlist.NLMSASequence(self,None,None,'onDemand',is_union,nsLength) # is_lpo AUTOMATIC
             self.seqs[None]=ns # ADD THIS TO THE INDEX
     def doSlice(self,seq):
         'getSlice from the server, and create an NLMSASlice object from results'
-        result=self.server.methodCall(self.name,'getSlice',[self.seqs.getSeqID(seq),
-                                      seq.start,seq.stop])
+        result=self.server.getSlice(self.seqs.getSeqID(seq),seq.start,seq.stop)
         if result=='':
             raise KeyError('this interval is not aligned!')
         id,l,d=result

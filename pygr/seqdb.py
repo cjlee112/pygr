@@ -967,7 +967,7 @@ class XMLRPCSequenceDB(SeqDBbase):
     def __init__(self,url,name):
         dict.__init__(self)
         import coordinator
-        self.server=coordinator.get_connection(url)
+        self.server=coordinator.get_connection(url,name)
         self.url=url
         self.name=name
     def __getitem__(self,id):
@@ -975,11 +975,11 @@ class XMLRPCSequenceDB(SeqDBbase):
             return dict.__getitem__(self,id)
         except:
             pass
-        l=self.server.methodCall(self.name,'getSeqLen',[id])
+        l=self.server.getSeqLen(id)
         if l>0:
             s=XMLRPCSequence(self,id,l)
             self[id]=s
             return s
         raise KeyError('%s not in this database' % id)
     def strslice(self,id,start,stop):
-        return self.server.methodCall(self.name,'strslice',(id,start,stop))
+        return self.server.strslice(id,start,stop)
