@@ -156,14 +156,27 @@ cdef class IntervalDB:
 
 cdef class IntervalFileDBIterator:
   def __new__(self,int start,int end,IntervalFileDB db=None,
-              int nbuffer=1024):
+              int nbuffer=1024,rawIvals=None):
+    cdef int i
     self.it=interval_iterator_alloc()
     self.it_alloc=self.it
     self.start=start
     self.end=end
     self.db=db
+    if rawIvals is not None:
+      nbuffer=len(rawIvals)
     self.im_buf=interval_map_alloc(nbuffer)
     self.nbuf=nbuffer
+    if rawIvals is not None:
+      i=0
+      for ival in rawIvals:
+        self.im_buf[i].start=ival[0] # SAVE INTERVAL INFO
+        self.im_buf[i].end=ival[1]
+        self.im_buf[i].target_id=ival[2]
+        self.im_buf[i].target_start=ival[3]
+        self.im_buf[i].target_end=ival[4]
+        i=i+1
+      self.nhit=i # TOTAL NUMBER OF INTERVALS STORED
 
   cdef int restart(self,int start,int end,IntervalFileDB db) except -2:
     'reuse this iterator for another search without reallocing memory'
@@ -418,80 +431,88 @@ cdef class NLMSASliceLetters:
 cdef class NLMSASlice:
   def __new__(self,NLMSASequence ns not None,int start,int stop,
               int id= -1,int offset=0,seq=None):
-    cdef int i,j,n,start_max,end_min,start2,stop2,nseq,istart,istop
+    cdef int i,j,n,start_max,end_min,start2,stop2,nseq,istart,istop,localQuery
     cdef NLMSASequence ns_lpo
     cdef IntervalFileDBIterator it,it2
     cdef IntervalMap *im,*im2
 
     if seq is None: # GET FROM NLMSASequence
       seq=ns.seq
-    if id<0:
-      id=ns.id
     self.nlmsaSequence=ns # SAVE BASIC INFO
     self.start=start
     self.stop=stop
-    self.id=id
     self.offset=offset # ALWAYS STORE offset IN POSITIVE ORIENTATION
     self.seq=seq
-    if ns.db is None:
-      ns.forceLoad()
-    it2=None
-    if start<0: # NEED TO TRANSLATE OFFSETS TO MINUS ORIENTATION
-      offset= -offset
-    it=IntervalFileDBIterator(start+offset,stop+offset,ns.db)
-    n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
-    if n<=0:
-      raise KeyError('this interval is not aligned!')
-    for i from 0 <= i < n: # CLIP INTERVALS TO FIT [start:stop]
-      it.im_buf[i].start=it.im_buf[i].start-offset # XLATE TO SRC SEQ COORDS
-      it.im_buf[i].end=it.im_buf[i].end-offset
-      if stop<it.im_buf[i].end: # TRUNCATE TO FIT WITHIN [start:stop]
-        it.im_buf[i].target_end= it.im_buf[i].target_end \
-                                 +stop-it.im_buf[i].end # CALCULATE NEW ENDPOINT
-        it.im_buf[i].end=stop
-      if start>it.im_buf[i].start: # CALCULATE NEW STARTPOINT
-        it.im_buf[i].target_start=it.im_buf[i].target_start \
-                                 +start-it.im_buf[i].start
-        it.im_buf[i].start=start
-        
-    if not ns.is_lpo: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
-      ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id] # DEFAULT LPO
-      if ns_lpo.db is None:
-        ns_lpo.forceLoad()
-      for i from 0 <= i < n:
-        if it.im_buf[i].target_id != ns_lpo.id: # SWITCHING TO A DIFFERENT LPO?
-          ns_lpo=ns.nlmsaLetters.seqlist[it.im_buf[i].target_id]
-          if not ns_lpo.is_lpo:
-            raise ValueError('sequence mapped to non-LPO target??')
-          if ns_lpo.db is None:
-            ns_lpo.forceLoad()
-        if it2 is None: # NEED TO ALLOCATE NEW ITERATOR
-          it2=IntervalFileDBIterator(it.im_buf[i].target_start,
-                                     it.im_buf[i].target_end,ns_lpo.db)
-        else: # JUST REUSE THIS ITERATOR WITHOUT REALLOCING MEMORY
-          it2.restart(it.im_buf[i].target_start,
-                      it.im_buf[i].target_end,ns_lpo.db)
-        it2.loadAll() # GET ALL OVERLAPPING INTERVALS
-        if it2.nhit<=0: # NO HITS, SO TRY THE NEXT INTERVAL???
-          continue
-        im2=it2.im_buf # ARRAY FROM THIS ITERATOR
-        for j from 0 <= j < it2.nhit: # MAP EACH INTERVAL BACK TO ns
-          if im2[j].target_id==id: # DISCARD SELF-MATCH
+    try: # USE PYTHON METHOD TO DO QUERY
+      id,ivals=ns.nlmsaLetters.doSlice(seq)
+      it=IntervalFileDBIterator(start,stop,rawIvals=ivals) # STORE IN BINARY FMT
+      it2=IntervalFileDBIterator(start,stop) # HOLDER FOR SUBSEQUENT MERGE
+      localQuery=0 # DO NOT PERFORM LOCAL QUERY CODE BELOW!!
+    except AttributeError:
+      localQuery=1
+    if localQuery: ################################## PERFORM LOCAL QUERY
+      if id<0:
+        id=ns.id
+      self.id=id
+      if ns.db is None:
+        ns.forceLoad()
+      it2=None
+      if start<0: # NEED TO TRANSLATE OFFSETS TO MINUS ORIENTATION
+        offset= -offset
+      it=IntervalFileDBIterator(start+offset,stop+offset,ns.db)
+      n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
+      if n<=0:
+        raise KeyError('this interval is not aligned!')
+      for i from 0 <= i < n: # CLIP INTERVALS TO FIT [start:stop]
+        it.im_buf[i].start=it.im_buf[i].start-offset # XLATE TO SRC SEQ COORDS
+        it.im_buf[i].end=it.im_buf[i].end-offset
+        if stop<it.im_buf[i].end: # TRUNCATE TO FIT WITHIN [start:stop]
+          it.im_buf[i].target_end= it.im_buf[i].target_end \
+                                   +stop-it.im_buf[i].end # CALCULATE NEW ENDPOINT
+          it.im_buf[i].end=stop
+        if start>it.im_buf[i].start: # CALCULATE NEW STARTPOINT
+          it.im_buf[i].target_start=it.im_buf[i].target_start \
+                                   +start-it.im_buf[i].start
+          it.im_buf[i].start=start
+
+      if not ns.is_lpo: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
+        ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id] # DEFAULT LPO
+        if ns_lpo.db is None:
+          ns_lpo.forceLoad()
+        for i from 0 <= i < n:
+          if it.im_buf[i].target_id != ns_lpo.id: # SWITCHING TO A DIFFERENT LPO?
+            ns_lpo=ns.nlmsaLetters.seqlist[it.im_buf[i].target_id]
+            if not ns_lpo.is_lpo:
+              raise ValueError('sequence mapped to non-LPO target??')
+            if ns_lpo.db is None:
+              ns_lpo.forceLoad()
+          if it2 is None: # NEED TO ALLOCATE NEW ITERATOR
+            it2=IntervalFileDBIterator(it.im_buf[i].target_start,
+                                       it.im_buf[i].target_end,ns_lpo.db)
+          else: # JUST REUSE THIS ITERATOR WITHOUT REALLOCING MEMORY
+            it2.restart(it.im_buf[i].target_start,
+                        it.im_buf[i].target_end,ns_lpo.db)
+          it2.loadAll() # GET ALL OVERLAPPING INTERVALS
+          if it2.nhit<=0: # NO HITS, SO TRY THE NEXT INTERVAL???
             continue
-          if it.im_buf[i].target_start>im2[j].start: # GET INTERSECTION INTERVAL
-            start_max=it.im_buf[i].target_start
-          else:
-            start_max=im2[j].start
-          if it.im_buf[i].target_end<im2[j].end:
-            end_min=it.im_buf[i].target_end
-          else:
-            end_min=im2[j].end
-          istart=it.im_buf[i].start+start_max-it.im_buf[i].target_start # SRC COORDS
-          istop=it.im_buf[i].start+end_min-it.im_buf[i].target_start
-          start2=im2[j].target_start+start_max-im2[j].start # COORDS IN TARGET
-          stop2=im2[j].target_start+end_min-im2[j].start
-          it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
-          assert ns_lpo.id!=im2[j].target_id
+          im2=it2.im_buf # ARRAY FROM THIS ITERATOR
+          for j from 0 <= j < it2.nhit: # MAP EACH INTERVAL BACK TO ns
+            if im2[j].target_id==id: # DISCARD SELF-MATCH
+              continue
+            if it.im_buf[i].target_start>im2[j].start: # GET INTERSECTION INTERVAL
+              start_max=it.im_buf[i].target_start
+            else:
+              start_max=im2[j].start
+            if it.im_buf[i].target_end<im2[j].end:
+              end_min=it.im_buf[i].target_end
+            else:
+              end_min=im2[j].end
+            istart=it.im_buf[i].start+start_max-it.im_buf[i].target_start # SRC COORDS
+            istop=it.im_buf[i].start+end_min-it.im_buf[i].target_start
+            start2=im2[j].target_start+start_max-im2[j].start # COORDS IN TARGET
+            stop2=im2[j].target_start+end_min-im2[j].start
+            it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
+            assert ns_lpo.id!=im2[j].target_id
 
     it2.copy(it) # COPY FULL SET OF SAVED INTERVALS
     self.nseqBounds=it2.mergeSeq() # MERGE TO ONE INTERVAL PER SEQUENCE ORIENTATION
@@ -911,6 +932,15 @@ cdef class NLMSASlice:
     else:
       return -1
 
+  def rawIvals(self):
+    'return list of raw numeric intervals in this slice'
+    cdef int i
+    l=[]
+    for i from 0 <= i < self.n:
+      l.append((self.im[i].start,self.im[i].end,self.im[i].target_id,
+                self.im[i].target_start,self.im[i].target_end))
+    return l
+
 
 
 
@@ -1271,7 +1301,7 @@ class NLMSASeqList(list):
 
 class NLMSASeqDict(dict):
   'index sequences by pathForward, and use list to keep reverse mapping'
-  def __init__(self,nlmsa,filename,mode,maxID=1000000):
+  def __init__(self,nlmsa,filename,mode,maxID=1000000,idDictClass=None):
     dict.__init__(self)
     self.seqlist=NLMSASeqList(self)
     self.maxID=maxID
@@ -1280,8 +1310,12 @@ class NLMSASeqDict(dict):
     import shelve
     if mode=='w': # NEW DATABASE
       mode='c'
-    self.seqIDdict=shelve.open(filename+'.seqIDdict',mode)
-    self.IDdict=shelve.open(filename+'.idDict',mode)
+    if idDictClass is None: # USE PERSISTENT ID DICTIONARY STORAGE
+      self.seqIDdict=shelve.open(filename+'.seqIDdict',mode)
+      self.IDdict=shelve.open(filename+'.idDict',mode)
+    else: # USER SUPPLIED CLASS FOR ID DICTIONARY STORAGE
+      self.seqIDdict=idDictClass()
+      self.IDdict=idDictClass()
 
   def saveSeq(self,seq,nsID,offset,nlmsaID=None):
     'save mapping of seq to specified (nlmsaID,ns,offset)'
@@ -1419,15 +1453,15 @@ cdef class FilePtrPool:
 
 cdef class NLMSA:
   'toplevel interface to NLMSA storage of an LPO alignment'
-  def __new__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
-              maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666,
-              trypath=None):
+  def __init__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
+               maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666,
+               trypath=None,**kwargs):
     try:
       import resource # WE MAY NEED TO OPEN A LOT OF FILES...
       resource.setrlimit(resource.RLIMIT_NOFILE,(maxOpenFiles,-1))
     except: # BUT THIS IS OPTIONAL...
       pass
-    self.seqs=NLMSASeqDict(self,pathstem,mode)
+    self.seqs=NLMSASeqDict(self,pathstem,mode,**kwargs)
     self.seqlist=self.seqs.seqlist
     self.pathstem=pathstem
     import sys
@@ -1452,6 +1486,8 @@ cdef class NLMSA:
       self.lpo_id=0
       if mafFiles is not None:
         self.readMAFfiles(mafFiles,maxint)
+    elif mode!='xmlrpc':
+      raise ValueError('unknown mode %s' % mode)
 
   def read_indexes(self,seqDict):
     'open all nestedlist indexes in this LPO database for immediate use'
