@@ -444,7 +444,8 @@ cdef class NLMSASlice:
     self.offset=offset # ALWAYS STORE offset IN POSITIVE ORIENTATION
     self.seq=seq
     try: # USE PYTHON METHOD TO DO QUERY
-      id,ivals=ns.nlmsaLetters.doSlice(seq)
+      id,ivals=ns.nlmsaLetters.doSlice(seq) # doSlice() RETURNS RAW INTERVALS
+      self.id=id # SAVE OUR SEQUENCE'S nlmsa_id
       it=IntervalFileDBIterator(start,stop,rawIvals=ivals) # STORE IN BINARY FMT
       it2=IntervalFileDBIterator(start,stop) # HOLDER FOR SUBSEQUENT MERGE
       localQuery=0 # DO NOT PERFORM LOCAL QUERY CODE BELOW!!
