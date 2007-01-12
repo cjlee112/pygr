@@ -36,6 +36,19 @@ def get_server(host,port,logRequests=False):
     return server,port
 
 
+class ConnectionDict(dict):
+    'ensure that multiple requests for the same connection use same ServerProxy'
+    def __call__(self,url):
+        try:
+            return self[url]
+        except KeyError:
+            c=xmlrpclib.ServerProxy(url)
+            self[url]=c
+            return c
+
+get_connection=ConnectionDict() # THIS RETURNS SAME ServerProxy FOR SAME url
+
+
 def safe_dispatch(self,name,args):
     """restrict calls to selected methods, and trap all exceptions to
     keep server alive!"""
@@ -195,7 +208,8 @@ class HostInfo(ObjectFromString):
     _attrtype={'maxload':float}
 
 class XMLRPCServerBase(object):
-    xmlrpc_methods={'methodCall':0}
+    'Base class for creating an XMLRPC server for multiple objects'
+    xmlrpc_methods={'methodCall':0,'objectList':0}
     max_tb=10
     _dispatch=safe_dispatch # RESTRICT XMLRPC TO JUST THE METHODS LISTED ABOVE
     def __init__(self,name,host=None,port=5000,logRequests=False):
@@ -208,6 +222,9 @@ class XMLRPCServerBase(object):
         self.objDict[name]=obj
     def __delitem__(self,name):
         del self.objDict[name]
+    def objectList(self):
+        'get list of named objects in this server'
+        return [name for name in self.objDict]
     def methodCall(self,objname,methodname,args):
         'run the named method on the named object and return its result'
         try:
