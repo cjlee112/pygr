@@ -87,7 +87,9 @@ metadata = {
 	"pygr/graphquery",
 	"pygr/mapping",
         "pygr/coordinator",
+        "pygr/Data",
         "pygr/nestedlist",
+        "pygr/xnestedlist",
 	"pygr/poa",
 	#"pygr/lpo",  # THIS IS TEMPORARY
 	"pygr/schema",
