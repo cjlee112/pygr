@@ -412,7 +412,11 @@ class SeqDBbase(dict):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
 
-
+def ClassicUnpickler(cls, state):
+    self = cls.__new__(cls)
+    self.__setstate__(state)
+    return self
+ClassicUnpickler.__safe_for_unpickling__ = 1
 
 class BlastDBbase(SeqDBbase):
     "Container representing Blast database"
@@ -428,6 +432,7 @@ class BlastDBbase(SeqDBbase):
         self.filepath=filepath
         dict.__init__(self)
         self.set_seqtype()
+        self.skipSeqLenDict=skipSeqLenDict
         if skipSeqLenDict:
             self.seqClass=BlastSequenceBase # DON'T USE seqLenDict
         else:
@@ -447,6 +452,13 @@ class BlastDBbase(SeqDBbase):
             self.formatdb()
         if ifile is not None: # NOW THAT WE'RE DONE CONSTRUCTING, CLOSE THE FILE OBJECT
             ifile.close() # THIS SIGNALS WE'RE COMPLETELY DONE CONSTRUCTING THIS RESOURCE
+
+    def __reduce__(self): ############################# SUPPORT FOR PICKLING
+        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
+    def __getstate__(self):
+        return dict(filepath=self.filepath,skipSeqLenDict=self.skipSeqLenDict)
+    def __setstate__(self,state):
+        self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
 
     def checkdb(self):
         'check whether BLAST index files ready for use; return self.blastReady status'
