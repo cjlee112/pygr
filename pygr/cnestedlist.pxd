@@ -166,6 +166,7 @@ cdef class NLMSA:
   cdef int do_build
   cdef int lpo_id
   cdef readonly int maxlen,inlmsa
+  cdef public object _persistent_id
 
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id)
 
