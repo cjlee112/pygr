@@ -1455,6 +1455,13 @@ cdef class FilePtrPool:
       free(self.mode)
 
 
+
+def ClassicUnpickler(cls, state):  # THIS IS JUST A STANDARD UNPICKLER...
+    self = cls.__new__(cls)
+    self.__setstate__(state)
+    return self
+ClassicUnpickler.__safe_for_unpickling__ = 1
+
 cdef class NLMSA:
   'toplevel interface to NLMSA storage of an LPO alignment'
   def __init__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
@@ -1492,6 +1499,13 @@ cdef class NLMSA:
         self.readMAFfiles(mafFiles,maxint)
     elif mode!='xmlrpc':
       raise ValueError('unknown mode %s' % mode)
+
+  def __reduce__(self): ############################# SUPPORT FOR PICKLING
+    return (ClassicUnpickler, (self.__class__,self.__getstate__()))
+  def __getstate__(self):
+    return dict(pathstem=self.pathstem,seqDict=self.seqDict)
+  def __setstate__(self,state):
+    self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
 
   def read_indexes(self,seqDict):
     'open all nestedlist indexes in this LPO database for immediate use'
