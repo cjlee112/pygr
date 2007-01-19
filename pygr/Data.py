@@ -6,18 +6,17 @@ import shelve
 class PygrPickler(pickle.Pickler):
     def persistent_id(self,obj):
         'convert objects with _persistent_id to PYGR_ID strings during pickling'
+        import types
         try:
-            if obj is not self.root and obj._persistent_id is not None:
-                return 'PYGR_ID:%d' % obj._persistent_id
+            if not isinstance(obj,types.TypeType) and obj is not self.root and obj._persistent_id is not None:
+                return 'PYGR_ID:%s' % obj._persistent_id
         except AttributeError:
             pass
         return None
     def setRoot(self,obj):
         'set obj as root of pickling tree: genuinely pickle it (not just its id)'
         self.root=obj
-    def unsetRoot(self):
-        'reset root (after using this pickler)'
-        self.root=None
+
 
 class ResourceDBShelve(object):
     def __init__(self,dbpath,finder,mode='r'):
@@ -66,8 +65,7 @@ class ResourceFinder(object):
         self.dbstr=''
         self.d={}
         self.separator=separator
-    def resourceDBiter(self):
-        'iterate over all available databases, read from PYGRDATAPATH env var.'
+    def update(self):
         import os
         try:
             PYGRDATAPATH=os.environ['PYGRDATAPATH']
@@ -89,14 +87,16 @@ class ResourceFinder(object):
                     self.layer['here']=rdb
                 if dbpath[:5]=='http:' and 'remote' not in self.layer:
                     self.layer['remote']=rdb
+    def resourceDBiter(self):
+        'iterate over all available databases, read from PYGRDATAPATH env var.'
+        self.update()
         if self.db is None or len(self.db)==0:
             raise ValueError('empty PYGRDATAPATH! Please check environment variable.')
         for db in self.db:
             yield db
     def loads(self,data):
         'unpickle from string, using persistent ID expansion'
-        src=StringIO()
-        src.write(data)
+        src=StringIO(data)
         unpickler=pickle.Unpickler(src)
         unpickler.persistent_load=self.persistent_load # WE PROVIDE PERSISTENT LOOKUP
         return unpickler.load()
@@ -141,6 +141,7 @@ class ResourceFinder(object):
         db[id]=obj # SAVE THE OBJECT TO THE DATABASE
         self.d[id]=obj # SAVE TO OUR CACHE
     def getLayer(self,layer):
+        self.update() # MAKE SURE WE HAVE LOADED CURRENT DATABASE LIST
         if layer is not None:
             return self.layer[layer]
         else: # JUST USE OUR PRIMARY DATABASE
@@ -158,8 +159,8 @@ getResource=ResourceFinder()
 class ResourcePath(object):
     'simple way to read resource names as python foo.bar.bob expressions'
     def __init__(self,base,layer=None):
-        self._path=base
-        self._layer=layer
+        self.__dict__['_path']=base # AVOID TRIGGERING setattr!
+        self.__dict__['_layer']=layer
     def __getattr__(self,name):
         'extend the resource path by one more attribute'
         attr=ResourcePath(self._path+'.'+name,self._layer)
@@ -189,7 +190,7 @@ class ResourceLayer(object):
         return attr
 
 # PROVIDE TOP-LEVEL NAMES IN OUR RESOURCE HIERARCHY
-Bio=ResourceRoot('Bio')
+Bio=ResourcePath('Bio')
 
 
 # TOP-LEVEL NAMES FOR STANDARDIZED LAYERS
