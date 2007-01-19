@@ -971,17 +971,19 @@ class XMLRPCSequence(SequenceBase):
         SequenceBase.__init__(self)
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
-        return self.db.strslice(self.id,start,end)
+        return self.db.server.strslice(self.id,start,end)
     def __len__(self):
         return self.length
 
 class XMLRPCSequenceDB(SeqDBbase):
-    def __init__(self,url,name):
+    def __init__(self,url=None,name=None):
         dict.__init__(self)
         import coordinator
         self.server=coordinator.get_connection(url,name)
         self.url=url
         self.name=name
+    def __getstate__(self):
+        return dict(url=self.url,name=self.name)
     def __getitem__(self,id):
         try:
             return dict.__getitem__(self,id)
@@ -993,5 +995,3 @@ class XMLRPCSequenceDB(SeqDBbase):
             self[id]=s
             return s
         raise KeyError('%s not in this database' % id)
-    def strslice(self,id,start,stop):
-        return self.server.strslice(id,start,stop)
