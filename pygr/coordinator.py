@@ -244,6 +244,9 @@ class XMLRPCServerBase(object):
     max_tb=10
     _dispatch=safe_dispatch # RESTRICT XMLRPC TO JUST THE METHODS LISTED ABOVE
     def __init__(self,name,host=None,port=5000,logRequests=False):
+        if host is None: # GET FULLY QUALIFIED HOSTNAME SO OTHERS CAN CONTACT US
+            host=get_hostname()
+        self.host=host
         self.name=name
         self.server,self.port = get_server(host,port,logRequests)
         self.server.register_instance(self)
@@ -275,6 +278,11 @@ class XMLRPCServerBase(object):
         'launch the XMLRPC service.  Never exits.'
         detach_as_demon_process(rc_server)
         serve_forever(self)
+    def register(self,url,name):
+        'register our server with the designated index server'
+        data=self.registrationData # RAISE ERROR IF NO DATA TO REGISTER...
+        server=get_connection(url,name)
+        server.registerServer('%s:%d' % (self.host,self.port),data)
         
 class ResourceController(object):
     """Centralized controller for getting resources and rules for
