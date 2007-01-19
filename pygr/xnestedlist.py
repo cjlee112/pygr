@@ -32,8 +32,8 @@ class NLMSAServer(cnestedlist.NLMSA):
 
 class NLMSAClient(cnestedlist.NLMSA):
     'client for accessing NLMSAServer via XMLRPC'
-    def __init__(self,url,name,**kwargs):
-        cnestedlist.NLMSA.__init__(self,mode='xmlrpc',**kwargs)
+    def __init__(self,url=None,name=None,idDictClass=dict,**kwargs):
+        cnestedlist.NLMSA.__init__(self,mode='xmlrpc',idDictClass=idDictClass,**kwargs)
         import coordinator
         self.server=coordinator.get_connection(url,name) # GET CONNECTION TO THE SERVER
         self.url=url
@@ -54,5 +54,7 @@ class NLMSAClient(cnestedlist.NLMSA):
     def __getitem__(self,k):
         'directly call slice without any ID lookup -- will be done server-side'
         return cnestedlist.NLMSASlice(self.seqlist[0],k.start,k.stop,-1,-1,k)
+    def __getstate__(self):
+        return dict(url=self.url,name=self.name,seqDict=self.seqDict)
 
 
