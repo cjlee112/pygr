@@ -400,7 +400,17 @@ class BlastDBinverse(object):
     def __getitem__(self,seq):
         return seq.pathForward.id
 
+def ClassicUnpickler(cls, state):
+    self = cls.__new__(cls)
+    self.__setstate__(state)
+    return self
+ClassicUnpickler.__safe_for_unpickling__ = 1
+
 class SeqDBbase(dict):
+    def __reduce__(self): ############################# SUPPORT FOR PICKLING
+        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
+    def __setstate__(self,state):
+        self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
     def __invert__(self):
         'keep a reference to an inverse mapping'
         try:
@@ -411,12 +421,6 @@ class SeqDBbase(dict):
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
-
-def ClassicUnpickler(cls, state):
-    self = cls.__new__(cls)
-    self.__setstate__(state)
-    return self
-ClassicUnpickler.__safe_for_unpickling__ = 1
 
 class BlastDBbase(SeqDBbase):
     "Container representing Blast database"
@@ -453,12 +457,8 @@ class BlastDBbase(SeqDBbase):
         if ifile is not None: # NOW THAT WE'RE DONE CONSTRUCTING, CLOSE THE FILE OBJECT
             ifile.close() # THIS SIGNALS WE'RE COMPLETELY DONE CONSTRUCTING THIS RESOURCE
 
-    def __reduce__(self): ############################# SUPPORT FOR PICKLING
-        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
-    def __getstate__(self):
+    def __getstate__(self): ################ SUPPORT FOR UNPICKLING
         return dict(filepath=self.filepath,skipSeqLenDict=self.skipSeqLenDict)
-    def __setstate__(self,state):
-        self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
 
     def checkdb(self):
         'check whether BLAST index files ready for use; return self.blastReady status'
@@ -982,7 +982,7 @@ class XMLRPCSequenceDB(SeqDBbase):
         self.server=coordinator.get_connection(url,name)
         self.url=url
         self.name=name
-    def __getstate__(self):
+    def __getstate__(self): ################ SUPPORT FOR UNPICKLING
         return dict(url=self.url,name=self.name)
     def __getitem__(self,id):
         try:
