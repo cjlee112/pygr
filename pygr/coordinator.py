@@ -18,15 +18,14 @@ def get_hostname(host=None):
 
 def get_server(host,port,logRequests=False):
     "start xmlrpc server on requested host:port"
-    import SimpleXMLRPCServer
+    from SimpleXMLRPCServer import SimpleXMLRPCServer
     import socket
     if host is None: # FOR CREATING XMLRPC SERVER, USE localhost BY DEFAULT
         host='localhost'
     maxport=port+50
     while port<maxport:
         try: # TRY TO FIND AN OPEN PORT
-            server=SimpleXMLRPCServer.SimpleXMLRPCServer((host,port),
-                                                         logRequests=logRequests)
+            server=SimpleXMLRPCServer((host,port),logRequests=logRequests)
             break
         except socket.error: # KEEP TRYING MORE PORTS
             port += 1
@@ -163,7 +162,8 @@ def try_fork():
 
 def detach_as_demon_process(self):
     "standard UNIX technique c/o Jurgen Hermann's Python Cookbook recipe"
-    if self.errlog is False: # CREATE AN APPROPRIATE ERRORLOG FILEPATH
+    # CREATE AN APPROPRIATE ERRORLOG FILEPATH
+    if not hasattr(self,'errlog') or self.errlog is False:
         self.errlog=os.getcwd()+'/'+self.name+'.log'
     try_fork() # DISCONNECT FROM PARENT PROCESS
     #os.chdir("/")
@@ -276,7 +276,7 @@ class XMLRPCServerBase(object):
         return m(*args) # RUN THE OBJECT METHOD
     def serve_forever(self):
         'launch the XMLRPC service.  Never exits.'
-        detach_as_demon_process(rc_server)
+        detach_as_demon_process(self)
         serve_forever(self)
     def register(self,url,name):
         'register our server with the designated index server'
