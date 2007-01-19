@@ -20,6 +20,8 @@ class PygrPickler(pickle.Pickler):
 
 class ResourceDBServer(object):
     xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0}
+    def __init__(self):
+        self.d={}
     def getResource(self,id):
         try:
             return self.d[id] # RETURN DICT OF PICKLED OBJECTS
@@ -213,6 +215,13 @@ class ResourceFinder(object):
                     break
             if skipThis: # CAN'T SERVE THIS CLASS, SO SKIP IT
                 continue
+            try: # TEST WHETHER obj CAN BE RE-CLASSED TO CLIENT / SERVER
+                obj.__class__=serverKlass # CONVERT TO SERVER CLASS FOR SERVING
+            except TypeError: # GRR, EXTENSION CLASS CAN'T BE RE-CLASSED...
+                state=obj.__getstate__() # READ obj STATE
+                newobj=serverKlass.__new__(serverKlass) # ALLOCATE NEW OBJECT
+                newobj.__setstate__(state) # AND INITIALIZE ITS STATE
+                obj=newobj # THIS IS OUR RE-CLASSED VERSION OF obj
             try: # USE OBJECT METHOD TO SAVE HOST INFO, IF ANY...
                 obj.saveHostInfo(server.host,server.port,id)
             except AttributeError: # TRY TO SAVE URL AND NAME DIRECTLY ON obj
