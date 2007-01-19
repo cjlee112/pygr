@@ -18,6 +18,43 @@ class PygrPickler(pickle.Pickler):
         self.root=obj
 
 
+class ResourceDBServer(object):
+    xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0}
+    def getResource(self,id):
+        try:
+            return self.d[id] # RETURN DICT OF PICKLED OBJECTS
+        except KeyError:
+            return '' # EMPTY STRING INDICATES FAILURE
+    def registerServer(self,locationKey,serviceDict):
+        for id,pdata in serviceDict.items():
+            try:
+                self.d[id][locationKey]=pdata # ADD TO DICT FOR THIS RESOURCE
+            except KeyError:
+                self.d[id]={locationKey:pdata} # CREATE NEW DICT FOR THIS RESOURCE
+        return ''  # DUMMY RETURN VALUE FOR XMLRPC
+    def delResource(self,id,locationKey):
+        try:
+            del self.d[id][locationKey]
+        except KeyError:
+            pass
+        return ''  # DUMMY RETURN VALUE FOR XMLRPC
+
+class ResourceDBClient(object):
+    def __init__(self,url,finder):
+        from coordinator import get_connection
+        self.server=get_connection(url,'index')
+        self.url=url
+        self.finder=finder
+    def __getitem__(self,id):
+        d=self.server.getResource(id) # RAISES KeyError IF NOT FOUND
+        for location,objData in d.items():
+            try:
+                return self.finder.loads(objData)
+            except KeyError:
+                pass # HMM, TRY ANOTHER LOCATION
+        raise KeyError('unable construct %s from remote services')
+
+
 class ResourceDBShelve(object):
     def __init__(self,dbpath,finder,mode='r'):
         import anydbm
@@ -66,6 +103,7 @@ class ResourceFinder(object):
         self.d={}
         self.separator=separator
     def update(self):
+        'get the latest list of resource databases'
         import os
         try:
             PYGRDATAPATH=os.environ['PYGRDATAPATH']
@@ -76,17 +114,20 @@ class ResourceFinder(object):
             self.db=[]
             self.layer={}
             for dbpath in PYGRDATAPATH.split(self.separator):
-                dbpath=os.path.join(dbpath,'.pygr_data')
-                rdb=ResourceDBShelve(os.path.expanduser(dbpath),self)
-                self.db.append(rdb)
-                if dbpath[0]=='/' and 'system' not in self.layer:
-                    self.layer['system']=rdb
-                if dbpath[:2]=='~/' and 'my' not in self.layer:
-                    self.layer['my']=rdb
-                if dbpath[:2]=='./' and 'here' not in self.layer:
-                    self.layer['here']=rdb
-                if dbpath[:5]=='http:' and 'remote' not in self.layer:
-                    self.layer['remote']=rdb
+                if dbpath.startswith('http://'):
+                    rdb=ResourceDBClient(dbpath,self)
+                    if 'remote' not in self.layer:
+                        self.layer['remote']=rdb
+                else: # TREAT AS LOCAL FILEPATH
+                    dbpath=os.path.join(dbpath,'.pygr_data') # CONSTRUCT FILENAME
+                    rdb=ResourceDBShelve(os.path.expanduser(dbpath),self)
+                    if dbpath.startswith('/') and 'system' not in self.layer:
+                        self.layer['system']=rdb
+                    if dbpath.startswith('~/') and 'my' not in self.layer:
+                        self.layer['my']=rdb
+                    if dbpath.startswith('./') and 'here' not in self.layer:
+                        self.layer['here']=rdb
+                self.db.append(rdb) # SAVE TO OUR LIST OF RESOURCE DATABASES
     def resourceDBiter(self):
         'iterate over all available databases, read from PYGRDATAPATH env var.'
         self.update()
@@ -127,8 +168,8 @@ class ResourceFinder(object):
                 try:
                     obj=db[id] # TRY TO OBTAIN FROM THIS DATABASE
                     break # SUCCESS!  NOTHING MORE TO DO
-                except KeyError:
-                    pass
+                except KeyError,IOError:
+                    pass # NOT IN THIS DB, OR OBJECT DATAFILES NOT LOADABLE HERE...
             if obj is None:
                 raise KeyError('unable to find %s in PYGRDATAPATH' % id)
         obj._persistent_id=id  # MARK WITH ITS PERSISTENT ID
@@ -150,7 +191,39 @@ class ResourceFinder(object):
         'delete the specified resource from the specified layer'
         db=self.getLayer(layer)
         del db[id]
-
+    def newServer(self,name,serverClasses=None,**kwargs):
+        'construct server for the designated classes'
+        if serverClasses is None: # DEFAULT TO ALL CLASSES WE KNOW HOW TO SERVE
+            from seqdb import BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC
+            serverClasses=[(BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC)]
+            try:
+                from cnestedlist import NLMSA
+                from xnestedlist import NLMSAClient,NLMSAServer
+                serverClasses.append((NLMSA,NLMSAClient,NLMSAServer))
+            except ImportError: # cnestedlist NOT INSTALLED, SO SKIP...
+                pass
+        import coordinator
+        server=coordinator.XMLRPCServerBase(name,**kwargs)
+        clientDict={}
+        for id,obj in self.d.items(): # SAVE ALL OBJECTS MATCHING serverClasses
+            skipThis=True
+            for baseKlass,clientKlass,serverKlass in serverClasses:
+                if isinstance(obj,baseKlass) and not isinstance(obj,clientKlass):
+                    skipThis=False # OK, WE CAN SERVE THIS CLASS
+                    break
+            if skipThis: # CAN'T SERVE THIS CLASS, SO SKIP IT
+                continue
+            try: # USE OBJECT METHOD TO SAVE HOST INFO, IF ANY...
+                obj.saveHostInfo(server.host,server.port,id)
+            except AttributeError: # TRY TO SAVE URL AND NAME DIRECTLY ON obj
+                obj.url='http://%s:%d' % (server.host,server.port)
+                obj.name=id
+            obj.__class__=clientKlass # CONVERT TO CLIENT CLASS FOR PICKLING
+            clientDict[id]=self.dumps(obj) # PICKLE THE CLIENT OBJECT, SAVE
+            obj.__class__=serverKlass # CONVERT TO SERVER CLASS FOR SERVING
+            server[id]=obj # ADD TO XMLRPC SERVER
+        server.registrationData=clientDict # SAVE DATA FOR SERVER REGISTRATION
+        return server
 
 
 ################# CREATE AN INTERFACE TO THE RESOURCE DATABASE
