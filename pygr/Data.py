@@ -20,14 +20,17 @@ class PygrPickler(pickle.Pickler):
 
 class ResourceDBServer(object):
     xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0}
-    def __init__(self):
+    def __init__(self,readOnly=False):
         self.d={}
+        self.readOnly=readOnly
     def getResource(self,id):
         try:
             return self.d[id] # RETURN DICT OF PICKLED OBJECTS
         except KeyError:
             return '' # EMPTY STRING INDICATES FAILURE
     def registerServer(self,locationKey,serviceDict):
+        if self.readOnly:
+            raise ValueError('FORBIDDEN access attempt')
         for id,pdata in serviceDict.items():
             try:
                 self.d[id][locationKey]=pdata # ADD TO DICT FOR THIS RESOURCE
@@ -35,6 +38,8 @@ class ResourceDBServer(object):
                 self.d[id]={locationKey:pdata} # CREATE NEW DICT FOR THIS RESOURCE
         return ''  # DUMMY RETURN VALUE FOR XMLRPC
     def delResource(self,id,locationKey):
+        if self.readOnly:
+            raise ValueError('FORBIDDEN access attempt')
         try:
             del self.d[id][locationKey]
         except KeyError:
@@ -193,7 +198,7 @@ class ResourceFinder(object):
         'delete the specified resource from the specified layer'
         db=self.getLayer(layer)
         del db[id]
-    def newServer(self,name,serverClasses=None,**kwargs):
+    def newServer(self,name,serverClasses=None,withIndex=False,**kwargs):
         'construct server for the designated classes'
         if serverClasses is None: # DEFAULT TO ALL CLASSES WE KNOW HOW TO SERVE
             from seqdb import BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC
@@ -232,6 +237,11 @@ class ResourceFinder(object):
             obj.__class__=serverKlass # CONVERT TO SERVER CLASS FOR SERVING
             server[id]=obj # ADD TO XMLRPC SERVER
         server.registrationData=clientDict # SAVE DATA FOR SERVER REGISTRATION
+        if withIndex: # SERVE OUR OWN INDEX AS A STATIC, READ-ONLY INDEX
+            myIndex=ResourceDBServer() # CREATE EMPTY INDEX
+            server['index']=myIndex # ADD TO OUR XMLRPC SERVER
+            server.register('','',server=myIndex) # ADD OUR RESOURCES TO THE INDEX
+            myIndex.readOnly=True # LOCK THE INDEX.  DON'T ACCEPT FOREIGN DATA!!
         return server
 
 
