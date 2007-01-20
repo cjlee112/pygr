@@ -1009,6 +1009,20 @@ Set trypath to give a list of directories to search.'''
                 m(owner,seqDict) # PASS CACHE HINT DOWN TO SUBDICTIONARY
 
 
+class DummyProxy(object):
+    pass
+class DummyProxyDict(dict):
+    def __init__(self):
+        dict.__init__(self)
+        self.n=0
+    def __call__(self):
+        a=DummyProxy()
+        i=self.n
+        self[i]=a
+        self.n+=1
+        return i,a
+cacheProxyDict=DummyProxyDict()
+
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
     xmlrpc_methods={"getSeqLen":0,"strslice":0}
