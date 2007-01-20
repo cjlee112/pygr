@@ -182,8 +182,8 @@ cdef class NLMSASequence:
   cdef int saveInterval(self,IntervalMap im[],int n,int expand_self,FILE *ifile)
 
 cdef class NLMSASlice:
-  cdef readonly start,stop,id
-  cdef int n,nseqBounds,nrealseq,offset
+  cdef readonly int start,stop,id
+  cdef int n,nseqBounds,nrealseq,offset,deallocID
   cdef IntervalMap *im
   cdef IntervalMap *seqBounds
   cdef readonly NLMSASequence nlmsaSequence
