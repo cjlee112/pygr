@@ -232,8 +232,13 @@ class BlastSequenceBase(SequenceBase):
         self.db=db
         self.id=id
         SequenceBase.__init__(self)
-    def strslice(self,start,end):
+    def strslice(self,start,end,useCache=True):
         "Efficient access to slice of a sequence, useful for huge contigs"
+        if useCache:
+            try:
+                return self.db.strsliceCache(self,start,end)
+            except IndexError: # NOT FOUND IN CACHE
+                pass # JUST USE OUR REGULAR METHOD
         return fastacmd_seq(self.db.filepath,self.id,start,end)
 
 class BlastSequence(BlastSequenceBase):
@@ -252,8 +257,13 @@ class FileDBSequence(BlastSequenceBase):
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
         return self.db.seqLenDict[self.id][0]
-    def strslice(self,start,end):
+    def strslice(self,start,end,useCache=True):
         "Efficient access to slice of a sequence, useful for huge contigs"
+        if useCache:
+            try:
+                return self.db.strsliceCache(self,start,end)
+            except IndexError: # NOT FOUND IN CACHE
+                pass # JUST USE OUR REGULAR METHOD
         try:
             ifile=self.db._pureseq
         except AttributeError:
@@ -421,6 +431,43 @@ class SeqDBbase(dict):
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
+    _cache_max=10000
+    def cacheHint(self,owner,ivalDict):
+        'save a cache hint dict of {id:(start,stop)} associated with owner'
+        d={}
+        for id,ival in ivalDict.items(): # BUILD THE CACHE DICTIONARY FOR owner
+            if ival[0]<0: # FORCE IVAL INTO POSITIVE ORIENTATION
+                ival=(-ival[1],-ival[0])
+            if ival[1]-ival[0]>self._cache_max: # TRUNCATE EXCESSIVE LENGTH
+                ival=(ival[0],ival[0]+self._cache_max)
+            d[id]=[ival[0],ival[1]]
+        try:
+            self._cache[owner]=d # ADD TO EXISTING CACHE
+        except AttributeError:
+            import weakref # AUTOMATICALLY REMOVE FROM CACHE IF owner
+            self._cache=weakref.WeakKeyDictionary() # GOES OUT OF SCOPE
+            self._cache[owner]=d
+    def strsliceCache(self,seq,start,stop):
+        'get strslice using cache hints, if any'
+        try:
+            cacheList=self._cache.values()
+        except AttributeError:
+            raise IndexError('no cache present')
+        for d in cacheList:
+            try:
+                ival=d[seq.id]
+            except KeyError:
+                continue # NOT IN THIS CACHE, SO SKIP
+            if start>=ival[0] and stop<=ival[1]: # CONTAINED IN ival
+                try:
+                    s=ival[2] # GET SEQ STRING FROM OUR CACHE
+                except IndexError: # NEED TO CACHE ival SEQ STRING
+                    s=seq.strslice(ival[0],ival[1],useCache=False)
+                    ival.append(s)
+                return s[start-ival[0]:stop-ival[0]]
+        raise IndexError('interval not found in cache')
+
+
 
 class BlastDBbase(SeqDBbase):
     "Container representing Blast database"
@@ -943,11 +990,30 @@ Set trypath to give a list of directories to search.'''
         for db in self.dicts:
             n+=len(db)
         return n
+    def cacheHint(self,owner,ivalDict):
+        'save a cache hint dict of {id:(start,stop)} associated with owner'
+        d={}
+        for id,ival in ivalDict.items(): # EXTRACT SEPARATE SUBDICT FOR EACH prefix
+            prefix=id.split(self.separator)[0] # EXTRACT PREFIX, SEQID
+            seqID=id[len(prefix)+1:]
+            try: # SAVE TO SEPARATE DICTIONARY FOR EACH prefix
+                d[prefix][seqID]=ival
+            except KeyError:
+                d[prefix]={seqID:ival}
+        for prefix,seqDict in d.items():
+            try:
+                m=self.prefixDict[prefix].cacheHint
+            except AttributeError: # CAN'T cacheHint, SO JUST IGNORE
+                pass
+            else:
+                m(owner,seqDict) # PASS CACHE HINT DOWN TO SUBDICTIONARY
 
 
 class BlastDBXMLRPC(BlastDB):
+    'XMLRPC server wrapper around a standard BlastDB'
     xmlrpc_methods={"getSeqLen":0,"strslice":0}
     def getSeqLen(self,id):
+        'get sequence length, or -1 if not found'
         try:
             return len(self[id]) 
         except KeyError:
@@ -963,19 +1029,25 @@ class BlastDBXMLRPC(BlastDB):
 
     
 class XMLRPCSequence(SequenceBase):
-    "Represents a sequence in a blast database, w/o keeping seq in memory"
+    "Represents a sequence in a blast database, accessed via XMLRPC"
     def __init__(self,db,id,length):
         self.db=db
         self.id=id
         self.length=length
         SequenceBase.__init__(self)
-    def strslice(self,start,end):
-        "Efficient access to slice of a sequence, useful for huge contigs"
-        return self.db.server.strslice(self.id,start,end)
+    def strslice(self,start,end,useCache=True):
+        "XMLRPC access to slice of a sequence"
+        if useCache:
+            try:
+                return self.db.strsliceCache(self,start,end)
+            except IndexError: # NOT FOUND IN CACHE
+                pass # JUST USE OUR REGULAR XMLRPC METHOD
+        return self.db.server.strslice(self.id,start,end) # GET FROM XMLRPC
     def __len__(self):
         return self.length
 
 class XMLRPCSequenceDB(SeqDBbase):
+    'XMLRPC client: access sequence database over XMLRPC'
     def __init__(self,url=None,name=None):
         dict.__init__(self)
         import coordinator
