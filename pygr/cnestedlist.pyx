@@ -431,7 +431,7 @@ cdef class NLMSASliceLetters:
 cdef class NLMSASlice:
   def __new__(self,NLMSASequence ns not None,int start,int stop,
               int id= -1,int offset=0,seq=None):
-    cdef int i,j,n,start_max,end_min,start2,stop2,nseq,istart,istop,localQuery
+    cdef int i,j,n,start_max,end_min,start2,stop2,nseq,istart,istop,localQuery,cacheMax
     cdef NLMSASequence ns_lpo
     cdef IntervalFileDBIterator it,it2
     cdef IntervalMap *im,*im2
@@ -528,6 +528,21 @@ cdef class NLMSASlice:
       if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].target_id):
         n=n+1
     self.nrealseq=n # SAVE THE COUNT
+    try: # _cache_max=0 TURNS OFF CACHING...
+      cacheMax=ns.nlmsaLetters.seqs._cache_max
+    except AttributeError:
+      cacheMax=1 # ALLOW CACHING...
+    try:  # SAVE OUR COVERING INTERVALS AS CACHE HINTS IF POSSIBLE...
+      saveCache=ns.nlmsaLetters.seqs.cacheHint
+    except AttributeError:
+      cacheMax=0 # TURN OFF CACHING
+    if cacheMax>0: # CONSTRUCT & SAVE DICT OF CACHE HINTS: COVERING INTERVALS
+      cacheDict={}
+      for i from 0 <= i < self.nseqBounds: # ONLY SAVE NON-LPO SEQUENCES
+        if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].target_id):
+          id=ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)
+          cacheDict[id]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
+      saveCache(self,cacheDict) # SAVE THE COVERING IVALS AS CACHE HINTS
 
   def __dealloc__(self):
     'remember: dealloc cannot call other methods!'
@@ -1291,6 +1306,10 @@ class NLMSASeqList(list):
     'return NLMSASequence, seq for a given nlmsa_id'
     seqID,nsID=self.nlmsaSeqDict.IDdict[str(nlmsaID)]
     return self.nlmsaSeqDict.nlmsa.seqDict[seqID]
+  def getSeqID(self,nlmsaID):
+    'return seqID for a given nlmsa_id'
+    seqID,nsID=self.nlmsaSeqDict.IDdict[str(nlmsaID)]
+    return seqID
   def is_lpo(self,id):
     cdef NLMSASequence ns
     if id>=len(self):
