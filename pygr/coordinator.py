@@ -271,6 +271,10 @@ class XMLRPCServerBase(object):
             obj=self.objDict[objname]
             if methodname in obj.xmlrpc_methods:
                 m=getattr(obj,methodname)
+            else:
+                print >>sys.stderr,\
+                      "methodCall: blocked unregistered method %s" % methodname
+                return ''
         except KeyError,AttributeError:
             return '' # RETURN FAILURE CODE
         return m(*args) # RUN THE OBJECT METHOD
