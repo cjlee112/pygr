@@ -278,10 +278,11 @@ class XMLRPCServerBase(object):
         'launch the XMLRPC service.  Never exits.'
         detach_as_demon_process(self)
         serve_forever(self)
-    def register(self,url,name):
+    def register(self,url,name,server=None):
         'register our server with the designated index server'
         data=self.registrationData # RAISE ERROR IF NO DATA TO REGISTER...
-        server=get_connection(url,name)
+        if server is None:
+            server=get_connection(url,name)
         server.registerServer('%s:%d' % (self.host,self.port),data)
         
 class ResourceController(object):
