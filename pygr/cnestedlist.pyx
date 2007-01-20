@@ -1363,7 +1363,8 @@ class NLMSASeqDict(dict):
     else: # GET THE IDENTFIER FROM THE SEQ / DATABASE
       id=self.getSeqID(seq)
     if nlmsaID is None: # ALLOCATE A NEW UNIQUE ID
-      nlmsaID=len(self.seqlist)+len(self.seqIDdict)+self.nlmsa.nPad
+      nlmsaID=self.nlmsa.inlmsa # USE THE NEXT FREE ID
+      self.nlmsa.inlmsa=self.nlmsa.inlmsa+1 # ADVANCE THE COUNTER
     self.seqIDdict[id]=nlmsaID,nsID,offset
     self.IDdict[str(nlmsaID)]=id,nsID
 
