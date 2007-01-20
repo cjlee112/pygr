@@ -22,15 +22,14 @@ class ResourceDBServer(object):
     xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0}
     def __init__(self,readOnly=False):
         self.d={}
-        self.readOnly=readOnly
+        if readOnly: # LOCK THE INDEX.  DON'T ACCEPT FOREIGN DATA!!
+            self.xmlrpc_methods={'getResource':0} # ONLY ALLOW THESE METHODS!
     def getResource(self,id):
         try:
             return self.d[id] # RETURN DICT OF PICKLED OBJECTS
         except KeyError:
             return '' # EMPTY STRING INDICATES FAILURE
     def registerServer(self,locationKey,serviceDict):
-        if self.readOnly:
-            raise ValueError('FORBIDDEN access attempt')
         for id,pdata in serviceDict.items():
             try:
                 self.d[id][locationKey]=pdata # ADD TO DICT FOR THIS RESOURCE
@@ -38,8 +37,6 @@ class ResourceDBServer(object):
                 self.d[id]={locationKey:pdata} # CREATE NEW DICT FOR THIS RESOURCE
         return ''  # DUMMY RETURN VALUE FOR XMLRPC
     def delResource(self,id,locationKey):
-        if self.readOnly:
-            raise ValueError('FORBIDDEN access attempt')
         try:
             del self.d[id][locationKey]
         except KeyError:
@@ -238,10 +235,9 @@ class ResourceFinder(object):
             server[id]=obj # ADD TO XMLRPC SERVER
         server.registrationData=clientDict # SAVE DATA FOR SERVER REGISTRATION
         if withIndex: # SERVE OUR OWN INDEX AS A STATIC, READ-ONLY INDEX
-            myIndex=ResourceDBServer() # CREATE EMPTY INDEX
+            myIndex=ResourceDBServer(readOnly=True) # CREATE EMPTY INDEX
             server['index']=myIndex # ADD TO OUR XMLRPC SERVER
             server.register('','',server=myIndex) # ADD OUR RESOURCES TO THE INDEX
-            myIndex.readOnly=True # LOCK THE INDEX.  DON'T ACCEPT FOREIGN DATA!!
         return server
 
 
