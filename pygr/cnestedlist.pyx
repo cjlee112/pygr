@@ -431,10 +431,11 @@ cdef class NLMSASliceLetters:
 cdef class NLMSASlice:
   def __new__(self,NLMSASequence ns not None,int start,int stop,
               int id= -1,int offset=0,seq=None):
-    cdef int i,j,n,start_max,end_min,start2,stop2,nseq,istart,istop,localQuery,cacheMax
+    cdef int i,j,n,start_max,end_min,start2,stop2,nseq,istart,istop,localQuery
     cdef NLMSASequence ns_lpo
     cdef IntervalFileDBIterator it,it2
     cdef IntervalMap *im,*im2
+    cdef int cacheMax
 
     if seq is None: # GET FROM NLMSASequence
       seq=ns.seq
@@ -442,6 +443,7 @@ cdef class NLMSASlice:
     self.start=start
     self.stop=stop
     self.offset=offset # ALWAYS STORE offset IN POSITIVE ORIENTATION
+    self.deallocID= -1
     self.seq=seq
     try: # USE PYTHON METHOD TO DO QUERY
       id,ivals=ns.nlmsaLetters.doSlice(seq) # doSlice() RETURNS RAW INTERVALS
@@ -528,24 +530,37 @@ cdef class NLMSASlice:
       if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].target_id):
         n=n+1
     self.nrealseq=n # SAVE THE COUNT
+
     try: # _cache_max=0 TURNS OFF CACHING...
-      cacheMax=ns.nlmsaLetters.seqs._cache_max
+      cacheMax=ns.nlmsaLetters.seqDict._cache_max
     except AttributeError:
       cacheMax=1 # ALLOW CACHING...
     try:  # SAVE OUR COVERING INTERVALS AS CACHE HINTS IF POSSIBLE...
-      saveCache=ns.nlmsaLetters.seqs.cacheHint
+      saveCache=ns.nlmsaLetters.seqDict.cacheHint
     except AttributeError:
       cacheMax=0 # TURN OFF CACHING
     if cacheMax>0: # CONSTRUCT & SAVE DICT OF CACHE HINTS: COVERING INTERVALS
+      from seqdb import cacheProxyDict
+      self.deallocID,cacheProxy=cacheProxyDict()
       cacheDict={}
+      try: # ADD A CACHE HINT FOR QUERY SEQ IVAL
+        seqID=ns.nlmsaLetters.seqs.getSeqID(seq) # GET FULL-LENGTH ID
+        cacheDict[seqID]=(self.start,self.stop)
+      except KeyError:
+        pass
       for i from 0 <= i < self.nseqBounds: # ONLY SAVE NON-LPO SEQUENCES
         if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].target_id):
-          id=ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)
-          cacheDict[id]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
-      saveCache(self,cacheDict) # SAVE THE COVERING IVALS AS CACHE HINTS
+          cacheDict[ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
+      saveCache(cacheProxy,cacheDict) # SAVE COVERING IVALS AS CACHE HINT
 
   def __dealloc__(self):
     'remember: dealloc cannot call other methods!'
+    if self.deallocID>=0: # REMOVE OUR ENTRY FROM CACHE...
+      from seqdb import cacheProxyDict
+      try: # WORKAROUND weakref - PYREX PROBLEMS...
+        del cacheProxyDict[self.deallocID]
+      except KeyError:
+        pass
     if self.im:
       free(self.im)
       self.im=NULL
