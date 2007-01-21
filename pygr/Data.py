@@ -195,7 +195,8 @@ class ResourceFinder(object):
         'delete the specified resource from the specified layer'
         db=self.getLayer(layer)
         del db[id]
-    def newServer(self,name,serverClasses=None,withIndex=False,**kwargs):
+    def newServer(self,name,serverClasses=None,clientHost=None,
+                  withIndex=False,**kwargs):
         'construct server for the designated classes'
         if serverClasses is None: # DEFAULT TO ALL CLASSES WE KNOW HOW TO SERVE
             from seqdb import BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC
@@ -208,6 +209,8 @@ class ResourceFinder(object):
                 pass
         import coordinator
         server=coordinator.XMLRPCServerBase(name,**kwargs)
+        if clientHost is None: # DEFAULT: USE THE SAME HOST STRING AS SERVER
+            clientHost=server.host
         clientDict={}
         for id,obj in self.d.items(): # SAVE ALL OBJECTS MATCHING serverClasses
             skipThis=True
@@ -225,9 +228,9 @@ class ResourceFinder(object):
                 newobj.__setstate__(state) # AND INITIALIZE ITS STATE
                 obj=newobj # THIS IS OUR RE-CLASSED VERSION OF obj
             try: # USE OBJECT METHOD TO SAVE HOST INFO, IF ANY...
-                obj.saveHostInfo(server.host,server.port,id)
+                obj.saveHostInfo(clientHost,server.port,id)
             except AttributeError: # TRY TO SAVE URL AND NAME DIRECTLY ON obj
-                obj.url='http://%s:%d' % (server.host,server.port)
+                obj.url='http://%s:%d' % (clientHost,server.port)
                 obj.name=id
             obj.__class__=clientKlass # CONVERT TO CLIENT CLASS FOR PICKLING
             clientDict[id]=self.dumps(obj) # PICKLE THE CLIENT OBJECT, SAVE
