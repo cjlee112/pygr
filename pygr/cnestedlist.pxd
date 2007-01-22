@@ -80,7 +80,7 @@ cdef extern from "intervaldb.h":
   IntervalIterator *interval_iterator_alloc() except NULL
   int free_interval_iterator(IntervalIterator *it)
   IntervalIterator *reset_interval_iterator(IntervalIterator *it)
-  IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn) except NULL
+  int find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn,IntervalIterator **it_return) except -1
   char *write_binary_files(IntervalMap im[],int n,int ntop,int div,SublistHeader *subheader,int nlists,char filestem[])
   IntervalDBFile *read_binary_files(char filestem[],char err_msg[],int subheader_nblock) except NULL
   int free_interval_dbfile(IntervalDBFile *db_file)
@@ -134,6 +134,7 @@ cdef class IntervalFileDBIterator:
   cdef IntervalMap *im_buf
   cdef int ihit,nhit,start,end,nbuf
   cdef IntervalFileDB db
+  cdef IntervalDB idb
 
   cdef int restart(self,int start,int end,IntervalFileDB db) except -2
   cdef int reset(self) except -2
@@ -156,25 +157,29 @@ cdef class FilePtrPool:
   cdef FILE *ifile(self,int id)
   cdef int close(self,int id)
 
-
+cdef class NLMSASequence
 
 cdef class NLMSA:
   cdef readonly object pathstem
   cdef readonly object seqs
   cdef readonly object seqlist
   cdef readonly object seqDict
+  cdef NLMSASequence currentUnion
   cdef int do_build
+  cdef readonly object lpoList
   cdef int lpo_id
-  cdef readonly int maxlen,inlmsa
-  cdef public object _persistent_id,url,name
+  cdef readonly int maxlen,inlmsa,is_bidirectional,use_virtual_lpo,in_memory_mode
+  cdef public object _persistent_id
 
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id)
 
 cdef class NLMSASequence:
   cdef readonly int id,length,nbuild,is_lpo,is_union
+  cdef readonly object offset
   cdef readonly object seq
   cdef readonly object name
   cdef IntervalFileDB db
+  cdef IntervalDB idb
   cdef FILE *build_ifile
   cdef readonly object filestem
   cdef readonly NLMSA nlmsaLetters
