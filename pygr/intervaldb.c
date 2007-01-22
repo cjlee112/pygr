@@ -395,11 +395,11 @@ void reorient_intervals(int n,IntervalMap im[],int ori_sign)
   }
 }
 
-IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,
-				 IntervalMap im[],int n,
-				 SublistHeader subheader[],int nlists,
-				 IntervalMap buf[],int nbuf,
-				 int *p_nreturn)
+int find_intervals(IntervalIterator *it0,int start,int end,
+		   IntervalMap im[],int n,
+		   SublistHeader subheader[],int nlists,
+		   IntervalMap buf[],int nbuf,
+		   int *p_nreturn,IntervalIterator **it_return)
 {
   IntervalIterator *it=NULL,*it2=NULL;
   int ibuf=0,j,k,ori_sign=1;
@@ -446,9 +446,10 @@ IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,
   reorient_intervals(ibuf,buf,ori_sign); /* REORIENT INTERVALS TO MATCH QUERY ORI */
 #endif
   *p_nreturn=ibuf; /* #INTERVALS FOUND IN THIS PASS */
-  return it; /* HAND BACK ITERATOR FOR CONTINUING THE SEARCH, IF ANY */
+  *it_return=it; /* HAND BACK ITERATOR FOR CONTINUING THE SEARCH, IF ANY */
+  return 0; /* SIGNAL THAT NO ERROR OCCURRED */
  handle_malloc_failure:
-  return NULL;
+  return -1;
 }
 
 

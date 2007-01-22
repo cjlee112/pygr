@@ -70,7 +70,6 @@ typedef struct {
   char *filename;
 } FilePtrRecord;
 
-
 extern int imstart_qsort_cmp(const void *void_a,const void *void_b);
 extern int target_qsort_cmp(const void *void_a,const void *void_b);
 extern IntervalMap *read_intervals(int n,FILE *ifile);
@@ -83,7 +82,7 @@ extern IntervalDB *build_interval_db(IntervalMap im[],int n);
 extern IntervalIterator *interval_iterator_alloc(void);
 extern int free_interval_iterator(IntervalIterator *it);
 extern IntervalIterator *reset_interval_iterator(IntervalIterator *it);
-extern IntervalIterator *find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn);
+extern int find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn,IntervalIterator **it_return);
 extern int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop);
 extern IntervalMap *read_sublist(FILE *ifile,SublistHeader *subheader);
 extern int find_file_intervals(IntervalIterator *it0,int start,int end,
