@@ -17,9 +17,9 @@ cdef class IntervalDBIterator:
     if self.ihit>=self.nhit: # TRY TO GET ONE MORE BUFFER CHUNK OF HITS
       if self.it==NULL: # ITERATOR IS EXHAUSTED
         return -1
-      self.it=find_intervals(self.it,self.start,self.end,self.db.im,self.db.ntop,
-                             self.db.subheader,self.db.nlists,self.im_buf,1024,
-                             &(self.nhit)) # GET NEXT BUFFER CHUNK
+      find_intervals(self.it,self.start,self.end,self.db.im,self.db.ntop,
+                     self.db.subheader,self.db.nlists,self.im_buf,1024,
+                     &(self.nhit),&(self.it)) # GET NEXT BUFFER CHUNK
       self.ihit=0 # START ITERATING FROM START OF BUFFER
     if self.ihit<self.nhit: # RETURN NEXT ITEM FROM BUFFER
       i=self.ihit
@@ -113,9 +113,9 @@ cdef class IntervalDB:
     it_alloc=it
     l=[] # LIST OF RESULTS TO HAND BACK
     while it:
-      it=find_intervals(it,start,end,self.im,self.ntop,
-                        self.subheader,self.nlists,im_buf,1024,
-                        &(nhit)) # GET NEXT BUFFER CHUNK
+      find_intervals(it,start,end,self.im,self.ntop,
+                     self.subheader,self.nlists,im_buf,1024,
+                     &(nhit),&(it)) # GET NEXT BUFFER CHUNK
       for i from 0 <= i < nhit:
         l.append((im_buf[i].start,im_buf[i].end,im_buf[i].target_id,im_buf[i].target_start,im_buf[i].target_end))
     free_interval_iterator(it_alloc)
@@ -156,6 +156,7 @@ cdef class IntervalDB:
 
 cdef class IntervalFileDBIterator:
   def __new__(self,int start,int end,IntervalFileDB db=None,
+              NLMSASequence ns=None,
               int nbuffer=1024,rawIvals=None):
     cdef int i
     self.it=interval_iterator_alloc()
@@ -163,7 +164,13 @@ cdef class IntervalFileDBIterator:
     self.start=start
     self.end=end
     self.db=db
-    if rawIvals is not None:
+    if ns is not None:
+      if ns.idb is not None:
+        self.idb=ns.idb
+      elif ns.db is None:
+        ns.forceLoad()
+      self.db=ns.db
+    if rawIvals is not None and len(rawIvals)>nbuffer:
       nbuffer=len(rawIvals)
     self.im_buf=interval_map_alloc(nbuffer)
     self.nbuf=nbuffer
@@ -195,12 +202,12 @@ cdef class IntervalFileDBIterator:
 
   cdef int extend(self,int ikeep):
     'expand the buffer if necessary, keeping elements [ikeep:nbuf]'
-    cdef int len,istart
+    cdef int length,istart
     cdef IntervalMap *new_buf
     istart=self.nbuf-ikeep
-    len=sizeof(IntervalMap)*istart # #BYTES WE MUST KEEP
+    length=sizeof(IntervalMap)*istart # #BYTES WE MUST KEEP
     if ikeep==0: # KEEPING THE WHOLE BUFFER, SO MUST ALLOCATE NEW SPACE
-      new_buf=<IntervalMap *>realloc(self.im_buf,2*len) # DOUBLE OUR BUFFER
+      new_buf=<IntervalMap *>realloc(self.im_buf,2*length) # DOUBLE OUR BUFFER
       if new_buf==NULL:
         raise MemoryError('out of memory')
       self.im_buf=new_buf
@@ -208,11 +215,11 @@ cdef class IntervalFileDBIterator:
     elif ikeep<8: # RUNNING OUT OF ROOM, SO EXPAND BUFFER
       self.nbuf=2*self.nbuf
       new_buf=interval_map_alloc(self.nbuf)
-      memcpy(new_buf,self.im_buf+ikeep,len)
+      memcpy(new_buf,self.im_buf+ikeep,length)
       free(self.im_buf)
       self.im_buf=new_buf
     else: # JUST SHIFT [ikeep:] SLICE OF BUFFER TO FRONT [0:istart]
-      memmove(self.im_buf,self.im_buf+ikeep,len)
+      memmove(self.im_buf,self.im_buf+ikeep,length)
     return istart # RETURN START OF EMPTY BLOCK WHERE WE CAN ADD NEW DATA
 
   cdef int saveInterval(self,int start,int end,int target_id,
@@ -233,22 +240,27 @@ cdef class IntervalFileDBIterator:
   cdef int nextBlock(self,int *pkeep) except -2:
     'load one more block of overlapping intervals'
     cdef int i
-    if self.db is None:
-      raise IOError('Iterator has no database!  Please provide a db argument.')
     if self.it==NULL: # ITERATOR IS EXHAUSTED
       return -1
     if pkeep and pkeep[0]>=0 and pkeep[0]<self.nhit: #MUST KEEP [ikeep:] SLICE
       i=self.extend(pkeep[0]) # MOVE SLICE TO THE FRONT
     else: # WE CAN USE THE WHOLE BUFFER
       i=0
-    find_file_intervals(self.it,self.start,self.end,
-                        self.db.db[0].ii,self.db.db[0].nii,
-                        self.db.db[0].subheader,self.db.db[0].nlists,
-                        &(self.db.db[0].subheader_file),
-                        self.db.db[0].ntop,self.db.db[0].div,
-                        self.db.db[0].ifile_idb,
-                        self.im_buf+i,self.nbuf-i,
-                        &(self.nhit),&(self.it)) # GET NEXT BUFFER CHUNK
+    if self.db is not None: # ON-DISK DATABASE
+      find_file_intervals(self.it,self.start,self.end,
+                          self.db.db[0].ii,self.db.db[0].nii,
+                          self.db.db[0].subheader,self.db.db[0].nlists,
+                          &(self.db.db[0].subheader_file),
+                          self.db.db[0].ntop,self.db.db[0].div,
+                          self.db.db[0].ifile_idb,
+                          self.im_buf+i,self.nbuf-i,
+                          &(self.nhit),&(self.it)) # GET NEXT BUFFER CHUNK
+    elif self.idb is not None: # IN-MEMORY DATABASE
+      find_intervals(self.it,self.start,self.end,self.idb.im,self.idb.ntop,
+                     self.idb.subheader,self.idb.nlists,self.im_buf+i,self.nbuf-i,
+                     &(self.nhit),&(self.it)) # GET NEXT BUFFER CHUNK
+    else:
+      raise IOError('Iterator has no database!  Please provide a db argument.')
     self.nhit=self.nhit+i # TOTAL #HITS IN THE BUFFER
     self.ihit=i # START ITERATING FROM START OF NEW HITS
     if pkeep and pkeep[0]>=0: # RESET ikeep INDEX TO START OF BUFFER
@@ -457,41 +469,40 @@ cdef class NLMSASlice:
       if id<0:
         id=ns.id
       self.id=id
-      if ns.db is None:
-        ns.forceLoad()
       it2=None
       if start<0: # NEED TO TRANSLATE OFFSETS TO MINUS ORIENTATION
         offset= -offset
-      it=IntervalFileDBIterator(start+offset,stop+offset,ns.db)
-      n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
-      if n<=0:
-        raise KeyError('this interval is not aligned!')
-      for i from 0 <= i < n: # CLIP INTERVALS TO FIT [start:stop]
-        it.im_buf[i].start=it.im_buf[i].start-offset # XLATE TO SRC SEQ COORDS
-        it.im_buf[i].end=it.im_buf[i].end-offset
-        if stop<it.im_buf[i].end: # TRUNCATE TO FIT WITHIN [start:stop]
-          it.im_buf[i].target_end= it.im_buf[i].target_end \
-                                   +stop-it.im_buf[i].end # CALCULATE NEW ENDPOINT
-          it.im_buf[i].end=stop
-        if start>it.im_buf[i].start: # CALCULATE NEW STARTPOINT
-          it.im_buf[i].target_start=it.im_buf[i].target_start \
-                                   +start-it.im_buf[i].start
-          it.im_buf[i].start=start
+      if ns.nlmsaLetters.use_virtual_lpo==1: # TRANSLATE SEQ DIRECTLY TO LPO
+        it=IntervalFileDBIterator(start,stop,rawIvals=((start,stop,ns.id-1,
+                                                        start+offset,stop+offset),))
+        n=1 # JUST THE SINGLE IDENTITY MAPPING FROM SEQ TO LPO
+      else: # PERFORM NORMAL SEQ --> LPO QUERY
+        it=IntervalFileDBIterator(start+offset,stop+offset,ns=ns)
+        n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
+        if n<=0:
+          raise KeyError('this interval is not aligned!')
+        for i from 0 <= i < n: # CLIP INTERVALS TO FIT [start:stop]
+          it.im_buf[i].start=it.im_buf[i].start-offset # XLATE TO SRC SEQ COORDS
+          it.im_buf[i].end=it.im_buf[i].end-offset
+          if stop<it.im_buf[i].end: # TRUNCATE TO FIT WITHIN [start:stop]
+            it.im_buf[i].target_end= it.im_buf[i].target_end \
+                                     +stop-it.im_buf[i].end # CALCULATE NEW ENDPOINT
+            it.im_buf[i].end=stop
+          if start>it.im_buf[i].start: # CALCULATE NEW STARTPOINT
+            it.im_buf[i].target_start=it.im_buf[i].target_start \
+                                     +start-it.im_buf[i].start
+            it.im_buf[i].start=start
 
       if not ns.is_lpo: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
         ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id] # DEFAULT LPO
-        if ns_lpo.db is None:
-          ns_lpo.forceLoad()
         for i from 0 <= i < n:
           if it.im_buf[i].target_id != ns_lpo.id: # SWITCHING TO A DIFFERENT LPO?
             ns_lpo=ns.nlmsaLetters.seqlist[it.im_buf[i].target_id]
             if not ns_lpo.is_lpo:
               raise ValueError('sequence mapped to non-LPO target??')
-            if ns_lpo.db is None:
-              ns_lpo.forceLoad()
           if it2 is None: # NEED TO ALLOCATE NEW ITERATOR
             it2=IntervalFileDBIterator(it.im_buf[i].target_start,
-                                       it.im_buf[i].target_end,ns_lpo.db)
+                                       it.im_buf[i].target_end,ns=ns_lpo)
           else: # JUST REUSE THIS ITERATOR WITHOUT REALLOCING MEMORY
             it2.restart(it.im_buf[i].target_start,
                         it.im_buf[i].target_end,ns_lpo.db)
@@ -1175,8 +1186,8 @@ cdef class NLMSANode:
 
 cdef class NLMSASequence:
   'sequence interface to NLMSA storage of an LPO alignment'
-  def __new__(self,NLMSA nl not None,filestem,seq,mode='r',is_union=0,
-              length=None):
+  def __init__(self,NLMSA nl not None,filestem,seq,mode='r',is_union=0,
+               length=None):
     self.nlmsaLetters=nl
     self.filestem=filestem
     self.is_union=is_union
@@ -1200,11 +1211,19 @@ cdef class NLMSASequence:
       self.length=0 # LPO AND UNION SEQUENCES EXPAND AUTOMATICALLY
       if not is_union:
         self.is_lpo=1
-    if mode=='onDemand': # WAIT TO OPEN DB UNTIL ACTUALLY NEEDED
-      self.db=None
-    else:
+        if len(nl.lpoList)>0:  # CALCULATE OFFSET OF NEW LPO, BASED ON LAST LPO
+          lastLPO=nl.lpoList[-1]
+          self.offset=lastLPO.offset+lastLPO.length
+        else:
+          self.offset=0
+        nl.lpoList.append(self) # ADD TO THE LPO LIST
+    self.idb=None # DEFAULT: NOT USING IN-MEMORY DATABASE.
+    self.db=None # DEFAULT: WAIT TO OPEN DB UNTIL ACTUALLY NEEDED
+    if mode=='r': # IMMEDIATELY OPEN DATABASE, UNLIKE onDemand MODE
       self.db=IntervalFileDB(filestem,mode)
-    if mode=='w':
+    elif mode=='memory': # OPEN IN-MEMORY DATABASE
+      self.idb=IntervalDB()
+    elif mode=='w': # WRITE .build FILE
       filename=filestem+'.build'
       self.build_ifile=fopen(filename,'w')
       if self.build_ifile==NULL:
@@ -1226,6 +1245,9 @@ cdef class NLMSASequence:
     if self.db is not None:
       self.db.close() # CLOSE THE DATABASE, RELEASE MEMORY
       self.db=None # DISCONNECT FROM DATABASE
+    if self.idb is not None:
+      self.idb.close() # CLOSE THE DATABASE, RELEASE MEMORY
+      self.idb=None # DISCONNECT FROM DATABASE
     if self.build_ifile:
       fclose(self.build_ifile)
       self.build_ifile=NULL
@@ -1234,7 +1256,7 @@ cdef class NLMSASequence:
     'build nested list from saved unsorted alignment data'
     cdef IntervalDB db
     if self.build_ifile==NULL:
-      raise ValueError('not opened in write mode')
+      raise IOError('not opened in write mode')
     if self.nbuild<=0:
       raise ValueError('No alignment data for this sequence.  Nothing to build!')
     fclose(self.build_ifile)
@@ -1246,10 +1268,12 @@ cdef class NLMSASequence:
     db.close() # DUMP NESTEDLIST FROM MEMORY
     import os
     os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
-    self.db.open(self.filestem) # NOW OPEN THE IntervalDBFile
+    self.db=IntervalFileDB(self.filestem) # NOW OPEN THE IntervalFileDB
 
   cdef int saveInterval(self,IntervalMap im[],int n,int expand_self,FILE *ifile):
     cdef int i
+    if ifile==NULL:
+      raise IOError('not opened in write mode')
     if expand_self: # AN LPO THAT EXPANDS AS WE ADD TO IT...
       for i from 0 <= i < n:
         if im[i].start>=0:
@@ -1266,15 +1290,16 @@ cdef class NLMSASequence:
     'save mapping [k.start:k.stop] --> (id,start,stop)'
     cdef int i
     cdef IntervalMap im_tmp
-    if self.build_ifile==NULL:
+    if self.build_ifile: # SAVE TO BUILD FILE
+      im_tmp.start,im_tmp.end=(k.start,k.stop)
+      im_tmp.target_id,im_tmp.target_start,im_tmp.target_end=t
+      im_tmp.sublist= -1
+      i=self.saveInterval(&im_tmp,1,self.is_lpo,self.build_ifile)
+  ##     print 'saveInterval:',self.id,im_tmp.start,im_tmp.end,im_tmp.target_id,\
+  ##           im_tmp.target_start,im_tmp.target_end
+      self.nbuild=self.nbuild+i # INCREMENT COUNTER OF INTERVALS SAVED
+    else:
       raise ValueError('not opened in write mode')
-    im_tmp.start,im_tmp.end=(k.start,k.stop)
-    im_tmp.target_id,im_tmp.target_start,im_tmp.target_end=t
-    im_tmp.sublist= -1
-    i=self.saveInterval(&im_tmp,1,self.is_lpo,self.build_ifile)
-##     print 'saveInterval:',self.id,im_tmp.start,im_tmp.end,im_tmp.target_id,\
-##           im_tmp.target_start,im_tmp.target_end
-    self.nbuild=self.nbuild+i # INCREMENT COUNTER OF INTERVALS SAVED
 
   def __getitem__(self,k):
     try:
@@ -1294,7 +1319,9 @@ cdef class NLMSASequence:
     'add sequence to union'
     # CHECK FOR OVERFLOW... CREATE A NEW UNION IF NEEDED
     if self.length+len(seq.path)>self.nlmsaLetters.maxlen:
-      ns=self.nlmsaLetters.newSequence(None,is_union=1)
+      if self.nlmsaLetters.use_virtual_lpo: # NEED TO CREATE CORRESPONDING LPO
+        ns=self.nlmsaLetters.newSequence(None) # OUR LPO
+      ns=self.nlmsaLetters.newSequence(None,is_union=1) # OUR UNION
       ns.__iadd__(seq) # ADD seq TO BRAND-NEW UNION
       return ns # RETURN THE NEW UNION COORDINATE SYSTEM
     self.nlmsaLetters.seqs.saveSeq(seq,self.id,self.length)
@@ -1355,8 +1382,11 @@ class NLMSASeqDict(dict):
       self.seqIDdict=idDictClass()
       self.IDdict=idDictClass()
 
-  def saveSeq(self,seq,nsID,offset,nlmsaID=None):
+  def saveSeq(self,seq,nsID= -1,offset=0,nlmsaID=None):
     'save mapping of seq to specified (nlmsaID,ns,offset)'
+    if nsID<0: # LET THE UNION FIGURE IT OUT
+      self.nlmsa.currentUnion=self.nlmsa.currentUnion.__iadd__(seq)
+      return # THE UNION ADDED IT FOR US, NO NEED TO DO ANYTHING
     import types
     if isinstance(seq,types.StringType):
       id=seq # TREAT THIS AS FULLY QUALIFIED IDENTIFIER
@@ -1415,6 +1445,17 @@ class NLMSASeqDict(dict):
     import shelve
     self.seqIDdict=shelve.open(self.filename+'.seqIDdict',mode)
     self.IDdict=shelve.open(self.filename+'.idDict',mode)
+  def getUnionSlice(self,seq):
+    'get union coords for this seq interval, adding seq to index if needed'
+    try:
+      id,ns,offset=self[seq] # LOOK UP IN INDEX
+    except KeyError:
+      self.saveSeq(seq) # ADD THIS NEW SEQUENCE TO OUR CURRENT UNION
+      id,ns,offset=self[seq] # LOOK UP IN INDEX
+    if seq.orientation<0: # REVERSE ORIENTATION
+      return ns,slice(seq.start-offset,seq.stop-offset) # USE UNION COORDS
+    else: # FORWARD ORIENTATION
+      return ns,slice(seq.start+offset,seq.stop+offset) # USE UNION COORDS
 
 
 
@@ -1495,12 +1536,13 @@ cdef class NLMSA:
   'toplevel interface to NLMSA storage of an LPO alignment'
   def __init__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
                maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666,
-               trypath=None,**kwargs):
+               trypath=None,bidirectional=True,use_virtual_lpo= -1,**kwargs):
     try:
       import resource # WE MAY NEED TO OPEN A LOT OF FILES...
       resource.setrlimit(resource.RLIMIT_NOFILE,(maxOpenFiles,-1))
     except: # BUT THIS IS OPTIONAL...
       pass
+    self.lpoList=[] # EMPTY LIST OF LPO
     self.seqs=NLMSASeqDict(self,pathstem,mode,**kwargs)
     self.seqlist=self.seqs.seqlist
     self.pathstem=pathstem
@@ -1510,6 +1552,17 @@ cdef class NLMSA:
     self.maxlen=maxlen
     self.inlmsa=nPad
     self.seqDict=seqDict # SAVE FOR USER TO ACCESS...
+    self.in_memory_mode=0
+    if bidirectional:
+      self.is_bidirectional=1
+    else:
+      self.is_bidirectional=0
+    if use_virtual_lpo is True:
+      self.use_virtual_lpo=1
+    elif use_virtual_lpo is False:
+      self.use_virtual_lpo=0
+    else:
+      self.use_virtual_lpo=use_virtual_lpo
     if mode=='r':
       if self.seqDict is None:
         import seqdb
@@ -1522,10 +1575,18 @@ cdef class NLMSA:
       self.read_indexes(self.seqDict)
     elif mode=='w':
       self.do_build=1
-      self.newSequence()
+      self.newSequence() # CREATE INITIAL LPO
       self.lpo_id=0
       if mafFiles is not None:
         self.readMAFfiles(mafFiles,maxint)
+      else: # USER WILL ADD INTERVAL MAPPINGS HIMSELF...
+        self.newSequence(is_union=1) # SO HE NEEDS AN INITIAL UNION
+    elif mode=='memory':
+      self.in_memory_mode=1
+      self.do_build=1
+      self.newSequence() # CREATE INITIAL LPO
+      self.newSequence(is_union=1) # CREATE INITIAL UNION
+      self.lpo_id=0
     elif mode!='xmlrpc':
       raise ValueError('unknown mode %s' % mode)
 
@@ -1533,7 +1594,11 @@ cdef class NLMSA:
     import seqdb
     return (seqdb.ClassicUnpickler, (self.__class__,self.__getstate__()))
   def __getstate__(self):
-    return dict(pathstem=self.pathstem,seqDict=self.seqDict)
+    if self.in_memory_mode:
+      raise ValueError("can't pickle NLMSA.in_memory_mode")
+    return dict(pathstem=self.pathstem,seqDict=self.seqDict,
+                bidirectional=self.is_bidirectional,
+                use_virtual_lpo=self.use_virtual_lpo)
   def __setstate__(self,state):
     self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
 
@@ -1566,28 +1631,36 @@ cdef class NLMSA:
     cdef NLMSASequence ns
     i=len(self.seqlist) # USE ITS INDEX AS UNIQUE ID FOR THIS SEQUENCE
     filestem=self.pathstem+str(i)
-    ns=NLMSASequence(self,filestem,seq,'w',is_union=is_union) #OPEN FOR WRITING
+    if self.in_memory_mode:
+      mode='memory'
+    else:
+      mode='w'
+    ns=NLMSASequence(self,filestem,seq,mode,is_union=is_union) #OPEN FOR WRITING
+    if is_union: # RECORD THIS AS OUR CURRENT UNION OBJECT
+      self.currentUnion=ns
     self.seqs[seq]=ns # SAVE TO OUR INDEX
     print 'Opened build file for ns_id',ns.id,ns.is_union
     return ns
+
+  def initVirtualLPO(self):
+    'turn on use of virtual LPO mapping (i.e. no actual LPO is present!)'
+    if self.use_virtual_lpo==0:
+      raise ValueError('this alignment is already using an LPO!')
+    self.use_virtual_lpo=1 # TURN ON THE VIRTUAL LPO FEATURE
     
-  def __setitem__(self,k,seq):
-    'save mapping of LPO slice [k.start:k.stop] --> seq interval'
-    cdef int i,start,end
-    cdef NLMSASequence ns,ns_lpo
-    try:
-      id,ns,offset=self.seqs[seq] # LOOK UP IN INDEX
-      if seq.orientation<0: # REVERSE ORIENTATION
-        seqSlice=slice(seq.start-offset,seq.stop-offset) # USE UNION COORDS
-      else: # FORWARD ORIENTATION
-        seqSlice=slice(seq.start+offset,seq.stop+offset) # USE UNION COORDS
-    except KeyError: # ADD THIS NEW SEQUENCE TO OUR INDEX
-      ns=self.newSequence(seq)
-      id=ns.id
-      seqSlice=seq
-    ns[seqSlice]=(self.lpo_id,k.start,k.stop) # FORWARD MAPPING seq -> lpo
-    ns_lpo=self.seqlist[self.lpo_id]
-    ns_lpo[k]=(id,seq.start,seq.stop) # SAVE REVERSE MAPPING lpo -> seq
+##   def __setitem__(self,k,seq):
+##     'save mapping of LPO slice [k.start:k.stop] --> seq interval'
+##     cdef int i,start,end
+##     cdef NLMSASequence ns,ns_lpo
+##     ns,seqSlice=self.seqs.getUnionSlice(seq)
+## ##       ns=self.newSequence(seq)
+## ##       id=ns.id
+## ##       seqSlice=seq
+##     ns[seqSlice]=(self.lpo_id,k.start,k.stop) # FORWARD MAPPING seq -> lpo
+##     # THE FOLLOWING CODE IS NOT ADEQUATE!
+##     # NEEDS TO SCAN self.lpoList TO FIND WHICH LPO SLICE k IS CONTAINED IN!
+##     ns_lpo=self.seqlist[self.lpo_id]
+##     ns_lpo[k]=(id,seq.start,seq.stop) # SAVE REVERSE MAPPING lpo -> seq
 
   def __getitem__(self,k):
     'return a slice of the LPO'
@@ -1618,6 +1691,7 @@ cdef class NLMSA:
     cdef long long linecode_count[256]
 
     ns_lpo=self.seqlist[self.lpo_id] # OUR INITIAL LPO
+    self.use_virtual_lpo=0 # WE ARE USING A REAL LPO!
     self.seqname_alloc(seqnames,ns_lpo.id)
     nseq=1
     nseq0=1
