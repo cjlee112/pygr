@@ -822,16 +822,18 @@ IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
   fscanf(ifile,"%d %d %d %d %d",&n,&ntop,&div,&nlists,&nii);
   fclose(ifile);
 
-  CALLOC(ii,nii,IntervalIndex);
-  sprintf(path,"%s.index",filestem); /* SAVE BASIC SIZE INFO*/
-  ifile=fopen(path,"r");
-  if (!ifile) {
-    if (err_msg)
-      sprintf(err_msg,"unable to open file %s",path);
-    return NULL;
+  CALLOC(ii,nii+1,IntervalIndex);
+  if (nii>0) {
+    sprintf(path,"%s.index",filestem); /* SAVE BASIC SIZE INFO*/
+    ifile=fopen(path,"r");
+    if (!ifile) {
+      if (err_msg)
+	sprintf(err_msg,"unable to open file %s",path);
+      return NULL;
+    }
+    fread(ii,sizeof(IntervalIndex),nii,ifile);
+    fclose(ifile);
   }
-  fread(ii,sizeof(IntervalIndex),nii,ifile);
-  fclose(ifile);
 
   CALLOC(idb_file,1,IntervalDBFile);
   if(nlists>0){
