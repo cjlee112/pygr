@@ -1,5 +1,6 @@
 #from lpo import POMSANodeRef
 import sequence
+import nlmsa_utils
 
 cdef class IntervalDBIterator:
   def __new__(self,int start,int end,IntervalDB db not None):
@@ -1252,23 +1253,27 @@ cdef class NLMSASequence:
       fclose(self.build_ifile)
       self.build_ifile=NULL
 
-  def build(self):
+  def buildFiles(self):
     'build nested list from saved unsorted alignment data'
     cdef IntervalDB db
     if self.build_ifile==NULL:
       raise IOError('not opened in write mode')
-    if self.nbuild<=0:
-      raise ValueError('No alignment data for this sequence.  Nothing to build!')
     fclose(self.build_ifile)
     self.build_ifile=NULL
     filename=self.filestem+'.build'
     db=IntervalDB() # CREATE EMPTY NL IN MEMORY
-    db.buildFromUnsortedFile(filename,self.nbuild) # BUILD FROM .build
+    if self.nbuild>0:
+      db.buildFromUnsortedFile(filename,self.nbuild) # BUILD FROM .build
     db.write_binaries(self.filestem) # SAVE AS IntervalDBFile
     db.close() # DUMP NESTEDLIST FROM MEMORY
     import os
     os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
     self.db=IntervalFileDB(self.filestem) # NOW OPEN THE IntervalFileDB
+
+  def buildInMemory(self):
+    if self.buildList is not None:
+      self.idb.save_tuples(self.buildList)
+    self.buildList=None
 
   cdef int saveInterval(self,IntervalMap im[],int n,int expand_self,FILE *ifile):
     cdef int i
@@ -1298,6 +1303,12 @@ cdef class NLMSASequence:
   ##     print 'saveInterval:',self.id,im_tmp.start,im_tmp.end,im_tmp.target_id,\
   ##           im_tmp.target_start,im_tmp.target_end
       self.nbuild=self.nbuild+i # INCREMENT COUNTER OF INTERVALS SAVED
+    elif self.nlmsaLetters.in_memory_mode:
+      t=(k.start,k.stop)+t
+      try:
+        self.buildList.append(t)
+      except AttributeError:
+        self.buildList=[t]
     else:
       raise ValueError('not opened in write mode')
 
@@ -1316,14 +1327,20 @@ cdef class NLMSASequence:
       return len(self.seq)
 
   def __iadd__(self,seq):
-    'add sequence to union'
+    'add sequence to our union'
+    try: # CHECK WHETHER THIS IS ALREADY IN THE INDEX
+      x=self.nlmsaLetters.seqs[seq]
+      return self # ALREADY IN THE INDEX, NO NEED TO ANYTHING
+    except KeyError: # OK, WE REALLY DO NEED TO ADD IT...
+      pass
     # CHECK FOR OVERFLOW... CREATE A NEW UNION IF NEEDED
-    if self.length+len(seq.path)>self.nlmsaLetters.maxlen:
+    if self.length+len(seq.path)>self.nlmsaLetters.maxlen: # TOO BIG!
       if self.nlmsaLetters.use_virtual_lpo: # NEED TO CREATE CORRESPONDING LPO
-        ns=self.nlmsaLetters.newSequence(None) # OUR LPO
-      ns=self.nlmsaLetters.newSequence(None,is_union=1) # OUR UNION
+        ns=self.nlmsaLetters.newSequence(None) # CREATE NEW LPO
+      ns=self.nlmsaLetters.newSequence(None,is_union=1) # NEW UNION
       ns.__iadd__(seq) # ADD seq TO BRAND-NEW UNION
       return ns # RETURN THE NEW UNION COORDINATE SYSTEM
+    # USE OUR EXISTING UNION
     self.nlmsaLetters.seqs.saveSeq(seq,self.id,self.length)
     self.length=self.length+len(seq.path) # EXPAND COORDINATE SYSTEM
     return self # iadd MUST ALWAYS RETURN self!!!
@@ -1333,217 +1350,19 @@ cdef class NLMSASequence:
 
 
 
-class NLMSASeqList(list):
-  def __init__(self,nlmsaSeqDict):
-    list.__init__(self)
-    self.nlmsaSeqDict=nlmsaSeqDict
-  def __getitem__(self,nlmsaID):
-    'return NLMSASequence for a given nlmsa_id'
-    try:
-      return list.__getitem__(self,nlmsaID)
-    except IndexError:
-      seqID,nsID=self.nlmsaSeqDict.IDdict[str(nlmsaID)]
-      return list.__getitem__(self,nsID)
-  def getSeq(self,nlmsaID):
-    'return NLMSASequence, seq for a given nlmsa_id'
-    seqID,nsID=self.nlmsaSeqDict.IDdict[str(nlmsaID)]
-    return self.nlmsaSeqDict.nlmsa.seqDict[seqID]
-  def getSeqID(self,nlmsaID):
-    'return seqID for a given nlmsa_id'
-    seqID,nsID=self.nlmsaSeqDict.IDdict[str(nlmsaID)]
-    return seqID
-  def is_lpo(self,id):
-    cdef NLMSASequence ns
-    if id>=len(self):
-      return False
-    ns=self[id]
-    if ns.is_lpo:
-      return True
-    else:
-      return False
-
-
-
-class NLMSASeqDict(dict):
-  'index sequences by pathForward, and use list to keep reverse mapping'
-  def __init__(self,nlmsa,filename,mode,maxID=1000000,idDictClass=None):
-    dict.__init__(self)
-    self.seqlist=NLMSASeqList(self)
-    self.maxID=maxID
-    self.nlmsa=nlmsa
-    self.filename=filename
-    import shelve
-    if mode=='w': # NEW DATABASE
-      mode='c'
-    if idDictClass is None: # USE PERSISTENT ID DICTIONARY STORAGE
-      self.seqIDdict=shelve.open(filename+'.seqIDdict',mode)
-      self.IDdict=shelve.open(filename+'.idDict',mode)
-    else: # USER SUPPLIED CLASS FOR ID DICTIONARY STORAGE
-      self.seqIDdict=idDictClass()
-      self.IDdict=idDictClass()
-
-  def saveSeq(self,seq,nsID= -1,offset=0,nlmsaID=None):
-    'save mapping of seq to specified (nlmsaID,ns,offset)'
-    if nsID<0: # LET THE UNION FIGURE IT OUT
-      self.nlmsa.currentUnion=self.nlmsa.currentUnion.__iadd__(seq)
-      return # THE UNION ADDED IT FOR US, NO NEED TO DO ANYTHING
-    import types
-    if isinstance(seq,types.StringType):
-      id=seq # TREAT THIS AS FULLY QUALIFIED IDENTIFIER
-    else: # GET THE IDENTFIER FROM THE SEQ / DATABASE
-      id=self.getSeqID(seq)
-    if nlmsaID is None: # ALLOCATE A NEW UNIQUE ID
-      nlmsaID=self.nlmsa.inlmsa # USE THE NEXT FREE ID
-      self.nlmsa.inlmsa=self.nlmsa.inlmsa+1 # ADVANCE THE COUNTER
-    self.seqIDdict[id]=nlmsaID,nsID,offset
-    self.IDdict[str(nlmsaID)]=id,nsID
-
-  def getID(self,seq):
-    'return nlmsa_id for a given seq'
-    return self[seq][0]
-  def __getitem__(self,seq):
-    'return nlmsaID,NLMSASequence,offset for a given seq'
-    try:
-      return dict.__getitem__(self,seq.pathForward)
-    except AttributeError:
-      raise KeyError('key must be a sequence interval!')
-    except KeyError:
-      pass
-    seqID=self.getSeqID(seq)
-    try:
-      nlmsaID,nsID,offset=self.seqIDdict[seqID]
-    except KeyError:
-      raise KeyError('seq not found in this alignment')
-    v=nlmsaID,self.seqlist[nsID],offset
-    dict.__setitem__(self,seq.pathForward,v) # CACHE THIS RESULT
-    return v
-
-  def getSeqID(self,seq):
-    'return fully qualified sequence ID for this seq'
-    return (~(self.nlmsa.seqDict))[seq]
-
-  def __setitem__(self,k,NLMSASequence ns):
-    'save mapping of seq to the specified NLMSASequence'
-    ns.id=len(self.seqlist)
-    self.seqlist.append(ns)
-    import types
-    if isinstance(k,types.StringType):
-      dict.__setitem__(self,k,(ns.id,ns,0)) # ALLOW BUILD WITH A STRING OBJECT
-    elif k is not None:
-      dict.__setitem__(self,k.pathForward,(ns.id,ns,0))
-  def __iadd__(self,ns):
-    'add coord system ns to the alignment'
-    self[None]=ns
-    return self # iadd MUST RETURN self!!!
-  def close(self):
-    'finalize and close shelve indexes'
-    self.seqIDdict.close()
-    self.IDdict.close()
-  def reopenReadOnly(self,mode='r'):
-    'save existing data and reopen in read-only mode'
-    self.close()
-    import shelve
-    self.seqIDdict=shelve.open(self.filename+'.seqIDdict',mode)
-    self.IDdict=shelve.open(self.filename+'.idDict',mode)
-  def getUnionSlice(self,seq):
-    'get union coords for this seq interval, adding seq to index if needed'
-    try:
-      id,ns,offset=self[seq] # LOOK UP IN INDEX
-    except KeyError:
-      self.saveSeq(seq) # ADD THIS NEW SEQUENCE TO OUR CURRENT UNION
-      id,ns,offset=self[seq] # LOOK UP IN INDEX
-    if seq.orientation<0: # REVERSE ORIENTATION
-      return ns,slice(seq.start-offset,seq.stop-offset) # USE UNION COORDS
-    else: # FORWARD ORIENTATION
-      return ns,slice(seq.start+offset,seq.stop+offset) # USE UNION COORDS
-
-
-
-
-
-cdef class FilePtrPool:
-  def __new__(self,char *mode='r',int maxfile=1024,int nalloc=4096):
-    self.maxfile=maxfile
-    self.nalloc=nalloc
-    self.npool=0
-    self.pool=<FilePtrRecord *>calloc(nalloc,sizeof(FilePtrRecord))
-    self.mode=strdup(mode)
-    if self.pool==NULL or self.mode==NULL:
-      raise MemoryError
-    self.head= -1
-    self.tail= -1
-
-  cdef int open(self,int id,char *filename):
-    if id>=self.nalloc: # NEED TO EXPAND STORAGE
-      pass
-    if self.pool[id].filename:
-      raise KeyError('already opened this pool ID!  debug!')
-    self.pool[id].filename=strdup(filename)
-    if self.pool[id].filename==NULL:
-      raise MemoryError
-    self.pool[id].left= -1 # INITIALLY NOT IN POOL LINK LIST
-    self.pool[id].right= -1
-    return 0
-
-  cdef FILE *ifile(self,int id):
-    if id<0 or id>=self.npool or self.pool[id].filename==NULL:
-      raise IndexError('invalid ID: no such FilePoolRecord')
-    if self.pool[id].ifile==NULL: # NEED TO OPEN THIS RECORD
-      if self.npool>=self.maxfile: # NEED TO CLOSE tail FilePtrRecord
-        if self.tail<=0:
-          raise IndexError('bad tail value!  debug!')
-        fclose(self.pool[self.tail].ifile)
-        self.pool[self.tail].ifile=NULL
-        self.tail=self.pool[self.tail].left
-      self.pool[id].ifile=fopen(self.pool[id].filename,self.mode)
-    if self.head==id: # ALREADY AT THE HEAD, SO NO NEED TO MOVE IT
-      return self.pool[id].ifile
-    if self.pool[id].left>=0:
-      self.pool[self.pool[id].left].right=self.pool[id].right # UNLINK
-    if self.pool[id].right>=0:
-      self.pool[self.pool[id].right].left=self.pool[id].left # UNLINK
-    if self.tail==id: # UPDATE NEW tail
-      self.tail=self.pool[id].left
-    elif self.tail<0: # THERE IS NO TAIL
-      self.tail=id # SO THIS BECOMES THE NEW TAIL
-    self.pool[id].right=self.head  # PLACE IN FRONT OF head
-    self.pool[id].left= -1
-    if self.head>=0:
-      self.pool[head].left=id
-    self.head=id # IT BECOMES THE NEW head
-    return self.pool[id].ifile
-
-  cdef int close(self,int id):
-    return -1 # THIS IS JUST A STUB!  PUT REAL CODE HERE!!!
-
-  def __dealloc__(self):
-    'remember: dealloc cannot call other methods!'
-    cdef int i
-    if self.pool:
-      for i from 0 <= i < self.npool:
-        if self.pool[i].ifile: # CLOSE FILE DESCRIPTOR
-          fclose(self.pool[i].ifile)
-        if self.pool[i].filename: # DUMP FILE STRINGS
-          free(self.pool[i].filename)
-      free(self.pool)
-      self.pool=NULL
-    if self.mode:
-      free(self.mode)
-
-
-
 cdef class NLMSA:
   'toplevel interface to NLMSA storage of an LPO alignment'
   def __init__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
                maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666,
-               trypath=None,bidirectional=True,use_virtual_lpo= -1,**kwargs):
+               trypath=None,bidirectional=True,use_virtual_lpo= -1,
+               maxLPOcoord=None,**kwargs):
     try:
       import resource # WE MAY NEED TO OPEN A LOT OF FILES...
       resource.setrlimit(resource.RLIMIT_NOFILE,(maxOpenFiles,-1))
     except: # BUT THIS IS OPTIONAL...
       pass
     self.lpoList=[] # EMPTY LIST OF LPO
-    self.seqs=NLMSASeqDict(self,pathstem,mode,**kwargs)
+    self.seqs=nlmsa_utils.NLMSASeqDict(self,pathstem,mode,**kwargs)
     self.seqlist=self.seqs.seqlist
     self.pathstem=pathstem
     import sys
@@ -1563,7 +1382,14 @@ cdef class NLMSA:
       self.use_virtual_lpo=0
     else:
       self.use_virtual_lpo=use_virtual_lpo
-    if mode=='r':
+    if maxLPOcoord is not None: # SIZE OF THE ENTIRE LPO COORD SYSTEM
+      self.maxLPOcoord=maxLPOcoord
+      if self.use_virtual_lpo==1:
+        raise ValueError('maxLPOcoord and use_virtual_lpo options incompatible!')
+      self.use_virtual_lpo=0
+    else: # DEFAULT: RESTRICT USER TO A SINGLE LPO
+      self.maxLPOcoord=self.maxlen
+    if mode=='r': # OPEN FROM DISK FILES
       if self.seqDict is None:
         import seqdb
         try: # SEE IF THERE IS A UNION HEADER FILE FOR pathstem.seqDict
@@ -1573,18 +1399,25 @@ cdef class NLMSA:
           raise ValueError('you must pass a seqDict, or valid header file %s'
                            % (pathstem+'.seqDict'))
       self.read_indexes(self.seqDict)
-    elif mode=='w':
+    elif mode=='w': # WRITE TO DISK FILES
       self.do_build=1
-      self.newSequence() # CREATE INITIAL LPO
       self.lpo_id=0
       if mafFiles is not None:
+        self.newSequence() # CREATE INITIAL LPO
         self.readMAFfiles(mafFiles,maxint)
       else: # USER WILL ADD INTERVAL MAPPINGS HIMSELF...
+        if self.seqDict is None:
+          import seqdb
+          self.seqDict=seqdb.SeqPrefixUnionDict(addAll=True)
+        self.initLPO() # CREATE AS MANY LPOs AS WE NEED
         self.newSequence(is_union=1) # SO HE NEEDS AN INITIAL UNION
-    elif mode=='memory':
+    elif mode=='memory': # CONSTRUCT IN-MEMORY
+      if self.seqDict is None:
+        import seqdb
+        self.seqDict=seqdb.SeqPrefixUnionDict(addAll=True)
       self.in_memory_mode=1
       self.do_build=1
-      self.newSequence() # CREATE INITIAL LPO
+      self.initLPO() # CREATE AS MANY LPOs AS WE NEED
       self.newSequence(is_union=1) # CREATE INITIAL UNION
       self.lpo_id=0
     elif mode!='xmlrpc':
@@ -1624,13 +1457,17 @@ cdef class NLMSA:
       # CREATE THE SEQ INTERFACE, BUT DELAY OPENING THE IntervalDBFile
       ns=NLMSASequence(self,filestem,seq,'onDemand',is_union) # UNTIL NEEDED
       ns.length=int(length) # SAVE STORED LENGTH
-      self.seqs[seq]=ns # SAVE TO OUR INDEX
+      self.addToSeqlist(ns,seq)
+  def addToSeqlist(self,NLMSASequence ns,seq=None):
+    'add an NLMSASequence to our seqlist, and set its id'
+    ns.id=self.seqlist.nextID()
+    self.seqs[seq]=ns # SAVE TO OUR INDEX
       
   def newSequence(self,seq=None,is_union=0):
     'create a new nestedlist index for sequence seq'
     cdef NLMSASequence ns
-    i=len(self.seqlist) # USE ITS INDEX AS UNIQUE ID FOR THIS SEQUENCE
-    filestem=self.pathstem+str(i)
+    id=self.seqlist.nextID() # USE ITS INDEX AS UNIQUE ID FOR THIS SEQUENCE
+    filestem=self.pathstem+str(id)
     if self.in_memory_mode:
       mode='memory'
     else:
@@ -1638,39 +1475,61 @@ cdef class NLMSA:
     ns=NLMSASequence(self,filestem,seq,mode,is_union=is_union) #OPEN FOR WRITING
     if is_union: # RECORD THIS AS OUR CURRENT UNION OBJECT
       self.currentUnion=ns
-    self.seqs[seq]=ns # SAVE TO OUR INDEX
-    print 'Opened build file for ns_id',ns.id,ns.is_union
+    self.addToSeqlist(ns,seq) # SAVE TO OUR INDEX
+    #print 'Opened build file for ns_id',ns.id,ns.is_union
     return ns
 
+  def nextID(self):
+    'get a unique nlmsaID and advance counter'
+    nlmsaID=self.inlmsa # USE THE NEXT FREE ID
+    self.inlmsa=self.inlmsa+1 # ADVANCE THE COUNTER
+    return nlmsaID
+    
+  def initLPO(self):
+    'create LPOs for this alignment'
+    cdef NLMSASequence ns
+    offset=0
+    while offset<self.maxLPOcoord:
+      ns=self.newSequence() # CREATE AN LPO
+      ns.offset=offset # FORCE OUR DESIRED OFFSET... EVEN THOUGH ALL LPOs EMPTY
+      offset=offset+self.maxlen
   def initVirtualLPO(self):
     'turn on use of virtual LPO mapping (i.e. no actual LPO is present!)'
     if self.use_virtual_lpo==0:
       raise ValueError('this alignment is already using an LPO!')
     self.use_virtual_lpo=1 # TURN ON THE VIRTUAL LPO FEATURE
     
-##   def __setitem__(self,k,seq):
-##     'save mapping of LPO slice [k.start:k.stop] --> seq interval'
-##     cdef int i,start,end
-##     cdef NLMSASequence ns,ns_lpo
-##     ns,seqSlice=self.seqs.getUnionSlice(seq)
-## ##       ns=self.newSequence(seq)
-## ##       id=ns.id
-## ##       seqSlice=seq
-##     ns[seqSlice]=(self.lpo_id,k.start,k.stop) # FORWARD MAPPING seq -> lpo
-##     # THE FOLLOWING CODE IS NOT ADEQUATE!
-##     # NEEDS TO SCAN self.lpoList TO FIND WHICH LPO SLICE k IS CONTAINED IN!
-##     ns_lpo=self.seqlist[self.lpo_id]
-##     ns_lpo[k]=(id,seq.start,seq.stop) # SAVE REVERSE MAPPING lpo -> seq
 
+  def __setitem__(self,k,v):
+    if isinstance(k,nlmsa_utils.BuildMSASlice):
+      k.__iadd__(v)
+    else:
+      raise KeyError('Usage only nlmsa[s1]+=s2 allowed. nlmsa[s1]=s2 forbidden!')
   def __getitem__(self,k):
     'return a slice of the LPO'
     if isinstance(k,sequence.SeqPath): # TREAT k AS A SEQUENCE INTERVAL
       id,ns,offset=self.seqs[k] # GET UNION INFO FOR THIS SEQ
-      return NLMSASlice(ns,k.start,k.stop,id,offset,k)
+      if self.do_build:
+        return nlmsa_utils.BuildMSASlice(ns,k.start,k.stop,id,offset,0,k)
+      else: # QUERY THE ALIGNMENT
+        return NLMSASlice(ns,k.start,k.stop,id,offset,k)
     try: # TREAT k AS A PYTHON SLICE OBJECT
-      return NLMSASlice(self.seqlist[self.lpo_id],k.start,k.stop)
+      i=k.start
     except AttributeError:
       raise KeyError('key must be a sequence interval or python slice object')
+    if self.do_build:
+      return nlmsa_utils.BuildMSASlice(self.lpoList[0],k.start,k.stop,-1,0,1,None)
+    else: # QUERY THE ALIGNMENT
+      l=nlmsa_utils.splitLPOintervals(self.lpoList,k) # MAP TO LPO(S)
+      if len(l)>1:
+        raise ValueError('Sorry!  Query interval spans multiple LPOs!')
+      for ns,myslice in l: # ONLY RETURN ONE SLICE OBJECT
+          return NLMSASlice(ns,myslice.start,myslice.stop)
+
+  def __iadd__(self,seq):
+    'add seq to our union'
+    self.seqs.saveSeq(seq)
+    return self  # iadd MUST ALWAYS RETURN self!
 
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id):
     seqnames[0].p=<char *>malloc(32)
@@ -1792,15 +1651,13 @@ cdef class NLMSA:
     self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
 
     
-  def build(self):
-    'build nestedlist databases from saved mappings and initialize for use'
+  def buildFiles(self):
+    'build nestedlist databases on-disk'
     cdef NLMSASequence ns
-    if self.do_build==0:
-      raise ValueError('not opened in write mode')
     self.seqs.reopenReadOnly() # SAVE INDEXES AND OPEN READ-ONLY
     ifile=file(self.pathstem+'NLMSAindex','w')
     for ns in self.seqlist: # BUILD EACH IntervalFileDB ONE BY ONE
-      ns.build()
+      ns.buildFiles()
       if ns.is_lpo:
         ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,'NLMSA_LPO_Internal',0,ns.length))
       elif ns.is_union:
@@ -1810,6 +1667,20 @@ cdef class NLMSA:
     ifile.close()
     if hasattr(self.seqDict,'writeHeaderFile'):
       self.seqDict.writeHeaderFile(self.pathstem+'.seqDict')
+
+  def build(self):
+    'build nestedlist databases from saved mappings and initialize for use'
+    if self.do_build==0:
+      raise ValueError('not opened in write mode')
+    try: # TURN OFF AUTOMATIC ADDING OF SEQUENCES TO OUR SEQDICT...
+      self.seqDict.addAll=False
+    except AttributeError: # THAT WAS PURELY OPTIONAL...
+      pass
+    if self.in_memory_mode:
+      for ns in self.seqlist: # BUILD EACH IntervalDB ONE BY ONE
+        ns.buildInMemory()
+    else:
+      self.buildFiles()
     self.do_build=0
 
   def seqInterval(self,int iseq,int istart,int istop):
