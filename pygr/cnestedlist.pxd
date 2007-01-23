@@ -148,14 +148,6 @@ cdef class IntervalFileDBIterator:
   cdef int copy(self,IntervalFileDBIterator src)
 
 
-cdef class FilePtrPool:
-  cdef FilePtrRecord *pool
-  cdef int npool,maxfile,nalloc,head,tail
-  cdef char *mode
-
-  cdef int open(self,int id,char *filename)
-  cdef FILE *ifile(self,int id)
-  cdef int close(self,int id)
 
 cdef class NLMSASequence
 
@@ -164,9 +156,9 @@ cdef class NLMSA:
   cdef readonly object seqs
   cdef readonly object seqlist
   cdef readonly object seqDict
-  cdef NLMSASequence currentUnion
+  cdef readonly NLMSASequence currentUnion
   cdef int do_build
-  cdef readonly object lpoList
+  cdef readonly object lpoList,maxLPOcoord
   cdef int lpo_id
   cdef readonly int maxlen,inlmsa,is_bidirectional,use_virtual_lpo,in_memory_mode
   cdef public object _persistent_id
@@ -183,6 +175,7 @@ cdef class NLMSASequence:
   cdef FILE *build_ifile
   cdef readonly object filestem
   cdef readonly NLMSA nlmsaLetters
+  cdef readonly object buildList
   
   cdef int saveInterval(self,IntervalMap im[],int n,int expand_self,FILE *ifile)
 
