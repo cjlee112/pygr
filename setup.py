@@ -88,10 +88,10 @@ metadata = {
 	"pygr/mapping",
         "pygr/coordinator",
         "pygr/Data",
+        "pygr/nlmsa_utils",
         "pygr/nestedlist",
         "pygr/xnestedlist",
 	"pygr/poa",
-	#"pygr/lpo",  # THIS IS TEMPORARY
 	"pygr/schema",
 	"pygr/seqdb",
 	"pygr/sequence",
