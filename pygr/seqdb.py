@@ -355,17 +355,29 @@ def save_interval_alignment(m,ival,srcSet,destSet=None,edgeClass=BlastHitInfo,
         m+=srcSeq # MAKE SURE THIS SEQUENCE IS IN THE MAPPING TOP-LEVEL INDEX
         m[srcPath][destPath]=edgeClass(ival) # SAVE ALIGNMENT WITH EDGE INFO
     else:
-        m[srcPath]=destPath # JUST SAVE ALIGNMENT, NO EDGE INFO
+        m+=srcSeq # MAKE SURE THIS SEQUENCE IS IN THE MAPPING TOP-LEVEL INDEX
+        m[srcPath][destPath]=None # JUST SAVE ALIGNMENT, NO EDGE INFO
     return srcPath,destPath # HAND BACK IN CASE CALLER WANTS TO KNOW THE INTERVALS
 
 
 def read_interval_alignment(ofile,srcSet,destSet,al=None):
     "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
+    needToBuild=False
     if al is None:
-        al=PathMapping()
+        try:
+            import cnestedlist
+            al=cnestedlist.NLMSA('blasthits','memory',use_virtual_lpo=True)
+            edgeClass=None
+            needToBuild=True
+        except ImportError:
+            print 'WARNING: import cnestedlist failed. Using old-style PathMapping()'
+            al=PathMapping()
+            edgeClass=BlastHitInfo
     p=BlastHitParser()
     for t in p.parse_file(ofile):
-        save_interval_alignment(al,BlastIval(t),srcSet,destSet)
+        save_interval_alignment(al,BlastIval(t),srcSet,destSet,edgeClass)
+    if needToBuild:
+        al.build()
     return al
 
 def process_blast(cmd,seq,seqDB,al=None,seqString=None):
@@ -409,6 +421,11 @@ class BlastDBinverse(object):
         self.db=db
     def __getitem__(self,seq):
         return seq.pathForward.id
+    def __contains__(self,seq):
+        try:
+            return seq.pathForward.db is self.db
+        except AttributeError:
+            return False
 
 def ClassicUnpickler(cls, state):
     self = cls.__new__(cls)
@@ -860,6 +877,21 @@ class MAFStoredPathMapping(PathMapping):
                     yield IntervalTransform(e.reverse(e2.srcPath),e2.destPath)
 
 
+class KeepUniqueDict(dict):
+    'dict that blocks attempts to overwrite an existing key'
+    def __setitem__(self,k,v):
+        try:
+            if self[k] is v:
+                return # ALREADY SAVED.  NOTHING TO DO!
+        except KeyError: # NOT PRESENT, SO JUST SAVE THE VALUE
+            dict.__setitem__(self,k,v)
+            return
+        raise KeyError('attempt to overwrite existing key!')
+    def __hash__(self):
+        'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
+        return id(self)
+
+
 class PrefixDictInverse(object):
     def __init__(self,db):
         self.db=db
@@ -869,6 +901,11 @@ class PrefixDictInverse(object):
                    +self.db.separator+seq.pathForward.id
         except KeyError:
             raise KeyError('seq not in PrefixUnionDict')
+    def __contains__(self,seq):
+        try:
+            return seq.pathForward.db in self.db.dicts
+        except AttributeError:
+            return False
 
 
 class PrefixUnionMemberDict(dict):
@@ -920,9 +957,12 @@ Set trypath to give a list of directories to search.'''
                                   % filepath)
             ifile.close()
         self.separator=separator
-        self.prefixDict=prefixDict
+        if prefixDict is not None:
+            self.prefixDict=prefixDict
+        else:
+            self.prefixDict={}
         d={}
-        for k,v in prefixDict.items():
+        for k,v in self.prefixDict.items():
             d[v]=k # CREATE A REVERSE MAPPING
         self.dicts=d
 
@@ -1008,6 +1048,60 @@ Set trypath to give a list of directories to search.'''
             else:
                 m(owner,seqDict) # PASS CACHE HINT DOWN TO SUBDICTIONARY
 
+
+class PrefixDictInverseAdder(PrefixDictInverse):
+    def getName(self,seq):
+        'also handle seq with no db attribute...'
+        try:
+            return PrefixDictInverse.__getitem__(self,seq)
+        except AttributeError: # NO db?  THEN TREAT AS A user SEQUENCE
+            return 'user'+self.db.separator+seq.pathForward.id
+    def __getitem__(self,seq):
+        'handles optional mode that adds seq if not already present'
+        try:
+            return self.getName(seq)
+        except KeyError:
+            if self.db.addAll:
+                self.db+=seq # FORCE self.db TO ADD THIS TO ITS INDEX
+                return self.getName(seq) # THIS SHOULD SUCCEED NOW...
+            else: # OTHERWISE JUST RE-RAISE THE ORIGINAL EXCEPTION
+                raise
+
+
+class SeqPrefixUnionDict(PrefixUnionDict):
+    'adds method for easily adding a seq or its database to the PUD'
+    def __init__(self,addAll=False,**kwargs):
+        PrefixUnionDict.__init__(self,**kwargs)
+        self._inverse=PrefixDictInverseAdder(self)
+        self.addAll=addAll # FORCE AUTOMATIC ADDING
+
+    def __iadd__(self,k):
+        'add a sequence or database to prefix-union, with a unique prefix'
+        if isinstance(k,SeqPath): # k IS A SEQUENCE...
+            if k in (~self): # k ALREADY IN ONE OF OUR DATABASES
+                return self
+            try:
+                k=k.db # OK, JUST ADD ITS DATABASE!
+            except AttributeError:
+                try: # SAVE TO user SEQUENCE DICT
+                    d=self.prefixDict['user']
+                except KeyError: # NEED TO CREATE A user DICT
+                    d=KeepUniqueDict()
+                    self.prefixDict['user']=d
+                    self.dicts[d]='user'
+                d[k.pathForward.id]=k # ADD SEQUENCE k TO user DICTIONARY
+                return self
+        # k MUST BE A SEQ DATABASE STYLE DICT...
+        if k in self.dicts: # ALREADY IS ONE OF OUR DATABASES
+            return self # NOTHING FURTHER TO DO
+        try: # USE LAST FIELD OF ITS persistent_id
+            id=k._persistent_id.split('.')[-1]
+        except AttributeError:
+            id='noname%d'%len(self.dicts) # CREATE AN ARBITRARY UNIQUE ID
+        self.prefixDict[id]=k
+        self.dicts[k]=id
+        return self # IADD MUST RETURN SELF!
+        
 
 class DummyProxy(object):
     pass
