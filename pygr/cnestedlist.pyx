@@ -1691,3 +1691,83 @@ cdef class NLMSA:
 
 
 
+def dump_textfile(pathstem,outfilename=None):
+  'dump NLMSA binary files to a text file'
+  cdef int n,nlmsaID,nsID,offset
+  cdef FILE *outfile
+  cdef char err_msg[2048],tmp[2048]
+  err_msg[0]=0 # ENSURE STRING IS EMPTY
+  import os.path
+  basestem=os.path.basename(pathstem) # GET RID OF PATH INFO
+  if outfilename is None:
+    outfilename=pathstem+'.txt' # DEFAULT TEXTFILE NAME
+  outfile=fopen(outfilename,"w")
+  if outfile==NULL:
+    raise IOError('unable to open file %s' %outfilename)
+  import shelve # NEED TO COPY THE WHOLE seqIDdict
+  seqIDdict=shelve.open(pathstem+'.seqIDdict','r')
+  n=len(seqIDdict)
+  strcpy(tmp,basestem) # COPY TO C STRING SO WE CAN fprintf
+  if fprintf(outfile,"PATHSTEM\t%s\t%d\n",tmp,n)<0:
+    raise IOError('error writing to file %s' %outfilename)
+  for id,t in seqIDdict.iteritems(): # SAVE seqIDdict
+    strcpy(tmp,id) # CONVERT TO C DATA TYPES FOR fprintf
+    nlmsaID=t[0]
+    nsID=t[1]
+    offset=t[2]
+    if fprintf(outfile,"SEQID\t%s\t%d\t%d\t%d\n",tmp,
+               nlmsaID,nsID,offset)<0:
+      raise IOError('error writing to file %s' %outfilename)
+
+  ifile=file(pathstem+'NLMSAindex') # NOW SAVE THE NLMSA DATA
+  for line in ifile:
+    id,name,is_union,length=line.strip().split('\t')
+    strcpy(tmp,line) # COPY TO C STRING SO WE CAN fprintf
+    if fprintf(outfile,"NLMSASequence\t%s",tmp)<0:
+      raise IOError('error writing file %s'%outfilename)
+    mypath=pathstem+id
+    mybase=basestem+id
+    if save_text_file(mypath,mybase,err_msg,outfile)!=0:
+      raise IOError(err_msg)
+  fclose(outfile)
+  ifile.close()
+
+
+def textfile_to_binaries(filename):
+  'convert pathstem.txt textfile to NLMSA binary files'
+  cdef int i,n,nlmsaID,nsID,offset
+  cdef FILE *infile
+  cdef char err_msg[2048],line[32768],tmp[2048],basestem[2048]
+  err_msg[0]=0 # ENSURE STRING IS EMPTY
+  infile=fopen(filename,"r")
+  if infile==NULL:
+    raise IOError('unable to open file %s' %filename)
+  if fgets(line,32767,infile)==NULL:
+    raise IOError('error or EOF reading %s'%filename)
+  if 2!=sscanf(line,"PATHSTEM\t%s\t%d",basestem,&n):
+    raise IOError('bad format in %s'%filename)
+
+  import shelve # CREATE THE seqIDdict
+  seqIDdict=shelve.open(basestem+'.seqIDdict','c')
+  IDdict=shelve.open(basestem+'.idDict','c')
+  for i from 0 <= i <n:
+    if fgets(line,32767,infile)==NULL:
+      raise IOError('error or EOF reading %s'%filename)
+    if 4!=sscanf(line,"SEQID\t%s\t%d %d %d",tmp,
+                 &nlmsaID,&nsID,&offset):
+      raise IOError('bad format in %s'%filename)
+    seqIDdict[tmp]=(nlmsaID,nsID,offset) # SAVE THIS ENTRY
+    IDdict[str(nlmsaID)]=(tmp,nsID)
+  seqIDdict.close() # DONE WRITING THE seqIDdict
+  IDdict.close() # DONE WRITING THE seqIDdict
+    
+  ifile=file(basestem+'NLMSAindex',"w")
+  while fgets(line,32767,infile)!=NULL:
+    s=line # CONVERT STRING TO PYTHON OBJECT
+    if not s.startswith('NLMSASequence'):
+      raise IOError('bad format in file %s'%filename)
+    ifile.write(s[14:]) # JUST PRINT THE DATA FIELDS
+    if text_file_to_binaries(infile,err_msg)<0:
+      raise IOError(err_msg)
+  fclose(infile)
+  ifile.close()
