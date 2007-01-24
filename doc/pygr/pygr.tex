@@ -43,8 +43,677 @@
 \section{Introduction}
 \label{intro}
 
-Pygr is an open source software project used to develop graph database
-interfaces for the popular Python language, with a strong emphasis
+Pygr is open source software designed to make it easy to do powerful sequence and
+comparative genomics analyses, even with extremely large multi-genome alignments.
+
+
+\subsection{Sequence / Alignment Tutorial}
+\label{seq-align}
+
+Sequences and alignments also can be modeled as graph structures in Pygr, providing the same consistent and simple framework for queries.
+
+\subsubsection{Sequence Objects}
+Pygr tries to provide a very "Pythonic" model for sequences.  This python interpreter session illustrates some simple features:
+
+\begin{verbatim}
+>>> from pygr.seqdb import *
+>>> s=NamedSequence('attatatgccactat','bobo') #create a sequence named bobo
+>>> s # interpreter will print repr(s)
+bobo[0:15]
+>>> t=s[-8:] #python slice gives last 8 nt of s
+>>> t # interpreter will print repr(t)
+bobo[7:15]
+>>> str(t) #string conversion just yields the sequence as a string 
+'gccactat'
+>>> rc= -s #get the reverse complement
+>>> str(rc[:5]) #its first five letters
+'atagt'
+\end{verbatim}
+
+Several points:
+\begin{itemize}
+
+\item
+   Slices of a sequence object (e.g. s[1:10] or s[-8:]) are themselves sequence objects.
+
+\item    
+The string value of a sequence object (e.g. str(s)) is just the sequence itself (as a string).
+
+\end{itemize}
+
+\subsubsection{Comparative Genomics Query of Multigenome Alignments}
+
+Many groups (e.g. David Haussler's group at UC Santa Cruz) have constructed alignments of multiple genomes.  These alignments are extremely useful and interesting, but so large that it is cumbersome to work with the dataset using conventional methods.  For example, for the 17-genome alignment you have to work simultaneously with the individual genome datasets for human, chimp, mouse, rat, dog, chicken, fugu and zebrafish etc., as well as the huge alignment itself.  Pygr makes this quite easy.  Here we illustrate an example of mapping a set of human exons, which has two splice sites
+(\code{ss1} and \code{ss2}) bracketing a single exon (\code{exon}).
+We use the alignment database to map each of these splice sites onto all the aligned
+genomes, and to print the percent-identity and percent-aligned for each genome,
+as well as the two nucleotides consituting the splice site itself.
+It also prints the conservation of the two exonic region (between \code{ss1}
+and \code{ss2}: 
+
+\begin{verbatim}
+import pygr.Data # FINDS DATA WHEREVER IT'S REGISTERED
+msa=pygr.Data.Bio.Seq.MSA.ucsc17() # SANTA CRUZ 17-GENOME ALIGNMENT
+exons=pygr.Data.Leelab.ASAP2.hg17.exons() # ASAP2 HUMAN EXONS
+idDict= ~(msa.seqDict) # INVERSE: MAPS SEQ --> STRING IDENTIFIER
+def printConservation(id,label,site):
+    for src,dest,edge in msa[site].edges(mergeMost=True):
+        print '%d\t%s\t%s\t%s\t%s\t%s\t%2.1f\t%2.1f' \
+              %(id,label,repr(src),src,idDict[dest],dest,
+                100*edge.pIdentity(),100*edge.pAligned())
+for id,exon in exons.iteritems():
+    ss1=exon.before()[-2:] # GET THE 2 NT SPLICE SITES
+    ss2=exon.after()[:2]
+    cacheHint=msa[ss1+ss2] #CACHE THE COVERING INTERVALS FROM ss1 TO ss2
+    printConservation(id,'ss1',ss1)
+    printConservation(id,'ss2',ss2)
+    printConservation(id,'exon',exon)
+\end{verbatim}
+
+A few notes:
+
+\begin{itemize}
+
+\item
+Querying a large multi-genome alignment requires special interval indexing
+algorithms (R-Tree or nested-list used in Pygr).  Pygr provides a high-performance
+C implementation of a disk-based nested-list database that provides both
+very fast interval overlap query times (sub-millisecond per query, compared with
+10-30 seconds per query using MySQL multi-column indexing, and much faster
+than Postgres R-Tree indexing), and a very small memory footprint
+(e.g. 2.5 MB RSS in-memory, 8 MB VSZ virtual size,
+for working with the UCSC 17 vertebrate
+genome alignment and sequence databases).  For more information on the
+nested-list algorithm and performance comparisons, see the published paper,
+Alekseyenko & Lee, Bioinformatics 2007.
+
+\item
+The alignment database query is in the first line of \code{printConservation()}.
+\code{msa} is the database; \code{site} is the interval query; and the
+\method{edges} methods iterates over the results, returning a tuple for
+each, consisting of a {\em source sequence} interval (i.e. an interval of
+\code{site}), a {\em destination sequence} interval (i.e. an interval in
+an aligned genome), and an {\em edge object} describing that alignment.
+We are taking advantage of Pygr's group-by operator \code{mergeMost},
+which will cause multiple intervals in a given sequence to be merged
+into a single interval that constitutes their ``union''.  Thus,
+for each aligned genome, the \code{edges} iterator will return a single
+aligned interval.  The alignment edge object provides some useful 
+conveniences, such as calculating the percent-identity between \code{src}
+and \code{dest} automatically for you.  \method{pIdentity()} computes
+the fraction of identical residues; \method{pAligned} computes the 
+fraction of {\em aligned} residues (allowing you to see if there are 
+big gaps or insertions in the alignment of this interval).  If we 
+had wanted to inspect the detailed alignment letter by letter, we
+would just iterate over the \member{letters} attribute instead of
+the \method{edges} method. (See the \class{NLMSASlice} documentation for 
+further information).
+
+\item
+Pygr provides convenient query options for specifying precisely how regions
+of alignment should be ``grouped'' together (e.g. treat alignment intervals
+separated by indels up to a certain size as being a {\em single} alignment
+region) or filtered (e.g. require a certain level of conservation over some
+minimum size of alignment region).  Here's an example:
+\begin{verbatim}
+results=msa[site].edges(maxgap=1,maxinsert=1,
+                        minAlignSize=14,pIdentityMin=0.9)
+\end{verbatim}
+This example groups together any number of alignment intervals separated by indels
+of at most one in length, and then filters these alignment regions to
+just those (sub)regions that have at least 90\% sequence identity over
+a region of at least 14 residues in length.
+
+\item
+\code{src} and \code{dest} print the first two nucleotides
+of the site in human and in the aligned genome.
+
+\item
+it's worth noting that the actual sequence string comparisons are being
+done using a completely different database mechanism (either Pygr's
+simple \code{pureseq} text format, or (before release 0.5) NCBI's \code{fastacmd}),
+not the \code{cnestedlist} database.  Basically, each genome is being queried
+as a separate sequence database, represented in Pygr by the
+\class{BlastDB} class.  Pygr makes this complex set of multi-database
+operations more or less transparent to the user.
+For further information, see the \class{BlastDB} documentation.  
+
+\item
+Note: \code{exon} must itself be a slice of a sequence in our alignment, 
+or the alignment query \code{msa[site]} will raise an KeyError informing
+the user that the sequence \code{site} is not in the alignment.
+
+\item
+The only slightly interesting operation here is the use of interval
+addition to obtain the ``union'' of two intervals, e.g. \code{ss1+ss2}.
+This obtains a single interval that covers both of the input intervals.
+
+\item
+When the print  statement requests str() representations of these sequence objects, Pygr uses fseek() to extract just the right piece of the corresponding chromosomes from the 17 BLAST databases representing all the different genomes.
+
+\end{itemize}
+
+(Actually, because of Pygr's caching / optimizations, considerably more is going on than indicated in this simplified sketch.  But you get the idea: Pygr makes it relatively effortless to work with a variety of disparate (and large) resources in an integrated way.)
+
+Here is some example output:
+\begin{verbatim}
+NEED TO UPDATE THESE RESULTS
+1       Mm.99996        ss1     hg17    50.0    100.0   AG      GG
+1       Mm.99996        ss1     canFam1 50.0    100.0   AG      GG
+1       Mm.99996        ss1     panTro1 50.0    100.0   AG      GG
+1       Mm.99996        ss1     rn3     100.0   100.0   AG      AG
+1       Mm.99996        ss2     hg17    100.0   100.0   AG      AG
+1       Mm.99996        ss2     canFam1 100.0   100.0   AG      AG
+1       Mm.99996        ss2     panTro1 100.0   100.0   AG      AG
+1       Mm.99996        ss2     rn3     100.0   100.0   AG      AG
+1       Mm.99996        ss3     hg17    100.0   100.0   GT      GT
+1       Mm.99996        ss3     canFam1 100.0   100.0   GT      GT
+1       Mm.99996        ss3     panTro1 100.0   100.0   GT      GT
+1       Mm.99996        ss3     rn3     100.0   100.0   GT      GT
+1       Mm.99996        e1      hg17    78.9    100.0   AG      GG
+1       Mm.99996        e1      canFam1 84.2    100.0   AG      GG
+1       Mm.99996        e1      panTro1 77.6    100.0   AG      GG
+1       Mm.99996        e1      rn3     97.4    98.7    AG      AG
+1       Mm.99996        e2      hg17    91.6    99.1    CC      CC
+1       Mm.99996        e2      canFam1 88.8    99.1    CC      CC
+1       Mm.99996        e2      panTro1 91.6    99.1    CC      CC
+1       Mm.99996        e2      rn3     97.2    100.0   CC      CC
+\end{verbatim}
+
+\subsubsection{Working with Sequences from Databases}
+
+Pygr provides a variety of "back-end" implementations of sequence objects, ranging from sequences stored in a relational database table, or a BLAST database, to sequences created by the user in Python (as above).  All of these provide the same consistent interface, and in general try to be efficient.  For example, Pygr sequence objects are just "placeholders" that record what sequence interval you're working with, but if the back-end is an external database, the sequence object itself does not store the sequence, and creating new sequence objects (e.g. taking slices of the object as above) will not require anything to be done on the actual sequence itself (such as copying a portion of it).  Pygr only obtains sequence information when you actually ask for it (e.g. by taking the string value str(s) of a sequence object), and normally only obtains just the portion that you ask for (i.e. str(s[1000000:1000100]) only obtains 100nt of sequence, even if s is a 100 megabase sequence.  By contrast str(s)[1000000:1000100] would force it to obtain the whole sequence from the database, then slice out just the 100 nt you selected). 
+
+Here's an example of working with sequences from a BLAST database:
+
+\begin{verbatim}
+NEED TO UPDATE THESE RESULTS
+>>> from pygr.seqdb import *
+>>> db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
+>>> s=db['CYGB_HUMAN'][90:150] # get a sequence by ID, and take a slice
+>>> str(s)
+'TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA'
+>>> m=db.blast(s) # get alignment to all BLAST hits in db
+>>> for src,dest,edge in m.edges(): # print out the alignment edges
+...     print src,repr(src),'\n',dest,repr(dest),e.pIdentity(),'\n'
+... 
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPP CYGB_HUMAN[90:145] 
+TLVENLRDADKLNTIFNQMGKSHALRHKVDPVYFKILAGVILEVLVEAFPQCFSP CYGB_BRARE[87:142] 72
+
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150] 
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150]
+ 120
+
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150] 
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPMYFKILSGVILEVIAEEFANDFPVETQKA CYGB_MOUSE[90:150]
+112 
+...
+\end{verbatim}
+
+This example introduces the use of a Pygr alignment object to store the mapping of s onto homologous sequences in db, obtained from BLAST.  Here's what Pygr actually does:
+
+\begin{itemize}
+
+\item
+We can construct a BlastDB object from any FASTA formatted sequence file.  A BlastDB object is just a placeholder that acts as a convenient interface to the BLAST database.  For example, it acts as a Python dictionary mapping sequence IDs to the associated sequence objects (i.e. if 'CYGB_HUMAN' is a sequence ID in sp, then db['CYGB_HUMAN'] is the sequence object for that sequence.  This object is instantiated from class BlastSequence, which provides an interface to the BLAST database.
+
+\item 
+When you work with such sequence objects, slicing etc. happens in the usual way, creating new sequence objects.
+
+\item  
+Only when you ask for actual sequence (by taking str(s)) does it obtain a sequence string from the database.  This is done using fseek() system call to obtain just the selected slice.  So you can efficiently obtain a substring of a sequence, even if that sequence is an entire chromosome.
+
+\item
+When you first create the BlastDB object, it looks for existing BLAST database files associated with the FASTA file 'sp'.  If present, it uses them.  If not, it will create them automatically if the user actually tries to run a BLAST query.  Pygr builds BLAST database files using the NCBI program formatdb (Pygr figures out whether the sequences are nucleotide or protein, and gives formatdb the appropriate command line options).  
+
+\item 
+When you invoke the db.blast() method on a sequence object, it obtains the actual string of the object, and uses it to run a BLAST search.  It determines the type (nucleotide or protein) of the sequence object, and uses the appropriate search method (in this case blastp).  You can pass optional arguments for controlling BLAST.  It then reads the results into a Pygr multiple sequence alignment object, which stores the alignments as sets of matched intervals.  Specifically, it is a graph, whose nodes are sequence intervals (i.e. sequence objects that typically represent only part of a sequence), and whose edges represent an alignment between a pair of intervals.  To illustrate this, we ran a for-loop over all the "edge relations" in this graph, and printed them out.  This is a tuple of 3 values: \code{src} and \code{dest} are the two aligned sequence intervals, and \code{edge} provides a convenient interface to information about their relationship (e.g. \%identity, etc.).  
+
+\item
+Note: print converts its arguments to strings (i.e. calls str() on them), so we used \code{repr(src)} to get a "string representation" of each sequence interval.  When print calls str() on individualBlastSequence interval objects returned by the BLAST search, they invoke fseek() to obtain the specific sequence slice representing that interval.
+\end{itemize}
+
+\subsubsection{pygr.Data:a Namespace for Transparently Importing Data}
+One challenge in bioinformatics is the complexity of managing many diverse
+data resources.  For example, running a large job on a heterogeneous cluster
+of computers is complicated by the fact that individual computers often can't
+access a given data resource in the same way (i.e. the file path may be different),
+and some machines may not have direct access at all to certain resources.
+
+Pygr provides a systematic solution to this problem: creating a consistent
+namespace for data.  A given resource is given a unique name that then becomes
+its universal handle for accessing it, no matter where you are (just as Python's
+\code{import} command provides a consistent name for accessing a given code
+resource, regardless of where you are).  For example, say we want to add the
+hg17 (release 17 of the human genome sequence) as ``Bio.Seq.Genome.hg17''
+(the choice of name is arbitrary, but it's best to choose a good convention and follow
+it consistently):
+
+\begin{verbatim}
+from pygr import seqdb
+import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
+pygr.Data.Bio.Seq.Genome.hg17=seqdb.BlastDB('hg17')
+\end{verbatim}
+
+In any subsequent Python session, we can now access it directly by its
+pygr.Data name:
+\begin{verbatim}
+import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
+hg17=pygr.Data.Bio.Seq.Genome.hg17() # FIND THE RESOURCE
+\end{verbatim}
+Note that we did {\em not} even have to know how to construct the hg17 
+object, e.g. what Python class to use (seqdb.BlastDB), or even to import
+the necessary modules for constructing it.  \code{pygr.Data} uses the
+power of Python pickling to figure out automatically what to import.
+pygr.Data looks at the environment variable PYGRDATAPATH to get a list 
+of local and remote resource databases in which to look up any resource name
+that you try to load.  For example, in the shell you might set:
+\begin{verbatim}
+setenv PYGRDATAPATH ~,.,/usr/local/pygr,mysql:PYGRDATA.index,http://leelab.mbi.ucla.edu:5000
+\end{verbatim}
+This is a comma-separated string (since colon ':' appears inside URLs).
+In this case it tells pygr.Data to look for resource databases (in order):
+\code{\$HOME/.pygr_data}; \code{./.pygr_data}; \code{/usr/local/pygr/.pygr_data};
+the MySQL table PYGRDATA.index (using your
+MySQL .my.cnf file to determine the MySQL host and authentication);
+and the XMLRPC server running on leelab.mbi.ucla.edu on port 5000.
+
+pygr.Data is smart about figuring out data resource dependencies.
+For example, you could just save a 17-genome alignment in a single step
+as follows:
+\begin{verbatim}
+from pygr import cnestedlist
+import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
+pygr.Data.Bio.Seq.MSA.ucsc17=cnestedlist.NLMSA('/loaner/ucsc17')
+\end{verbatim}
+This works, even though using this 17-genome alignment (behind the
+scenes) involves accessing 17 BlastDB sequence databases (one for each
+of the genomes in the alignment).  Because the alignment object (NLMSA)
+references the 17 BlastDB databases, pygr.Data automatically saves information
+about how to access them too.
+
+However, it would be a lot smarter to give those databases pygr.Data resource
+names too.  Let's do that:
+\begin{verbatim}
+from pygr import cnestedlist
+import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
+nlmsa=cnestedlist.NLMSA('/loaner/ucsc17')
+for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
+    pygr.Data.getResource.addResource('Bio.Seq.Genome.'+id,genome)
+pygr.Data.Bio.Seq.MSA.ucsc17=nlmsa # NOW SAVE THE ALIGNMENT
+\end{verbatim}
+
+This has several advantages.  First, we can now access other genome databases
+using pygr.Data too:
+\begin{verbatim}
+import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
+mm7=pygr.Data.Bio.Seq.Genome.mm7() # GET THE MOUSE GENOME
+\end{verbatim}
+But more importantly, when we try to load the ucsc17 alignment on
+another machine, if the genome databases are not in the same directory
+as on our original machine, the first method above would fail, whereas in
+the second approach pygr.Data now will automatically scan all its resource databases to
+figure out how to load each of the genomes on that machine.
+
+\subsubsection{pygr.Data Sharing Over a Network via XMLRPC}
+Sometimes individual compute nodes may not have sufficient disk space to
+store all the data resources (for example, just the single the ucsc17 17-genome alignment and 
+associated genome databases takes about 200 GB).  Yet it would be useful
+to run compute-intensive analyses on those machines accessing such data.
+pygr.Data makes that easy.  We first create an XMLRPC server on a machine that
+has access to the data:
+
+\begin{verbatim}
+import pygr.Data
+nlmsa=pygr.Data.Bio.Seq.MSA.ucsc17() # GET OUR NLMSA AND SEQ DBs
+server=pygr.Data.getResource.newServer('nlmsa_server') # SERVE ALL LOADED DATA
+server.register() # TELL PYGRDATA INDEX SERVER WHAT RESOURCES WE'RE SERVING
+server.serve_forever() # START THE SERVICE...
+\end{verbatim}
+
+This example code looks for a pygr.Data XMLRPC server in your PYGRDATAPATH,
+and registers our resources to that index.  Now any machine that can access
+your servers can access the alignment as easily as:
+\begin{verbatim}
+import pygr.Data
+nlmsa=pygr.Data.Bio.Seq.MSA.ucsc17() # GET THE NLMSA AND SEQ DBs
+\end{verbatim}
+Alignment queries and sequence strings will be obtained via XMLRPC 
+queries over the network.
+
+
+
+\subsubsection{Example: a MySQL Database}
+Here's an example of working with sequences from a relational database:
+
+\begin{verbatim}
+>>> import MySQLdb # standard module for accessing MySQL, now get a cursor...
+>>> rdb=MySQLdb.connect(db='HUMAN_SPLICE_03',read_default_file=os.environ['HOME'
+]+'/.my.cnf')
+>>> t=SQLTable('genomic_cluster_JUN03',rdb.cursor()) #interface to a table of
+ sequences
+>>> from pygr.seqdb import *   # pygr module for working with sequences from databases
+>>> t.objclass(DNASQLSequence) #use this class as "row objects"
+>>> s2=t['Hs.1162'] # get a specific sequence object by ID
+>>> str(s2[1000:1050]) # this will only get 50 nt of the genomic sequence from 
+MySQL
+'acctgggtgatgaaataaatttttacgccaaatcccgatgacacacaatt'
+\end{verbatim}
+
+(Note: in this example we used MySQLdb.connect()'s ability to read database 
+server and user authentication information directly from the standard ~/.my.cnf file normally used by the MySQL client).
+
+\subsubsection{Building an Alignment Database from MAF files}
+It may be helpful to see how a large multi-genome alignment database
+is created in Pygr.  It is quite straightforward.
+UCSC has defined a new file format for large multigenome alignment,
+called MAF.  Pygr provides high-performance utilities for reading
+MAF alignment files and building a disk-based NLMSA alignment database.
+(These utilities are written in C for performance).  Here's an
+example of building an alignment database from scratch using a
+set of MAF files stored in a directory called \code{maf/}:
+
+\begin{verbatim}
+import os
+from pygr import cnestedlist,seqdb
+
+genomes={'hg17':'hg17','mm5':'mm5', 'rn3':'rn3', 'canFam1':'cf1', 
+         'danRer1':'dr1', 'fr1':'fr1','galGal2':'gg2', 'panTro1':'pt1'}
+for k,v in genomes.items(): # PREFIX DICTIONARY FOR UNION OF GENOMES
+    genomes[k]=seqdb.BlastDB(v) # USE v AS FILENAME FOR FASTA FILE
+genomeUnion=seqdb.PrefixUnionDict(genomes) # CREATE UNION OF THESE DBs
+# CREATE NLMSA DATABASE ucsc8 ON DISK, FROM MAF FILES IN maf/
+msa=cnestedlist.NLMSA('ucsc8','w',genomeUnion,os.listdir('maf'))
+\end{verbatim}
+
+The only real work here is due to the fact that UCSC's MAF files
+use a {\em prefix.suffix} notation for identifying specific sequences,
+where {\em prefix} gives the name of the genome, and {\em suffix}
+gives the identifier of the sequence in that genome database.
+Here we use Pygr's \class{PrefixUnionDict} class to wrap the 
+set of genome databases in a dict-like interface that accepts
+string keys of the form {\em prefix.suffix} and returns the
+right sequence object from the right genome database.  As an
+added twist, the genome names in the MAF files match the
+filenames of the associated genome databases in most cases, but
+not all, so we have to create an initial dictionary giving the
+correct mapping.  Actually building the NLMSA requires just one
+line, but actually a number of steps are happening behind the
+scenes:
+\begin{itemize}
+\item If you have never opened \class{BlastDB} objects for these genome
+databases before, \class{BlastDB} will initialize each one.  This means
+two things.  First, it builds an index of all the sequences and their 
+lengths.  This is essential for combining the
+large numbers of sequences in these databases into 
+``unified'' coordinate systems in the NLMSA (otherwise there would
+have to be a separate database file for each individual sequence).
+Second, it saves the sequences to a simple indexed file format that
+allows Pygr to retrieve individual sequence fragments quickly and
+efficiently.  We got tired of NCBI \code{fastacmd}'s horrible
+memory requirements and slow speed, so we implemented fast sequence
+indexing.
+
+\item \class{NLMSA} reads each MAF file and divides the interval
+alignment data into one or more coordinate systems created 
+on-the-fly (for efficient memory usage, NLMSA uses \class{int}
+coordinates (32-bit), which has a maximum size of approximately
+2 billion.  This is too small even for a single genome like human;
+\class{NLMSA} automatically splits the database into as many
+coordinate systems are needed to represent the alignment.
+Each coordinate system has its own database file on disk.
+
+\item After it has finished reading the MAF data, \class{NLMSA}
+begins to build the database indexes for each coordinate 
+system.  Computationally, this operation is equivalent to
+a {\em sort} (N log N complexity).  Once the indexes are built, the database is
+ready for use.
+\end{itemize}
+	
+\subsubsection{Example: Mapping an entire gene set onto a new genome version}
+To illustrate how Pygr can perform a big task with a little code, here is an example that maps a set of gene sequences onto a new version of the genome, using megablast to do the mapping, and a relational database to store the results.  Moreover, since mapping 80,000 gene clusters takes a fair amount of time, the calculation is parallelized to run over a large number of compute nodes simultaneously:
+
+\begin{verbatim}
+import pygr.Data
+from pygr.apps.leelabdb import * # this accesses our databases
+from pygr import coordinator     # this provides parallelization support
+
+def map_clusters(server,dbname='HUMAN_SPLICE_03',
+                 result_table='GENOME_ALIGNMENT.hg17_cluster_JUN03_all',
+                 rmOpts='',**kwargs):
+    "CLIENT FUNCTION: map clusters one by one"
+    # CONSTRUCT RESOURCE FOR US IF NEEDED
+    genome=pygr.Data.Bio.Seq.Genome.hg17()
+    # LOAD DB SCHEMA
+    (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna, 
+    protein, clusterExons,clusterSplices)=getSpliceGraphFromDB(spliceCalcs[dbname])
+    # NOW MAP CLUSTER SEQUENCES ONE BY ONE TO OUR NEW genome
+    for cluster_id in server:
+        g=genomic_seq[cluster_id] # GET THE OLD GENOMIC SEQUENCE FOR THIS CLUSTER
+        m=genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # MASK, BLAST, READ INTO m
+        # SAVE ALIGNMENT m TO DATABASE TABLE result_table USING cursor
+        createTableFromRepr(m.repr_dict(),result_table,clusters.cursor,
+                            {'src_id':'varchar(12)','dest_id':'varchar(12)'})
+        yield cluster_id # WE MUST FUNCTION AS GENERATOR TO KEEP ERROR TRAPPING 
+		         # HAPPY
+
+def serve_clusters(dbname='HUMAN_SPLICE_03',
+                   source_table='HUMAN_SPLICE_03.genomic_cluster_JUN03',**kwargs):
+    "SERVER FUNCTION: serve up cluster_id one by one to as many clients as you want"
+    cursor=getUserCursor(dbname)
+    t=SQLTable(source_table,cursor)
+    for id in t:
+        yield id # HAND OUT ONE CLUSTER ID TO A CLIENT
+
+if __name__=='__main__': # AUTOMATICALLY RUN EITHER THE CLIENT OR SERVER FUNCTION
+    coordinator.start_client_or_server(map_clusters,serve_clusters,[],__file__)
+\end{verbatim}
+
+First, let's just focus on the map_clusters() function, which illustrates how the mapping of each gene is generated and saved.  Let's examine the data piece by piece:
+\begin{itemize}
+
+\item
+genome: a BLAST database storing our hg17 genome sequence
+
+\item
+genomic_seq: another sequence database (which in this case happens to be stored in a relational database), mapping each cluster ID to a piece of the old genomic sequence version containing that specific gene.
+
+\item   
+cluster_id: a cluster ID for us to process.
+
+\item
+g: the actual sequence object associated with this cluster_id
+
+\item
+m: the mapping of g onto genome, as generated by megablast after first running RepeatMasker on g, using the RepeatMasker options passed as rmOpts.  Note that only the top hit will be saved (maximum number of hits to save maxseq=1), and only if it has at least 98% identity.  This alignment is then saved to a relational database table using createTableFromRepr().
+
+\end{itemize}
+This code will run in parallel over as many compute nodes as you have free, using Pygr's coordinator module.  The parallelization model for this particular task is simple: a single iterator (server) dispensing task IDs to many clients. 
+
+\begin{itemize}
+
+\item
+server: the serve_clusters() function is trivial: all it does is connect to a specific database table (source_table) and iterate over all its primary keys, yielding them one by one.
+
+\item    
+client: the map_clusters() function expects an iterator as its first argument, which must give it a sequence of task IDs (cluster_id in this script).  This iterator is actually using an XMLRPC request to the server to get the next task ID, but that is done transparently by the coordinator.Processor() class.  The map_clusters() function is modeled as a generator: that is, it first does some initial setup (loading the database schema for example), then it runs its actual task loop, yielding each completed task ID. This enables coordinator.Processor to run map_clusters() within an error-trapping try: except: clause that catches and reports all errors to the central coordinator.Coordinator instance, and also to implement some intelligent error handling policies (like robustly preventing rare individual errors from causing an entire Processor() to crash, but detecting when consistent patterns of errors occur on a particular Processor, and automatically shutting down that Processor.
+
+\item 
+start_client_or_server(): this line automatically starts up the correct function (depending on whether this process is running as client or server).  To make a long story short, all you have to do is run the script once (as a server), and it will automatically start clients for you on free compute nodes (using ssh-agent), with reasonable load-balancing and queuing policies.  For details, see the coordinator module docs.
+\end{itemize}
+
+
+\subsubsection{Alignment Graph Basics: THIS IS OBSOLETE.  UPDATE!!}
+
+Pygr multiple alignment objects can be treated as mappings of sequence intervals onto sequence intervals.  Here is a very simple example (continuing from the previous example), showing basic operations for constructing an alignment:
+
+\begin{verbatim}
+>>> m2=PathMapping() # create an empty alignment object
+>>> m2[s]=db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interva
+l of MYG_CHICK
+>>> m2[s[:10] ] # get alignment for first 10 letters, and print representation
+MYG_CHICK[83:93]
+>>> m2[s]=db['MYG_CANFA'][45:105] # add an additional edge
+>>> for s2 in m2[s[:10] ]: # get aligned seqs for the first 10 letters again...
+...     print repr(s2)
+...
+MYG_CHICK[83:93]
+MYG_CANFA[45:55]
+\end{verbatim}
+In this case we created an alignment of sequence intervals without edge information.  However, we can also store edge information with a given alignment edge, in the "usual" Pygr way:
+
+\begin{verbatim}
+>>> class Foo(object): pass # create a dummy class that we can add attributes to
+...
+>>> a=Foo() # create a dummy object
+>>> a.x=7 # add an attribute
+>>> m2=PathMapping() # create an empty alignment object
+>>> m2+=s # add as node to the alignment graph
+>>> m2[s][db['MYG_CHICK'][83:143] ]=a # add an edge mapping interval s -> an int
+erval of MYG_CHICK
+>>> for e in m2[s[:10] ].edges(): # get alignment edges for the first 10 letters
+ again...
+...     print repr(e.destPath),e.x # we can access edge attributes
+...
+MYG_CHICK[83:93] 7
+\end{verbatim}
+
+\subsubsection{Alignment Query OBSOLETE: UPDATE!}
+
+Since Pygr alignments follow the same interface as any Pygr graph, we can query them using the standard GraphQuery class.  Let's say we have a Python script load_alignments.py that loads two alignments:
+
+\begin{itemize}
+
+\item
+mRNA_swiss: an alignment of mRNA sequences to homologous SwissProt sequences;
+
+\item
+swiss_features: an alignment of SwissProt sequences onto annotation objects. 
+
+\end{itemize}
+To find out how the known SwissProt annotations map on to our mRNA sequences requires a join, which can be formulated as a simple Pygr graph, consisting of a mapping of an mRNA sequence interval (node 1), onto a SwissProt sequence interval (node 2), onto a feature annotation (node 3):
+
+\begin{verbatim}
+>>> from load_alignments import * # load the alignments
+>>> from pygr.graphquery import *      # import the graph query code
+>>> queryGraph={1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} # 
+edge 2->3 must come from swiss_features
+>>> l=[dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] # run the query and 
+save the mappings
+>>> len(l) # how many annotations mapped onto our mRNA sequences?
+4703
+\end{verbatim}
+
+We assumed that mRNA_swiss would be passed as the default dataGraph, and specified directly that edge 2->3 should be looked up in swiss_features.  We then captured all the results from the GraphQuery iterator using a Python list comprehension.  Note that since the iterator returns each result in the same container (mapping object), if we want to save all the individual results we have to copy each one to a new mapping (dict) object, as illustrated in this example.
+Storing Alignments in a Relational Database
+
+
+\subsubsection{Persistent Alignment Storage OBSOLETE: UPDATE!}
+Pygr makes it easy to store alignments persistently in a relational database.  To illustrate, here we run BLAST to generate an alignment of one sequence to manyother sequences, and store it to a MySQL table test.alignment:
+
+\begin{verbatim}
+from pygr.seqdb import *
+db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
+m=db.blast(db['CYGB_HUMAN']) # get alignment to all BLAST hits in db
+import MySQLdb # import the MySQL adapter
+import os
+# open a connection to the test database
+cursor=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf').cursor()
+# save the alignment, creating table test.alignment if not exists
+createTableFromRepr(m.repr_dict(),'test.alignment',cursor,
+                    {'src_id':'varchar(12)','dest_id':'varchar(12)'})
+\end{verbatim}
+
+The only line here that needs comment is Pygr's createTableFromRepr() function.  It takes four arguments:
+
+   1. an iterator, each of whose return values is a dictionary mapping column names to value representations that can be stored in a relational table.  Here we have passed m.repr_dict() as the iterator.  It is a generator function that simply yields edge.repr_dict() on each of the edges stored in m.  The edge.repr_dict() method in turn simply returns a dictionary mapping column names (like 'src_id') onto values that are storable in a relational table.
+   2. a table name: in this case, 'test.alignment'
+   3. a cursor for connecting to the database
+   4. an optional dictionary for customizing exactly how specific columns should be stored in the database.  In this case, we specified varchar(12) for both src_id and dest_id (the identifiers of the source and destination (aligned) sequences)
+
+This function constructs a schema and creates the table in the database if it does not already exist.  It then saves all of the output of m.repr_dict() as rows in the database table.  To see exactly what it generates, we can look at its output interactively:
+
+\begin{verbatim}
+>>> for e in m.repr_dict(): break
+... 
+>>> e
+{'src_id': 'CYGB_HUMAN', 'blast_score': 344, 'dest_id': 'CYGB_HUMAN', 'src_end':
+ 190, 'src_ori': 1, 'percent_id': 90, 'dest_ori': 1, 'src_start': 0, 'dest_start' : 0, e_value': 94.301000000000002, 'dest_end': 190}
+
+Here is the schema automatically created by createTableFromRepr():
+
+mysql> desc alignment;
++-------------+-------------+------+-----+---------+-------+
+| Field       | Type        | Null | Key | Default | Extra |
++-------------+-------------+------+-----+---------+-------+
+| src_id      | varchar(12) |      | MUL |         |       |
+| blast_score | int(11)     |      |     | 0       |       |
+| dest_id     | varchar(12) |      | MUL |         |       |
+| src_end     | int(11)     |      |     | 0       |       |
+| src_ori     | int(11)     |      |     | 0       |       |
+| percent_id  | int(11)     |      | MUL | 0       |       |
+| dest_ori    | int(11)     |      |     | 0       |       |
+| src_start   | int(11)     |      |     | 0       |       |
+| dest_start  | int(11)     |      |     | 0       |       |
+| e_value     | float       |      |     | 0       |       |
+| dest_end    | int(11)     |      |     | 0       |       |
++-------------+-------------+------+-----+---------+-------+
+11 rows in set (0.01 sec)
+\end{verbatim}
+
+Thus the basic format of stored alignments is
+
+\begin{itemize}
+
+\item
+only alignment information is stored; no actual sequence is stored, only the sequence identifiers and begin-end points of each aligned interval.
+
+\item
+additional edge information for each alignment row is saved, as provided by the edges repr_dict() method.
+
+\item
+directional: it distinguishes one of the sequence pair as the source sequence, the other as the destination sequence.
+
+\end{itemize}
+
+We can now make use of the stored alignment in Pygr just as if it were a normal (in-memory) alignment object.  The only difference is we use the StoredPathMapping class instead of the standard PathMapping class.  Here is an example script that connects to the stored alignment, and prints out the alignment of one sequence:
+
+\begin{verbatim}
+import MySQLdb
+from pygr.seqdb import *
+cursor=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf').cursor()
+t=SQLTableMultiNoCache('test.alignment',cursor)
+t._distinct_key='src_id' # use this column as the ID field to search
+sp=BlastDB('sp') # OPEN SWISSPROT BLAST DB
+m=StoredPathMapping(t,sp,sp) # tell it to search sp for both source and target 
+sequence IDs
+for e in m[sp['CYGB_HUMAN'] ].edges(): # SHOW ALL ALIGNMENTS FOR THIS SEQUENCE
+    print repr(e.srcPath),repr(e.destPath),e.blast_score
+\end{verbatim}
+
+StoredPathMapping expects three arguments:
+
+   1. an SQLTable object which provides the interface to the database table containing the alignment.  t is just an interface to the MySQL table.  Since each sequence can potentially have many rows (many alignment intervals against one or more destination sequences), we used the SQLTableMultiNoCache subclass: each key value (source sequence ID) can have multiple rows; and we chose not to have it cache rows that it retrieves (there would be no benefit from doing so, since StoredPathMapping itself performs result caching).  Also note the t._distinct_key assignment: this informs the table object that when we try to access a particular key (e.g. t['CYGB_HUMAN']), the column to search for this key is 'src_id'.
+   2. a sequence dictionary object from which to obtain the source sequences.  This dictionary must map a source sequence identifier to an actual sequence object representing that sequence.  In this case, we just used our sp BLAST database as the source sequence dictionary.
+   3. a sequence dictionary object from which to obtain the destination sequences.  This dictionary must map a destination sequence identifier to an actual sequence object representing that sequence.  We just used the sp database again.
+
+Thus we informed StoredPathMapping to treat t as a mapping of sp onto itself.
+
+The StoredPathMapping object (m) acts as an interface to the relational database, which we can treat just like a regular PathMapping alignment object.  The difference is that it looks up the alignment from the back-end database table when you request a mapping of a specific sequence.  In other words, only when we invoked m[sp['CYGB_HUMAN'] ] did it obtain the alignment information for that source sequence from the database; once retrieved, this information is cached locally so that subsequent queries of the same source sequence will just use the local data without having to re-query the database.
+
+\subsubsection{More examples}
+\label{more-exam}
+
+Additional examples of how to use pygr can be found in the tests/ directory within the pygr distribution package.
+
+
+\subsection{Using Pygr as a Graph Database}
+The real power of Pygr is that it provides a simple model for viewing
+all data as {\em graph databases}-- in which all data are represented
+as nodes and connections between nodes (edges), and queries are formulated
+as a specific pattern of connections to find --
+in a very Pythonic style.  To illustrate the simplicity and power
+of the graph database approach, Pygr has a strong emphasis
 on bioinformatics applications ranging from genome-wide analysis of
 alternative splicing patterns, to comparative genomics queries of
 multi-genome alignment data.
@@ -52,7 +721,7 @@ multi-genome alignment data.
 The following introductory examples show how to use Pygr for graph queries, sequence searching and alignment queries, annotation queries, and multigenome alignment queries.
 
 
-\subsection{Example: Simple graph query}
+\subsubsection{Example: Simple graph query}
 Why would you want to use Pygr?  Interesting data often consists of specific graph structures, and these relationships are much easier to describe as graphs than they are in SQL.  For example, the simplest and most common form of alternative splicing is exon-skipping, where an exon is either skipped or included (see slide 15 of the ISMB slides for a picture).  This can be defined immediately as a graph in which three nodes (exons 1, 2, 3) are joined by edges either as 1-2-3 or 1-3.  Unfortunately, writing an SQL query for this simple pattern requires a 6-way JOIN (argh).
 
 \begin{verbatim}
@@ -160,541 +829,6 @@ spliceGraph[exon1]+=exon2 # equivalent to exon1.next+=exon2
 This "short" form is equivalent to saving None as the edge information.
 
 
-\subsection{Sequence / Alignment Tutorial}
-\label{seq-align}
-
-Sequences and alignments also can be modeled as graph structures in Pygr, providing the same consistent and simple framework for queries.
-
-\subsubsection{Sequence Objects}
-Pygr tries to provide a very "Pythonic" model for sequences.  This python interpreter session illustrates some simple features:
-
-\begin{verbatim}
->>> from pygr.seqdb import *
->>> s=NamedSequence('attatatgccactat','bobo') #create a sequence named bobo
->>> s # interpreter will print repr(s)
-bobo[0:15]
->>> t=s[-8:] #python slice gives last 8 nt of s
->>> t # interpreter will print repr(t)
-bobo[7:15]
->>> str(t) #string conversion just yields the sequence as a string 
-'gccactat'
->>> rc= -s #get the reverse complement
->>> str(rc[:5]) #its first five letters
-'atagt'
-\end{verbatim}
-
-Several points:
-\begin{itemize}
-
-\item
-   Slices of a sequence object (e.g. s[1:10] or s[-8:]) are themselves sequence objects.
-
-\item    
-The string value of a sequence object (e.g. str(s)) is just the sequence itself (as a string).
-
-\end{itemize}
-
-\subsubsection{Working with Sequences from Databases}
-
-Pygr provides a variety of "back-end" implementations of sequence objects, ranging from sequences stored in a relational database table, or a BLAST database, to sequences created by the user in Python (as above).  All of these provide the same consistent interface, and in general try to be efficient.  For example, Pygr sequence objects are just "placeholders" that record what sequence interval you're working with, but if the back-end is an external database, the sequence object itself does not store the sequence, and creating new sequence objects (e.g. taking slices of the object as above) will not require anything to be done on the actual sequence itself (such as copying a portion of it).  Pygr only obtains sequence information when you actually ask for it (e.g. by taking the string value str(s) of a sequence object), and normally only obtains just the portion that you ask for (i.e. str(s[1000000:1000100]) only obtains 100nt of sequence, even if s is a 100 megabase sequence.  By contrast str(s)[1000000:1000100] would force it to obtain the whole sequence from the database, then slice out just the 100 nt you selected). 
-
-Here's an example of working with sequences from a relational database:
-
-\begin{verbatim}
->>> import MySQLdb # standard module for accessing MySQL, now get a cursor...
->>> rdb=MySQLdb.connect(db='HUMAN_SPLICE_03',read_default_file=os.environ['HOME'
-]+'/.my.cnf')
->>> t=SQLTable('genomic_cluster_JUN03',rdb.cursor()) #interface to a table of
- sequences
->>> from pygr.seqdb import *   # pygr module for working with sequences from databases
->>> t.objclass(DNASQLSequence) #use this class as "row objects"
->>> s2=t['Hs.1162'] # get a specific sequence object by ID
->>> str(s2[1000:1050]) # this will only get 50 nt of the genomic sequence from 
-MySQL
-'acctgggtgatgaaataaatttttacgccaaatcccgatgacacacaatt'
-\end{verbatim}
-
-(Note: in this example we used MySQLdb.connect()'s ability to read database 
-server and user authentication information directly from the standard ~/.my.cnf file normally used by the MySQL client).
-
-Here's an example of working with sequences from a BLAST database:
-
-\begin{verbatim}
->>> from pygr.seqdb import *
->>> db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
->>> s=db['CYGB_HUMAN'][90:150] # get a sequence by ID, and take a slice
->>> str(s)
-'TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA'
->>> m=db.blast(s) # get alignment to all BLAST hits in db
->>> for e in m.edges(): # print out the alignment edges
-...     print e.srcPath,repr(e.srcPath),'\n',e.destPath,repr(e.destPath),e.blast
-_score,'\n'
-... 
-TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPP CYGB_HUMAN[90:145] 
-TLVENLRDADKLNTIFNQMGKSHALRHKVDPVYFKILAGVILEVLVEAFPQCFSP CYGB_BRARE[87:142] 72
-
-TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150] 
-TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150]
- 120
-
-TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150] 
-TVVENLHDPDKVSSVLALVGKAHALKHKVEPMYFKILSGVILEVIAEEFANDFPVETQKA CYGB_MOUSE[90:150]
-112 
-...
-\end{verbatim}
-
-This example introduces the use of a Pygr alignment object to store the mapping of s onto homologous sequences in db, obtained from BLAST.  Here's what Pygr actually does:
-
-\begin{itemize}
-
-\item
-When you first create the BlastDB object, it looks for existing BLAST database files associated with the FASTA file 'sp'.  If present, it uses them.  If not, it creates them automatically, using the NCBI program formatdb (it figures out whether the sequences are nucleotide or protein, and gives formatdb the appropriate command line options).  It then returns a BlastDB object, which is just a placeholder that acts as a convenient interface to the BLAST database.  For example, it acts as a Python dictionary mapping sequence IDs to the associated sequence objects (i.e. if 'CYGB_HUMAN' is a sequence ID in sp, then db['CYGB_HUMAN'] is the sequence object for that sequence.  This object is instantiated from class BlastSequence, which provides an interface to the BLAST database.
-
-\item 
-When you work with such sequence objects, slicing etc. happens in the usual way, creating new sequence objects.
-
-\item  
-Only when you ask for actual sequence (by taking str(s)) does it obtain a sequence string from the database, using NCBI's fastacmd.  This is done using fastacmd's -L option to obtain just the selected slice.  So you can efficiently obtain a substring of a sequence, even if that sequence is an entire chromosome.
-    * When you invoke the db.blast() method on a sequence object, it obtains the actual string of the object, and uses it to run a BLAST search.  It determines the type (nucleotide or protein) of the sequence object, and uses the appropriate search method (in this case blastp).  You can pass optional arguments for controlling BLAST.  It then reads the results into a Pygr multiple sequence alignment object, which stores the alignments as sets of matched intervals.  Specifically, it is a graph, whose nodes are sequence intervals (i.e. sequence objects that typically represent only part of a sequence), and whose edges represent an alignment between a pair of intervals.  To illustrate this, we ran a for-loop over all the "edge relations" in this graph, and printed them out.  This interface is being rewritten to make it more general, but already is fairly simple: e.srcPath and e.destPath are the two aligned sequence intervals; other edge attributes such as e.blast_score or e.percent_id give you access to the BLAST info for that alignment.  Note: print converts its arguments to strings (i.e. calls str() on them), so we used repr(e.srcPath) to get a "string representation" of each sequence interval.  When print calls str() on individualBlastSequence interval objects returned by the BLAST search, they invoke fastacmd -L to obtain the specific sequence slice representing that interval.
-\end{itemize}
-
-\subsubsection{Alignment Graph Basics}
-
-Pygr multiple alignment objects can be treated as mappings of sequence intervals onto sequence intervals.  Here is a very simple example (continuing from the previous example), showing basic operations for constructing an alignment:
-
-\begin{verbatim}
->>> m2=PathMapping() # create an empty alignment object
->>> m2[s]=db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interva
-l of MYG_CHICK
->>> m2[s[:10] ] # get alignment for first 10 letters, and print representation
-MYG_CHICK[83:93]
->>> m2[s]=db['MYG_CANFA'][45:105] # add an additional edge
->>> for s2 in m2[s[:10] ]: # get aligned seqs for the first 10 letters again...
-...     print repr(s2)
-...
-MYG_CHICK[83:93]
-MYG_CANFA[45:55]
-\end{verbatim}
-In this case we created an alignment of sequence intervals without edge information.  However, we can also store edge information with a given alignment edge, in the "usual" Pygr way:
-
-\begin{verbatim}
->>> class Foo(object): pass # create a dummy class that we can add attributes to
-...
->>> a=Foo() # create a dummy object
->>> a.x=7 # add an attribute
->>> m2=PathMapping() # create an empty alignment object
->>> m2+=s # add as node to the alignment graph
->>> m2[s][db['MYG_CHICK'][83:143] ]=a # add an edge mapping interval s -> an int
-erval of MYG_CHICK
->>> for e in m2[s[:10] ].edges(): # get alignment edges for the first 10 letters
- again...
-...     print repr(e.destPath),e.x # we can access edge attributes
-...
-MYG_CHICK[83:93] 7
-\end{verbatim}
-
-\subsubsection{Alignment Query}
-
-Since Pygr alignments follow the same interface as any Pygr graph, we can query them using the standard GraphQuery class.  Let's say we have a Python script load_alignments.py that loads two alignments:
-
-\begin{itemize}
-
-\item
-mRNA_swiss: an alignment of mRNA sequences to homologous SwissProt sequences;
-
-\item
-swiss_features: an alignment of SwissProt sequences onto annotation objects. 
-
-\end{itemize}
-To find out how the known SwissProt annotations map on to our mRNA sequences requires a join, which can be formulated as a simple Pygr graph, consisting of a mapping of an mRNA sequence interval (node 1), onto a SwissProt sequence interval (node 2), onto a feature annotation (node 3):
-
-\begin{verbatim}
->>> from load_alignments import * # load the alignments
->>> from pygr.graphquery import *      # import the graph query code
->>> queryGraph={1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} # 
-edge 2->3 must come from swiss_features
->>> l=[dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] # run the query and 
-save the mappings
->>> len(l) # how many annotations mapped onto our mRNA sequences?
-4703
-\end{verbatim}
-
-We assumed that mRNA_swiss would be passed as the default dataGraph, and specified directly that edge 2->3 should be looked up in swiss_features.  We then captured all the results from the GraphQuery iterator using a Python list comprehension.  Note that since the iterator returns each result in the same container (mapping object), if we want to save all the individual results we have to copy each one to a new mapping (dict) object, as illustrated in this example.
-Storing Alignments in a Relational Database
-
-\subsubsection{Example: Working with the UCSC Multigenome Alignment Data}
-
-David Haussler's group has constructed alignments of multiple genomes.  These alignments are extremely useful and interesting, but so large that it is cumbersome to work with the dataset using conventional methods.  For example, for the 8-genome alignment you have to work simultaneously with the individual genome datasets for human, chimp, mouse, rat, dog, chicken, fugu and zebrafish, as well as the huge alignment itself.  Pygr makes this quite easy.  Here we illustrate an example of mapping an alternative 3' exon, which has two alternative splice sites
-(\code{start1} and \code{start2}) and a single terminal splice site (\code{stop}).
-We use the alignment database to map each of these splice sites onto all the aligned
-genomes, and to print the percent-identity and percent-aligned for each genome,
-as well as the two nucleotides consituting the splice site itself.
-To examine the conservation of the two exonic regions (between \code{start1}
-and \code{start2}, and the adjacent region terminated by \code{stop}, 
-we print the same information for each genome's alignment to these two regions as well.
-The code first opens the alignment database.  The function (\code{getAlt3Conservation})
-obtains sequence slice objects representing the various ``sites'' to be queried.
-The actual alignment database query is performed in \code{printResults}:
-
-\begin{verbatim}
-from pygr import cnestedlist
-msa=cnestedlist.NLMSA('/usr/tmp/ucscDB/mafdb') # OPEN THE ALIGNMENT DB
-
-def printResults(prefix,msa,site,altID='NULL',cluster_id='NULL',dbUnion=None):
-    'get alignment of each genome to site, print %identity and %aligned'
-    for src,dest,edge in msa[site].edges(mergeMost=True): # ALIGNMENT QUERY!
-        print '%s\t%s\t%s\t%s\t%2.1f\t%2.1f\t%s\t%s' \
-              %(altID,cluster_id,prefix,dbUnion.dicts[dest.pathForward.db],
-                100.*edge.pIdentity(),100.*edge.pAligned(),src[:2],dest[:2])
-
-def getAlt3Conservation(msa,gene,start1,start2,stop,**kwargs):
-    'gene must be a slice of a sequence in our genome alignment msa'
-    ss1=gene[start1-2:start1] # USE SPLICE SITE COORDINATES
-    ss2=gene[start2-2:start2]
-    ss3=gene[stop:stop+2]
-    e1=ss1+ss2 # GET INTERVAL BETWEEN PAIR OF SPLICE SITES
-    e2=gene[max(start1,start2):stop] # GET INTERVAL BETWEEN e1 AND stop
-    zone=e1+ss3 # USE zone AS COVERING INTERVAL TO BUNDLE fastacmd REQUESTS
-    cache=msa[zone].keys(mergeMost=True) # PYGR BUNDLES REQUESTS TO MINIMIZE TRAFFIC
-    for prefix,site in [('ss1',ss1),('ss2',ss2),('ss3',ss3),('e1',e1),('e2',e2)]:
-        printResults(prefix,msa,site,dbUnion=msa.seqDict,**kwargs)
-
-# RUN A QUERY LIKE THIS...
-# getAlt3Conservation(msa,some_gene,some_start,other_start,stop)
-
-\end{verbatim}
-
-A few notes:
-
-\begin{itemize}
-
-\item
-The alignment database query is in the first line of \code{printResults()}.
-\code{msa} is the database; \code{site} is the interval query; and the
-\method{edges} methods iterates over the results, returning a tuple for
-each, consisting of a {\em source sequence} interval (i.e. an interval of
-\code{site}), a {\em destination sequence} interval (i.e. an interval in
-an aligned genome), and an {\em edge object} describing that alignment.
-We are taking advantage of Pygr's group-by operator \code{mergeMost},
-which will cause multiple intervals in a given sequence to be merged
-into a single interval that constitutes their ``union''.  Thus,
-for each aligned genome, the \code{edges} iterator will return a single
-aligned interval.  The alignment edge object provides some useful 
-conveniences, such as calculating the percent-identity between \code{src}
-and \code{dest} automatically for you.  \method{pIdentity()} computes
-the fraction of identical residues; \method{pAligned} computes the 
-fraction of {\em aligned} residues (allowing you to see if there are 
-big gaps or insertions in the alignment of this interval).  If we 
-had wanted to inspect the detailed alignment letter by letter, we
-would just iterate over the \member{letters} attribute instead of
-the \method{edges} method. (See the \class{NLMSASlice} documentation for 
-further information).
-
-\item
-Pygr provides convenient query options for specifying precisely how regions
-of alignment should be ``grouped'' together (e.g. treat alignment intervals
-separated by indels up to a certain size as being a {\em single} alignment
-region) or filtered (e.g. require a certain level of conservation over some
-minimum size of alignment region).  Here's an example:
-\begin{verbatim}
-results=msa[site].edges(maxgap=1,maxinsert=1,
-                        minAlignSize=14,pIdentityMin=0.9)
-\end{verbatim}
-This example groups together any number of alignment intervals separated by indels
-of at most one in length, and then filters these alignment regions to
-just those (sub)regions that have at least 90\% sequence identity over
-a region of at least 14 residues in length.
-
-\item
-\code{src[:2]} and \code{dest[:2]} print the first two nucleotides
-of the site in \code{gene} and in the aligned genome.
-
-\item
-it's worth noting that the actual sequence string comparisons are being
-done using a completely different database mechanism (either Pygr's
-simple \code{pureseq} text format, or (before release 0.5) NCBI's \code{fastacmd}),
-not the \code{cnestedlist} database.  Basically, each genome is being queried
-as a separate sequence database, represented in Pygr by the
-\class{BlastDB} class.  Pygr makes this complex set of multi-database
-operations more or less transparent to the user.
-For further information, see the \class{BlastDB} documentation.  
-
-\item
-The other operations here are entirely vanilla: mainly slicing a 
-\code{gene} sequence to obtain the specific sites that we want to query.
-Note: \code{gene} must itself be a slice of a sequence in our alignment, 
-or the alignment query \code{msa[site]} will raise an IndexError informing
-the user that the sequence \code{site} is not in the alignment.
-
-\item
-The only slightly interesting operation here is the use of interval
-addition to obtain the ``union'' of two intervals, e.g. \code{e1=ss1+ss2}.
-This obtains a single interval that contains both of the input intervals.
-
-\item
-When the print  statement requests str() representations of these sequence objects, Pygr uses fastacmd -L to extract just the right piece of the corresponding chromosomes from the eight BLAST databases.
-
-\end{itemize}
-
-(Actually, because of Pygr's caching / optimizations, considerably more is going on than indicated in this simplified sketch.  But you get the idea: Pygr makes it relatively effortless to work with a variety of disparate (and large) resources in an integrated way.)
-
-Here is some example output:
-\begin{verbatim}
-1       Mm.99996        ss1     hg17    50.0    100.0   AG      GG
-1       Mm.99996        ss1     canFam1 50.0    100.0   AG      GG
-1       Mm.99996        ss1     panTro1 50.0    100.0   AG      GG
-1       Mm.99996        ss1     rn3     100.0   100.0   AG      AG
-1       Mm.99996        ss2     hg17    100.0   100.0   AG      AG
-1       Mm.99996        ss2     canFam1 100.0   100.0   AG      AG
-1       Mm.99996        ss2     panTro1 100.0   100.0   AG      AG
-1       Mm.99996        ss2     rn3     100.0   100.0   AG      AG
-1       Mm.99996        ss3     hg17    100.0   100.0   GT      GT
-1       Mm.99996        ss3     canFam1 100.0   100.0   GT      GT
-1       Mm.99996        ss3     panTro1 100.0   100.0   GT      GT
-1       Mm.99996        ss3     rn3     100.0   100.0   GT      GT
-1       Mm.99996        e1      hg17    78.9    100.0   AG      GG
-1       Mm.99996        e1      canFam1 84.2    100.0   AG      GG
-1       Mm.99996        e1      panTro1 77.6    100.0   AG      GG
-1       Mm.99996        e1      rn3     97.4    98.7    AG      AG
-1       Mm.99996        e2      hg17    91.6    99.1    CC      CC
-1       Mm.99996        e2      canFam1 88.8    99.1    CC      CC
-1       Mm.99996        e2      panTro1 91.6    99.1    CC      CC
-1       Mm.99996        e2      rn3     97.2    100.0   CC      CC
-\end{verbatim}
-
-\subsubsection{Building an Alignment Database from MAF files}
-UCSC has defined a new file format for large multigenome alignment,
-called MAF.  Pygr provides high-performance utilities for reading
-MAF alignment files and building a disk-based NLMSA alignment database.
-(These utilities are written in C for performance).  Here's an
-example of building an alignment database from scratch using a
-set of MAF files stored in a directory called \code{maf/}:
-
-\begin{verbatim}
-import os
-from pygr import cnestedlist,seqdb
-
-genomes={'hg17':'hg17','mm5':'mm5', 'rn3':'rn3', 'canFam1':'cf1', 
-         'danRer1':'dr1', 'fr1':'fr1','galGal2':'gg2', 'panTro1':'pt1'}
-for k,v in genomes.items(): # PREFIX DICTIONARY FOR UNION OF GENOMES
-    genomes[k]=seqdb.BlastDB(v) # USE v AS FILENAME FOR FASTA FILE
-genomeUnion=seqdb.PrefixUnionDict(genomes) # CREATE UNION OF THESE DBs
-# CREATE NLMSA DATABASE ucsc8 ON DISK, FROM MAF FILES IN maf/
-msa=cnestedlist.NLMSA('ucsc8','w',genomeUnion,os.listdir('maf'))
-\end{verbatim}
-
-The only real work here is due to the fact that UCSC's MAF files
-use a {\em prefix.suffix} notation for identifying specific sequences,
-where {\em prefix} gives the name of the genome, and {\em suffix}
-gives the identifier of the sequence in that genome database.
-Here we use Pygr's \class{PrefixUnionDict} class to wrap the 
-set of genome databases in a dict-like interface that accepts
-string keys of the form {\em prefix.suffix} and returns the
-right sequence object from the right genome database.  As an
-added twist, the genome names in the MAF files match the
-filenames of the associated genome databases in most cases, but
-not all, so we have to create an initial dictionary giving the
-correct mapping.  Actually building the NLMSA requires just one
-line, but actually a number of steps are happening behind the
-scenes:
-\begin{itemize}
-\item If you have never opened \class{BlastDB} objects for these genome
-databases before, \class{BlastDB} will initialize each one.  This means
-two things.  First, it builds an index of all the sequences and their 
-lengths.  This is essential for combining the
-large numbers of sequences in these databases into 
-``unified'' coordinate systems in the NLMSA (otherwise there would
-have to be a separate database file for each individual sequence).
-Second, it saves the sequences to a simple indexed file format that
-allows Pygr to retrieve individual sequence fragments quickly and
-efficiently.  We got tired of NCBI \code{fastacmd}'s horrible
-memory requirements and slow speed, so we implemented fast sequence
-indexing.
-
-\item \class{NLMSA} reads each MAF file and divides the interval
-alignment data into one or more coordinate systems created 
-on-the-fly (for efficient memory usage, NLMSA uses \class{int}
-coordinates (32-bit), which has a maximum size of approximately
-2 billion.  This is too small even for a single genome like human;
-\class{NLMSA} automatically splits the database into as many
-coordinate systems are needed to represent the alignment.
-Each coordinate system has its own database file on disk.
-
-\item After it has finished reading the MAF data, \class{NLMSA}
-begins to build the database indexes for each coordinate 
-system.  Computationally, this operation is equivalent to
-a {\em sort}.  Once the indexes are built, the database is
-ready for use.
-\end{itemize}
-	
-\subsubsection{Persistent Alignment Storage}
-Pygr makes it easy to store alignments persistently in a relational database.  To illustrate, here we run BLAST to generate an alignment of one sequence to manyother sequences, and store it to a MySQL table test.alignment:
-
-\begin{verbatim}
-from pygr.seqdb import *
-db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
-m=db.blast(db['CYGB_HUMAN']) # get alignment to all BLAST hits in db
-import MySQLdb # import the MySQL adapter
-import os
-# open a connection to the test database
-cursor=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf').cursor()
-# save the alignment, creating table test.alignment if not exists
-createTableFromRepr(m.repr_dict(),'test.alignment',cursor,
-                    {'src_id':'varchar(12)','dest_id':'varchar(12)'})
-\end{verbatim}
-
-The only line here that needs comment is Pygr's createTableFromRepr() function.  It takes four arguments:
-
-   1. an iterator, each of whose return values is a dictionary mapping column names to value representations that can be stored in a relational table.  Here we have passed m.repr_dict() as the iterator.  It is a generator function that simply yields edge.repr_dict() on each of the edges stored in m.  The edge.repr_dict() method in turn simply returns a dictionary mapping column names (like 'src_id') onto values that are storable in a relational table.
-   2. a table name: in this case, 'test.alignment'
-   3. a cursor for connecting to the database
-   4. an optional dictionary for customizing exactly how specific columns should be stored in the database.  In this case, we specified varchar(12) for both src_id and dest_id (the identifiers of the source and destination (aligned) sequences)
-
-This function constructs a schema and creates the table in the database if it does not already exist.  It then saves all of the output of m.repr_dict() as rows in the database table.  To see exactly what it generates, we can look at its output interactively:
-
-\begin{verbatim}
->>> for e in m.repr_dict(): break
-... 
->>> e
-{'src_id': 'CYGB_HUMAN', 'blast_score': 344, 'dest_id': 'CYGB_HUMAN', 'src_end':
- 190, 'src_ori': 1, 'percent_id': 90, 'dest_ori': 1, 'src_start': 0, 'dest_start' : 0, e_value': 94.301000000000002, 'dest_end': 190}
-
-Here is the schema automatically created by createTableFromRepr():
-
-mysql> desc alignment;
-+-------------+-------------+------+-----+---------+-------+
-| Field       | Type        | Null | Key | Default | Extra |
-+-------------+-------------+------+-----+---------+-------+
-| src_id      | varchar(12) |      | MUL |         |       |
-| blast_score | int(11)     |      |     | 0       |       |
-| dest_id     | varchar(12) |      | MUL |         |       |
-| src_end     | int(11)     |      |     | 0       |       |
-| src_ori     | int(11)     |      |     | 0       |       |
-| percent_id  | int(11)     |      | MUL | 0       |       |
-| dest_ori    | int(11)     |      |     | 0       |       |
-| src_start   | int(11)     |      |     | 0       |       |
-| dest_start  | int(11)     |      |     | 0       |       |
-| e_value     | float       |      |     | 0       |       |
-| dest_end    | int(11)     |      |     | 0       |       |
-+-------------+-------------+------+-----+---------+-------+
-11 rows in set (0.01 sec)
-\end{verbatim}
-
-Thus the basic format of stored alignments is
-
-\begin{itemize}
-
-\item
-only alignment information is stored; no actual sequence is stored, only the sequence identifiers and begin-end points of each aligned interval.
-
-\item
-additional edge information for each alignment row is saved, as provided by the edges repr_dict() method.
-
-\item
-directional: it distinguishes one of the sequence pair as the source sequence, the other as the destination sequence.
-
-\end{itemize}
-
-We can now make use of the stored alignment in Pygr just as if it were a normal (in-memory) alignment object.  The only difference is we use the StoredPathMapping class instead of the standard PathMapping class.  Here is an example script that connects to the stored alignment, and prints out the alignment of one sequence:
-
-\begin{verbatim}
-import MySQLdb
-from pygr.seqdb import *
-cursor=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf').cursor()
-t=SQLTableMultiNoCache('test.alignment',cursor)
-t._distinct_key='src_id' # use this column as the ID field to search
-sp=BlastDB('sp') # OPEN SWISSPROT BLAST DB
-m=StoredPathMapping(t,sp,sp) # tell it to search sp for both source and target 
-sequence IDs
-for e in m[sp['CYGB_HUMAN'] ].edges(): # SHOW ALL ALIGNMENTS FOR THIS SEQUENCE
-    print repr(e.srcPath),repr(e.destPath),e.blast_score
-\end{verbatim}
-
-StoredPathMapping expects three arguments:
-
-   1. an SQLTable object which provides the interface to the database table containing the alignment.  t is just an interface to the MySQL table.  Since each sequence can potentially have many rows (many alignment intervals against one or more destination sequences), we used the SQLTableMultiNoCache subclass: each key value (source sequence ID) can have multiple rows; and we chose not to have it cache rows that it retrieves (there would be no benefit from doing so, since StoredPathMapping itself performs result caching).  Also note the t._distinct_key assignment: this informs the table object that when we try to access a particular key (e.g. t['CYGB_HUMAN']), the column to search for this key is 'src_id'.
-   2. a sequence dictionary object from which to obtain the source sequences.  This dictionary must map a source sequence identifier to an actual sequence object representing that sequence.  In this case, we just used our sp BLAST database as the source sequence dictionary.
-   3. a sequence dictionary object from which to obtain the destination sequences.  This dictionary must map a destination sequence identifier to an actual sequence object representing that sequence.  We just used the sp database again.
-
-Thus we informed StoredPathMapping to treat t as a mapping of sp onto itself.
-
-The StoredPathMapping object (m) acts as an interface to the relational database, which we can treat just like a regular PathMapping alignment object.  The difference is that it looks up the alignment from the back-end database table when you request a mapping of a specific sequence.  In other words, only when we invoked m[sp['CYGB_HUMAN'] ] did it obtain the alignment information for that source sequence from the database; once retrieved, this information is cached locally so that subsequent queries of the same source sequence will just use the local data without having to re-query the database.
-Example: Mapping an entire gene set onto a new genome version
-To illustrate how Pygr can perform a big task with a little code, here is an example that maps a set of gene sequences onto a new version of the genome, using megablast to do the mapping, and a relational database to store the results.  Moreover, since mapping 80,000 gene clusters takes a fair amount of time, the calculation is parallelized to run over a large number of compute nodes simultaneously:
-
-\begin{verbatim}
-from pygr.apps.leelabdb import * # this accesses our databases
-from pygr import coordinator     # this provides parallelization support
-
-def map_clusters(server,genome_rsrc='hg17',dbname='HUMAN_SPLICE_03',
-                 result_table='GENOME_ALIGNMENT.hg17_cluster_JUN03_all',
-                 rmOpts='',**kwargs):
-    "CLIENT FUNCTION: map clusters one by one"
-    # CONSTRUCT RESOURCE FOR US IF NEEDED
-    genome=BlastDB(ifile=server.open_resource(genome_rsrc,'r'))
-    # LOAD DB SCHEMA
-    (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna, 
-    protein, clusterExons,clusterSplices)=getSpliceGraphFromDB(spliceCalcs[dbname])
-    # NOW MAP CLUSTER SEQUENCES ONE BY ONE TO OUR NEW genome
-    for cluster_id in server:
-        g=genomic_seq[cluster_id] # GET THE OLD GENOMIC SEQUENCE FOR THIS CLUSTER
-        m=genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # MASK, BLAST, READ INTO m
-        # SAVE ALIGNMENT m TO DATABASE TABLE result_table USING cursor
-        createTableFromRepr(m.repr_dict(),result_table,clusters.cursor,
-                            {'src_id':'varchar(12)','dest_id':'varchar(12)'})
-        yield cluster_id # WE MUST FUNCTION AS GENERATOR TO KEEP ERROR TRAPPING 
-		         # HAPPY
-
-def serve_clusters(dbname='HUMAN_SPLICE_03',
-                   source_table='HUMAN_SPLICE_03.genomic_cluster_JUN03',**kwargs):
-    "SERVER FUNCTION: serve up cluster_id one by one to as many clients as you want"
-    cursor=getUserCursor(dbname)
-    t=SQLTable(source_table,cursor)
-    for id in t:
-        yield id # HAND OUT ONE CLUSTER ID TO A CLIENT
-
-if __name__=='__main__': # AUTOMATICALLY RUN EITHER THE CLIENT OR SERVER FUNCTION
-    coordinator.start_client_or_server(map_clusters,serve_clusters,['hg17'],__file__)
-\end{verbatim}
-
-First, let's just focus on the map_clusters() function, which illustrates how the mapping of each gene is generated and saved.  Let's examine the data piece by piece:
-\begin{itemize}
-
-\item
-genome: a BLAST database storing our "new" genome sequence
-
-\item
-genomic_seq: another sequence database (which in this case happens to be stored in a relational database), mapping each cluster ID to a piece of the old genomic sequence version containing that specific gene.
-
-\item   
-cluster_id: a cluster ID for us to process.
-
-\item
-g: the actual sequence object associated with this cluster_id
-
-\item
-m: the mapping of g onto genome, as generated by megablast after first running RepeatMasker on g, using the RepeatMasker options passed as rmOpts.  Note that only the top hit will be saved (maximum number of hits to save maxseq=1), and only if it has at least 98% identity.  This alignment is then saved to a relational database table using createTableFromRepr().
-
-\end{itemize}
-This code will run in parallel over as many compute nodes as you have free, using Pygr's coordinator module.  The parallelization model for this particular task is simple: a single iterator (server) dispensing task IDs to many clients. 
-
-\begin{itemize}
-
-\item
-server: the serve_clusters() function is trivial: all it does is connect to a specific database table (source_table) and iterate over all its primary keys, yielding them one by one.
-
-\item    
-client: the map_clusters() function expects an iterator as its first argument, which must give it a sequence of task IDs (cluster_id in this script).  This iterator is actually using an XMLRPC request to the server to get the next task ID, but that is done transparently by the coordinator.Processor() class.  The map_clusters() function is modeled as a generator: that is, it first does some initial setup (loading the database schema for example), then it runs its actual task loop, yielding each completed task ID. This enables coordinator.Processor to run map_clusters() within an error-trapping try: except: clause that catches and reports all errors to the central coordinator.Coordinator instance, and also to implement some intelligent error handling policies (like robustly preventing rare individual errors from causing an entire Processor() to crash, but detecting when consistent patterns of errors occur on a particular Processor, and automatically shutting down that Processor.
-
-\item 
-start_client_or_server(): this line automatically starts up the correct function (depending on whether this process is running as client or server).  To make a long story short, all you have to do is run the script once (as a server), and it will automatically start clients for you on free compute nodes (using ssh-agent), with reasonable load-balancing and queuing policies.  For details, see the coordinator module docs.
-\end{itemize}
-
-
-\subsubsection{More examples}
-\label{more-exam}
-
-Additional examples of how to use pygr can be found in the tests/ directory within the pygr distribution package.
 
 
 \section{Module Documentation}
