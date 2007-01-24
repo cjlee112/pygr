@@ -21,12 +21,14 @@ cdef extern from "stdio.h":
   int fclose(FILE *)
   int sscanf(char *str,char *fmt,...)
   int sprintf(char *str,char *fmt,...)
+  int fprintf(FILE *ifile,char *fmt,...)
   char *fgets(char *str,int size,FILE *ifile)
 
 cdef extern from "string.h":
   int strncmp(char *s1,char *s2,size_t len)
   char *strcpy(char *dest,char *src)
   char *strdup(char *)
+  char *strcat(char *,char *)
 
 cdef extern from "intervaldb.h":
   ctypedef struct IntervalMap:
@@ -87,6 +89,9 @@ cdef extern from "intervaldb.h":
   int find_file_intervals(IntervalIterator *it0,int start,int end,IntervalIndex ii[],int nii,SublistHeader subheader[],int nlists,SubheaderFile *subheader_file,int ntop,int div,FILE *ifile,IntervalMap buf[],int nbuf,int *p_nreturn,IntervalIterator **it_return) except -1
   int write_padded_binary(IntervalMap im[],int n,int div,FILE *ifile)
   int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
+  int save_text_file(char filestem[],char basestem[],char err_msg[],FILE *ofile)
+  int text_file_to_binaries(FILE *infile,char err_msg[])
+
 
 
 cdef extern from "apps/maf2nclist.h":

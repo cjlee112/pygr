@@ -99,6 +99,11 @@ extern IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
 					 int subheader_nblock);
 extern int free_interval_dbfile(IntervalDBFile *db_file);
 
+extern int save_text_file(char filestem[],char err_msg[],
+			  char basestem[],FILE *ofile);
+extern int text_file_to_binaries(FILE *infile,char err_msg[]);
+
+
 #define FIND_FILE_MALLOC_ERR -2
 
 #define ITERATOR_STACK_TOP(it) while (it->up) it=it->up;
