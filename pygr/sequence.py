@@ -497,6 +497,14 @@ class SeqPath(object):
         if other.stop>self.stop:
             self.stop=other.stop
         return self # iadd MUST ALWAYS RETURN self!!
+    def before(self):
+        'get the sequence interval before this interval'
+        return SeqPath(self.path,None,self.start)
+    def after(self):
+        'get the sequence interval after this interval'
+        if self.stop==0:
+            raise IndexError('cannot create empty sequence interval')
+        return SeqPath(self.path,self.stop,None)
 
     ############################################ STRING SEQUENCE METHODS
     _complement={'a':'t', 'c':'g', 'g':'c', 't':'a', 'u':'a', 'n':'n',
