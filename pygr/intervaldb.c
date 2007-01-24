@@ -901,3 +901,184 @@ int free_interval_dbfile(IntervalDBFile *db_file)
 
 
 
+int save_text_file(char filestem[],char basestem[],
+		   char err_msg[],FILE *ofile)
+{
+  int i,n,ntop,div,nlists,nii,npad;
+  char path[2048];
+  IntervalMap im;
+  IntervalIndex ii;
+  SublistHeader subheader;
+  FILE *ifile=NULL;
+
+  sprintf(path,"%s.size",filestem); /* SAVE BASIC SIZE INFO*/
+  ifile=fopen(path,"r");
+  if (!ifile) 
+    goto unable_to_open_file;
+  if (5!=fscanf(ifile,"%d %d %d %d %d",&n,&ntop,&div,&nlists,&nii))
+    goto fread_error_occurred;
+  fclose(ifile);
+  npad=ntop%div;
+  if (npad>0) /* PAD TO AN EXACT MULTIPLE OF div */
+    npad=ntop+(div-npad);
+  else /* AN EXACT MULTIPLE OF div, SO NO PADDING */
+    npad=ntop;
+
+  if (fprintf(ofile,"SIZE\t%s\t%d %d %d %d %d\n",
+	      basestem,n,ntop,div,nlists,nii)<0)
+    goto write_error_occurred;
+
+  if (nii>0) {
+    sprintf(path,"%s.index",filestem); /* SAVE BASIC SIZE INFO*/
+    ifile=fopen(path,"r");
+    if (!ifile) 
+      goto unable_to_open_file;
+    for (i=0;i<nii;i++) {
+      if (1!=fread(&ii,sizeof(IntervalIndex),1,ifile))
+	goto fread_error_occurred;
+      if (fprintf(ofile,"I %d %d\n",ii.start,ii.end)<0)
+	goto write_error_occurred;
+    }
+    fclose(ifile);
+  }
+
+  if(nlists>0){
+    sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
+    ifile=fopen(path,"r");
+    if (!ifile) 
+      goto unable_to_open_file;
+    for (i=0;i<nlists;i++) {
+      if (1!=fread(&subheader,sizeof(SublistHeader),1,ifile))
+	goto fread_error_occurred;
+      if (fprintf(ofile,"S %d %d\n",subheader.start,subheader.len)<0)
+	goto write_error_occurred;
+      npad=subheader.start+subheader.len;
+    }
+    fclose(ifile);
+  }
+
+  if (npad>0) {
+    sprintf(path,"%s.idb",filestem); /* SAVE BASIC SIZE INFO*/
+    ifile=fopen(path,"r");
+    if (!ifile) 
+      goto unable_to_open_file;
+    for (i=0;i<npad;i++) {
+      if (1!=fread(&im,sizeof(IntervalMap),1,ifile))
+	goto fread_error_occurred;
+      if (fprintf(ofile,"M %d %d %d %d %d %d\n",im.start,im.end,
+		  im.target_id,im.target_start,
+		  im.target_end,im.sublist)<0)
+	goto write_error_occurred;
+    }
+    fclose(ifile);
+  }
+  return 0; /* INDICATES NO ERROR OCCURRED */
+ unable_to_open_file:
+  if (err_msg)
+    sprintf(err_msg,"unable to open file %s",path);
+  return -1;
+ fread_error_occurred:
+  if (err_msg)
+    sprintf(err_msg,"error or EOF reading file %s",path);
+  return -1;
+ write_error_occurred:
+  if (err_msg)
+    sprintf(err_msg,"error writing output file! out of disk space?");
+  return -1;
+}
+
+
+
+int text_file_to_binaries(FILE *infile,char err_msg[])
+{
+  int i,n,ntop,div,nlists,nii,npad;
+  char path[2048],line[32768],filestem[2048];
+  IntervalMap im;
+  IntervalIndex ii;
+  SublistHeader subheader;
+  FILE *ifile=NULL;
+
+  if (NULL==fgets(line,32767,infile))
+    goto fread_error_occurred;
+  if (6!=sscanf(line,"SIZE\t%s\t%d %d %d %d %d",
+		filestem,&n,&ntop,&div,&nlists,&nii))
+    goto fread_error_occurred;
+  sprintf(path,"%s.size",filestem); /* SAVE BASIC SIZE INFO*/
+  ifile=fopen(path,"w");
+  if (!ifile) 
+    goto unable_to_open_file;
+  if (fprintf(ifile,"%d %d %d %d %d\n",n,ntop,div,nlists,nii)<0)
+    goto write_error_occurred;
+  fclose(ifile);
+  npad=ntop%div;
+  if (npad>0) /* PAD TO AN EXACT MULTIPLE OF div */
+    npad=ntop+(div-npad);
+  else /* AN EXACT MULTIPLE OF div, SO NO PADDING */
+    npad=ntop;
+
+  if (nii>0) {
+    sprintf(path,"%s.index",filestem); /* SAVE INDEX INFO*/
+    ifile=fopen(path,"w");
+    if (!ifile) 
+      goto unable_to_open_file;
+    for (i=0;i<nii;i++) {
+      if (NULL==fgets(line,32767,infile))
+	goto fread_error_occurred;
+      if (2!=sscanf(line,"I %d %d",&(ii.start),&(ii.end)))
+	goto fread_error_occurred;
+      if (1!=fwrite(&ii,sizeof(IntervalIndex),1,ifile))
+	goto write_error_occurred;
+    }
+    fclose(ifile);
+  }
+
+  if(nlists>0){
+    sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
+    ifile=fopen(path,"w");
+    if (!ifile) 
+      goto unable_to_open_file;
+    for (i=0;i<nlists;i++) {
+      if (NULL==fgets(line,32767,infile))
+	goto fread_error_occurred;
+      if (2!=sscanf(line,"S %d %d",&(subheader.start),&(subheader.len)))
+	goto fread_error_occurred;
+      if (1!=fwrite(&subheader,sizeof(SublistHeader),1,ifile))
+	goto write_error_occurred;
+      npad=subheader.start+subheader.len;
+    }
+    fclose(ifile);
+  }
+
+  sprintf(path,"%s.idb",filestem); /* SAVE THE ACTUAL INTERVAL DB*/
+  ifile=fopen(path,"w");
+  if (!ifile) 
+    goto unable_to_open_file;
+  for (i=0;i<npad;i++) {
+    if (NULL==fgets(line,32767,infile))
+      goto fread_error_occurred;
+    if (6!=sscanf(line,"M %d %d %d %d %d %d",&(im.start),&(im.end),
+		  &(im.target_id),&(im.target_start),
+		  &(im.target_end),&(im.sublist)))
+      goto fread_error_occurred;
+    if (1!=fwrite(&im,sizeof(IntervalMap),1,ifile))
+      goto write_error_occurred;
+  }
+  fclose(ifile);
+
+  return 0; /* INDICATES NO ERROR OCCURRED */
+ unable_to_open_file:
+  if (err_msg)
+    sprintf(err_msg,"unable to open file %s",path);
+  return -1;
+ fread_error_occurred:
+  if (err_msg)
+    sprintf(err_msg,"error or EOF reading input file");
+  return -1;
+ write_error_occurred:
+  if (err_msg)
+    sprintf(err_msg,"error writing file %s! out of disk space?",
+	    path);
+  return -1;
+}
+
+
