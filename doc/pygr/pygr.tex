@@ -125,7 +125,7 @@ than Postgres R-Tree indexing), and a very small memory footprint
 for working with the UCSC 17 vertebrate
 genome alignment and sequence databases).  For more information on the
 nested-list algorithm and performance comparisons, see the published paper,
-Alekseyenko & Lee, Bioinformatics 2007.
+Alekseyenko and Lee, Bioinformatics 2007.
 
 \item
 The alignment database query is in the first line of \code{printConservation()}.
@@ -184,12 +184,44 @@ or the alignment query \code{msa[site]} will raise an KeyError informing
 the user that the sequence \code{site} is not in the alignment.
 
 \item
-The only slightly interesting operation here is the use of interval
+One interesting operation here is the use of interval
 addition to obtain the ``union'' of two intervals, e.g. \code{ss1+ss2}.
 This obtains a single interval that covers both of the input intervals.
 
 \item
 When the print  statement requests str() representations of these sequence objects, Pygr uses fseek() to extract just the right piece of the corresponding chromosomes from the 17 BLAST databases representing all the different genomes.
+
+\item
+Given the high speed of the NLMSA alignment query, it turns out that the
+operation of reading sequence strings from the sequence databases (in this
+case, for printing them in printConservation() and calculating the percent identity
+in pIdentity()) is the rate-limiting step for this analysis.  I.e. this analysis
+spends far more time waiting for disk I/O to read a particular piece of sequence 
+than it does running the NLMSA alignment queries.  To solve this problem, Pygr
+provides a mechanism for intelligent caching of sequence data.  Whenever you
+perform a query (e.g. \code{msa[site]}), it infers that you are likely to look
+at the sequence intervals that are contained within this slice of the alignment
+(i.e. within the region aligned to \code{site}).  It sets ``caching hints'' on the
+associated sequence databases, recording for each aligned sequence
+the covering interval coordinates (i.e. the smallest interval that fully contains
+all portions of the sequence that are aligned to \code{site}).  These caching hints
+do not themselves trigger reading of sequence string data from the databases.  Only
+when user code actually requests sequence strings that fall within these covering
+intervals, the sequence database object will load not the requested interval, but
+the entire covering interval, which is then cached.  Thereafter, all sequence
+string requests that fall within the covering interval are simply immediately sliced
+from the cached sequence string, completely avoiding any need to read from disk.
+This greatly accelerates sequence analysis with very large multigenome alignments
+and sequence databases.  
+
+In this case, to enforce the most efficient caching possible, we simply performed
+a query that contains all three sites of interest (ss1, ss2, and exon).  By performing
+this query first, and holding onto the query result, we ensure that Pygr will
+use the same cache for all three subsequent queries contained in it.  As soon
+as we release the reference to this query result (i.e. in the example above,
+whenever the variable \code{cacheHint} is deleted or over-written with a new value,
+freeing Python to garbage-collect the original query result), the associated 
+cache hint information will also be cleared.
 
 \end{itemize}
 
@@ -273,7 +305,7 @@ When you invoke the db.blast() method on a sequence object, it obtains the actua
 Note: print converts its arguments to strings (i.e. calls str() on them), so we used \code{repr(src)} to get a "string representation" of each sequence interval.  When print calls str() on individualBlastSequence interval objects returned by the BLAST search, they invoke fseek() to obtain the specific sequence slice representing that interval.
 \end{itemize}
 
-\subsubsection{pygr.Data:a Namespace for Transparently Importing Data}
+\subsubsection{pygr.Data: a Namespace for Transparently Importing Data}
 One challenge in bioinformatics is the complexity of managing many diverse
 data resources.  For example, running a large job on a heterogeneous cluster
 of computers is complicated by the fact that individual computers often can't
@@ -292,7 +324,7 @@ it consistently):
 \begin{verbatim}
 from pygr import seqdb
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-pygr.Data.Bio.Seq.Genome.hg17=seqdb.BlastDB('hg17')
+pygr.Data.Bio.Seq.Genome.hg17=seqdb.BlastDB('hg17') # SAVE AS THIS NAME
 \end{verbatim}
 
 In any subsequent Python session, we can now access it directly by its
@@ -301,6 +333,9 @@ pygr.Data name:
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
 hg17=pygr.Data.Bio.Seq.Genome.hg17() # FIND THE RESOURCE
 \end{verbatim}
+The call syntax (\code{hg17()}) emphasizes that this acts like a Python
+constructor: it constructs a Python object for us (in this case, the
+desired seqdb.BlastDB object representing this genome database).
 Note that we did {\em not} even have to know how to construct the hg17 
 object, e.g. what Python class to use (seqdb.BlastDB), or even to import
 the necessary modules for constructing it.  \code{pygr.Data} uses the
@@ -379,7 +414,12 @@ import pygr.Data
 nlmsa=pygr.Data.Bio.Seq.MSA.ucsc17() # GET THE NLMSA AND SEQ DBs
 \end{verbatim}
 Alignment queries and sequence strings will be obtained via XMLRPC 
-queries over the network.
+queries over the network.  Note that if any of the sequence databases
+{\em are} available locally (on this machine), Pygr will automatically use that 
+in preference to obtaining it over the network (based on your PYGRDATAPATH
+settings).  However, if a particular resource is not available locally,
+Pygr will transparently get access to it from the server we created,
+using XMLRPC.
 
 
 
@@ -525,7 +565,7 @@ cluster_id: a cluster ID for us to process.
 g: the actual sequence object associated with this cluster_id
 
 \item
-m: the mapping of g onto genome, as generated by megablast after first running RepeatMasker on g, using the RepeatMasker options passed as rmOpts.  Note that only the top hit will be saved (maximum number of hits to save maxseq=1), and only if it has at least 98% identity.  This alignment is then saved to a relational database table using createTableFromRepr().
+m: the mapping of g onto genome, as generated by megablast after first running RepeatMasker on g, using the RepeatMasker options passed as rmOpts.  Note that only the top hit will be saved (maximum number of hits to save maxseq=1), and only if it has at least 98\% identity.  This alignment is then saved to a relational database table using createTableFromRepr().
 
 \end{itemize}
 This code will run in parallel over as many compute nodes as you have free, using Pygr's coordinator module.  The parallelization model for this particular task is simple: a single iterator (server) dispensing task IDs to many clients. 
@@ -543,44 +583,99 @@ start_client_or_server(): this line automatically starts up the correct function
 \end{itemize}
 
 
-\subsubsection{Alignment Graph Basics: THIS IS OBSOLETE.  UPDATE!!}
+\subsubsection{Alignment Basics:}
 
-Pygr multiple alignment objects can be treated as mappings of sequence intervals onto sequence intervals.  Here is a very simple example (continuing from the previous example), showing basic operations for constructing an alignment:
+Pygr multiple alignment objects can be treated as mappings of sequence intervals onto sequence intervals.  Here is a very simple example, showing basic operations for constructing an alignment:
 
 \begin{verbatim}
->>> m2=PathMapping() # create an empty alignment object
->>> m2[s]=db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interva
-l of MYG_CHICK
->>> m2[s[:10] ] # get alignment for first 10 letters, and print representation
-MYG_CHICK[83:93]
->>> m2[s]=db['MYG_CANFA'][45:105] # add an additional edge
->>> for s2 in m2[s[:10] ]: # get aligned seqs for the first 10 letters again...
+>>> from pygr import cnestedlist
+>>> m2=cnestedlist.NLMSA('myo',mode='memory') # an empty alignment, in-memory
+>>> m2+=s # add sequence s to the alignment
+>>> m2[s]+=db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interval of MYG_CHICK
+>>> m2[s]+=db['MYG_CANFA'][45:105] # add an additional edge
+>>> m2.build() # done constructing the alignment.  Initialize for query.
+>>> for s2 in m2[s[:10]]: # get aligned seqs for the first 10 letters again...
 ...     print repr(s2)
 ...
 MYG_CHICK[83:93]
 MYG_CANFA[45:55]
 \end{verbatim}
-In this case we created an alignment of sequence intervals without edge information.  However, we can also store edge information with a given alignment edge, in the "usual" Pygr way:
-
+In this case we used in-memory storage of the alignment.  However, for really large
+alignments (e.g. an all vs. all BLAST analysis) we may prefer to store the alignment
+on-disk.  In pygr, all we have to do is change the mode flag to 'w' (implying {\em write}
+a file):
 \begin{verbatim}
->>> class Foo(object): pass # create a dummy class that we can add attributes to
-...
->>> a=Foo() # create a dummy object
->>> a.x=7 # add an attribute
->>> m2=PathMapping() # create an empty alignment object
->>> m2+=s # add as node to the alignment graph
->>> m2[s][db['MYG_CHICK'][83:143] ]=a # add an edge mapping interval s -> an int
-erval of MYG_CHICK
->>> for e in m2[s[:10] ].edges(): # get alignment edges for the first 10 letters
- again...
-...     print repr(e.destPath),e.x # we can access edge attributes
-...
-MYG_CHICK[83:93] 7
+from pygr import cnestedlist,seqdb
+msa=cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
+sp=seqdb.BlastDB('sp') # OPEN SWISSPROT DATABASE
+for id,s in sp.iteritems(): # FOR EVERY SEQUENCE IN SWISSPROT
+    sp.blast(s,msa,expmax=1e-10) # GET STRONG HOMOLOGS, SAVE ALIGNMENT IN msa
+msa.build() # DONE CONSTRUCTING THE ALIGNMENT, SO BUILD THE ALIGNMENT DB INDEXES
+# msa READY TO QUERY NOW...
 \end{verbatim}
+Again you can see how pygr makes it quite simple to do a large analysis
+and create a powerful resource (an all-vs-all alignment database).
+A couple of points deserve comment:
 
-\subsubsection{Alignment Query OBSOLETE: UPDATE!}
+\begin{itemize}
 
-Since Pygr alignments follow the same interface as any Pygr graph, we can query them using the standard GraphQuery class.  Let's say we have a Python script load_alignments.py that loads two alignments:
+\item
+The in-memory and on-disk NLMSA alignment storages have exactly the same
+interface.  You can work with alignments from small to large to gimungous
+using the same consistent set of tools.  Moreover the performance will be
+fast across the whole range of scales, because the NLMSA storage and query
+algorithms scale very well (O(logN)).
+
+\item
+Because of the \code{mode='w'} flag, NLMSA will create a set of alignment
+index files called 'all_vs_all'.
+
+\item 
+\code{bidirectional=False}: whenever you store an alignment relationship
+$S \rightarrow T$, this can either be {\em unidirectional} or {\em bidirectional}.
+Unidirectional means only $S \rightarrow T$ is stored; bidirectional means
+both $S \rightarrow T$ and $T \rightarrow S$ are stored (i.e. you can both query
+with S (and get T), and query with T (and get S).  In general, you want 
+a unidirectional alignment storage when {\em directionality matters}.  For
+example, in a BLAST all vs. all search the alignment of S and T that you get
+when you blast S against the database (finding T, among others) may well be
+different from the alignment of S and T that you get when you blast T against
+the database (finding S, among others).  If you stored the all-vs-all alignment
+using bidirectional storage, querying \code{msa} with S would get TWO alignments 
+to T: one from the $S \rightarrow T$ BLAST search results, and one from the
+$T \rightarrow S$ BLAST search results.  This simply reflects the fact that 
+the all vs all BLAST stored two alignments of S and T into \code{msa}.
+What this highlights is that BLAST is not a true multiple sequence alignment
+algorithm (among other things, it is not symmetric: you can get different
+mappings in one direction vs. the other).  
+
+In general, bidirectional storage
+mainly makes sense for true multiple sequence alignments (which are guaranteed
+to be symmetric).
+
+\item
+Supplying the BlastDB.blast() method with an alignment object makes it store
+its results into that alignment, rather than creating its own alignment holder
+for us.  In this way we can make it store many different BLAST searches into
+a single alignment database.
+
+\item
+To make the NLMSA algorithm scalable, pygr defers construction of the alignment
+indexes until the alignment is complete.  We trigger this by calling its build()
+method.  At this point we now have an alignment database stored on disk, which
+we can open at any time later and query with the high-speed nested list algorithm
+as illustrated in the examples in previous sections.
+
+\end{itemize}
+
+
+\subsubsection{Alignment Query as a Graph Database Query}
+
+Pygr can do much more sophisticated analyses than this fairly easily.  
+Just to give a taste of how to use these capabilities, we will illustrate
+one example of a standard Pygr model: querying Pygr data by drawing a ``query
+graph'' showing the connections we want to find, and running its GraphQuery()
+engine.  Since Pygr alignments follow the same interface as any Pygr graph, we can query them using the standard GraphQuery class.  Let's say we have a Python script load_alignments.py that loads two alignments:
 
 \begin{itemize}
 
@@ -596,10 +691,10 @@ To find out how the known SwissProt annotations map on to our mRNA sequences req
 \begin{verbatim}
 >>> from load_alignments import * # load the alignments
 >>> from pygr.graphquery import *      # import the graph query code
->>> queryGraph={1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} # 
-edge 2->3 must come from swiss_features
->>> l=[dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] # run the query and 
-save the mappings
+# draw a graph using a dict.  Note: edge 2->3 must come from swiss_features
+>>> queryGraph={1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} 
+# run the query and save the mappings
+>>> l=[dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] 
 >>> len(l) # how many annotations mapped onto our mRNA sequences?
 4703
 \end{verbatim}
@@ -607,99 +702,6 @@ save the mappings
 We assumed that mRNA_swiss would be passed as the default dataGraph, and specified directly that edge 2->3 should be looked up in swiss_features.  We then captured all the results from the GraphQuery iterator using a Python list comprehension.  Note that since the iterator returns each result in the same container (mapping object), if we want to save all the individual results we have to copy each one to a new mapping (dict) object, as illustrated in this example.
 Storing Alignments in a Relational Database
 
-
-\subsubsection{Persistent Alignment Storage OBSOLETE: UPDATE!}
-Pygr makes it easy to store alignments persistently in a relational database.  To illustrate, here we run BLAST to generate an alignment of one sequence to manyother sequences, and store it to a MySQL table test.alignment:
-
-\begin{verbatim}
-from pygr.seqdb import *
-db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
-m=db.blast(db['CYGB_HUMAN']) # get alignment to all BLAST hits in db
-import MySQLdb # import the MySQL adapter
-import os
-# open a connection to the test database
-cursor=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf').cursor()
-# save the alignment, creating table test.alignment if not exists
-createTableFromRepr(m.repr_dict(),'test.alignment',cursor,
-                    {'src_id':'varchar(12)','dest_id':'varchar(12)'})
-\end{verbatim}
-
-The only line here that needs comment is Pygr's createTableFromRepr() function.  It takes four arguments:
-
-   1. an iterator, each of whose return values is a dictionary mapping column names to value representations that can be stored in a relational table.  Here we have passed m.repr_dict() as the iterator.  It is a generator function that simply yields edge.repr_dict() on each of the edges stored in m.  The edge.repr_dict() method in turn simply returns a dictionary mapping column names (like 'src_id') onto values that are storable in a relational table.
-   2. a table name: in this case, 'test.alignment'
-   3. a cursor for connecting to the database
-   4. an optional dictionary for customizing exactly how specific columns should be stored in the database.  In this case, we specified varchar(12) for both src_id and dest_id (the identifiers of the source and destination (aligned) sequences)
-
-This function constructs a schema and creates the table in the database if it does not already exist.  It then saves all of the output of m.repr_dict() as rows in the database table.  To see exactly what it generates, we can look at its output interactively:
-
-\begin{verbatim}
->>> for e in m.repr_dict(): break
-... 
->>> e
-{'src_id': 'CYGB_HUMAN', 'blast_score': 344, 'dest_id': 'CYGB_HUMAN', 'src_end':
- 190, 'src_ori': 1, 'percent_id': 90, 'dest_ori': 1, 'src_start': 0, 'dest_start' : 0, e_value': 94.301000000000002, 'dest_end': 190}
-
-Here is the schema automatically created by createTableFromRepr():
-
-mysql> desc alignment;
-+-------------+-------------+------+-----+---------+-------+
-| Field       | Type        | Null | Key | Default | Extra |
-+-------------+-------------+------+-----+---------+-------+
-| src_id      | varchar(12) |      | MUL |         |       |
-| blast_score | int(11)     |      |     | 0       |       |
-| dest_id     | varchar(12) |      | MUL |         |       |
-| src_end     | int(11)     |      |     | 0       |       |
-| src_ori     | int(11)     |      |     | 0       |       |
-| percent_id  | int(11)     |      | MUL | 0       |       |
-| dest_ori    | int(11)     |      |     | 0       |       |
-| src_start   | int(11)     |      |     | 0       |       |
-| dest_start  | int(11)     |      |     | 0       |       |
-| e_value     | float       |      |     | 0       |       |
-| dest_end    | int(11)     |      |     | 0       |       |
-+-------------+-------------+------+-----+---------+-------+
-11 rows in set (0.01 sec)
-\end{verbatim}
-
-Thus the basic format of stored alignments is
-
-\begin{itemize}
-
-\item
-only alignment information is stored; no actual sequence is stored, only the sequence identifiers and begin-end points of each aligned interval.
-
-\item
-additional edge information for each alignment row is saved, as provided by the edges repr_dict() method.
-
-\item
-directional: it distinguishes one of the sequence pair as the source sequence, the other as the destination sequence.
-
-\end{itemize}
-
-We can now make use of the stored alignment in Pygr just as if it were a normal (in-memory) alignment object.  The only difference is we use the StoredPathMapping class instead of the standard PathMapping class.  Here is an example script that connects to the stored alignment, and prints out the alignment of one sequence:
-
-\begin{verbatim}
-import MySQLdb
-from pygr.seqdb import *
-cursor=MySQLdb.Connection(db='test',read_default_file=os.environ['HOME']+'/.my.cnf').cursor()
-t=SQLTableMultiNoCache('test.alignment',cursor)
-t._distinct_key='src_id' # use this column as the ID field to search
-sp=BlastDB('sp') # OPEN SWISSPROT BLAST DB
-m=StoredPathMapping(t,sp,sp) # tell it to search sp for both source and target 
-sequence IDs
-for e in m[sp['CYGB_HUMAN'] ].edges(): # SHOW ALL ALIGNMENTS FOR THIS SEQUENCE
-    print repr(e.srcPath),repr(e.destPath),e.blast_score
-\end{verbatim}
-
-StoredPathMapping expects three arguments:
-
-   1. an SQLTable object which provides the interface to the database table containing the alignment.  t is just an interface to the MySQL table.  Since each sequence can potentially have many rows (many alignment intervals against one or more destination sequences), we used the SQLTableMultiNoCache subclass: each key value (source sequence ID) can have multiple rows; and we chose not to have it cache rows that it retrieves (there would be no benefit from doing so, since StoredPathMapping itself performs result caching).  Also note the t._distinct_key assignment: this informs the table object that when we try to access a particular key (e.g. t['CYGB_HUMAN']), the column to search for this key is 'src_id'.
-   2. a sequence dictionary object from which to obtain the source sequences.  This dictionary must map a source sequence identifier to an actual sequence object representing that sequence.  In this case, we just used our sp BLAST database as the source sequence dictionary.
-   3. a sequence dictionary object from which to obtain the destination sequences.  This dictionary must map a destination sequence identifier to an actual sequence object representing that sequence.  We just used the sp database again.
-
-Thus we informed StoredPathMapping to treat t as a mapping of sp onto itself.
-
-The StoredPathMapping object (m) acts as an interface to the relational database, which we can treat just like a regular PathMapping alignment object.  The difference is that it looks up the alignment from the back-end database table when you request a mapping of a specific sequence.  In other words, only when we invoked m[sp['CYGB_HUMAN'] ] did it obtain the alignment information for that source sequence from the database; once retrieved, this information is cached locally so that subsequent queries of the same source sequence will just use the local data without having to re-query the database.
 
 \subsubsection{More examples}
 \label{more-exam}
