@@ -1500,11 +1500,14 @@ cdef class NLMSA:
     self.use_virtual_lpo=1 # TURN ON THE VIRTUAL LPO FEATURE
     
 
-  def __setitem__(self,k,v):
-    if isinstance(k,nlmsa_utils.BuildMSASlice):
-      k.__iadd__(v)
-    else:
-      raise KeyError('Usage only nlmsa[s1]+=s2 allowed. nlmsa[s1]=s2 forbidden!')
+  def __setitem__(self,k,v): # THIS METHOD EXISTS ONLY FOR nlmsa[s1]+=s2
+    if isinstance(v,nlmsa_utils.BuildMSASlice):
+      if v.seq is not None and v.seq==k: # CASE WHERE k IS A SEQ INTERVAL
+        return # MATCHES += USAGE: NO NEED TO DO ANYTHING!
+      elif v.is_lpo and isinstance(k,slice) \
+               and k.start==v.start and k.stop==v.stop: # CASE: k IS A slice
+        return # MATCHES += USAGE: NO NEED TO DO ANYTHING!
+    raise KeyError('Usage only nlmsa[s1]+=s2 allowed. nlmsa[s1]=s2 forbidden!')
   def __getitem__(self,k):
     'return a slice of the LPO'
     if isinstance(k,sequence.SeqPath): # TREAT k AS A SEQUENCE INTERVAL
