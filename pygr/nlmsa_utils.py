@@ -10,7 +10,7 @@ class NLMSASeqList(list):
       seqID,nsID=self.nlmsaSeqDict.IDdict[str(nlmsaID)]
       return list.__getitem__(self,nsID)
   def getSeq(self,nlmsaID):
-    'return NLMSASequence, seq for a given nlmsa_id'
+    'return seq for a given nlmsa_id'
     seqID,nsID=self.nlmsaSeqDict.IDdict[str(nlmsaID)]
     return self.nlmsaSeqDict.nlmsa.seqDict[seqID]
   def getSeqID(self,nlmsaID):
@@ -65,24 +65,36 @@ class NLMSASeqDict(dict):
     self.seqIDdict[id]=nlmsaID,nsID,offset
     self.IDdict[str(nlmsaID)]=id,nsID
 
+  def getIDcoords(self,seq):
+    'return nlmsaID,start,stop for a given seq ival. Handles annotation!'
+    nlmsaID=self.getID(seq)
+    try: # RETURN COORDS RELATIVE TO PARENT ANNOTATION
+      if seq.annot.orientation==seq.orientation: # SAME ORIENTATION
+        return nlmsaID,seq.start-seq.annot.start,seq.stop-seq.annot.start
+      else: # OPPOSITE ORIENTATION
+        return nlmsaID,seq.start+seq.annot.start,seq.stop+seq.annot.start
+    except AttributeError:
+      return nlmsaID,seq.start,seq.stop # STANDARD COORDS
   def getID(self,seq):
     'return nlmsa_id for a given seq'
     return self[seq][0]
   def __getitem__(self,seq):
     'return nlmsaID,NLMSASequence,offset for a given seq'
-    try:
-      return dict.__getitem__(self,seq.pathForward)
-    except AttributeError:
-      raise KeyError('key must be a sequence interval!')
-    except KeyError:
-      pass
-    seqID=self.getSeqID(seq)
+    if not hasattr(seq,'annot'): # DON'T APPLY TO ANNOTATIONS
+      try: # LOOK IN OUR SEQUENCE CACHE
+        return dict.__getitem__(self,seq.pathForward)
+      except AttributeError:
+        raise KeyError('key must be a sequence interval!')
+      except KeyError:
+        pass
+    seqID=self.getSeqID(seq) # USE SEQ ID TO LOOK UP...
     try:
       nlmsaID,nsID,offset=self.seqIDdict[seqID]
     except KeyError:
       raise KeyError('seq not found in this alignment')
     v=nlmsaID,self.seqlist[nsID],offset
-    dict.__setitem__(self,seq.pathForward,v) # CACHE THIS RESULT
+    if not hasattr(seq,'annot'): # DON'T APPLY TO ANNOTATIONS
+      dict.__setitem__(self,seq.pathForward,v) # CACHE THIS RESULT
     return v
 
   def getSeqID(self,seq):
@@ -118,10 +130,11 @@ class NLMSASeqDict(dict):
     except KeyError:
       self.saveSeq(seq) # ADD THIS NEW SEQUENCE TO OUR CURRENT UNION
       id,ns,offset=self[seq] # LOOK UP IN INDEX
-    if seq.orientation<0: # REVERSE ORIENTATION
-      return ns,slice(seq.start-offset,seq.stop-offset) # USE UNION COORDS
+    i,start,stop=self.getIDcoords(seq) # MAKE SURE TO HANDLE ANNOTS RIGHT
+    if start<0: # REVERSE ORIENTATION
+      return ns,slice(start-offset,stop-offset) # USE UNION COORDS
     else: # FORWARD ORIENTATION
-      return ns,slice(seq.start+offset,seq.stop+offset) # USE UNION COORDS
+      return ns,slice(start+offset,stop+offset) # USE UNION COORDS
 
 
 
@@ -189,8 +202,7 @@ class BuildMSASlice(object):
             splitList=splitLPOintervals(self.ns.nlmsaLetters.lpoList,
                                         slice(self.start,self.stop),targetIval)
             for ns,src,target in splitList: # SAVE INTERVALS TO RESPECTIVE LPOs
-                ns[src]=(self.ns.nlmsaLetters.seqs.getID(target),
-                         target.start,target.stop) # SAVE LPO --> TARGET
+                ns[src]=self.ns.nlmsaLetters.seqs.getIDcoords(target) #LPO-->TARGET
                 if self.ns.nlmsaLetters.is_bidirectional:
                     nsu,myslice=self.ns.nlmsaLetters.seqs.getUnionSlice(target)
                     nsu[myslice]=(ns.id,src.start,src.stop) # SAVE TARGET --> LPO
@@ -206,9 +218,8 @@ class BuildMSASlice(object):
                 self.ns.nlmsaLetters.__iadd__(targetIval)
                 self.ns.nlmsaLetters.initVirtualLPO()
                 ns_lpo=self.ns.nlmsaLetters.seqlist[self.ns.id -1] # OUR VIRTUAL LPO
-                ns_lpo[self.offsetSlice(self.seq)]=(
-                    self.ns.nlmsaLetters.seqs.getID(targetIval),
-                    targetIval.start,targetIval.stop) # SAVE SRC --> TARGET
+                ns_lpo[self.offsetSlice(self.seq)]=self.ns.nlmsaLetters.seqs \
+                     .getIDcoords(targetIval) # SAVE SRC --> TARGET
                 if self.ns.nlmsaLetters.is_bidirectional:
                     nsu,myslice=self.ns.nlmsaLetters.seqs.getUnionSlice(targetIval)
                     ns_lpo=self.ns.nlmsaLetters.seqlist[nsu.id -1] # OUR VIRTUAL LPO
