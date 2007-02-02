@@ -177,6 +177,15 @@ def absoluteSlice(seq,start,stop):
     else: # FORWARD ORIENTATION
         return seq.pathForward[start:stop]
 
+def relativeSlice(seq,start,stop):
+    '''get slice of this sequence object, in relative coordinates.
+    This method calls getitem on the top-level sequence object
+    i.e. seq.pathForward'''
+    if start<0: # REVERSE ORIENTATION
+        return -(seq[-stop:-start])
+    else: # FORWARD ORIENTATION
+        return seq[start:stop]
+
 def sumSliceIndex(i,myslice,relativeToStart):
     '''Adjust index value either relative to myslice.start (positive indexes)
     or relative to myslice.stop (negative indexes).  Handle the case where
@@ -326,18 +335,22 @@ class SeqPath(object):
         return start # RETURN THE PROPERLY CHECKED VALUE...
 
     def __getitem__(self,k):
+        try: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
+            myclass=self.db.itemSliceClass
+        except AttributeError:
+            myclass=SeqPath
         if isinstance(k,types.IntType):
             if k== -1: # HAVE TO HANDLE THIS CASE SPECIALLY
                 k=slice(k,None,1) # -1 IS LAST LETTER, SO [-1:None] slice
             else: # REGULAR CASE, JUST [k:k+1] slice
                 k=slice(k,k+1,1)
         if isinstance(k,types.SliceType): # GET AN INTERVAL USING slice
-            return SeqPath(self,k.start,k.stop,k.step)
+            return myclass(self,k.start,k.stop,k.step)
         elif isinstance(k,SeqPath): # MODEL SEQ AS GRAPH
             if k.path is not self.path:
                 raise KeyError('node is not in this sequence!')
             try:
-                target=SeqPath(self.path,k.stop,k.stop+len(k)*k.step,k.step)
+                target=myclass(self.path,k.stop,k.stop+len(k)*k.step,k.step)
                 return {target:LetterEdge(k,target)}
             except IndexError: # OUT OF BOUNDS, SO NO NEXT NODE
                 return {}
