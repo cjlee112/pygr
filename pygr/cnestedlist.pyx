@@ -775,7 +775,7 @@ cdef class NLMSASlice:
       return None
     if maxAlignSize is not None and m[1]-m[0]>maxAlignSize:
       return None
-    seqEdge=sequence.Seq2SeqEdge(self,sequence.absoluteSlice(seq,m[2],m[3]),
+    seqEdge=sequence.Seq2SeqEdge(self,sequence.relativeSlice(seq,m[2],m[3]),
                                  sequence.absoluteSlice(self.seq,m[0],m[1]))
     if pIdentityMin is not None:
       return seqEdge.conservedSegment(pIdentityMin=pIdentityMin,
@@ -892,7 +892,7 @@ cdef class NLMSASlice:
               targetStart=targetStart+maskStart-start
               start=maskStart
             result.append((sequence.absoluteSlice(self.seq,start,end),
-                           sequence.absoluteSlice(seq,targetStart,
+                           sequence.relativeSlice(seq,targetStart,
                                                   targetEnd)))
           del seqStart[seq] # REMOVE THIS SEQ FROM START DICT
 
@@ -910,7 +910,7 @@ cdef class NLMSASlice:
                 if end<i: # TRUNCATE TARGET IVAL END
                   targetEnd=targetEnd+end-i
                 result.append((sequence.absoluteSlice(self.seq,start,end),
-                               sequence.absoluteSlice(seq,targetStart,
+                               sequence.relativeSlice(seq,targetStart,
                                                       targetEnd)))
             maskStart=None # REGION NOW BELOW THRESHOLD
         elif maskStart is None:
@@ -1370,6 +1370,7 @@ cdef class NLMSA:
       maxlen=sys.maxint-65536 # MAXIMUM VALUE REPRESENTABLE BY int
     self.maxlen=maxlen
     self.inlmsa=nPad
+    self._ignoreShadowAttr={'sourceDB':None,'targetDB':None} # SCHEMA INFO
     self.seqDict=seqDict # SAVE FOR USER TO ACCESS...
     self.in_memory_mode=0
     if bidirectional:
@@ -1654,8 +1655,8 @@ cdef class NLMSA:
     self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
 
     
-  def buildFiles(self):
-    'build nestedlist databases on-disk'
+  def buildFiles(self,saveSeqDict=True):
+    'build nestedlist databases on-disk, and .seqDict index if desired'
     cdef NLMSASequence ns
     self.seqs.reopenReadOnly() # SAVE INDEXES AND OPEN READ-ONLY
     ifile=file(self.pathstem+'NLMSAindex','w')
@@ -1668,7 +1669,7 @@ cdef class NLMSA:
       else:
         ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,ns.name,0,ns.length))
     ifile.close()
-    if hasattr(self.seqDict,'writeHeaderFile'):
+    if saveSeqDict and hasattr(self.seqDict,'writeHeaderFile'):
       self.seqDict.writeHeaderFile(self.pathstem+'.seqDict')
 
   def build(self):
@@ -1689,7 +1690,7 @@ cdef class NLMSA:
   def seqInterval(self,int iseq,int istart,int istop):
     'get specified interval in the target sequence'
     seq=self.seqlist.getSeq(iseq) # JUST THE SEQ OBJECT
-    return sequence.absoluteSlice(seq,istart,istop)
+    return sequence.relativeSlice(seq,istart,istop)
 
 
 
