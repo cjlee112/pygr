@@ -484,11 +484,22 @@ class SeqDBbase(dict):
                 return s[start-ival[0]:stop-ival[0]]
         raise IndexError('interval not found in cache')
 
+class SeqDBDescriptor(object):
+    'forwards attribute requests to self.annot'
+    def __init__(self,attr):
+        self.attr=attr
+    def __get__(self,obj,objtype):
+        return getattr(obj.pathForward,self.attr) # RAISES AttributeError IF NONE
 
+class SeqDBSlice(SeqPath):
+    'JUST A WRAPPER FOR SCHEMA TO HANG SHADOW ATTRIBUTES ON...'
+    id=SeqDBDescriptor('id')
+    db=SeqDBDescriptor('db')
 
 class BlastDBbase(SeqDBbase):
     "Container representing Blast database"
-    seqClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
+    itemClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
+    itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
     def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
                  blastReady=False):
         "format database and build indexes if needed. Provide filepath or file object"
@@ -502,7 +513,7 @@ class BlastDBbase(SeqDBbase):
         self.set_seqtype()
         self.skipSeqLenDict=skipSeqLenDict
         if skipSeqLenDict:
-            self.seqClass=BlastSequenceBase # DON'T USE seqLenDict
+            self.itemClass=BlastSequenceBase # DON'T USE seqLenDict
         else:
             import anydbm
             try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
@@ -590,7 +601,7 @@ class BlastDBbase(SeqDBbase):
         try:
             return dict.__getitem__(self,id)
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
-            s=self.seqClass(self,id)
+            s=self.itemClass(self,id)
             s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
             dict.__setitem__(self,id,s) # CACHE IT
             return s
@@ -690,10 +701,10 @@ class BlastDB(BlastDBbase):
             return dict.__getitem__(self,id)
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
             try:
-                s=self.seqClass(self,id)
+                s=self.itemClass(self,id)
             except KeyError:
                 id=self.get_real_id(id)
-                s=self.seqClass(self,id)
+                s=self.itemClass(self,id)
             s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
             dict.__setitem__(self,id,s) # CACHE IT
             return s
@@ -728,6 +739,62 @@ class StoredPathMapping(PathMapping):
 
     # NEED TO ADD APPROPRIATE HOOKS FOR __iter__, items(), ETC.
 
+class AnnotationSeq(SeqPath):
+    pass
+class AnnotationDescriptor(object):
+    'forwards attribute requests to self.annot'
+    def __init__(self,attr):
+        self.attr=attr
+    def __get__(self,obj,objtype):
+        return getattr(obj.annot,self.attr) # RAISES AttributeError IF NONE
+class AnnotationSlice(SeqPath):
+    'represents subslice of an annotation'
+    def __init__(self,path,*args,**kwargs):
+        self.annot=path.annot # KEEP POINTING AT PARENT ANNOTATION
+        SeqPath.__init__(self,path,*args,**kwargs)
+    id=AnnotationDescriptor('id') # ACCESS TO SCHEMA INFO VIA AnnotationSeq
+    db=AnnotationDescriptor('db')
+
+class AnnotationDB(dict):
+    'container of annotations as specific slices of db sequences'
+    def __init__(self,sliceDB,seqDB,itemClass=AnnotationSeq,
+                 itemSliceClass=AnnotationSlice):
+        '''sliceDB must map identifier to a sliceInfo object;
+        sliceInfo must have name,start,stop,ori attributes;
+        seqDB must map sequence ID to a sliceable sequence object'''
+        dict.__init__(self)
+        self.sliceDB=sliceDB
+        self.seqDB=seqDB
+        self.itemClass=itemClass
+        self.itemSliceClass=itemSliceClass
+    def __reduce__(self): ############################# SUPPORT FOR PICKLING
+        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
+    def __setstate__(self,state):
+        self.__init__(*state) #JUST PASS ARGS TO CONSTRUCTOR
+    def __getstate__(self): ################ SUPPORT FOR UNPICKLING
+        return (self.sliceDB,self.seqDB,self.itemClass)
+    def __hash__(self):
+        'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
+        return id(self)
+    def __getitem__(self,k):
+        try:
+            return dict.__getitem__(self,k)
+        except KeyError:
+            pass
+        sliceInfo=self.sliceDB[k]
+        seq=self.seqDB[sliceInfo.name]
+        myslice=seq[sliceInfo.start:sliceInfo.stop] # USE SIGN CONVENTION INSTEAD?
+        if sliceInfo.ori<0:
+            myslice= -myslice
+        if self.itemClass is not None: # FORCE IT TO USE OUR ITEMCLASS
+            myslice.__class__=self.itemClass
+        myslice.annot=myslice # THIS FIELD INDICATES THIS IS AN ANNOTATION
+        myslice.id=k # SAVE SCHEMA INFORMATION: ID AND DB
+        myslice.db=self
+        self[k]=myslice # CACHE THIS IN OUR DICT
+        return myslice
+
+
 
 class SliceDB(dict):
     'associates an ID with a specific slice of a specific db sequence'
@@ -744,13 +811,14 @@ class SliceDB(dict):
         try:
             return dict.__getitem__(self,k)
         except KeyError:
-            sliceInfo=self.sliceDB[k]
-            seq=self.seqDB[sliceInfo.name]
-            myslice=seq[sliceInfo.start-self.leftOffset:sliceInfo.stop+self.rightOffset]
-            if sliceInfo.ori<0:
-                myslice= -myslice
-            self[k]=myslice
-            return myslice
+            pass
+        sliceInfo=self.sliceDB[k]
+        seq=self.seqDB[sliceInfo.name]
+        myslice=seq[sliceInfo.start-self.leftOffset:sliceInfo.stop+self.rightOffset]
+        if sliceInfo.ori<0:
+            myslice= -myslice
+        self[k]=myslice
+        return myslice
 
 
 
@@ -896,12 +964,23 @@ class PrefixDictInverse(object):
     def __init__(self,db):
         self.db=db
     def __getitem__(self,seq):
-        try:
+        try: # 1ST CHECK DIRECTLY FOR .db / .id ATTRS ON seq
+            return self.db.dicts[seq.db] \
+                   +self.db.separator+str(seq.id)
+        except KeyError:
+            raise KeyError('seq not in PrefixUnionDict')
+        except AttributeError:
+            pass
+        try: # INSTEAD GET FROM seq.pathForward
             return self.db.dicts[seq.pathForward.db] \
                    +self.db.separator+seq.pathForward.id
         except KeyError:
             raise KeyError('seq not in PrefixUnionDict')
     def __contains__(self,seq):
+        try:
+            return seq.db in self.db.dicts
+        except AttributeError:
+            pass
         try:
             return seq.pathForward.db in self.db.dicts
         except AttributeError:
