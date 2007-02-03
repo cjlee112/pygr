@@ -149,6 +149,11 @@ class ResourceDBMySQL(object):
             except KeyError:
                 pass # HMM, TRY ANOTHER LOCATION
         raise KeyError('unable construct %s from remote services')
+    def __setitem__(self,id,obj):
+        'add an object to this resource database'
+        s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
+        self.cursor.execute('replace into %s values (%%s,%%s,%%s)'
+                            %self.tablename,(id,'mysql:'+self.tablename,s))
     def registerServer(self,locationKey,serviceDict):
         'register the specified services to mysql database'
         n=0
@@ -156,6 +161,20 @@ class ResourceDBMySQL(object):
             n+=self.cursor.execute('replace into %s values (%%s,%%s,%%s)' %
                                    self.tablename,(id,locationKey,pdata))
         return n
+    def setschema(self,id,attr,kwargs):
+        'save a schema binding for id.attr --> targetID'
+        if attr is not None:
+            targetID=kwargs['targetID'] # RAISES KeyError IF NOT PRESENT
+        kwdata=self.finder.dumps(kwargs)
+        self.cursor.execute('replace into %s values (%%s,%%s,%%s)'
+                            %self.tablename,('SCHEMA.'+id,attr,kwdata))
+    def getschema(self,id):
+        d={}
+        self.cursor.execute('select location,objdata from %s where pygr_id=%%s'
+                            % self.tablename,('SCHEMA.'+id,))
+        for attr,objData in self.cursor.fetchall():
+            d[attr]=self.finder.loads(objData)
+        return d
             
 
 class ResourceDBShelve(object):
@@ -238,8 +257,8 @@ class ResourceFinder(object):
                         self.layer['remote']=rdb
                 elif dbpath.startswith('mysql:'):
                     rdb=ResourceDBMySQL(dbpath[6:],self)
-                    if 'remote' not in self.layer:
-                        self.layer['remote']=rdb
+                    if 'MySQL' not in self.layer:
+                        self.layer['MySQL']=rdb
                 else: # TREAT AS LOCAL FILEPATH
                     rdb=ResourceDBShelve(os.path.expanduser(dbpath),self)
                     if dbpath.startswith('/') and 'system' not in self.layer:
@@ -378,7 +397,10 @@ class ResourceFinder(object):
         raise KeyError('no schema info available for '+id)
     def schemaAttr(self,id,attr):
         'actually retrieve the desired schema attribute'
-        schema=self.findSchema(id)[attr]
+        try:
+            schema=self.findSchema(id)[attr]
+        except KeyError:
+            raise AttributeError('no pygr.Data schema info for %s.%s'%(id,attr))
         targetID=schema['targetID'] # GET THE RESOURCE ID
         return self(targetID) # ACTUALLY GET THE RESOURCE
     def applySchema(self,id,obj):
@@ -545,3 +567,4 @@ here=ResourceLayer('here')
 my=ResourceLayer('my')
 system=ResourceLayer('system')
 remote=ResourceLayer('remote')
+MySQL=ResourceLayer('MySQL')
