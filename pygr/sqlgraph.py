@@ -54,8 +54,11 @@ class SQLRow(object):
 
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
-    def __init__(self,name,cursor):
+    def __init__(self,name,cursor=None,itemClass=None):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
+        if cursor is None:
+            import MySQLdb,os
+            cursor=MySQLdb.connect(read_default_file=os.environ['HOME']+'/.my.cnf',compress=True).cursor()
         cursor.execute('describe %s' % name)
         columns=cursor.fetchall()
         self.cursor=cursor
@@ -79,7 +82,15 @@ class SQLTableBase(dict):
             self.data['id']=self.data[self.primary_key]
         if hasattr(self,'_attr_alias'): # FINALLY, APPLY ANY ATTRIBUTE ALIASES FOR THIS CLASS
             self.addAttrAlias(**self._attr_alias)
+        self.objclass(itemClass) # CONSTRUCT OUR DEFAULT ITEM CLASS
 
+    def __getstate__(self):
+        if self.itemClass.__name__=='foo':
+            return [self.name,None,None]
+        else:
+            return [self.name,None,self.itemClass]
+    def __setstate__(self,l):
+        self.__init__(*l)
     def __repr__(self):
         return '<SQL table '+self.name+'>'
 
@@ -107,7 +118,7 @@ class SQLTableBase(dict):
             oclass._attrcol=self.data # BIND ATTRIBUTE LIST TO TUPLEO INTERFACE
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
-        self.oclass=oclass
+        self.itemClass=oclass
 
 
 def iterSQLKey(self):
@@ -123,7 +134,7 @@ class SQLTable(SQLTableBase):
     def load(self,oclass=None):
         "Load all data from the table"
         if oclass is None:
-            oclass=self.oclass
+            oclass=self.itemClass
         self.cursor.execute('select * from %s' % self.name)
         l=self.cursor.fetchall()
         for t in l:
@@ -134,7 +145,7 @@ class SQLTable(SQLTableBase):
     def select(self,whereClause,params=None,oclass=None):
         "Generate the list of objects that satisfy the database SELECT"
         if oclass is None:
-            oclass=self.oclass
+            oclass=self.itemClass
         self.cursor.execute('select t1.* from %s t1 %s' % (self.name,whereClause),params)
         l=self.cursor.fetchall()
         for t in l:
@@ -158,24 +169,25 @@ class SQLTable(SQLTableBase):
             if len(l)!=1:
                 raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
             try:
-                o=self.oclass(l[0]) # SAVE USING SPECIFIED OBJECT CLASS
+                o=self.itemClass(l[0]) # SAVE USING SPECIFIED OBJECT CLASS
             except AttributeError:
                 self.objclass() # CREATE A CLASS FOR OUR ROW-OBJECT
-                o=self.oclass(l[0]) # TRY AGAIN...
+                o=self.itemClass(l[0]) # TRY AGAIN...
             dict.__setitem__(self,k,o) # CACHE IT IN LOCAL DICTIONARY
+            o.db=self # MARK THE OBJECT AS BEING PART OF THIS CONTAINER
             return o
 
 
 class SQLTableNoCache(SQLTableBase):
     "Provide on-the-fly access to rows in the database, but never cache results"
-    oclass=SQLRow # DEFAULT OBJECT CLASS FOR ROWS...
+    itemClass=SQLRow # DEFAULT OBJECT CLASS FOR ROWS...
     __iter__=iterSQLKey
 
     def __getitem__(self,k): # FIRST TRY LOCAL INDEX, THEN TRY DATABASE
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
-            o=self.oclass(self,k) # RETURN AN EMPTY CONTAINER FOR ACCESSING THIS ROW
+            o=self.itemClass(self,k) # RETURN AN EMPTY CONTAINER FOR ACCESSING THIS ROW
             dict.__setitem__(self,k,o) # STORE EMPTY CONTAINER IN LOCAL DICTIONARY
             return o
     def addAttrAlias(self,**kwargs):
@@ -201,7 +213,79 @@ class SQLTableMultiNoCache(SQLTableBase):
         if not hasattr(self,'oclass'):
             self.objclass() # GENERATE DEFAULT OBJECT CLASS BASED ON TupleO
         for row in l:
-            yield self.oclass(row)
+            yield self.itemClass(row)
+
+
+
+class SQLEdgeDict(object):
+    '2nd level graph interface to SQL database'
+    def __init__(self,fromNode,table):
+        self.fromNode=fromNode
+        self.table=table
+    def __getitem__(self,target):
+        self.table.cursor.execute('select * from %s where source_id=%%s and target_id=%%s'
+                                  %self.table.name,(self.fromNode,target))
+        l=self.table.cursor.fetchall()
+        try:
+            return l[0][2] # RETURN EDGE
+        except IndexError:
+            raise KeyError('no edge from node to target')
+    def __setitem__(self,target,edge):
+        self.table.cursor.execute('insert into %s values (%%s,%%s,%%s)'
+                                  %self.table.name,
+                                  (self.fromNode,target,edge))
+    def __delitem__(self,target):
+        if self.table.cursor.execute('delete from %s where source_id=%%s and target_id=%%s'
+                                     %self.table.name,
+                                     (self.fromNode,target))!=1:
+            raise KeyError('no edge from node to target')
+        
+    __iter__=lambda self:self.iteritems(1)
+    keys=lambda self:[k for k in self]
+    itervalues=lambda self:self.iteritems(2)
+    values=lambda self:[k for k in self.iteritems(2)]
+    items=lambda self:[k for k in self.iteritems()]
+    edges=lambda self:[(self.fromNode,)+k for k in self.iteritems()]
+    def iteritems(self,k=slice(1,3)):
+        self.table.cursor.execute('select * from %s where source_id=%%s'
+                                  %self.table.name,(self.fromNode,))
+        for row in self.table.cursor.fetchall():
+            yield row[k]
+
+
+class SQLGraph(SQLTableMultiNoCache):
+    '''provide a graph interface via a SQL table.  Key capabilities are:
+       - setitem with an empty dictionary: a dummy operation
+       - getitem with a key that exists: return a placeholder
+       - setitem with non empty placeholder: again a dummy operation
+       TABLE SCHEMA:
+       create table mygraph (source_id int not null,target_id int not null,edge_id int,
+              unique(source_id,target_id));
+       '''
+    _distinct_key='source_id'
+    def __getitem__(self,k):
+        return SQLEdgeDict(k,self)
+    def __setitem__(self,k,v):
+        pass
+    def __contains__(self,k):
+        return self.cursor.execute('select * from %s where source_id=%%s'
+                                   %self.name,(k,))>0
+    def __iter__(self):
+        n=self.cursor.execute('select source_id from %s' %self.name)
+        for i in range(n):
+            yield self.cursor.fetchone()[0]
+    def iteritems(self,myslice=slice(0,2)):
+        for k in self:
+            result=(k,SQLEdgeDict(k,self))
+            yield result[myslice]
+    keys=lambda self:[k for k in self]
+    itervalues=lambda self:self.iteritems(1)
+    values=lambda self:[k for k in self.iteritems(1)]
+    items=lambda self:[k for k in self.iteritems()]
+    def edges(self):
+        for targetDict in self.itervalues():
+            for result in targetDict.edges():
+                yield result
 
 
 def describeDBTables(name,cursor,idDict):
