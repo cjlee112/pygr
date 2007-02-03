@@ -243,3 +243,186 @@ class DictQueue(dict):
         del l[0]
         if len(l)==0:
             dict.__delitem__(self,k)
+
+
+
+
+################################ PYGR.DATA.SCHEMA - AWARE CLASSES BELOW
+
+
+def methodFactory(methodList,methodStr,localDict):
+    for methodName in methodList:
+        localDict[methodName]=eval(methodStr%methodName)
+
+
+class IntShelve(object):
+    'provides an interface to shelve that can use int as key'
+    def __init__(self,filename=None,mode='r',**kwargs):
+        import shelve
+        self.filename=filename
+        if mode=='r': # READ-ONLY MODE
+            self.d=shelve.open(filename,mode)
+        else: # CREATION / WRITING: FORCE IT TO WRITEBACK AT close()
+            self.d=shelve.open(filename,mode,writeback=True)
+    def __getstate__(self): ############### PICKLING METHODS
+        return [self.filename]
+    def __setstate__(self,l):
+        self.__init__(*l)
+    def saveKey(self,i):
+        'convert to string key'
+        if isinstance(i,int):
+            return 'int:%s'%i
+        elif isinstance(i,str):
+            return i
+        try:
+            return 'int:%s'%int(i)
+        except TypeError:
+            pass
+        raise KeyError('IntShelve can only save int or str as key')
+    def trueKey(self,k):
+        "convert back to key's original format"
+        if k.startswith('int:'):
+            return int(k[4:])
+        else:
+            return k
+    def __getitem__(self,k): ################ STANDARD ITERATOR METHODS
+        return self.d[self.saveKey(k)]
+    def __setitem__(self,k,v):
+        self.d[self.saveKey(k)]=v
+    def __contains__(self,k):
+        return self.saveKey(k) in self.d
+    def __iter__(self):
+        for k in self.d:
+            yield self.trueKey(k)
+    keys=lambda self:[k for k in self]
+    def iteritems(self):
+        for k,v in self.d.iteritems():
+            yield self.trueKey(k),v
+    items=lambda self:[k for k in self.iteritems()]
+    close=lambda self:self.d.close()
+
+
+
+class IDNodeDict(object):
+    """2nd layer graph interface implementation using proxy dict.
+       e.g. shelve."""
+    dictClass=dict
+    def __init__(self,graph,fromNode):
+        self.graph=graph
+        self.fromNode=fromNode
+
+    def __getitem__(self,target): ############# ACCESS METHODS
+        edgeID=self.graph.d[self.fromNode][target.id]
+        return self.graph.edgeDB[edgeID]
+
+    def __setitem__(self,target,edgeInfo):
+        "Add edge from fromNode to target with edgeInfo"
+        if edgeInfo is not None:
+            self.graph.d[self.fromNode][target.id]=edgeInfo.id
+        self.graph+=target # ADD NEW NODE TO THE NODE DICT
+
+    def __delitem__(self,target):
+        "Delete edge from fromNode to target"
+        try:
+            del self.graph.d[self.fromNode][target.id]
+        except KeyError: # GENERATE A MORE INFORMATIVE ERROR MESSAGE
+            raise KeyError('No edge from node to target')
+    ######### CONVENIENCE METHODS THAT USE THE ACCESS METHODS ABOVE
+    def __iadd__(self,target):
+        "Add edge from fromNode to target with no edge-info"
+        self[target]=None
+        return self # THIS IS REQUIRED FROM iadd()!!
+
+    def __isub__(self,target):
+        "Delete edge from fromNode to target"
+        self.__delitem__(target)
+        return self # THIS IS REQUIRED FROM iadd()!!
+
+    def edges(self):
+        "Return iterator for accessing edges from fromNode"
+        for target,edgeInfo in self.graph.d[self.fromNode].items():
+            yield self.graph.sourceDB[self.fromNode],\
+                  self.graph.targetDB[target],\
+                  self.graph.edgeDB[edgeInfo]
+
+                
+
+class IDGraph(object):
+    """Top layer graph interface implemenation using proxy dict.
+       Works with dict, shelve, any mapping interface."""
+    edgeDictClass=IDNodeDict # DEFAULT EDGE DICT
+    def __init__(self,proxyDict=None,sourceDB=None,targetDB=None,
+                 edgeDB=None,**kwargs):
+        if proxyDict is not None: # USE THE SUPPLIED STORAGE
+            self.d=proxyDict
+        else: # ACCESS THE DATA VIA A SHELVE
+            self.d=IntShelve(**kwargs)
+        if sourceDB is not None:
+            self.sourceDB=sourceDB
+        if targetDB is not None:
+            self.targetDB=targetDB
+        if edgeDB is not None:
+            self.edgeDB=edgeDB
+    def __getstate__(self): ############### PICKLING METHODS
+        return [self.d] # JUST PICKLE THE STORAGE
+    def __setstate__(self,l):
+        self.__init__(*l)
+
+    # USE METHOD FROM THE SHELVE...
+    methodFactory(['__contains__'],'lambda self,obj:self.d.%s(obj.id)',locals())
+    def __iter__(self):
+        for node in self.d:
+            yield self.sourceDB[node]
+    keys=lambda self:[k for k in self]
+    def itervalues(self):
+        for node in self.d:
+            yield self.edgeDictClass(self,node)
+    values=lambda self:[v for v in self.itervalues()]
+    def iteritems(self):
+        for node in self.d:
+            yield self.sourceDB[node],self.edgeDictClass(self,node)
+    items=lambda self:[v for v in self.iteritems()]
+
+    def __iadd__(self,node):
+        "Add node to graph with no edges"
+        node=node.id # INTERNALL JUST USE ITS id
+        if node not in self.d:
+            self.d[node]={} # INITIALIZE TOPLEVEL DICTIONARY
+        return self # THIS IS REQUIRED FROM iadd()!!
+
+    def __getitem__(self,node):
+        if node in self:
+            return self.edgeDictClass(self,node.id)
+        raise KeyError('node not in graph')
+    def __setitem__(self,node,target):
+        "This method exists only to support g[n]+=o.  Do not use as g[n]=foo."
+        node=node.id # INTERNALL JUST USE ITS id
+        try:
+            if node==target.fromNode:
+                return
+        except AttributeError:
+            pass
+        raise ValueError('Incorrect usage.  Add edges using g[n]+=o or g[n][o]=edge.')
+
+    def __delitem__(self,node):
+        "Delete node from graph."
+        node=node.id # INTERNALL JUST USE ITS id
+        # GRR, WE REALLY NEED TO FIND ALL EDGES THAT GO TO THIS NODE, DELETE THEM TOO
+        try:
+            del self.d[node]  # DO STUFF TO REMOVE IT HERE...
+        except KeyError:
+            raise KeyError('Node not present in mapping.')
+
+    def __isub__(self,node):
+        "Delete node from graph"
+        self.__delitem__(node)
+        return self # THIS IS REQUIRED FROM isub()!!
+
+    def __hash__(self): # SO SCHEMA CAN INDEX ON GRAPHS...
+        return id(self)
+
+    def edges(self):
+        "Return iterator for all edges in this graph"
+        for edgedict in self.values():
+            for edge in edgedict.edges():
+                yield edge
