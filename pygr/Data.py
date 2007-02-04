@@ -84,11 +84,15 @@ class PygrPickler(pickle.Pickler):
 
 
 class ResourceDBServer(object):
-    xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0}
-    def __init__(self,readOnly=False):
+    xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0,
+                    'getName':0}
+    def __init__(self,name,readOnly=False):
+        self.name=name
         self.d={}
         if readOnly: # LOCK THE INDEX.  DON'T ACCEPT FOREIGN DATA!!
-            self.xmlrpc_methods={'getResource':0} # ONLY ALLOW THESE METHODS!
+            self.xmlrpc_methods={'getResource':0,'getName':0} # ONLY ALLOW THESE METHODS!
+    def getName(self):
+        return self.name
     def getResource(self,id):
         try:
             return self.d[id] # RETURN DICT OF PICKLED OBJECTS
@@ -116,6 +120,8 @@ class ResourceDBClient(object):
         self.server=get_connection(url,'index')
         self.url=url
         self.finder=finder
+        self.name=self.server.getName()
+        finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
     def __getitem__(self,id):
         'get construction rule from index server, and attempt to construct'
         d=self.server.getResource(id) # RAISES KeyError IF NOT FOUND
@@ -139,6 +145,10 @@ class ResourceDBMySQL(object):
                                     +'/.my.cnf').cursor()
         self.tablename=tablename
         self.finder=finder
+        if self.cursor.execute('select location from %s where pygr_id=%%s'
+                               % self.tablename,('PYGRLAYERNAME',))>0:
+            self.name=self.cursor.fetchone()[0]
+            finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
     def __getitem__(self,id):
         'get construction rule from mysql, and attempt to construct'
         self.cursor.execute('select location,objdata from %s where pygr_id=%%s'
@@ -233,12 +243,16 @@ class ResourceDBShelve(object):
 
 
 class ResourceFinder(object):
-    def __init__(self,separator=','):
+    def __init__(self,separator=',',saveDict=None):
         self.db=None
         self.layer={}
         self.dbstr=''
         self.d={}
         self.separator=separator
+        if saveDict is not None:
+            self.saveDict=saveDict
+            self.update()
+            del self.saveDict
     def update(self):
         'get the latest list of resource databases'
         import os
@@ -268,6 +282,16 @@ class ResourceFinder(object):
                     if dbpath.startswith('./') and 'here' not in self.layer:
                         self.layer['here']=rdb
                 self.db.append(rdb) # SAVE TO OUR LIST OF RESOURCE DATABASES
+    def addLayer(self,layerName,rdb):
+        'add resource database as a new named layer'
+        if layerName in self.layer: # FOR SECURITY, DON'T ALLOW OVERWRITING
+            print 'WARNING: ignored duplicate pygr.Data resource layer',layerName
+            return
+        self.layer[layerName]=rdb # INTERNAL DICTIONARY
+        try: # ADD NAME TO THE MODULE TOP-LEVEL DICTIONARY
+            self.saveDict[layerName]=ResourceLayer(layerName)
+        except AttributeError:
+            pass
     def resourceDBiter(self):
         'iterate over all available databases, read from PYGRDATAPATH env var.'
         self.update()
@@ -375,7 +399,7 @@ class ResourceFinder(object):
             server[id]=obj # ADD TO XMLRPC SERVER
         server.registrationData=clientDict # SAVE DATA FOR SERVER REGISTRATION
         if withIndex: # SERVE OUR OWN INDEX AS A STATIC, READ-ONLY INDEX
-            myIndex=ResourceDBServer(readOnly=True) # CREATE EMPTY INDEX
+            myIndex=ResourceDBServer(name,readOnly=True) # CREATE EMPTY INDEX
             server['index']=myIndex # ADD TO OUR XMLRPC SERVER
             server.register('','',server=myIndex) # ADD OUR RESOURCES TO THE INDEX
         return server
@@ -441,8 +465,6 @@ class ResourceFinder(object):
 
 
 
-################# CREATE AN INTERFACE TO THE RESOURCE DATABASE
-getResource=ResourceFinder()
 
 class ResourcePath(object):
     'simple way to read resource names as python foo.bar.bob expressions'
@@ -568,3 +590,6 @@ my=ResourceLayer('my')
 system=ResourceLayer('system')
 remote=ResourceLayer('remote')
 MySQL=ResourceLayer('MySQL')
+
+################# CREATE AN INTERFACE TO THE RESOURCE DATABASE
+getResource=ResourceFinder(saveDict=locals())
