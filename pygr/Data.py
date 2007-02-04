@@ -250,8 +250,8 @@ class ResourceFinder(object):
         self.d={}
         self.separator=separator
         if saveDict is not None:
-            self.saveDict=saveDict
-            self.update()
+            self.saveDict=saveDict # SAVE NEW LAYER NAMES HERE...
+            self.update() # FORCE LOADING OF RESOURCE DBs FROM PYGRDATAPATH
             del self.saveDict
     def update(self):
         'get the latest list of resource databases'
@@ -265,23 +265,36 @@ class ResourceFinder(object):
             self.db=[]
             self.layer={}
             for dbpath in PYGRDATAPATH.split(self.separator):
-                if dbpath.startswith('http://'):
-                    rdb=ResourceDBClient(dbpath,self)
-                    if 'remote' not in self.layer:
-                        self.layer['remote']=rdb
-                elif dbpath.startswith('mysql:'):
-                    rdb=ResourceDBMySQL(dbpath[6:],self)
-                    if 'MySQL' not in self.layer:
-                        self.layer['MySQL']=rdb
-                else: # TREAT AS LOCAL FILEPATH
-                    rdb=ResourceDBShelve(os.path.expanduser(dbpath),self)
-                    if dbpath.startswith('/') and 'system' not in self.layer:
-                        self.layer['system']=rdb
-                    if dbpath.startswith('~/') and 'my' not in self.layer:
-                        self.layer['my']=rdb
-                    if dbpath.startswith('./') and 'here' not in self.layer:
-                        self.layer['here']=rdb
-                self.db.append(rdb) # SAVE TO OUR LIST OF RESOURCE DATABASES
+                try:
+                    if dbpath.startswith('http://'):
+                        rdb=ResourceDBClient(dbpath,self)
+                        if 'remote' not in self.layer:
+                            self.layer['remote']=rdb
+                    elif dbpath.startswith('mysql:'):
+                        rdb=ResourceDBMySQL(dbpath[6:],self)
+                        if 'MySQL' not in self.layer:
+                            self.layer['MySQL']=rdb
+                    else: # TREAT AS LOCAL FILEPATH
+                        rdb=ResourceDBShelve(os.path.expanduser(dbpath),self)
+                        if dbpath.startswith('/') and 'system' not in self.layer:
+                            self.layer['system']=rdb
+                        if dbpath.startswith('~/') and 'my' not in self.layer:
+                            self.layer['my']=rdb
+                        if dbpath.startswith('./') and 'here' not in self.layer:
+                            self.layer['here']=rdb
+                except: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
+                    if hasattr(self,'saveDict'): # IN THE MIDDLE OF MODULE IMPORT
+                        import traceback,sys
+                        traceback.print_exc(10,sys.stderr) # JUST PRINT TRACEBACK
+                        print >>sys.stderr,'''
+error loading resource %s
+NOTE: Just skipping this resource, without halting on this exception.
+This error WILL NOT prevent successful import of this module.
+Continuing with import...'''%dbpath
+                    else:
+                        raise # JUST PROPAGATE THE ERROR AS USUAL
+                else: # NO PROBLEM, SO ADD TO OUR RESOURCE DB LIST
+                    self.db.append(rdb) # SAVE TO OUR LIST OF RESOURCE DATABASES
     def addLayer(self,layerName,rdb):
         'add resource database as a new named layer'
         if layerName in self.layer: # FOR SECURITY, DON'T ALLOW OVERWRITING
