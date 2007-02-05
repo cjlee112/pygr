@@ -275,12 +275,14 @@ class ResourceFinder(object):
                         if 'MySQL' not in self.layer:
                             self.layer['MySQL']=rdb
                     else: # TREAT AS LOCAL FILEPATH
-                        rdb=ResourceDBShelve(os.path.expanduser(dbpath),self)
+                        dbpath=os.path.expanduser(dbpath)
+                        rdb=ResourceDBShelve(dbpath,self)
                         if dbpath.startswith('/') and 'system' not in self.layer:
                             self.layer['system']=rdb
-                        if dbpath.startswith('~/') and 'my' not in self.layer:
+                        if dbpath.startswith(os.path.expanduser('~')) \
+                               and 'my' not in self.layer:
                             self.layer['my']=rdb
-                        if dbpath.startswith('./') and 'here' not in self.layer:
+                        if dbpath.startswith('.') and 'here' not in self.layer:
                             self.layer['here']=rdb
                 except: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
                     if hasattr(self,'saveDict'): # IN THE MIDDLE OF MODULE IMPORT
@@ -564,7 +566,7 @@ class ManyToManyRelation(object):
             bindObj=(self.sourceDB,self.targetDB,self.edgeDB)
             bindArgs=({},dict(invert=True),dict(getEdges=True))
             for i in range(3):
-                if self.bindAttrs[i] is not None:
+                if len(self.bindAttrs)>i and self.bindAttrs[i] is not None:
                     b=ItemRelation(source) # SAVE ITEM BINDING
                     b.saveSchema(bindObj[i],self.bindAttrs[i],
                                  **bindArgs[i])
