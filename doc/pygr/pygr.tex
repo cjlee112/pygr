@@ -40,7 +40,7 @@
 %end{latexonly}
 
 
-\section{Introduction}
+\section{Introductory Tutorial}
 \label{intro}
 
 Pygr is open source software designed to make it easy to do powerful sequence and
@@ -305,6 +305,7 @@ When you invoke the db.blast() method on a sequence object, it obtains the actua
 Note: print converts its arguments to strings (i.e. calls str() on them), so we used \code{repr(src)} to get a "string representation" of each sequence interval.  When print calls str() on individualBlastSequence interval objects returned by the BLAST search, they invoke fseek() to obtain the specific sequence slice representing that interval.
 \end{itemize}
 
+\subsection{Simplifying the Challenges of Working with Complex Datasets}
 \subsubsection{pygr.Data: a Namespace for Transparently Importing Data}
 One challenge in bioinformatics is the complexity of managing many diverse
 data resources.  For example, running a large job on a heterogeneous cluster
@@ -390,6 +391,74 @@ as on our original machine, the first method above would fail, whereas in
 the second approach pygr.Data now will automatically scan all its resource databases to
 figure out how to load each of the genomes on that machine.
 
+\subsubsection{pygr.Data.schema: a Simple Framework For Managing Database Schemas}
+{\em Schema} refers to any relationship between two or more collections of
+data.  It captures the structure of relationships that define these particular
+kinds of data.  For example ``a genome has genes, and genes have exons'', or 
+``an exon is connected to another exon by a splice''.  In pygr.Data we can
+store such schema information as easily as:
+\begin{verbatim}
+pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph=splicegraph # ADD A NEW RESOURCE
+pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
+  pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
+                               bindAttrs=('next','previous','exons'))
+\end{verbatim}
+This example assumes that 
+\begin{itemize}
+\item \code{splicegraph} is a graph whose nodes are exons, and whose
+edges are splices connecting a pair of exons.  Specifically,
+\code{splicegraph[exon1][exon2]=splice1} means \code{splice1} is a 
+splice object (from the container \code{splices}) that connects
+\code{exon1} and \code{exon2} (both from the container \code{exons}).
+
+\item An exon can have one or more ``outgoing'' splices connecting it
+to subsequent exons, as well as one or more ``incoming'' splices from
+previous exons.  Thus this relation of exon to exon is a Many-to-Many
+mapping (e.g. as distinguished from a One-to-One mapping, where each
+exon must have exactly one such relationship with another exon).
+
+\item Because pygr.Data now knows the schema for splicegraph, it
+will automatically reconstruct these relationships for any user who
+accesses these data from pygr.Data.  Specifically, if a user
+retrieves \code{pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph},
+the \code{sourceDB}, \code{targetDB}, \code{edgeDB} attributes on
+the returned object will automatically be set to point to the 
+corresponding pygr.Data resources representing \code{exons} and \code{splices}
+respectively.  \code{splicegraph} does not need to do anything to 
+remember these relationships; pygr.Data.schema remembers and applies
+this information for you automatically.  Note that when you access
+\code{splicegraph}, neither \code{exons} nor \code{splices} will be 
+actually loaded unless you do something that specifically tries to
+read these data (e.g. \code{for exon in splicegraph} will read
+\code{exons} but not \code{splices}).
+
+\item The easiest way for users to work with a schema is to translate
+it into object-oriented behavior.  I.e. instead of remembering that
+when we have \code{exons} we can use \code{splicegraph} to find its
+\code{splices} via code like 
+\begin{verbatim}
+for exon,splice in splicegraph[exon0].items():
+   do something...
+\end{verbatim}
+most people would find it easier to remember that every \code{exon}
+has a \code{next} attribute that gives its splices to subsequent exons
+via code like
+\begin{verbatim}
+for exon,splice in exon0.next.items():
+   do something...
+\end{verbatim}
+Based on the schema statement we gave it,
+pygr.Data.schema will automatically create the attributes \code{next},
+\code{previous} on any exon item from the container \code{exons},
+according to the schema.  I.e. \code{exon.next} will be equivalent to
+\code{splicegraph[exon]}.  Note that as long as the object \code{exon0}
+came from the pygr.Data resource, the user {\em would not have to do anything}
+to be able to use the \code{next} attribute.  On the basis of the saved
+schema information, pygr.Data will construct this attribute automatically,
+and will automatically load the resources \code{splicegraph} and \code{splices}
+if the user tries to actually use the \code{next} attribute.
+\end{itemize}
+
 \subsubsection{pygr.Data Sharing Over a Network via XMLRPC}
 Sometimes individual compute nodes may not have sufficient disk space to
 store all the data resources (for example, just the single the ucsc17 17-genome alignment and 
@@ -421,27 +490,126 @@ settings).  However, if a particular resource is not available locally,
 Pygr will transparently get access to it from the server we created,
 using XMLRPC.
 
+\subsubsection{pygr.Data Layers}
+Based on your PYGRDATAPATH, pygr.Data provides a number of named {\em layers}
+that give abstract names for where you want to read or store your pygr.Data info.
+For example, if you wanted to store a resource specifically in the resource
+database in your current directory, you could type:
+\begin{verbatim}
+pygr.Data.here.Bio.Seq.MSA.ucsc17=nlmsa # SAVE THE NLMSA AND SEQ DBs
+\end{verbatim}
+\begin{itemize}
+\item The abstract pygr.Data layer \code{here} refers to the first entry in your
+PYGRDATAPATH that starts with ``.'' (dot).  For other layer names, see
+the reference documentation.  This might be useful for prototyping or
+testing a new resource, without yet adding it to your long-term resource
+database.
+
+\item Similarly, the pygr.Data layer
+\code{my} is the first entry that begins with your home directory
+(i.e. ~ (tilde), ``/home/yourname'' or whatever your home directory is).
+
+\item Every pygr.Data resource database server (XMLRPC or MySQL) has
+a ``layer name'' that will be automatically loaded to your pygr.Data module
+when you import it.  For example, to delete this particular resource rule
+from our lab's central resource database (called ``leelab'', because it is
+not accessible outside our lab):
+\begin{verbatim}
+del pygr.Data.leelab.Bio.Seq.MSA.ucsc17 # DELETE THIS RESOURCE RULE
+\end{verbatim}
+\end{itemize}
 
 
-\subsubsection{Example: a MySQL Database}
-Here's an example of working with sequences from a relational database:
+\subsection{Storing Alignments}
+\subsubsection{Alignment Basics}
+
+Pygr multiple alignment objects can be treated as mappings of sequence intervals onto sequence intervals.  Here is a very simple example, showing basic operations for constructing an alignment:
 
 \begin{verbatim}
->>> import MySQLdb # standard module for accessing MySQL, now get a cursor...
->>> rdb=MySQLdb.connect(db='HUMAN_SPLICE_03',read_default_file=os.environ['HOME'
-]+'/.my.cnf')
->>> t=SQLTable('genomic_cluster_JUN03',rdb.cursor()) #interface to a table of
- sequences
->>> from pygr.seqdb import *   # pygr module for working with sequences from databases
->>> t.objclass(DNASQLSequence) #use this class as "row objects"
->>> s2=t['Hs.1162'] # get a specific sequence object by ID
->>> str(s2[1000:1050]) # this will only get 50 nt of the genomic sequence from 
-MySQL
-'acctgggtgatgaaataaatttttacgccaaatcccgatgacacacaatt'
+>>> from pygr import cnestedlist
+>>> m2=cnestedlist.NLMSA('myo',mode='memory') # an empty alignment, in-memory
+>>> m2+=s # add sequence s to the alignment
+>>> ival=s[100:160] # AN INTERVAL OF s
+>>> m2[ival]+=db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interval of MYG_CHICK
+>>> m2[ival]+=db['MYG_CANFA'][45:105] # add an additional edge
+>>> m2.build() # done constructing the alignment.  Initialize for query.
+>>> for s2 in m2[ival[:10]]: # get aligned seqs for the first 10 letters of ival...
+...     print repr(s2)
+...
+MYG_CHICK[83:93]
+MYG_CANFA[45:55]
 \end{verbatim}
+In this case we used in-memory storage of the alignment.  
 
-(Note: in this example we used MySQLdb.connect()'s ability to read database 
-server and user authentication information directly from the standard ~/.my.cnf file normally used by the MySQL client).
+\subsubsection{Storing an All-vs-All BLAST Alignment}
+However, for really large
+alignments (e.g. an all vs. all BLAST analysis) we may prefer to store the alignment
+on-disk.  In pygr, all we have to do is change the mode flag to 'w' (implying {\em write}
+a file):
+\begin{verbatim}
+from pygr import cnestedlist,seqdb
+msa=cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
+sp=seqdb.BlastDB('sp') # OPEN SWISSPROT DATABASE
+for id,s in sp.iteritems(): # FOR EVERY SEQUENCE IN SWISSPROT
+    sp.blast(s,msa,expmax=1e-10) # GET STRONG HOMOLOGS, SAVE ALIGNMENT IN msa
+msa.build() # DONE CONSTRUCTING THE ALIGNMENT, SO BUILD THE ALIGNMENT DB INDEXES
+# msa READY TO QUERY NOW...
+\end{verbatim}
+Again you can see how pygr makes it quite simple to do a large analysis
+and create a powerful resource (an all-vs-all alignment database).
+A couple of points deserve comment:
+
+\begin{itemize}
+
+\item
+The in-memory and on-disk NLMSA alignment storages have exactly the same
+interface.  You can work with alignments from small to large to gimungous
+using the same consistent set of tools.  Moreover the performance will be
+fast across the whole range of scales, because the NLMSA storage and query
+algorithms scale very well (O(logN)).
+
+\item
+Because of the \code{mode='w'} flag, NLMSA will create a set of alignment
+index files called 'all_vs_all'.
+
+\item 
+\code{bidirectional=False}: whenever you store an alignment relationship
+$S \rightarrow T$, this can either be {\em unidirectional} or {\em bidirectional}.
+Unidirectional means only $S \rightarrow T$ is stored; bidirectional means
+both $S \rightarrow T$ and $T \rightarrow S$ are stored (i.e. you can both query
+with S (and get T), and query with T (and get S).  In general, you want 
+a unidirectional alignment storage when {\em directionality matters}.  For
+example, in a BLAST all vs. all search the alignment of S and T that you get
+when you blast S against the database (finding T, among others) may well be
+different from the alignment of S and T that you get when you blast T against
+the database (finding S, among others).  If you stored the all-vs-all alignment
+using bidirectional storage, querying \code{msa} with S would get TWO alignments 
+to T: one from the $S \rightarrow T$ BLAST search results, and one from the
+$T \rightarrow S$ BLAST search results.  This simply reflects the fact that 
+the all vs all BLAST stored two alignments of S and T into \code{msa}.
+What this highlights is that BLAST is not a true multiple sequence alignment
+algorithm (among other things, it is not symmetric: you can get different
+mappings in one direction vs. the other).  
+
+In general, bidirectional storage
+mainly makes sense for true multiple sequence alignments (which are guaranteed
+to be symmetric).
+
+\item
+Supplying the BlastDB.blast() method with an alignment object makes it store
+its results into that alignment, rather than creating its own alignment holder
+for us.  In this way we can make it store many different BLAST searches into
+a single alignment database.
+
+\item
+To make the NLMSA algorithm scalable, pygr defers construction of the alignment
+indexes until the alignment is complete.  We trigger this by calling its build()
+method.  At this point we now have an alignment database stored on disk, which
+we can open at any time later and query with the high-speed nested list algorithm
+as illustrated in the examples in previous sections.
+
+\end{itemize}
+
 
 \subsubsection{Building an Alignment Database from MAF files}
 It may be helpful to see how a large multi-genome alignment database
@@ -583,131 +751,147 @@ start_client_or_server(): this line automatically starts up the correct function
 \end{itemize}
 
 
-\subsubsection{Alignment Basics:}
-
-Pygr multiple alignment objects can be treated as mappings of sequence intervals onto sequence intervals.  Here is a very simple example, showing basic operations for constructing an alignment:
-
+\subsection{Sequence Annotation Databases}
+\subsubsection{What is a pygr sequence annotation?}
+{\em Annotation} -- information bound to specific intervals of a genome
+or sequence -- is an essential concept in bioinformatics.  We would like to
+be able to store and query annotations naturally as part of working with
+multi-genome alignments, as a standard operation in comparative genomics.
+Pygr makes this easy:
 \begin{verbatim}
->>> from pygr import cnestedlist
->>> m2=cnestedlist.NLMSA('myo',mode='memory') # an empty alignment, in-memory
->>> m2+=s # add sequence s to the alignment
->>> m2[s]+=db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interval of MYG_CHICK
->>> m2[s]+=db['MYG_CANFA'][45:105] # add an additional edge
->>> m2.build() # done constructing the alignment.  Initialize for query.
->>> for s2 in m2[s[:10]]: # get aligned seqs for the first 10 letters again...
-...     print repr(s2)
-...
-MYG_CHICK[83:93]
-MYG_CANFA[45:55]
+for alignedRegion in msa[myRegion]: # FIND ALIGNMENT IN OTHER GENOMES
+  for exon in alignedRegion.exons: # SEE IF THIS CONTAINS ANY ANNOTATED EXONS
+    print 'exon\tID:%d\tSEQ:%s' % (exon.id,str(exon)) # PRINT ITS SEQUENCE
+    for exon2,splice in exon.next.items(): # LOOK AT ALTERNATIVE SPLICING OF THIS EXON
+      do something...
 \end{verbatim}
-In this case we used in-memory storage of the alignment.  However, for really large
-alignments (e.g. an all vs. all BLAST analysis) we may prefer to store the alignment
-on-disk.  In pygr, all we have to do is change the mode flag to 'w' (implying {\em write}
-a file):
-\begin{verbatim}
-from pygr import cnestedlist,seqdb
-msa=cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
-sp=seqdb.BlastDB('sp') # OPEN SWISSPROT DATABASE
-for id,s in sp.iteritems(): # FOR EVERY SEQUENCE IN SWISSPROT
-    sp.blast(s,msa,expmax=1e-10) # GET STRONG HOMOLOGS, SAVE ALIGNMENT IN msa
-msa.build() # DONE CONSTRUCTING THE ALIGNMENT, SO BUILD THE ALIGNMENT DB INDEXES
-# msa READY TO QUERY NOW...
-\end{verbatim}
-Again you can see how pygr makes it quite simple to do a large analysis
-and create a powerful resource (an all-vs-all alignment database).
-A couple of points deserve comment:
-
 \begin{itemize}
+\item In the above code, we assumed that there exists a mapping of any genomic
+sequence region (\code{alignedRegion}) to exon annotations.  This mapping
+is bound by pygr.Data.schema to the sequence object's \code{exons} attribute.
+In a moment we will see how to construct such a mapping.
 
-\item
-The in-memory and on-disk NLMSA alignment storages have exactly the same
-interface.  You can work with alignments from small to large to gimungous
-using the same consistent set of tools.  Moreover the performance will be
-fast across the whole range of scales, because the NLMSA storage and query
-algorithms scale very well (O(logN)).
+\item An annotation is {\em both} a sequence interval (just like any other
+sequence interval in pygr, e.g. you can get its sequence string via \code{str}),
+and also an annotation object.  What makes it an annotation object?  
 
-\item
-Because of the \code{mode='w'} flag, NLMSA will create a set of alignment
-index files called 'all_vs_all'.
+\item Pygr marks
+it with one attribute (\code{annot}) that points to its parent annotation
+object.  For example, in the case above, \code{alignedRegion} might not contain
+the whole exon, in which case \code{exon} would be just the part of the exon
+contained in \code{alignedRegion}, and \code{exon.annot} would be the complete
+exon.
 
-\item 
-\code{bidirectional=False}: whenever you store an alignment relationship
-$S \rightarrow T$, this can either be {\em unidirectional} or {\em bidirectional}.
-Unidirectional means only $S \rightarrow T$ is stored; bidirectional means
-both $S \rightarrow T$ and $T \rightarrow S$ are stored (i.e. you can both query
-with S (and get T), and query with T (and get S).  In general, you want 
-a unidirectional alignment storage when {\em directionality matters}.  For
-example, in a BLAST all vs. all search the alignment of S and T that you get
-when you blast S against the database (finding T, among others) may well be
-different from the alignment of S and T that you get when you blast T against
-the database (finding S, among others).  If you stored the all-vs-all alignment
-using bidirectional storage, querying \code{msa} with S would get TWO alignments 
-to T: one from the $S \rightarrow T$ BLAST search results, and one from the
-$T \rightarrow S$ BLAST search results.  This simply reflects the fact that 
-the all vs all BLAST stored two alignments of S and T into \code{msa}.
-What this highlights is that BLAST is not a true multiple sequence alignment
-algorithm (among other things, it is not symmetric: you can get different
-mappings in one direction vs. the other).  
+\item In addition, pygr also marks it with 
+two attributes that identify it as belonging to its annotation database:
+\code{id} gives its unique identifier (primary key) in that database,
+and \code{db} points to the annotation database object itself.
 
-In general, bidirectional storage
-mainly makes sense for true multiple sequence alignments (which are guaranteed
-to be symmetric).
-
-\item
-Supplying the BlastDB.blast() method with an alignment object makes it store
-its results into that alignment, rather than creating its own alignment holder
-for us.  In this way we can make it store many different BLAST searches into
-a single alignment database.
-
-\item
-To make the NLMSA algorithm scalable, pygr defers construction of the alignment
-indexes until the alignment is complete.  We trigger this by calling its build()
-method.  At this point we now have an alignment database stored on disk, which
-we can open at any time later and query with the high-speed nested list algorithm
-as illustrated in the examples in previous sections.
-
+\item Because pygr can see that \code{exon} is part of the exons annotation database,
+it can apply schema information automatically to it.  In this particular case,
+it applies the splicegraph schema to it (see example from pygr.Data.schema
+tutorial above), so we can find out what exons it splices to via its \code{next}
+attribute.
 \end{itemize}
 
 
-\subsubsection{Alignment Query as a Graph Database Query}
-
-Pygr can do much more sophisticated analyses than this fairly easily.  
-Just to give a taste of how to use these capabilities, we will illustrate
-one example of a standard Pygr model: querying Pygr data by drawing a ``query
-graph'' showing the connections we want to find, and running its GraphQuery()
-engine.  Since Pygr alignments follow the same interface as any Pygr graph, we can query them using the standard GraphQuery class.  Let's say we have a Python script load_alignments.py that loads two alignments:
-
-\begin{itemize}
-
-\item
-mRNA_swiss: an alignment of mRNA sequences to homologous SwissProt sequences;
-
-\item
-swiss_features: an alignment of SwissProt sequences onto annotation objects. 
-
-\end{itemize}
-To find out how the known SwissProt annotations map on to our mRNA sequences requires a join, which can be formulated as a simple Pygr graph, consisting of a mapping of an mRNA sequence interval (node 1), onto a SwissProt sequence interval (node 2), onto a feature annotation (node 3):
-
+\subsubsection{Constructing an Annotation Database}
+Suppose you had a set of annotations \code{sliceDB} each consisting of a sequence ID,
+start, and stop coordinates.  We can easily construct an annotation database
+from this:
 \begin{verbatim}
->>> from load_alignments import * # load the alignments
->>> from pygr.graphquery import *      # import the graph query code
-# draw a graph using a dict.  Note: edge 2->3 must come from swiss_features
->>> queryGraph={1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} 
-# run the query and save the mappings
->>> l=[dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] 
->>> len(l) # how many annotations mapped onto our mRNA sequences?
-4703
+from pygr import seqdb,cnestedlist
+annoDB=seqdb.AnnotationDB(sliceDB,genome) # CREATE THE ANNOTATION DB
+nlmsa=cnestedlist.NLMSA('exonAnnot','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
+                        use_virtual_lpo=True,bidirectional=False)
+for id,a in sliceDB.items(): # SAVE ALL ANNOTATION INTERVALS
+  ival=genome[a.name][a.start:a.stop] # GET CORRESPONDING INTERVAL OF genome
+  ann=annoDB[id] # ANNOTATION OBJ IS ACTUALLY SAME SEQ IVAL, BUT DIFFERENT ID,DB...
+  nlmsa+=ival # ADD THIS GENOME SEQ TO ALIGNMENT GRAPH AS A ``NODE''
+  nlmsa[ival]+=ann # ADD ALIGNMENT BETWEEN ival AND ann INTERVALS
+nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
+pygr.Data.Bio.Genomics.ASAP2.exons=annoDB # ADD AS A PYGR.DATA RESOURCE
+pygr.Data.Bio.Genomics.ASAP2.exonmap=nlmsa # NOW SAVE MAPPING AND SCHEMA
+pygr.schema.Data.Bio.Genomics.ASAP2.exonmap= \
+      pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons'))
+\end{verbatim}
+\begin{itemize}
+\item NLMSA provides an efficient, high-performance way to store and
+query huge annotation databases.  The mapping is stored on disk but is
+accessed with high-speed indexing.
+
+\item More importantly, however, a pygr.Data user need never even be
+aware that an NLMSA is being used to provide this mapping.  As far as
+users are concerned, all they need to know is that any sequence object from \code{genome}
+has an \code{exons} attribute that automatically gives a list of exon
+annotations contained within that sequence.  I.e. as in the previous 
+example, you would simply access it via:
+\begin{verbatim}
+for exon in someRegion.exons:
+  do something...
 \end{verbatim}
 
-We assumed that mRNA_swiss would be passed as the default dataGraph, and specified directly that edge 2->3 should be looked up in swiss_features.  We then captured all the results from the GraphQuery iterator using a Python list comprehension.  Note that since the iterator returns each result in the same container (mapping object), if we want to save all the individual results we have to copy each one to a new mapping (dict) object, as illustrated in this example.
-Storing Alignments in a Relational Database
+\item The \code{ManyToManyRelation} indicates that \code{nlmsa} should
+be interpreted as being a many-to-many relation from items of \code{genome}
+to items of \code{annoDB}.  It also creates an \code{exons} attribute on
+items of \code{genome} that translates to \code{g.exons=nlmsa[g]}.
 
+\item In the above example, we assumed that \code{genome} was obtained
+from pygr.Data (and thus a pygr.Data resource ID).  If not, we would first
+have to add it, just as we did for \code{annoDB}.
 
-\subsubsection{More examples}
-\label{more-exam}
+\item Note that we only bound an attribute (\code{exons}, to the 
+\code{genome} items) for the forward mapping (from \code{genome} to \code{annoDB}).
+We did not even store the reverse mapping in \code{nlmsa}, because
+it is completely trivial.  (i.e. an annotation from \code{annoDB} is itself
+the interval of \code{genome} that it maps to).  This was set by
+the \code{bidirectional=False} option to the \code{NLMSA}.
 
-Additional examples of how to use pygr can be found in the tests/ directory within the pygr distribution package.
+\item The \code{use_virtual_lpo} option indicates that this is a pairwise
+(sequence to sequence) alignment, not a true multiple sequence alignment
+(which requires its own coordinate system, called an LPO; see the reference
+docs on NLMSA for more information).  This option could have been omitted;
+pygr would have figured it out automatically from the fact that we saved 
+direct alignments of sequence interval pairs to \code{nlmsa}.  NLMSA does not
+permit mixing pairwise and true MSA alignment formats in a single NLMSA.
+\end{itemize}
 
+\subsubsection{Constructing an Annotation Mapping using Megablast}
+What if someone provided you with a set of ``exon annotations'' in the form
+of short sequences representing the exons, rather than actual genomic
+coordinates?  Again, pygr makes this mapping extremely easy to save:
+\begin{verbatim}
+from pygr import seqdb,cnestedlist,sequence
+annoDB=seqdb.AnnotationDB({},genome) # CREATE THE ANNOTATION DB
+nlmsa=cnestedlist.NLMSA('exonAnnot','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
+                        use_virtual_lpo=True,bidirectional=False)
+for id,s in exonSeqs.items(): # SAVE ALL ANNOTATION INTERVALS
+  ann=sequence.Sequence(s,id) # CREATE A SEQUENCE OBJECT
+  ann.db=annoDB # FORCE IT TO BE PART OF THE ANNOTATION DB
+  genome.megablast(ann,nlmsa,maxseq=1,minIdentity=98) # SAVE ITS BEST HIT IN nlmsa
+nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
+pygr.Data.Bio.Genomics.ASAP2.exons=annoDB # ADD AS A PYGR.DATA RESOURCE
+pygr.Data.Bio.Genomics.ASAP2.exonmap=nlmsa # NOW SAVE MAPPING AND SCHEMA
+pygr.schema.Data.Bio.Genomics.ASAP2.exonmap= \
+      pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons'))
+\end{verbatim}
+
+\begin{itemize}
+\item This example assumes \code{exonSeqs} is a dictionary of exon IDs and sequence
+strings.
+
+\item We construct a sequence object \code{ann} that looks like an annotation
+object (i.e. an item of the initially empty container \code{annoDB}) 
+to pygr because it has an \code{id} and \code{db} attributes.
+
+\item We then find the best match using megablast (using proper repeat masking
+for alignment seeding, but propagating alignment through repeats).  Since we provide
+our own alignment object \code{nlmsa}, it will use that to save the best hit.
+
+\item We save resource and schema information as before.
+
+\item
+\end{itemize}
 
 \subsection{Using Pygr as a Graph Database}
 The real power of Pygr is that it provides a simple model for viewing
@@ -829,6 +1013,66 @@ spliceGraph[exon1]+=exon2 # equivalent to exon1.next+=exon2
 \end{verbatim}
 
 This "short" form is equivalent to saving None as the edge information.
+
+
+\subsubsection{Alignment Query as a Graph Database Query}
+
+Pygr can do much more sophisticated analyses than this fairly easily.  
+Just to give a taste of how to use these capabilities, we will illustrate
+one example of a standard Pygr model: querying Pygr data by drawing a ``query
+graph'' showing the connections we want to find, and running its GraphQuery()
+engine.  Since Pygr alignments follow the same interface as any Pygr graph, we can query them using the standard GraphQuery class.  Let's say we have a Python script load_alignments.py that loads two alignments:
+
+\begin{itemize}
+
+\item
+mRNA_swiss: an alignment of mRNA sequences to homologous SwissProt sequences;
+
+\item
+swiss_features: an alignment of SwissProt sequences onto annotation objects. 
+
+\end{itemize}
+To find out how the known SwissProt annotations map on to our mRNA sequences requires a join, which can be formulated as a simple Pygr graph, consisting of a mapping of an mRNA sequence interval (node 1), onto a SwissProt sequence interval (node 2), onto a feature annotation (node 3):
+
+\begin{verbatim}
+>>> from load_alignments import * # load the alignments
+>>> from pygr.graphquery import *      # import the graph query code
+# draw a graph using a dict.  Note: edge 2->3 must come from swiss_features
+>>> queryGraph={1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} 
+# run the query and save the mappings
+>>> l=[dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] 
+>>> len(l) # how many annotations mapped onto our mRNA sequences?
+4703
+\end{verbatim}
+
+We assumed that mRNA_swiss would be passed as the default dataGraph, and specified directly that edge 2->3 should be looked up in swiss_features.  We then captured all the results from the GraphQuery iterator using a Python list comprehension.  Note that since the iterator returns each result in the same container (mapping object), if we want to save all the individual results we have to copy each one to a new mapping (dict) object, as illustrated in this example.
+Storing Alignments in a Relational Database
+
+
+\subsubsection{Example: a MySQL Database OBSOLETE}
+Here's an example of working with sequences from a relational database:
+
+\begin{verbatim}
+>>> import MySQLdb # standard module for accessing MySQL, now get a cursor...
+>>> rdb=MySQLdb.connect(db='HUMAN_SPLICE_03',read_default_file=os.environ['HOME'
+]+'/.my.cnf')
+>>> t=SQLTable('genomic_cluster_JUN03',rdb.cursor()) #interface to a table of
+ sequences
+>>> from pygr.seqdb import *   # pygr module for working with sequences from databases
+>>> t.objclass(DNASQLSequence) #use this class as "row objects"
+>>> s2=t['Hs.1162'] # get a specific sequence object by ID
+>>> str(s2[1000:1050]) # this will only get 50 nt of the genomic sequence from 
+MySQL
+'acctgggtgatgaaataaatttttacgccaaatcccgatgacacacaatt'
+\end{verbatim}
+
+(Note: in this example we used MySQLdb.connect()'s ability to read database 
+server and user authentication information directly from the standard ~/.my.cnf file normally used by the MySQL client).
+
+\subsubsection{More examples}
+\label{more-exam}
+
+Additional examples of how to use pygr can be found in the tests/ directory within the pygr distribution package.
 
 
 
