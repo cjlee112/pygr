@@ -480,11 +480,13 @@ int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
 
 
 /* READ A SUBLIST FROM DATABASE FILE */
-IntervalMap *read_sublist(FILE *ifile,SublistHeader *subheader)
+IntervalMap *read_sublist(FILE *ifile,SublistHeader *subheader,
+			  IntervalMap *im)
 {
   PYGR_OFF_T ipos;
-  IntervalMap *im=NULL;
-  CALLOC(im,subheader->len,IntervalMap);
+  if (im==NULL) {
+    CALLOC(im,subheader->len,IntervalMap);
+  }
   ipos=subheader->start; /* CALCULATE POSITION IN RECORDS */
   ipos*=sizeof(IntervalMap);  /* CALCULATE FILE POSITION IN BYTES */
   PYGR_FSEEK(ifile,ipos,SEEK_SET);
@@ -546,21 +548,17 @@ int find_file_start(IntervalIterator *it,int start,int end,int isub,
     }
   }
 
+  if (!it->im) { /* NO ALLOCATION? ALLOCATE OUR BLOCK SIZE div */
+    CALLOC(it->im,div,IntervalMap); /* ALWAYS ALLOCATE div BUFFERSIZE */
+  }
   if (i_div>=0) { /* READ A SPECIFIC BLOCK OF SIZE div */
-    if (!it->im && it->n!=div) { /* NO ALLOCATION, OR WRONG SIZE */
-      FREE(it->im); /* DUMP OLD ALLOCATION, AND GET A NEW CHUNK */
-      CALLOC(it->im,div,IntervalMap);
-    }
     it->n=read_imdiv(ifile,it->im,div,i_div+offset_div,ntop+offset);
     it->ntop=ntop+offset; /* END OF THIS LIST IN THE BINARY FILE */
     it->nii=nii+offset_div; /* SAVE INFORMATION FOR READING SUBSEQUENT BLOCKS */
     it->i_div=i_div+offset_div; /* INDEX OF THIS BLOCK IN THE BINARY FILE */
   }
   else { /* A SMALL SUBLIST: READ THE WHOLE LIST INTO MEMORY */
-    FREE(it->im);  /* DUMP ANY OLD ALLOCATION */
-    it->im=read_sublist(ifile,subheader);
-    if (it->im == NULL)
-      goto handle_malloc_failure;
+    read_sublist(ifile,subheader,it->im); /* GUARANTEED TO BE <=div ITEMS */
     it->n=subheader->len;
     it->nii=1;
     it->i_div=0; /* INDICATE THAT THERE ARE NO ADDITIONAL BLOCKS TO READ*/
