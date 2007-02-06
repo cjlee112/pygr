@@ -1559,7 +1559,7 @@ cdef class NLMSA:
     nseq=1
     nseq0=1
     nseq1=1
-    memset(linecode_count,0,sizeof(linecode_count))
+    memset(<void *>linecode_count,0,sizeof(linecode_count))
     has_continuation=0
 
     nseq0=len(self.seqDict) # GET TOTAL #SEQUENCES IN ALL DATABASES
