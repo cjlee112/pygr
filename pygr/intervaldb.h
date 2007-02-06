@@ -84,7 +84,7 @@ extern int free_interval_iterator(IntervalIterator *it);
 extern IntervalIterator *reset_interval_iterator(IntervalIterator *it);
 extern int find_intervals(IntervalIterator *it0,int start,int end,IntervalMap im[],int n,SublistHeader subheader[],int nlists,IntervalMap buf[],int nbuf,int *p_nreturn,IntervalIterator **it_return);
 extern int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop);
-extern IntervalMap *read_sublist(FILE *ifile,SublistHeader *subheader);
+extern IntervalMap *read_sublist(FILE *ifile,SublistHeader *subheader,IntervalMap *im);
 extern int find_file_intervals(IntervalIterator *it0,int start,int end,
 			       IntervalIndex ii[],int nii,
 			       SublistHeader subheader[],int nlists,
