@@ -1116,170 +1116,6 @@ setenv PYTHONPATH PYGRDIR/build/lib.linux-i686-2.3
 \end{verbatim}
 where the last directory name depends on your specific architecture.
 
-\subsection{graphs and graph query module}
-\label{graphs-query}
-
-The basic idea of Pygr is that all Python data can be viewed as a graph whose nodes are objects and whose edges are object relations (in Python, references from one object to another).  This has a number of advantages. 
-
-   1. All data in a Python program become a database  that can be queried through simple but general graph query tools.  In many cases the need to write new code for some task can be replaced by a database query. 
-
-   2. Graph databases are more general and flexible in terms of what they can represent and query than relational databases, which is very important for complex bioinformatics data.
-
-   3. Indeed, in Pygr, a query is itself just a graph that can be stored and queried in a database, opening paths to automated query construction.
-
-   4. Pygr graphs are fully indexed, making queries about edge relationships (which are often unacceptably slow in relational databases) fast.
-
-   5. The interface can be very simple and pythonic: it's just a Mapping.  In Python "everything is a dictionary", also known as "the Mapping protocol": a dictionary maps some set of inputs to some set of outputs. e.g. m[a]=b maps a onto b, as a unique relation.  In Pygr, if we want to be able to map a node to multiple target nodes (i.e. allow it to have multiple edges), we simply add another layer of mapping: m[a][b]=edgeInfo (where edgeInfo is optional edge info.)
-
-Examples of the Pygr syntax:
-
-\begin{verbatim}
-graph += node1 # ADD node1 TO graph
-graph[node1] += node2 # ADD AN EDGE FROM node1 TO node2
-graph[node1][node2]=edge_info # ADD AN EDGE WITH ASSOCIATED edge_info
-# ADD SCHEMA BINDING WITH graph[node] BOUND AS node.attr
-setschema(node,attr,graph) 
-# SEARCH graph FOR SUBGRAPH {1->2; 1->3; 2->3}, 
-# I.E. EXONSKIP, WHERE THE SPLICE FROM 2 -> 3 HAS ATTRIBUTE type 'U11/U12' 
-for m in GraphQuery(graph,{1:{2:None,3:None},\
-                   2:{3:dict(filter=lambda edge,**kwargs:edge.type=='U11/U12')},\
-                   3:{}}):
-    print m[1].id,m[2].id,m[1,2].id
-\end{verbatim}
-
-Let's examine these examples one by one:
-\begin{itemize}
-
-\item
-adding a node to a graph is distinct from creating edges between it and other nodes.  The graph+=node notation simply adds node to the graph, initially with no edges to other nodes.
-
-\item 
-A similar syntax (graph[node1]+=node2) can be used to add an edge between two nodes, but with no edge information.  In this case the edge information stored for this relation is simply the Python None value.  Note that in Pygr the default type of graph has directed edges; that is a->b does not imply b->a.  In the default dictGraph graph class, these are two distinct edges that would have to be added separately if you truly want to have an edge going both from a to b and from b to a.
-
-\item 
-To add an edge between two nodes with edge information, use the graph[node1][node2]=edge_info syntax. 
-
-\item 
-You can bind an object attribute to a graph, using setschema(obj,attr,graph).  This acts like Python's built-in setattr(obj,attr,value), but instead of obj.attr simply storing the specified value, it is bound to the graph so that obj.attr is equivalent to graph[obj].  Both syntaxes are interchangeable and can be mixed in different pieces of code accessing the same object.
-
-\item 
-Since Pygr adopts the Mapping protocol as its model for storing graphs, you can create graphs simply by creating Python dict objects e.g. {foo:bar}.  In this example we construct a query graph whose "nodes" are just the integers 1, 2, and 3.  Since any kind of object is a valid key in Python mappings, they can therefore also be used as "nodes" in a Pygr graph.  This query graph illustrates a few simple principles:
-
-\item 
-a Pygr graph is just a two-level Python mapping.  For example, {1:{2,None}} is a graph with a single edge from 1 to 2, with no edge information.  Pygr graphs can have multiple edges from or to a given node. 
-
-\item    
-edge information in a query graph can be used to specify extra query arguments, again in the form of a Python dictionary.  This dictionary is interpreted as a set of "named arguments" to be used by the GraphQuery search method.  For example, a filter argument is interpreted as a callable function that is passed a set of named arguments describing the current edge / node matching being tested, and whose return value (True or False) will determine whether this edge "matches" our query graph.  In this example, we used it to check whether the edge.type attribute is "U11/U12" (an unusual type of splicing in gene structure graphs).
-
-\item         
-Graph query in Pygr simply means finding a subgraph of the datagraph that has node-to-node match to the edge structure given in the query graph.  In this example it is a simple exon-skip structure (3 exons, one of which can either be included or skipped).  The GraphQuery class provides a general mechanism for performing graph queries on any Python data (see below for full details).  It can be used as an iterator that will return all matches to the query (if any). 
-
-\item          
-Matches are themselves returned as a mapping of nodes and edges of the query graph (in this example, its nodes are the integers 1, 2 and 3) onto nodes and edges of the data graph.  In this example the match is returned as m, so m[1] is the node in the data graph corresponding to node 1 in the query graph.  This example assumes that object has an id attribute, which is printed out.  To refer to an edge, just use a tuple corresponding to a pair of nodes in the query graph.  In this example, 1,2 refers to the edge from node 1 to node 2 in the query graph, so m[1,2] is the edge in data graph between nodes m[1] and m[2].  This example also attempts to print an id attribute from that edge object.
-
-\item         
-Note on current behavior: currently, GraphQuery will throw a KeyError exception if it tries to search for a query node in the query graph and does not find it.  That's why we have to add the "node with no edges" entry 3:{} for node 3.  This will probably be addressed in the future, since this seems like a potential source of many annoying little bugs.
-
-\end{itemize}
-
-\subsubsection{dictGraph}
-
-dictGraph is Pygr's main graph class.  It provides all the standard behaviors described above.  The current reference implementation uses standard Python dict objects to store the graph.  All the usual Mapping protocol methods can be used on dictGraph objects (top-level interface, in the examples above graph) and dictEdge objects (second-level interface; in the examples above graph[node]). e.g.
-
-\begin{itemize}
-
-\item
-for node in graph: iterator method returns all nodes in the graph; you could also use graph.items() to get node,dictEdge pairs, etc.
-
-\item
-for node in graph[node]:  iterator method returns all nodes that are targets of edges originating at node.  Again, you could use graph[node].items() to get node,edgeInfo pairs.  Note: if node is not in graph, this will throw a KeyError exception just like any regular Python dict.
-
-\item
-if node in graph:  contains method checks whether node is present in the graph, using dict indexing.
-
-\item
-if node2 in graph[node1]:  test whether node1 has an edge to node2.  Again, if node1 isn't in graph, this will throw a KeyError exception.
-
-\end{itemize}
-
-\subsubsection{Directionality and Reverse Traversal}
-
-Note that dictGraph stores directed edges, that is, a->b does not imply b->a; those are two distinct edges that would have to be added separately if you want an edge going both directions.  Moreover, the current implementation of dictGraph does not provide a mechanism for traveling an edge backwards.  To do so with algorithmic efficiency requires storing each edge twice: once in a forward index and once in a reverse index.  Since that doubles the memory requirements for storing a graph, the default dictGraph class does not do this.  If you want such a "forward-backwards" graph, use the dictGraphFB subclass that stores both forwad and reverse indexes, and supports the inverse operator ($\sim$).  $\sim$ graph gets the reverse mapping, e.g. ($\sim$ graph)[node2] corresponds to the set of nodes that have edges to node2.  This area of the code hasn't been tested much yet.
-
-\subsubsection{Schema: binding object attributes to graphs}
-
-The goal of Pygr is to provide a single consistent model for working with data explicitly modeled as graphs (i.e. dictGraph-like objects) and standard Python objects that were not originally designed to be queried (or thought of) as a "graph".  Since Python uses the Mapping concept throughout the language and object model, and provides introspection, there is no reason why Pygr can't work with both kinds of data transparently.  One mechanism for making this idea explicit is the idea of binding an object attribute to a graph, via the new method we've called setschema(obj,attr,graph).  The idea here is that once you bind an object attribute to a graph, the two different data models obj.attr (object model) or graph[obj] (graph model) are made equivalent and interchangeable.  Operating on one affects the other and vice versa; they are two ways of referring to the same relation.  This concept can be applied at several different levels
-
-\begin{itemize}
-\item
-individual objects: just like getattr() and setattr(), you can apply schema methods to individual objects: getschema(obj,attr) (returns the bound graph) or setschema(obj,attr,graph) (binds the object attribute to the graph). 
-
-\item
-all instances of a class: you can bind specific attributes of a given class to a graph using the following class attribute syntax:
-
-\end{itemize}
-\begin{verbatim}
-class ExonForm(object): # ADD ATTRIBUTES STORING SCHEMA INFO
-    __class_schema__=SchemaDict(((spliceGraph,'next'),(alt5Graph,'alt5'),(alt3Graph,'alt3')))
-\end{verbatim}
-
-In this class we bound the next attribute to spliceGraph, alt5 attribute to alt5Graph, and alt3 attribute to alt3Graph.  That means, every instance obj of this class will have an attribute obj.next that is equivalent to spliceGraph[obj], etc.  Note that this is schema, not the actual operation of adding the object as a node to the graph.  Indeed, when obj is first created, it is not automatically added to spliceGraph; that is up to the user.  Unless your code has added the node to the graph (e.g. spliceGraph+=obj), obj.next should throw a KeyError exception.
-
-The general method getschema(obj,attr) works regardless of whether the schema was stored on an individual object or at the class level.
-
-\subsubsection{GraphQuery}
-
-The GraphQuery class implements simple node-to-node matching, in which each new node-set is generated by an iterator associated with a specific node in the query graph.  This iterator model is general: since indexes (mappings) support the iterator protocol, a given iterator may actually be an index lookup (or other clever search algorithm).  The GraphQuery constructor takes two arguments: the default data graph being queried, and the query graph.  The query graph is just a graph; its nodes can be any object that can be a graph node (i.e. any object that is indexible, e.g. by adding a __hash__() method).  Its node objects will not be modified in any way by the GraphQuery.  Its edges are expected to be dictionaries that can be checked for specific keyword arguments:
-
-\begin{itemize}
-
-\item
-filter: must be a callable function that accepts keyword arguments and returns True (accept this edge as a match to the queryGraph) or False (do not accept this edge as a match).  This function will be called with the following keyword arguments:
-       \begin{itemize}
-          \item
-          toNode: the target node of this edge, in the data graph
-          \item
-          fromNode: the origin node of this edge, in the data graph
-          \item
-           edge: the edge information for this edge in the data graph
-          \item 
-           queryMatch: a mapping of the query graph to the data graph, based on the partial matchings made so far
-           \item
-           gqi: the GraphQueryIterator instance associated with this matching operation.  Much more data is available from specific attributes of this object.
-	\end{itemize}
-
-\item 
-dataGraph: graph in which the current edge should be search for.  This allows a query to traverse multiple graphs.  In other words, when searching for edges from the current node, look up dataGraph[node] instead of defaultGraph[node].
-
-\item
-attr: object attribute name to use as the iterator, instead of the defaultGraph.In other words, generate edges from the current node via getattr(node,attr) instead of defaultGraph[node].  The object obtained from this attribute must act like a mapping; specifically, it must provide an items() method that returns zero or more pairs of targetNode,edgeInfo, just like a standard Pygr dictEdge object. 
-
-\item
-attrN: object attribute name to use as the iterator, instead of the defaultGraph. In other words, generate edges from the current node via getattr(node,attr) instead of defaultGraph[node].  The object obtained from this attribute must act like a sequence; specifically, it must provide an iterator that returns zero or more targetNode.  The edgeInfo for any edges generated this way will be None.
-
-\item
-f: a callable function that must return an iterator producing zero or more pairs of targetNode,edgeInfo.  Typically f is a Python generator function containing a statement like yield targetNode,edgeInfo.
-
-\item
-fN: a callable function that must return an iterator producing zero or more targetNode.  Typically fN is a Python generator function containing a statement like yield targetNode.  The edgeInfo for any edges generated this way will be None.
-
-\item 
-subqueries: a tuple of query graphs to be performed.  Since GraphQuery traversalcorresponds to logical AND (i.e. all the query graph nodes must be successfully matched to return a match), the subqueries are currently treated as a union (logical OR), by simply returning every match from each subquery as a match (at least for this node).  Each subquery is itself just another query graph.  Moreover, since query graphs can share nodes (i.e. the same object can appear as a node in multiple query graphs), subqueries can make reference to nodes that are already matched by the higher query.  This is an area that has not been explored much yet, but provides a pretty general model for powerful queries.
-
-\end{itemize}
-The attr - subqueries options are all implemented as extremely simple subclasses of GraphQuery.  If you want to see just how easy it is to write new subclasses of GraphQuery functionality, look at the graphquery.py module (the entire graph query module is only 237 lines long).
-
-Note: an easy way to pass keyword dictionaries (e.g. as edge information) is simply using the dict() constructor, e.g. dict(dataGraph=myGraph,filter=my_filter).  I think this is a little more readable than {'dataGraph':myGraph, 'filter':my_filter}.
-
-Note on current behavior: currently, the GraphQuery iterator returns the same mapping object for each iteration (simply changing its contents).  So to save these multiple values safely in a list comprehension we have to copy each one into a new dict object via dict(m).
-
-\subsubsection{What is GraphQuery actually doing?}
-
-A GraphQuery is basically an iterator that returns all possible mappings of the query graph onto the datagraph that match all of the nodes and edges of the query graph onto nodes and edges of the data graph.  As an iterator, it does not instantiate a list of the matches, but simply returns the matches one by one.  The current design is very simple.  The GraphQuery constructor builds an "iterator stack" of GraphQueryIterators, each representing one node in the query graph; they are enumerated in order by a breadth-first-search of the query graph.  The GraphQuery iterator processes the stack of GraphQueryIterators: any match simply pushes the stack to the next level; any match at the deepest level of the stack is a complete match (yield the queryMatch mapping); the end of any GraphQueryIterator simply pops the stack.  One obvious idea for improving all this is to replace this "interpreter" with a "compiler" that compiles Python for loops that are equivalent to this stack, and run that... likely to be many fold faster.
-
-
-
-
 
 \subsection{sequence Module}
 \label{sequence}
@@ -1411,6 +1247,20 @@ operations respectively.
 
 \end{itemize}
 
+\begin{funcdesc}{before}{} 
+  This method returns the entire sequence interval preceding this interval.
+  For example, if \code{exon} is an interval of genomic sequence, then
+  \code{exon.before()[-2:]} is its acceptor splice site (i.e. the 2 nt immediately
+  before \code{exon}).
+\end{funcdesc}
+
+\begin{funcdesc}{after}{} 
+  This method returns the entire sequence interval following this interval.
+  For example, if \code{exon} is an interval of genomic sequence, then
+  \code{exon.after()[:2]} is its donor splice site, (i.e. the 2 nt immediately
+  after \code{exon}).
+\end{funcdesc}
+
 
 \subsubsection{Sequence class}
 
@@ -1532,6 +1382,10 @@ either from the Sequence class, or in some cases from the SeqPath class.
   if you want to monitor or intercept slicing
   requests on your sequence, you can do so by providing your own getitem method.
   See \class{seqdb.BlastSequenceCache} class for an example.
+  If the sequence object has a \code{db} attribute, and that database object
+  it points to has an \code{itemSliceClass} attribute, \code{SeqPath.__getitem__}
+  will use that class to construct the subinterval object.  Otherwise it will
+  use \code{SeqPath} itself as the class for constructing the subinterval object.
 \end{funcdesc}
 
 \begin{funcdesc}{__getattr__}{attr}
@@ -1688,6 +1542,21 @@ The sequence module also provides convenience functions:
   the Pygr convention: a pair of positive values represents an interval
   on the forward strand; a pair of negative values represents an
   interval on the reverse strand (see Coordinate System, above).
+  Note: if {\em seq} is itself a subinterval, then the {\em start,stop}
+  coordinates are interpreted relative to its parent sequence, i.e.
+  \code{seq.pathForward[start:stop]}.
+\end{funcdesc}
+
+
+\begin{funcdesc}{relativeSlice}{seq, start, stop}
+  returns the sequence interval of \var{seq}, interpreting
+  \var{start} and \var{stop} according to
+  the Pygr convention: a pair of positive values represents an interval
+  on the forward strand; a pair of negative values represents an
+  interval on the reverse strand (see Coordinate System, above).
+  Note: if {\em seq} is itself a subinterval, then the {\em start,stop}
+  coordinates are interpreted relative to {\em seq} itself, i.e.
+  \code{seq[start:stop]}.
 \end{funcdesc}
 
 
@@ -1931,20 +1800,75 @@ and attributes.
 
 Construction Methods:
 
-\begin{funcdesc}{NLMSA}{pathstem='', mode='r', seqDict=None, mafFiles=None, maxOpenFiles=1024, maxlen=None, nPad=1000000, maxint=41666666}
+\begin{funcdesc}{NLMSA}{pathstem='', mode='r', seqDict=None, mafFiles=None, maxOpenFiles=1024, maxlen=None, nPad=1000000, maxint=41666666,trypath=None,bidirectional=True,use_virtual_lpo= -1,maxLPOcoord=None}
   Constructor for the class.  \var{pathstem} specifies a path and filename prefix for
   the NLMSA files (since multiple files are used to store one NLMSA, it will automatically add a
   number of suffixes automatically to open the necessary set of files for the NLMSA).
-  \var{mode} is either ``r'' to open an existing NLMSA (from the \var{pathstem} disk files), 
-  or ``w'' to create a new one (which will be saved to the \var{pathstem} disk files).
+  \var{mode} is either ``r'' to open an existing NLMSA (from the \var{pathstem} disk files); 
+  ``w'' to create a new one (which will be saved to the \var{pathstem} disk files);
+  or ``memory'' to create a new in-memory NLMSA (i.e. stored in your computer's RAM
+  instead of using files on your hard disk).  Obviously, this limits you to 
+  the amount of RAM in your computer, but will make the NLMSA much, much faster.
+
   \var{seqDict} specifies a dictionary which maps sequence names to actual sequence
   objects representing those sequences.  If \var{seqDict} is None, the constructor
   will look for a file \var{pathstem}\code{.seqDict} that is a \class{prefixUnionDict}
   header file for opening all the sequence database files for you automatically.
+  This header file will itself specify a list of sequence database files; the
+  \var{trypath} option, if provided, specifies a list of directories in which to look for these
+  sequence database files.
+
+  The \var{bidirectional} option indicates whether you wish the NLMSA to
+  save each alignment relationship A:B in {\em both} possible directions
+  (i.e. nlmsa[A] will yield B, and nlmsa[B] will yield A).  In general, the
+  \var{bidirectional=True} mode is most appropriate for true multiple sequence
+  alignments, i.e. where it is guaranteed that for a given pair of sequences A,B
+  each interval of A maps to a unique interval in B, which in turn maps back
+  to the same interval of A (and {\em only} that interval in A).  There are
+  many possible scenarios where you might prefer \var{bidirectional=False} mode:
+\begin{itemize}
+\item When you WANT your alignment to have a specific directionality.  For example,
+if \code{nlmsa} is a mapping of the human genome sequence onto the mouse genomic
+sequence, then \code{nlmsa[s]} should only yield a result if \code{s} is a human
+genome sequence interval; a mouse genome sequence interval should raise a \code{KeyError}.
+
+\item When the input alignment data may contain multiple, inconsistent alignments of
+a given pair of sequences.  For example, a BLAST all-vs-all will return TWO alignments
+of A,B: one when A is blasted against the database (finding B), and another when 
+B is blasted against the database (finding A).  These two alignments could be different!
+In this case, a \var{bidirectional=True} alignment would return BOTH alignments
+(i.e. \code{nlmsa[A]} will return TWO alignments of B, which might be identical...
+or might be significantly different).  This is undesirable behavior.  Instead,
+use \var{bidirectional=False} so that \code{nlmsa[A]} will simply return the 
+alignments that were found when A was blasted against the database.
+
+\item In general, using \var{bidirectional=True} can yield multiple, potentially
+inconsistent results when the input data are not a true multiple-sequence alignment
+(e.g. BLAST alignment data is strictly pairwise, not a true multiple-sequence alignment).
+\end{itemize}
+
+  \var{use_virtual_lpo=True} indicates a PAIRWISE sequence alignment, in which
+  the stored alignment relationships each consist of a pair of sequence intervals
+  that are aligned.  Note: this pairwise format can store the alignment of {\em any}
+  number of sequences, but the key point is that the individual alignment relations
+  are pairwise, sequence-to-sequence.  The opposite model (\var{use_virtual_lpo=False})
+  indicates a true MULTIPLE sequence alignment, in which the stored alignment
+  relationships each consist of an integer coordinate interval (the alignment's internal
+  coordinate system, for technical reasons called the ``LPO'') and a sequence
+  interval that is aligned to it.  Under normal circumstances, you will not need
+  to specify a value for the \var{use_virtual_lpo} option; the NLMSA will infer
+  the correct setting automatically based on the input data.  Note: the pairwise format
+  (\var{use_virtual_lpo=True}) and multiple alignment format (\var{use_virtual_lpo=False})
+  cannot be mixed in a single NLMSA.  It must be either one format or the other.
 
   \var{mafFiles} can be used to specify a list of
   filenames storing a multiple sequence alignment in the UCSC MAF format.
-  \var{maxOpenFiles} limits the open file descriptors the NLMSA will use.  Since
+
+  \var{maxOpenFiles} limits the open file descriptors the NLMSA will use.
+  {\em This option is no longer of much importance.  In versions prior to pygr 0.5,
+  however, it was important because each sequence in the alignment had its
+  own index file (in v.0.5 and later this problem is solved by unionization;
+  for details see below)}.  Since
   each sequence has a separate nested list database file, a large multi-genome alignment
   (with each genome containing 20 different chromosomes, say) can rapidly open a large
   number of file descriptors.  Note: NLMSA only opens a given sequence's nested list database
@@ -1952,7 +1876,9 @@ Construction Methods:
   keeps that file descriptor open to make subsequent queries to it fast.  If the number
   of open file descriptors would exceed \var{maxOpenFiles}, it will close other open
   database files, which may slow down query performance (due to having to open and close
-  databases repeatedly to process queries). \var{maxlen} specifies the maximum coordinate
+  databases repeatedly to process queries).
+
+  \var{maxlen} specifies the maximum coordinate
   value for an LPO database.  Its default value is 2GB, to prevent \class{int} overflow.
   Using a smaller value can be useful, to 1) limit the size of the LPO in memory
   during initial construction, and 2) to limit the size of LPO database files on disk
@@ -1962,6 +1888,7 @@ Construction Methods:
   this set of intervals is briefly held in RAM for this sort.  If you have insufficient
   RAM, the construction step may raise a MemoryError.  If so, you can avoid this problem
   by using a smaller \var{maxlen} value.
+
   The \var{maxint} option provides another way of limiting the size of LPO
   databases.  It specifies the maximum number of intervals to store per database.
   Since each interval takes 24 bytes, the default setting limits each LPO to
@@ -1969,17 +1896,33 @@ Construction Methods:
   requires loading each database index into memory as one-time operation
   during construction.  If your NLMSA build fails due to running out of memory,
   simply reduce this value.
+
   The \var{nPad} option sets the maximum number of LPO coordinate systems
   (specifically, the offset for the start of real sequence IDs in the NLMSA
   sequence index).  You are unlikely to need to change this default value.
 \end{funcdesc}
 
 
-\begin{funcdesc}{__setitem__}{i1, s1}
-  store an alignment interval; specifically, align the sequence
-  interval \var{s1} to the LPO coordinate interval \var{i1}.  This provides a trivial
-  user interface for you to build any desired alignment.  If the sequence containing
-  interval \var{s1} is not already in the NLMSA, it will be added for you automatically
+\begin{funcdesc}{__iadd__}{sequence}
+  As part of constructing an alignment, adds \var{sequence} to the alignment graph,
+  so that you can subsequently save specific alignments of intervals of
+  \var{sequence}, using code like \code{nlmsa[s]+=s2}, where \code{s} is
+  an interval of \var{sequence} and \code{s2} is some other sequence interval.
+  If \var{sequence} had not been added to the alignment, this later operation
+  will raise a \code{KeyError}.
+\end{funcdesc}
+
+
+\begin{funcdesc}{__getitem__}{seqInterval}
+  prepare to store an alignment relationship for the sequence interval \var{seqInterval},
+  i.e. get a BuildMSASlice object representing \var{seqInterval}, to which you can
+  then add other sequence intervals to align them.  I.e. \code{nlmsa[s1]+=s2}
+  saves the alignment of intervals s1 and s2.
+  You can also use a regular Python {\em slice} object using integer indices
+  ie. \code{nlmsa[1:45]}, in which case, it indicates that 
+  region of the LPO coordinate system.
+  If the sequence containing
+  interval \var{s2} is not already in the NLMSA, it will be added for you automatically
   (i.e. creating the necessary indexing, nested list database files, etc.).  In this
   case, the sequence must supply a unique string identifier, which will be used
   on subsequent attempts to open the NLMSA database, to match the individual sequence
@@ -1990,10 +1933,12 @@ Construction Methods:
 
 \begin{funcdesc}{build}{}
   to construct the final nested list databases,
-  after all the desired alignment intervals have been saved (using either the
-  \var{mafFiles} constructor argument, or using \method{setitem} above).  This method
+  after all the desired alignment intervals have been saved (using the
+  \method{iadd/getitem} above).  This method
   simply calls the build() method on all the constituent NLMSASequence objects
-  in this alignment.
+  in this alignment.  NOTE: you do not need to call \method{build}() if
+  you provided a \var{mafFiles} constructor argument, since that automatically
+  calls \method{build}().
 \end{funcdesc}
 
 
@@ -2005,6 +1950,14 @@ Alignment Usage Methods:
   You can also use a regular Python {\em slice} object using integer indices
   ie. \code{nlmsa[1:45]}, in which case, it gets the NLMSA slice corresponding to that 
   region of the LPO coordinate system.
+\end{funcdesc}
+
+\begin{funcdesc}{doSlice}{s1}
+  If you subclass NLMSA and provide a \method{doSlice} method, the NLMSA will
+  call your \method{doSlice(seq)} method to find alignment results for \code{seq},
+  instead of querying its stored alignment data.  You can thus use this 
+  to provide an NLMSA interface around virtually any source of alignment information
+  that you have.  To see an example, see the \class{xnestedlist.NLMSAClient} class.  
 \end{funcdesc}
 
 \begin{itemize}
@@ -2020,7 +1973,44 @@ you're doing (details below).  This dictionary is of type NLMSASeqDict (see belo
 \subsubsection{NLMSASlice}
 A temporary object created on-the-fly to represent (an interface to provide 
 information about) the portion of the alignment associated with a specific
-sequence interval.  Specifically, it acts like a dictionary whose keys are
+sequence interval.  This is the main class for querying information about
+alignments, and provides a number of useful methods for getting 
+detailed information about alignment relationships.
+
+In addition, the NLMSASlice is the basic unit of {\em sequence caching}
+control, by which you can ensure that pygr alignment analysis accesses
+sequence databases in the most efficient way.  Here's how it works:
+\begin{itemize}
+\item When you perform an NLMSA query by creating an NLMSASlice, it assembles
+a list of covering intervals for all sequences in this part of the alignment
+(i.e. for each sequence, the smallest interval that contains all of its
+aligned intervals in this NLMSASlice).  
+
+\item NLMSASlice then attempts to call the \code{cacheHint} method for each
+sequence database object containing the relevant sequences (if this method 
+exists; if it doesn't, this step is skipped).  It passes the \code{cacheHint} method 
+the covering interval information for the aligned sequence, and a reference to 
+itself (the NLMSASlice object) as the {\em owner} of this cache hint.
+
+\item If any operation subsequently attempts to access the actual sequence
+for any interval that is contained within this covering interval, the sequence
+database will instead load the entire covering interval, which it stores in 
+its cache, associated with the specified {\em owner}.  It then returns the
+appropriate subinterval of sequence requested, as usual.
+
+\item Any subsequent requests for sequence strings that fall within this 
+covering interval will simply be obtained from this cache, instead of 
+retrieving the sequence from disk files.
+
+\item This cache information is retained until the {\em owner} (in this case,
+the original NLMSASlice) is deleted (by Python garbage collecting).  Thus, to
+control sequence caching, all you have to do is hold on to the NLMSASlice as
+long as you want to work with its associated sequence intervals.  As soon as 
+you drop it, its associated cache information will also be automatically deleted,
+freeing up memory.
+\end{itemize}
+
+An NLMSASlice acts like a dictionary whose keys are
 sequence intervals that are aligned to this region, and whose values are
 \class{Seq2SeqEdge} objects providing detailed information about the alignment of
 the target interval (key) to the source interval (the sequence interval
@@ -2846,6 +2836,173 @@ will be mapped to SELECT of the appropriate column, but data is not cached
 on this object.  Constructor takes two arguments: a database table
 object, and an identifier for this row.  Actual data requests will
 be relayed by \class{SQLRow} to the database table object.
+
+
+\subsection{graphs and graph query module}
+\label{graphs-query}
+
+The basic idea of Pygr is that all Python data can be viewed as a graph whose nodes are objects and whose edges are object relations (in Python, references from one object to another).  This has a number of advantages. 
+
+   1. All data in a Python program become a database  that can be queried through simple but general graph query tools.  In many cases the need to write new code for some task can be replaced by a database query. 
+
+   2. Graph databases are more general and flexible in terms of what they can represent and query than relational databases, which is very important for complex bioinformatics data.
+
+   3. Indeed, in Pygr, a query is itself just a graph that can be stored and queried in a database, opening paths to automated query construction.
+
+   4. Pygr graphs are fully indexed, making queries about edge relationships (which are often unacceptably slow in relational databases) fast.
+
+   5. The interface can be very simple and pythonic: it's just a Mapping.  In Python "everything is a dictionary", also known as "the Mapping protocol": a dictionary maps some set of inputs to some set of outputs. e.g. m[a]=b maps a onto b, as a unique relation.  In Pygr, if we want to be able to map a node to multiple target nodes (i.e. allow it to have multiple edges), we simply add another layer of mapping: m[a][b]=edgeInfo (where edgeInfo is optional edge info.)
+
+Examples of the Pygr syntax:
+
+\begin{verbatim}
+graph += node1 # ADD node1 TO graph
+graph[node1] += node2 # ADD AN EDGE FROM node1 TO node2
+graph[node1][node2]=edge_info # ADD AN EDGE WITH ASSOCIATED edge_info
+# ADD SCHEMA BINDING WITH graph[node] BOUND AS node.attr
+setschema(node,attr,graph) 
+# SEARCH graph FOR SUBGRAPH {1->2; 1->3; 2->3}, 
+# I.E. EXONSKIP, WHERE THE SPLICE FROM 2 -> 3 HAS ATTRIBUTE type 'U11/U12' 
+for m in GraphQuery(graph,{1:{2:None,3:None},\
+                   2:{3:dict(filter=lambda edge,**kwargs:edge.type=='U11/U12')},\
+                   3:{}}):
+    print m[1].id,m[2].id,m[1,2].id
+\end{verbatim}
+
+Let's examine these examples one by one:
+\begin{itemize}
+
+\item
+adding a node to a graph is distinct from creating edges between it and other nodes.  The graph+=node notation simply adds node to the graph, initially with no edges to other nodes.
+
+\item 
+A similar syntax (graph[node1]+=node2) can be used to add an edge between two nodes, but with no edge information.  In this case the edge information stored for this relation is simply the Python None value.  Note that in Pygr the default type of graph has directed edges; that is a->b does not imply b->a.  In the default dictGraph graph class, these are two distinct edges that would have to be added separately if you truly want to have an edge going both from a to b and from b to a.
+
+\item 
+To add an edge between two nodes with edge information, use the graph[node1][node2]=edge_info syntax. 
+
+\item 
+You can bind an object attribute to a graph, using setschema(obj,attr,graph).  This acts like Python's built-in setattr(obj,attr,value), but instead of obj.attr simply storing the specified value, it is bound to the graph so that obj.attr is equivalent to graph[obj].  Both syntaxes are interchangeable and can be mixed in different pieces of code accessing the same object.
+
+\item 
+Since Pygr adopts the Mapping protocol as its model for storing graphs, you can create graphs simply by creating Python dict objects e.g. {foo:bar}.  In this example we construct a query graph whose "nodes" are just the integers 1, 2, and 3.  Since any kind of object is a valid key in Python mappings, they can therefore also be used as "nodes" in a Pygr graph.  This query graph illustrates a few simple principles:
+
+\item 
+a Pygr graph is just a two-level Python mapping.  For example, {1:{2,None}} is a graph with a single edge from 1 to 2, with no edge information.  Pygr graphs can have multiple edges from or to a given node. 
+
+\item    
+edge information in a query graph can be used to specify extra query arguments, again in the form of a Python dictionary.  This dictionary is interpreted as a set of "named arguments" to be used by the GraphQuery search method.  For example, a filter argument is interpreted as a callable function that is passed a set of named arguments describing the current edge / node matching being tested, and whose return value (True or False) will determine whether this edge "matches" our query graph.  In this example, we used it to check whether the edge.type attribute is "U11/U12" (an unusual type of splicing in gene structure graphs).
+
+\item         
+Graph query in Pygr simply means finding a subgraph of the datagraph that has node-to-node match to the edge structure given in the query graph.  In this example it is a simple exon-skip structure (3 exons, one of which can either be included or skipped).  The GraphQuery class provides a general mechanism for performing graph queries on any Python data (see below for full details).  It can be used as an iterator that will return all matches to the query (if any). 
+
+\item          
+Matches are themselves returned as a mapping of nodes and edges of the query graph (in this example, its nodes are the integers 1, 2 and 3) onto nodes and edges of the data graph.  In this example the match is returned as m, so m[1] is the node in the data graph corresponding to node 1 in the query graph.  This example assumes that object has an id attribute, which is printed out.  To refer to an edge, just use a tuple corresponding to a pair of nodes in the query graph.  In this example, 1,2 refers to the edge from node 1 to node 2 in the query graph, so m[1,2] is the edge in data graph between nodes m[1] and m[2].  This example also attempts to print an id attribute from that edge object.
+
+\item         
+Note on current behavior: currently, GraphQuery will throw a KeyError exception if it tries to search for a query node in the query graph and does not find it.  That's why we have to add the "node with no edges" entry 3:{} for node 3.  This will probably be addressed in the future, since this seems like a potential source of many annoying little bugs.
+
+\end{itemize}
+
+\subsubsection{dictGraph}
+
+dictGraph is Pygr's main graph class.  It provides all the standard behaviors described above.  The current reference implementation uses standard Python dict objects to store the graph.  All the usual Mapping protocol methods can be used on dictGraph objects (top-level interface, in the examples above graph) and dictEdge objects (second-level interface; in the examples above graph[node]). e.g.
+
+\begin{itemize}
+
+\item
+for node in graph: iterator method returns all nodes in the graph; you could also use graph.items() to get node,dictEdge pairs, etc.
+
+\item
+for node in graph[node]:  iterator method returns all nodes that are targets of edges originating at node.  Again, you could use graph[node].items() to get node,edgeInfo pairs.  Note: if node is not in graph, this will throw a KeyError exception just like any regular Python dict.
+
+\item
+if node in graph:  contains method checks whether node is present in the graph, using dict indexing.
+
+\item
+if node2 in graph[node1]:  test whether node1 has an edge to node2.  Again, if node1 isn't in graph, this will throw a KeyError exception.
+
+\end{itemize}
+
+\subsubsection{Directionality and Reverse Traversal}
+
+Note that dictGraph stores directed edges, that is, a->b does not imply b->a; those are two distinct edges that would have to be added separately if you want an edge going both directions.  Moreover, the current implementation of dictGraph does not provide a mechanism for traveling an edge backwards.  To do so with algorithmic efficiency requires storing each edge twice: once in a forward index and once in a reverse index.  Since that doubles the memory requirements for storing a graph, the default dictGraph class does not do this.  If you want such a "forward-backwards" graph, use the dictGraphFB subclass that stores both forwad and reverse indexes, and supports the inverse operator ($\sim$).  $\sim$ graph gets the reverse mapping, e.g. ($\sim$ graph)[node2] corresponds to the set of nodes that have edges to node2.  This area of the code hasn't been tested much yet.
+
+\subsubsection{Schema: binding object attributes to graphs}
+
+The goal of Pygr is to provide a single consistent model for working with data explicitly modeled as graphs (i.e. dictGraph-like objects) and standard Python objects that were not originally designed to be queried (or thought of) as a "graph".  Since Python uses the Mapping concept throughout the language and object model, and provides introspection, there is no reason why Pygr can't work with both kinds of data transparently.  One mechanism for making this idea explicit is the idea of binding an object attribute to a graph, via the new method we've called setschema(obj,attr,graph).  The idea here is that once you bind an object attribute to a graph, the two different data models obj.attr (object model) or graph[obj] (graph model) are made equivalent and interchangeable.  Operating on one affects the other and vice versa; they are two ways of referring to the same relation.  This concept can be applied at several different levels
+
+\begin{itemize}
+\item
+individual objects: just like getattr() and setattr(), you can apply schema methods to individual objects: getschema(obj,attr) (returns the bound graph) or setschema(obj,attr,graph) (binds the object attribute to the graph). 
+
+\item
+all instances of a class: you can bind specific attributes of a given class to a graph using the following class attribute syntax:
+
+\end{itemize}
+\begin{verbatim}
+class ExonForm(object): # ADD ATTRIBUTES STORING SCHEMA INFO
+    __class_schema__=SchemaDict(((spliceGraph,'next'),(alt5Graph,'alt5'),(alt3Graph,'alt3')))
+\end{verbatim}
+
+In this class we bound the next attribute to spliceGraph, alt5 attribute to alt5Graph, and alt3 attribute to alt3Graph.  That means, every instance obj of this class will have an attribute obj.next that is equivalent to spliceGraph[obj], etc.  Note that this is schema, not the actual operation of adding the object as a node to the graph.  Indeed, when obj is first created, it is not automatically added to spliceGraph; that is up to the user.  Unless your code has added the node to the graph (e.g. spliceGraph+=obj), obj.next should throw a KeyError exception.
+
+The general method getschema(obj,attr) works regardless of whether the schema was stored on an individual object or at the class level.
+
+\subsubsection{GraphQuery}
+
+The GraphQuery class implements simple node-to-node matching, in which each new node-set is generated by an iterator associated with a specific node in the query graph.  This iterator model is general: since indexes (mappings) support the iterator protocol, a given iterator may actually be an index lookup (or other clever search algorithm).  The GraphQuery constructor takes two arguments: the default data graph being queried, and the query graph.  The query graph is just a graph; its nodes can be any object that can be a graph node (i.e. any object that is indexible, e.g. by adding a __hash__() method).  Its node objects will not be modified in any way by the GraphQuery.  Its edges are expected to be dictionaries that can be checked for specific keyword arguments:
+
+\begin{itemize}
+
+\item
+filter: must be a callable function that accepts keyword arguments and returns True (accept this edge as a match to the queryGraph) or False (do not accept this edge as a match).  This function will be called with the following keyword arguments:
+       \begin{itemize}
+          \item
+          toNode: the target node of this edge, in the data graph
+          \item
+          fromNode: the origin node of this edge, in the data graph
+          \item
+           edge: the edge information for this edge in the data graph
+          \item 
+           queryMatch: a mapping of the query graph to the data graph, based on the partial matchings made so far
+           \item
+           gqi: the GraphQueryIterator instance associated with this matching operation.  Much more data is available from specific attributes of this object.
+	\end{itemize}
+
+\item 
+dataGraph: graph in which the current edge should be search for.  This allows a query to traverse multiple graphs.  In other words, when searching for edges from the current node, look up dataGraph[node] instead of defaultGraph[node].
+
+\item
+attr: object attribute name to use as the iterator, instead of the defaultGraph.In other words, generate edges from the current node via getattr(node,attr) instead of defaultGraph[node].  The object obtained from this attribute must act like a mapping; specifically, it must provide an items() method that returns zero or more pairs of targetNode,edgeInfo, just like a standard Pygr dictEdge object. 
+
+\item
+attrN: object attribute name to use as the iterator, instead of the defaultGraph. In other words, generate edges from the current node via getattr(node,attr) instead of defaultGraph[node].  The object obtained from this attribute must act like a sequence; specifically, it must provide an iterator that returns zero or more targetNode.  The edgeInfo for any edges generated this way will be None.
+
+\item
+f: a callable function that must return an iterator producing zero or more pairs of targetNode,edgeInfo.  Typically f is a Python generator function containing a statement like yield targetNode,edgeInfo.
+
+\item
+fN: a callable function that must return an iterator producing zero or more targetNode.  Typically fN is a Python generator function containing a statement like yield targetNode.  The edgeInfo for any edges generated this way will be None.
+
+\item 
+subqueries: a tuple of query graphs to be performed.  Since GraphQuery traversalcorresponds to logical AND (i.e. all the query graph nodes must be successfully matched to return a match), the subqueries are currently treated as a union (logical OR), by simply returning every match from each subquery as a match (at least for this node).  Each subquery is itself just another query graph.  Moreover, since query graphs can share nodes (i.e. the same object can appear as a node in multiple query graphs), subqueries can make reference to nodes that are already matched by the higher query.  This is an area that has not been explored much yet, but provides a pretty general model for powerful queries.
+
+\end{itemize}
+The attr - subqueries options are all implemented as extremely simple subclasses of GraphQuery.  If you want to see just how easy it is to write new subclasses of GraphQuery functionality, look at the graphquery.py module (the entire graph query module is only 237 lines long).
+
+Note: an easy way to pass keyword dictionaries (e.g. as edge information) is simply using the dict() constructor, e.g. dict(dataGraph=myGraph,filter=my_filter).  I think this is a little more readable than {'dataGraph':myGraph, 'filter':my_filter}.
+
+Note on current behavior: currently, the GraphQuery iterator returns the same mapping object for each iteration (simply changing its contents).  So to save these multiple values safely in a list comprehension we have to copy each one into a new dict object via dict(m).
+
+\subsubsection{What is GraphQuery actually doing?}
+
+A GraphQuery is basically an iterator that returns all possible mappings of the query graph onto the datagraph that match all of the nodes and edges of the query graph onto nodes and edges of the data graph.  As an iterator, it does not instantiate a list of the matches, but simply returns the matches one by one.  The current design is very simple.  The GraphQuery constructor builds an "iterator stack" of GraphQueryIterators, each representing one node in the query graph; they are enumerated in order by a breadth-first-search of the query graph.  The GraphQuery iterator processes the stack of GraphQueryIterators: any match simply pushes the stack to the next level; any match at the deepest level of the stack is a complete match (yield the queryMatch mapping); the end of any GraphQueryIterator simply pops the stack.  One obvious idea for improving all this is to replace this "interpreter" with a "compiler" that compiles Python for loops that are equivalent to this stack, and run that... likely to be many fold faster.
+
+
+
+
+
 
 \subsection{Coordinator Module}
 \label{coord-module}
