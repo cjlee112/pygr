@@ -139,15 +139,23 @@ class ResourceDBMySQL(object):
     '''mysql schema:
     (pygr_id varchar(255) not null,location varchar(255) not null,
     objdata text not null,unique(pygr_id,location))'''
-    def __init__(self,tablename,finder):
+    def __init__(self,tablename,finder=None,createLayer=None):
         import MySQLdb,os
         self.cursor=MySQLdb.connect(read_default_file=os.environ['HOME']
                                     +'/.my.cnf').cursor()
         self.tablename=tablename
+        if finder is None: # USE DEFAULT FINDER IF NOT PROVIDED
+            finder=getResource
         self.finder=finder
-        if self.cursor.execute('select location from %s where pygr_id=%%s'
+        if createLayer is not None: # CREATE DATABASE FROM SCRATCH
+            self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,objdata text not null,unique(pygr_id,location))'%tablename)
+            self.cursor.execute('insert into %s values (%%s,%%s,%%s)'
+                                %self.tablename,('PYGRLAYERNAME',createLayer,'a'))
+            self.name=createLayer
+            finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
+        elif self.cursor.execute('select location from %s where pygr_id=%%s'
                                % self.tablename,('PYGRLAYERNAME',))>0:
-            self.name=self.cursor.fetchone()[0]
+            self.name=self.cursor.fetchone()[0] # GET LAYERNAME FROM DB
             finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
     def __getitem__(self,id):
         'get construction rule from mysql, and attempt to construct'
@@ -164,6 +172,11 @@ class ResourceDBMySQL(object):
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
         self.cursor.execute('replace into %s values (%%s,%%s,%%s)'
                             %self.tablename,(id,'mysql:'+self.tablename,s))
+    def __delitem__(self,id):
+        'delete this resource and its schema rules'
+        if self.cursor.execute('delete from %s where pygr_id=%%s'
+                               %self.tablename,(id,))<1:
+            raise KeyError('no resource %s in this database'%id)
     def registerServer(self,locationKey,serviceDict):
         'register the specified services to mysql database'
         n=0
@@ -173,12 +186,17 @@ class ResourceDBMySQL(object):
         return n
     def setschema(self,id,attr,kwargs):
         'save a schema binding for id.attr --> targetID'
-        if attr is not None:
+        if not attr.startswith('-'): # REAL ATTRIBUTE
             targetID=kwargs['targetID'] # RAISES KeyError IF NOT PRESENT
         kwdata=self.finder.dumps(kwargs)
         self.cursor.execute('replace into %s values (%%s,%%s,%%s)'
                             %self.tablename,('SCHEMA.'+id,attr,kwdata))
+    def delschema(self,id,attr):
+        'delete schema binding for id.attr'
+        self.cursor.execute('delete from %s where pygr_id=%%s and location=%%s'
+                            %self.tablename,('SCHEMA.'+id,attr))
     def getschema(self,id):
+        'return dict of {attr:{args}}'
         d={}
         self.cursor.execute('select location,objdata from %s where pygr_id=%%s'
                             % self.tablename,('SCHEMA.'+id,))
@@ -227,7 +245,7 @@ class ResourceDBShelve(object):
                 yield id
     def setschema(self,id,attr,kwargs):
         'save a schema binding for id.attr --> targetID'
-        if attr is not None:
+        if not attr.startswith('-'): # REAL ATTRIBUTE
             targetID=kwargs['targetID'] # RAISES KeyError IF NOT PRESENT
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
         try:
@@ -240,6 +258,13 @@ class ResourceDBShelve(object):
     def getschema(self,id):
         'return dict of {attr:{args}}'
         return self.db['SCHEMA.'+id]
+    def delschema(self,id,attr):
+        'delete schema binding for id.attr'
+        self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
+        d=self.db['SCHEMA.'+id]
+        del d[attr]
+        self.db['SCHEMA.'+id]=d # FORCE shelve TO RESAVE BACK
+        self.reopen('r')  # REOPEN READ-ONLY
 
 
 class ResourceFinder(object):
@@ -371,6 +396,7 @@ Continuing with import...'''%dbpath
         'delete the specified resource from the specified layer'
         db=self.getLayer(layer)
         del db[id]
+        self.delSchema(id,layer)
     def newServer(self,name,serverClasses=None,clientHost=None,
                   withIndex=False,**kwargs):
         'construct server for the designated classes'
@@ -449,7 +475,7 @@ Continuing with import...'''%dbpath
         except KeyError:
             return # NO SCHEMA FOR THIS OBJ, SO NOTHING TO DO
         for attr,rules in schema.items():
-            if attr is not None:
+            if not attr.startswith('-'): # ONLY SHADOW REAL ATTRIBUTES
                 self.shadowAttr(obj,attr,**rules)
     def shadowAttr(self,obj,attr,itemRule=False,**kwargs):
         'create a descriptor for the attr on the appropriate obj class'
@@ -475,6 +501,14 @@ Continuing with import...'''%dbpath
         'save an attribute binding rule to the schema'
         db=self.getLayer(layer)
         db.setschema(id,attr,args)
+    def delSchema(self,id,layer=None):
+        'delete schema bindings TO and FROM this resource ID'
+        db=self.getLayer(layer)
+        d=db.getschema(id) # GET THE EXISTING SCHEMA
+        for attr,obj in d.items():
+            if attr.startswith('-'): # A SCHEMA OBJECT
+                obj.delschema(db) # DELETE ITS SCHEMA RELATIONS
+            db.delschema(id,attr) # DELETE THIS ATTRIBUTE SCHEMA RULE
         
 
 
@@ -501,10 +535,11 @@ class ResourcePath(object):
         'save obj using the specified resource name'
         getResource.addResource(self.getPath(name),obj,self._layer)
     def __delattr__(self,name):
+        getResource.deleteResource(self.getPath(name),self._layer)
         try: # IF ACTUAL ATTRIBUTE EXISTS, JUST DELETE IT
             del self.__dict__[name]
         except KeyError: # TRY TO DELETE RESOURCE FROM THE DATABASE
-            getResource.deleteResource(self.getPath(name),self._layer)
+            pass # NOTHING TO DO
     def __call__(self,*args,**kwargs):
         'construct the requested resource'
         return getResource(self._path,layer=self._layer,*args,**kwargs)
@@ -523,6 +558,7 @@ SchemaPath._pathClass=SchemaPath
 class ResourceLayer(object):
     def __init__(self,layer):
         self._layer=layer
+        self.schema=SchemaPath(layer=layer) # SCHEMA CONTROL FOR THIS LAYER
     def __getattr__(self,name):
         attr=ResourcePath(name,self._layer)
         setattr(self,name,attr) # CACHE THIS ATTRIBUTE ON THE OBJECT
@@ -532,36 +568,37 @@ class ResourceLayer(object):
 class DirectRelation(object):
     'bind an attribute to the target'
     def __init__(self,target):
-        self.target=target
+        self.target=getID(target)
     def schemaDict(self):
-        return dict(targetID=getID(self.target))
-    def saveSchema(self,source,attr,**kwargs):
+        return dict(targetID=self.target)
+    def saveSchema(self,source,attr,layer=None,**kwargs):
         d=self.schemaDict()
         d.update(kwargs) # ADD USER-SUPPLIED ARGS
-        getResource.saveSchema(getID(source),attr,d)
+        getResource.saveSchema(getID(source),attr,d,layer)
 
 class ItemRelation(DirectRelation):
     'bind item attribute to the target'
     def schemaDict(self):
-        return dict(targetID=getID(self.target),itemRule=True)
+        return dict(targetID=self.target,itemRule=True)
 
 class ManyToManyRelation(object):
     'a general graph mapping from sourceDB -> targetDB with edge info'
     def __init__(self,sourceDB,targetDB,edgeDB=None,bindAttrs=None):
-        self.sourceDB=sourceDB
-        self.targetDB=targetDB
-        self.edgeDB=edgeDB
+        self.sourceDB=getID(sourceDB) # CONVERT TO STRING RESOURCE ID
+        self.targetDB=getID(targetDB)
+        self.edgeDB=getID(edgeDB)
         self.bindAttrs=bindAttrs
-    def saveSchema(self,source,attr):
+    def saveSchema(self,source,attr,layer=None):
+        'save schema bindings associated with this rule'
         source=source.getPath(attr) # GET STRING ID FOR source
-        getResource.saveSchema(source,None,self) # SAVE SCHEMA RULE
+        getResource.saveSchema(source,'-many:many',self,layer) #SAVE THIS RULE
         b=DirectRelation(self.sourceDB) # SAVE sourceDB BINDING
-        b.saveSchema(source,'sourceDB')
+        b.saveSchema(source,'sourceDB',layer)
         b=DirectRelation(self.targetDB) # SAVE targetDB BINDING
-        b.saveSchema(source,'targetDB')
+        b.saveSchema(source,'targetDB',layer)
         if self.edgeDB is not None: # SAVE edgeDB BINDING
             b=DirectRelation(self.edgeDB)
-            b.saveSchema(source,'edgeDB')
+            b.saveSchema(source,'edgeDB',layer)
         if self.bindAttrs is not None:
             bindObj=(self.sourceDB,self.targetDB,self.edgeDB)
             bindArgs=({},dict(invert=True),dict(getEdges=True))
@@ -569,16 +606,29 @@ class ManyToManyRelation(object):
                 if len(self.bindAttrs)>i and self.bindAttrs[i] is not None:
                     b=ItemRelation(source) # SAVE ITEM BINDING
                     b.saveSchema(bindObj[i],self.bindAttrs[i],
-                                 **bindArgs[i])
+                                 layer,**bindArgs[i])
+    def delschema(self,resourceDB):
+        'delete resource attribute bindings associated with this rule'
+        if self.bindAttrs is not None:
+            bindObj=(self.sourceDB,self.targetDB,self.edgeDB)
+            for i in range(3):
+                if len(self.bindAttrs)>i and self.bindAttrs[i] is not None:
+                    resourceDB.delschema(bindObj[i],self.bindAttrs[i])
+
 
 class InverseRelation(DirectRelation):
     "bind source and target as each other's inverse mappings"
-    def saveSchema(self,source,attr,**kwargs):
+    def saveSchema(self,source,attr,layer=None,**kwargs):
+        'save schema bindings associated with this rule'
         source=source.getPath(attr) # GET STRING ID FOR source
-        DirectRelation.saveSchema(self,source,'inverseDB',**kwargs) # ->target
+        getResource.saveSchema(source,'-inverse',self,layer) # THIS RULE
+        DirectRelation.saveSchema(self,source,'inverseDB',
+                                  layer,**kwargs) # source -> target
         b=DirectRelation(source) # CREATE REVERSE MAPPING
-        b.saveSchema(self.target,'inverseDB',**kwargs) # target ->source
-
+        b.saveSchema(self.target,'inverseDB',
+                     layer,**kwargs) # target -> source
+    def delschema(self,resourceDB):
+        resourceDB.delschema(self.target,'inverseDB')
         
 def getID(obj):
     'get persistent ID of the object or raise AttributeError'
