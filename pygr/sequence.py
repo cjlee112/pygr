@@ -547,18 +547,15 @@ class SeqPath(object):
             s=self.path._reverse.strslice(-(self.stop),-(self.start))
             return self.reverse_complement(s)
     def __repr__(self):
-        if self.orientation<0: # INDICATE NEGATIVE ORIENTATION
-            ori='-'
-        else:
-            ori=''
         try: # USE id CONVENTION TO GET A NAME FOR THIS SEQUENCE
-            id=self.path.id
-        except AttributeError:
-            try: # TRY TO GET FROM TOP-LEVEL FORWARD SEQUENCE
-                id=self.path._reverse.id
-            except AttributeError: # OTHERWISE JUST USE A DEFAULT, SHOWING THERE'S NO id
-                id='@NONAME'
-        return '%s%s[%s:%s]' % (ori,id,repr(self.start),repr(self.stop))
+            id=self.pathForward.id
+        except AttributeError: # OTHERWISE JUST USE A DEFAULT, SHOWING THERE'S NO id
+            id='@NONAME'
+        if self.orientation<0: # INDICATE NEGATIVE ORIENTATION
+            return '-%s[%d:%d]' % (id,-self.stop,-self.start)
+        else:
+            return '%s[%d:%d]' % (id,self.start,self.stop)
+        
 
     def repr_dict(self):
         "Return compact dictionary representing this interval"
