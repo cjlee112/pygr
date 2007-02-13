@@ -755,24 +755,41 @@ class AnnotationSlice(SeqPath):
     id=AnnotationDescriptor('id') # ACCESS TO SCHEMA INFO VIA AnnotationSeq
     db=AnnotationDescriptor('db')
 
+class ForwardingDescriptor(object):
+    'forward an attribute request to item from another container'
+    def __init__(self,targetDB,attr):
+        self.targetDB=targetDB # CONTAINER TO GET ITEMS FROM
+        self.attr=attr # ATTRIBUTE TO MAP TO
+    def __get__(self,obj,objtype):
+        target=self.targetDB[obj.id] # GET target FROM CONTAINER
+        return getattr(target,self.attr) # GET DESIRED ATTRIBUTE
+
 class AnnotationDB(dict):
     'container of annotations as specific slices of db sequences'
     def __init__(self,sliceDB,seqDB,itemClass=AnnotationSeq,
-                 itemSliceClass=AnnotationSlice):
+                 itemSliceClass=AnnotationSlice,sliceAttrDict=None):
         '''sliceDB must map identifier to a sliceInfo object;
         sliceInfo must have name,start,stop,ori attributes;
-        seqDB must map sequence ID to a sliceable sequence object'''
+        seqDB must map sequence ID to a sliceable sequence object;
+        sliceAttrDict gives optional dict of item attributes that
+        should be mapped to sliceDB item attributes.'''
         dict.__init__(self)
         self.sliceDB=sliceDB
         self.seqDB=seqDB
         self.itemClass=itemClass
         self.itemSliceClass=itemSliceClass
+        self.sliceAttrDict=sliceAttrDict
+        if sliceAttrDict is not None:
+            for k,v in sliceAttrDict.items():
+                setattr(itemClass,k,ForwardingDescriptor(sliceDB,v))
+                setattr(itemSliceClass,k,ForwardingDescriptor(sliceDB,v))
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __setstate__(self,state):
         self.__init__(*state) #JUST PASS ARGS TO CONSTRUCTOR
     def __getstate__(self): ################ SUPPORT FOR UNPICKLING
-        return (self.sliceDB,self.seqDB,self.itemClass)
+        return (self.sliceDB,self.seqDB,self.itemClass,self.itemSliceClass,
+                self.sliceAttrDict)
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
