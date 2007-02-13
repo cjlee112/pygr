@@ -19,10 +19,13 @@ class OneTimeDescriptor(object):
 
 class ItemDescriptor(object):
     'provides shadow attribute for items in a db, based on schema'
-    def __init__(self,attrName,invert=False,getEdges=False,**kwargs):
+    def __init__(self,attrName,invert=False,getEdges=False,mapAttr=None,
+                 targetAttr=None,**kwargs):
         self.attr=attrName
         self.invert=invert
         self.getEdges=getEdges
+        self.mapAttr=mapAttr
+        self.targetAttr=targetAttr
     def __get__(self,obj,objtype):
         try:
             id=obj.db._persistent_id # GET RESOURCE ID OF DATABASE
@@ -33,7 +36,12 @@ class ItemDescriptor(object):
             targetDict= ~targetDict
         if self.getEdges:  # NEED TO FIX THIS !!!
             targetDict=targetDict.edges
-        result=targetDict[obj] # NOW PERFORM MAPPING IN THAT RESOURCE...
+        if self.mapAttr is not None: # USE mapAttr TO GET ID FOR MAPPING obj
+            result=targetDict[getattr(obj,self.mapAttr)]
+        else:
+            result=targetDict[obj] # NOW PERFORM MAPPING IN THAT RESOURCE...
+        if self.targetAttr is not None:
+            result=getattr(result,self.targetAttr) # GET ATTRIBUTE OF THE result
         obj.__dict__[self.attr]=result # PROVIDE DIRECTLY TO THE __dict__
         return result
 
