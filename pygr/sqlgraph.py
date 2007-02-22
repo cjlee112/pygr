@@ -292,6 +292,17 @@ class SQLGraph(SQLTableMultiNoCache):
     def __contains__(self,k):
         return self.cursor.execute('select * from %s where %s=%%s'
                                    %(self.name,self._attrSQL('source_id')),(k,))>0
+    def __invert__(self):
+        'get an interface to the inverse graph mapping'
+        try: # CACHED
+            return self._inverse
+        except AttributeError: # CONSTRUCT INTERFACE TO INVERSE MAPPING
+            self._inverse=SQLGraph(self.name,self.cursor, # SWAP SOURCE & TARGET
+                                   attrAlias=dict(source_id=self.data['target_id'],
+                                                  target_id=self.data['source_id'],
+                                                  edge_id=self.data['edge_id']))
+            self._inverse._inverse=self
+            return self._inverse
     def iteritems(self,myslice=slice(0,2)):
         for k in self:
             result=(k,SQLEdgeDict(k,self))
