@@ -344,6 +344,18 @@ class IDNodeDict(object):
             yield self.graph.sourceDB[self.fromNode],\
                   self.graph.targetDB[target],\
                   self.graph.edgeDB[edgeInfo]
+    keys=lambda self:[k[1] for k in self.edges()] ##### ITERATORS
+    values=lambda self:[k[2] for k in self.edges()]
+    items=lambda self:[k[1:2] for k in self.edges()]
+    def __iter__(self):
+        for source,target,edgeInfo in self.edges():
+            yield target
+    def itervalues(self):
+        for source,target,edgeInfo in self.edges():
+            yield edgeInfo
+    def iteritems(self):
+        for source,target,edgeInfo in self.edges():
+            yield target,edgeInfo
 
                 
 
@@ -418,6 +430,14 @@ class IDGraph(object):
         self.__delitem__(node)
         return self # THIS IS REQUIRED FROM isub()!!
 
+    def __invert__(self):
+        'get an interface to the inverse graph mapping'
+        try: # CACHED
+            return self._inverse
+        except AttributeError: # NEED TO CONSTRUCT INVERSE MAPPING
+            self._inverse=IDGraph(~(self.d),self.targetDB,self.sourceDB,self.edgeDB)
+            self._inverse._inverse=self
+            return self._inverse
     def __hash__(self): # SO SCHEMA CAN INDEX ON GRAPHS...
         return id(self)
 
