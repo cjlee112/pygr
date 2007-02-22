@@ -767,7 +767,8 @@ class ForwardingDescriptor(object):
 class AnnotationDB(dict):
     'container of annotations as specific slices of db sequences'
     def __init__(self,sliceDB,seqDB,itemClass=AnnotationSeq,
-                 itemSliceClass=AnnotationSlice,sliceAttrDict=None):
+                 itemSliceClass=AnnotationSlice,itemAttrDict=None,
+                 sliceAttrDict={}):
         '''sliceDB must map identifier to a sliceInfo object;
         sliceInfo must have name,start,stop,ori attributes;
         seqDB must map sequence ID to a sliceable sequence object;
@@ -778,32 +779,34 @@ class AnnotationDB(dict):
         self.seqDB=seqDB
         self.itemClass=itemClass
         self.itemSliceClass=itemSliceClass
-        self.sliceAttrDict=sliceAttrDict
-        if sliceAttrDict is not None:
-            for k,v in sliceAttrDict.items():
+        self.itemAttrDict=itemAttrDict
+        if itemAttrDict is not None:
+            for k,v in itemAttrDict.items():
                 setattr(itemClass,k,ForwardingDescriptor(sliceDB,v))
                 setattr(itemSliceClass,k,ForwardingDescriptor(sliceDB,v))
+        self.sliceAttrDict=dict(id='id',start='start',stop='stop') # DEFAULT
+        self.sliceAttrDict.update(sliceAttrDict) # ADD USER-PROVIDED ALIASES
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __setstate__(self,state):
         self.__init__(*state) #JUST PASS ARGS TO CONSTRUCTOR
     def __getstate__(self): ################ SUPPORT FOR UNPICKLING
         return (self.sliceDB,self.seqDB,self.itemClass,self.itemSliceClass,
-                self.sliceAttrDict)
+                self.itemAttrDict,self.sliceAttrDict)
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
     def __getitem__(self,k):
-        try:
+        'get annotation object by its ID'
+        try: # GET FROM OUR CACHE
             return dict.__getitem__(self,k)
         except KeyError:
             pass
         sliceInfo=self.sliceDB[k]
-        seq=self.seqDB[sliceInfo.name]
-        myslice=seq[sliceInfo.start:sliceInfo.stop] # USE SIGN CONVENTION INSTEAD?
-        if sliceInfo.ori<0:
-            myslice= -myslice
-        if self.itemClass is not None: # FORCE IT TO USE OUR ITEMCLASS
+        myslice=absoluteSlice(self.seqDB[getattr(sliceInfo,self.sliceAttrDict['id'])],
+                              getattr(sliceInfo,self.sliceAttrDict['start']),
+                              getattr(sliceInfo,self.sliceAttrDict['stop']))
+        if self.itemClass is not None: # FORCE ITEM TO USE ANNOTATION CLASS
             myslice.__class__=self.itemClass
         myslice.annot=myslice # THIS FIELD INDICATES THIS IS AN ANNOTATION
         myslice.id=k # SAVE SCHEMA INFORMATION: ID AND DB
