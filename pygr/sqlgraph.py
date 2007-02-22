@@ -82,7 +82,8 @@ class SQLTableBase(dict):
             self.data['id']=self.data[self.primary_key]
         if hasattr(self,'_attr_alias'): # FINALLY, APPLY ANY ATTRIBUTE ALIASES FOR THIS CLASS
             self.addAttrAlias(**self._attr_alias)
-        self.objclass(itemClass) # CONSTRUCT OUR DEFAULT ITEM CLASS
+        if itemClass is not None or not hasattr(self,'itemClass'):
+            self.objclass(itemClass) # NEED TO SET OUR DEFAULT ITEM CLASS
 
     def __getstate__(self):
         if self.itemClass.__name__=='foo':
