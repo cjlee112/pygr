@@ -259,13 +259,13 @@ class SQLEdgeDict(object):
                                      (self.fromNode,target))<1:
             raise KeyError('no edge from node to target')
         
-    __iter__=lambda self:self.iteritems(1)
+    __iter__=lambda self:self.iteritems(0)
     keys=lambda self:[k for k in self]
-    itervalues=lambda self:self.iteritems(2)
-    values=lambda self:[k for k in self.iteritems(2)]
+    itervalues=lambda self:self.iteritems(1)
+    values=lambda self:[k for k in self.iteritems(1)]
     items=lambda self:[k for k in self.iteritems()]
     edges=lambda self:[(self.fromNode,)+k for k in self.iteritems()]
-    def iteritems(self,k=slice(1,3)):
+    def iteritems(self,k=slice(0,2)):
         self.table.cursor.execute('select %s,%s from %s where %s=%%s'
                                   %(self.table._attrSQL('target_id'),
                                     self.table._attrSQL('edge_id'),
