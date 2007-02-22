@@ -32,8 +32,8 @@ class SQLRow(object):
                                   % (what,self.table.name,self.table.primary_key),(self.id,))
         l=self.table.cursor.fetchall()
         if len(l)!=1:
-            raise KeyError('%s %s not found in %s, or not unique'
-                           % (str(self.id),what,self.name))
+            raise KeyError('%s[%s].%s not found, or not unique'
+                           % (self.table.name,str(self.id),what))
         return l[0][0] # RETURN THE SINGLE FIELD WE REQUESTED
 
     def _attrSQL(self,attr):
