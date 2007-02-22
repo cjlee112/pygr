@@ -36,21 +36,8 @@ class SQLRow(object):
                            % (self.table.name,str(self.id),what))
         return l[0][0] # RETURN THE SINGLE FIELD WE REQUESTED
 
-    def _attrSQL(self,attr):
-        "Translate python attribute name to appropriate SQL expression"
-        if attr=='id':
-            attr=self.table.primary_key
-        else: # MAKE SURE THIS ATTRIBUTE CAN BE MAPPED TO DATABASE EXPRESSION
-            try:
-                field=self.table.data[attr]
-            except KeyError:
-                raise AttributeError('%s not a valid column in %s' % (attr,self.table.name))
-            if isinstance(field,types.StringType):
-                attr=field # USE ALIASED EXPRESSION FOR DATABASE SELECT INSTEAD OF attr
-        return attr
-
     def __getattr__(self,attr):
-        return self._select(self._attrSQL(attr))
+        return self._select(self.table._attrSQL(attr))
 
 def ClassicUnpickler(cls, state):
     self = cls.__new__(cls)
@@ -62,7 +49,7 @@ ClassicUnpickler.__safe_for_unpickling__ = 1
 
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
-    def __init__(self,name,cursor=None,itemClass=None):
+    def __init__(self,name,cursor=None,itemClass=None,attrAlias=None):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
             import MySQLdb,os
@@ -92,18 +79,37 @@ class SQLTableBase(dict):
             self.addAttrAlias(**self._attr_alias)
         if itemClass is not None or not hasattr(self,'itemClass'):
             self.objclass(itemClass) # NEED TO SET OUR DEFAULT ITEM CLASS
+        if attrAlias is not None: # ADD ATTRIBUTE ALIASES
+            self.data.update(attrAlias)
 
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __getstate__(self):
-        if self.itemClass.__name__=='foo':
-            return [self.name,None,None]
-        else:
-            return [self.name,None,self.itemClass]
+        d={}
+        for k,v in self.data.items(): # SAVE ATTRIBUTE ALIASES
+            if isinstance(v,types.StringType):
+                d[k]=v
+        if self.itemClass.__name__=='foo': # NO NEED TO SAVE ITEM CLASS
+            return [self.name,None,None,d]
+        else: # SAVE ITEM CLASS
+            return [self.name,None,self.itemClass,d]
     def __setstate__(self,l):
         self.__init__(*l)
     def __repr__(self):
         return '<SQL table '+self.name+'>'
+
+    def _attrSQL(self,attr):
+        "Translate python attribute name to appropriate SQL expression"
+        if attr=='id':
+            attr=self.primary_key
+        else: # MAKE SURE THIS ATTRIBUTE CAN BE MAPPED TO DATABASE EXPRESSION
+            try:
+                field=self.data[attr]
+            except KeyError:
+                raise AttributeError('%s not a valid column in %s' % (attr,self.name))
+            if isinstance(field,types.StringType):
+                attr=field # USE ALIASED EXPRESSION FOR DATABASE SELECT INSTEAD OF attr
+        return attr
 
     def addAttrAlias(self,**kwargs):
         """Add new attributes as aliases of existing attributes.
@@ -179,11 +185,7 @@ class SQLTable(SQLTableBase):
             l=self.cursor.fetchall()
             if len(l)!=1:
                 raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
-            try:
-                o=self.itemClass(l[0]) # SAVE USING SPECIFIED OBJECT CLASS
-            except AttributeError:
-                self.objclass() # CREATE A CLASS FOR OUR ROW-OBJECT
-                o=self.itemClass(l[0]) # TRY AGAIN...
+            o=self.itemClass(l[0]) # SAVE USING SPECIFIED OBJECT CLASS
             dict.__setitem__(self,k,o) # CACHE IT IN LOCAL DICTIONARY
             o.db=self # MARK THE OBJECT AS BEING PART OF THIS CONTAINER
             return o
@@ -212,19 +214,21 @@ class SQLTableMultiNoCache(SQLTableBase):
     _distinct_key='id' # DEFAULT COLUMN TO USE AS KEY
     def __iter__(self):
         self.cursor.execute('select distinct(%s) from %s'
-                            %(self._distinct_key,self.name))
+                            %(self._attrSQL(self._distinct_key),self.name))
         l=self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
         for row in l:
             yield row[0]
 
     def __getitem__(self,id):
         self.cursor.execute('select * from %s where %s=%%s'
-                            %(self.name,self._distinct_key),(id,))
+                            %(self.name,self._attrSQL(self._distinct_key)),(id,))
         l=self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
-        if not hasattr(self,'oclass'):
+        if not hasattr(self,'itemClass'):
             self.objclass() # GENERATE DEFAULT OBJECT CLASS BASED ON TupleO
         for row in l:
             yield self.itemClass(row)
+    def addAttrAlias(self,**kwargs):
+        self.data.update(kwargs) # ALIAS KEYS TO EXPRESSION VALUES
 
 
 
@@ -234,11 +238,14 @@ class SQLEdgeDict(object):
         self.fromNode=fromNode
         self.table=table
     def __getitem__(self,target):
-        self.table.cursor.execute('select * from %s where source_id=%%s and target_id=%%s'
-                                  %self.table.name,(self.fromNode,target))
+        self.table.cursor.execute('select %s from %s where %s=%%s and %s=%%s'
+                                  %(self.table._attrSQL('edge_id'),
+                                    self.table.name,self.table._attrSQL('source_id'),
+                                    self.table._attrSQL('target_id')),
+                                  (self.fromNode,target))
         l=self.table.cursor.fetchall()
         try:
-            return l[0][2] # RETURN EDGE
+            return l[0][0] # RETURN EDGE
         except IndexError:
             raise KeyError('no edge from node to target')
     def __setitem__(self,target,edge):
@@ -246,9 +253,10 @@ class SQLEdgeDict(object):
                                   %self.table.name,
                                   (self.fromNode,target,edge))
     def __delitem__(self,target):
-        if self.table.cursor.execute('delete from %s where source_id=%%s and target_id=%%s'
-                                     %self.table.name,
-                                     (self.fromNode,target))!=1:
+        if self.table.cursor.execute('delete from %s where %s=%%s and %s=%%s'
+                                     %(self.table.name,self.table._attrSQL('source_id'),
+                                       self.table._attrSQL('target_id')),
+                                     (self.fromNode,target))<1:
             raise KeyError('no edge from node to target')
         
     __iter__=lambda self:self.iteritems(1)
@@ -258,8 +266,11 @@ class SQLEdgeDict(object):
     items=lambda self:[k for k in self.iteritems()]
     edges=lambda self:[(self.fromNode,)+k for k in self.iteritems()]
     def iteritems(self,k=slice(1,3)):
-        self.table.cursor.execute('select * from %s where source_id=%%s'
-                                  %self.table.name,(self.fromNode,))
+        self.table.cursor.execute('select %s,%s from %s where %s=%%s'
+                                  %(self.table._attrSQL('target_id'),
+                                    self.table._attrSQL('edge_id'),
+                                    self.table.name,self.table._attrSQL('source_id')),
+                                  (self.fromNode,))
         for row in self.table.cursor.fetchall():
             yield row[k]
 
@@ -279,12 +290,8 @@ class SQLGraph(SQLTableMultiNoCache):
     def __setitem__(self,k,v):
         pass
     def __contains__(self,k):
-        return self.cursor.execute('select * from %s where source_id=%%s'
-                                   %self.name,(k,))>0
-    def __iter__(self):
-        n=self.cursor.execute('select source_id from %s' %self.name)
-        for i in range(n):
-            yield self.cursor.fetchone()[0]
+        return self.cursor.execute('select * from %s where %s=%%s'
+                                   %(self.name,self._attrSQL('source_id')),(k,))>0
     def iteritems(self,myslice=slice(0,2)):
         for k in self:
             result=(k,SQLEdgeDict(k,self))
