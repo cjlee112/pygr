@@ -52,6 +52,14 @@ class SQLRow(object):
     def __getattr__(self,attr):
         return self._select(self._attrSQL(attr))
 
+def ClassicUnpickler(cls, state):
+    self = cls.__new__(cls)
+    self.__setstate__(state)
+    return self
+ClassicUnpickler.__safe_for_unpickling__ = 1
+
+
+
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None):
@@ -85,6 +93,8 @@ class SQLTableBase(dict):
         if itemClass is not None or not hasattr(self,'itemClass'):
             self.objclass(itemClass) # NEED TO SET OUR DEFAULT ITEM CLASS
 
+    def __reduce__(self): ############################# SUPPORT FOR PICKLING
+        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __getstate__(self):
         if self.itemClass.__name__=='foo':
             return [self.name,None,None]
