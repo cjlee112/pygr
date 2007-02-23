@@ -241,9 +241,9 @@ class SQLEdges(SQLTableMultiNoCache):
     _distinct_key='edge_id'
     def keys(self):
         self.cursor.execute('select %s,%s,%s from %s'
-                            %(self.table._attrSQL('source_id'),
-                              self.table._attrSQL('target_id'),
-                              self.table._attrSQL('edge_id'),self.name))
+                            %(self._attrSQL('source_id'),
+                              self._attrSQL('target_id'),
+                              self._attrSQL('edge_id'),self.name))
         return self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
     __call__=keys
     def __iter__(self):
@@ -251,8 +251,8 @@ class SQLEdges(SQLTableMultiNoCache):
             yield i
     def __getitem__(self,id):
         self.cursor.execute('select %s,%s from %s where %s=%%s'
-                            %(self.table._attrSQL('source_id'),
-                              self.table._attrSQL('target_id'),
+                            %(self._attrSQL('source_id'),
+                              self._attrSQL('target_id'),
                               self.name,self._attrSQL(self._distinct_key)),(id,))
         return self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
 
