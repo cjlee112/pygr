@@ -739,8 +739,12 @@ class StoredPathMapping(PathMapping):
 
     # NEED TO ADD APPROPRIATE HOOKS FOR __iter__, items(), ETC.
 
+def originalIval(self):
+    'get this interval as pure sequence interval (not as an annotation)'
+    return absoluteSlice(self,self.start,self.stop)
+
 class AnnotationSeq(SeqPath):
-    pass
+    originalIval=originalIval
 class AnnotationDescriptor(object):
     'forwards attribute requests to self.annot'
     def __init__(self,attr):
@@ -754,6 +758,7 @@ class AnnotationSlice(SeqPath):
         SeqPath.__init__(self,path,*args,**kwargs)
     id=AnnotationDescriptor('id') # ACCESS TO SCHEMA INFO VIA AnnotationSeq
     db=AnnotationDescriptor('db')
+    originalIval=originalIval
 
 class ForwardingDescriptor(object):
     'forward an attribute request to item from another container'
@@ -813,6 +818,16 @@ class AnnotationDB(dict):
         myslice.db=self
         self[k]=myslice # CACHE THIS IN OUR DICT
         return myslice
+    def __iter__(self): return iter(self.sliceDB) ########## ITERATORS
+    def keys(self): return self.sliceDB.keys()
+    def iteritems(self):
+        for k in self.sliceDB:
+            yield k,self[k]
+    def itervalues(self):
+        for k,v in self.iteritems():
+            yield v
+    def items(self): return [t for t in self.iteritems()]
+    def values(self): return [t[1] for t in self.iteritems()]
 
 
 
