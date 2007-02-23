@@ -1194,17 +1194,20 @@ class SeqPrefixUnionDict(PrefixUnionDict):
         if isinstance(k,SeqPath): # k IS A SEQUENCE...
             if k in (~self): # k ALREADY IN ONE OF OUR DATABASES
                 return self
-            try:
-                db=k.pathForward.db # OK, JUST ADD ITS DATABASE!
+            try: # OK, JUST ADD ITS DATABASE!
+                db=k.db # GET DB DIRECTLY FROM SeqPath object
             except AttributeError:
-                try: # SAVE TO user SEQUENCE DICT
-                    d=self.prefixDict['user']
-                except KeyError: # NEED TO CREATE A user DICT
-                    d=KeepUniqueDict()
-                    self.prefixDict['user']=d
-                    self.dicts[d]='user'
-                d[k.pathForward.id]=k.pathForward # ADD SEQUENCE TO user DICTIONARY
-                return self
+                try:
+                    db=k.pathForward.db # GET DB FROM pathForward
+                except AttributeError: # USER SEQUENCE, NOT FROM ANY CONTAINER?!
+                    try: # SAVE TO user SEQUENCE DICT
+                        d=self.prefixDict['user']
+                    except KeyError: # NEED TO CREATE A user DICT
+                        d=KeepUniqueDict()
+                        self.prefixDict['user']=d
+                        self.dicts[d]='user'
+                    d[k.pathForward.id]=k.pathForward # ADD TO user DICTIONARY
+                    return self
         # db MUST BE A SEQ DATABASE STYLE DICT...
         if db in self.dicts: # ALREADY IS ONE OF OUR DATABASES
             return self # NOTHING FURTHER TO DO
