@@ -23,21 +23,21 @@ class SQLRow(object):
        on this object.
     """
     def __init__(self,table,id):
-        self.table=table
+        self.db=table
         self.id=id
 
     def _select(self,what):
         "Get SQL select expression for this row"
-        self.table.cursor.execute('select %s from %s where %s=%%s'
-                                  % (what,self.table.name,self.table.primary_key),(self.id,))
-        l=self.table.cursor.fetchall()
+        self.db.cursor.execute('select %s from %s where %s=%%s'
+                               % (what,self.db.name,self.db.primary_key),(self.id,))
+        l=self.db.cursor.fetchall()
         if len(l)!=1:
             raise KeyError('%s[%s].%s not found, or not unique'
-                           % (self.table.name,str(self.id),what))
+                           % (self.db.name,str(self.id),what))
         return l[0][0] # RETURN THE SINGLE FIELD WE REQUESTED
 
     def __getattr__(self,attr):
-        return self._select(self.table._attrSQL(attr))
+        return self._select(self.db._attrSQL(attr))
 
 def ClassicUnpickler(cls, state):
     self = cls.__new__(cls)
@@ -139,6 +139,34 @@ class SQLTableBase(dict):
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
         self.itemClass=oclass
+    def select(self,whereClause,params=None,oclass=None,selectCols='t1.*'):
+        "Generate the list of objects that satisfy the database SELECT"
+        if oclass is None:
+            oclass=self.itemClass
+        self.cursor.execute('select %s from %s t1 %s'
+                            % (selectCols,self.name,whereClause),params)
+        l=self.cursor.fetchall()
+        for t in l:
+            yield self.cacheItem(t,oclass)
+    def tupleItem(self,t,oclass):
+        'create object to represent this row, using oclass'
+        o=oclass(t)
+        o.db=self # MARK THE OBJECT AS BEING PART OF THIS CONTAINER
+        return o
+    def getID(self,t): return t[self.data['id']] # GET ID FROM TUPLE
+    def cacheItem(self,t,oclass):
+        'get obj from cache if possible, or construct from tuple'
+        try:
+            id=self.getID(t)
+        except KeyError: # NO PRIMARY KEY?  IGNORE THE CACHE.
+            return self.tupleItem(t,oclass)
+        try: # IF ALREADY LOADED IN OUR DICTIONARY, JUST RETURN THAT ENTRY
+            return dict.__getitem__(self,id)
+        except KeyError:
+            pass
+        o=self.tupleItem(t,oclass)
+        dict.__setitem__(self,id,o)   # CACHE THIS ITEM IN OUR DICTIONARY
+        return o
 
 
 def iterSQLKey(self):
@@ -158,26 +186,8 @@ class SQLTable(SQLTableBase):
         self.cursor.execute('select * from %s' % self.name)
         l=self.cursor.fetchall()
         for t in l:
-            o=oclass(t)
-            self[getattr(o,self.primary_key)]=o
+            self.cacheItem(t,oclass) # CACHE IT IN LOCAL DICTIONARY
         self.__class__=SQLTableBase # ONLY CAN LOAD ONCE, SO REVERT TO BASE CLASS
-
-    def select(self,whereClause,params=None,oclass=None):
-        "Generate the list of objects that satisfy the database SELECT"
-        if oclass is None:
-            oclass=self.itemClass
-        self.cursor.execute('select t1.* from %s t1 %s' % (self.name,whereClause),params)
-        l=self.cursor.fetchall()
-        for t in l:
-            o=oclass(t)
-            if self.primary_key is not None: # CACHE THIS ITEM IN OUR DICTIONARY
-                id=getattr(o,self.primary_key)
-                try: # IF ALREADY LOADED IN OUR DICTIONARY, JUST RETURN THAT ENTRY
-                    o=self[id]
-                except KeyError:
-                    self[id]=o # OTHERWISE HAVE TO SAVE THE NEW ENTRY
-            yield o
-
 
     def __getitem__(self,k): # FIRST TRY LOCAL INDEX, THEN TRY DATABASE
         try:
@@ -188,17 +198,35 @@ class SQLTable(SQLTableBase):
             l=self.cursor.fetchall()
             if len(l)!=1:
                 raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
-            o=self.itemClass(l[0]) # SAVE USING SPECIFIED OBJECT CLASS
-            dict.__setitem__(self,k,o) # CACHE IT IN LOCAL DICTIONARY
-            o.db=self # MARK THE OBJECT AS BEING PART OF THIS CONTAINER
-            return o
+            return self.cacheItem(l[0],self.itemClass) # CACHE IT IN LOCAL DICTIONARY
+
+
+
+class SQLForeignRelation(object):
+    'mapping based on matching a foreign key in an SQL table'
+    def __init__(self,table,keyName):
+        self.table=table
+        self.keyName=keyName
+    def __getitem__(self,k):
+        'get list of objects o with getattr(o,keyName)==k.id'
+        l=[]
+        for o in self.table.select('where %s=%%s'%self.keyName,(k.id,)):
+            l.append(o)
+        if len(l)==0:
+            raise KeyError('%s not found in %s' %(str(k),self.name))
+        return l
 
 
 class SQLTableNoCache(SQLTableBase):
     "Provide on-the-fly access to rows in the database, but never cache results"
     itemClass=SQLRow # DEFAULT OBJECT CLASS FOR ROWS...
     __iter__=iterSQLKey
-
+    def getID(self,t): return t[0] # GET ID FROM TUPLE
+    def select(self,whereClause,params):
+        return SQLTableBase.select(self,whereClause,params,self.oclass,
+                                   self._attrSQL('id'))
+    def oclass(self,t): # CREATE OBJECT FROM TUPLE
+        return self.itemClass(self,t[0]) # AN EMPTY CONTAINER FOR ACCESSING THIS ROW
     def __getitem__(self,k): # FIRST TRY LOCAL INDEX, THEN TRY DATABASE
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
