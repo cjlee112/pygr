@@ -357,8 +357,28 @@ class IDNodeDict(object):
         for source,target,edgeInfo in self.edges():
             yield target,edgeInfo
 
-                
 
+class IDGraphEdges(object):
+    '''provides iterator over edges as (source,target,edge) tuples
+       and getitem[edge] --> [(source,target),...]'''
+    def __init__(self,g):
+        self.g=g
+        self.d=g.d.edges # GET EDGES INTERFACE IN ID-SPACE
+    def __iter__(self):
+        for sourceID,targetID,edgeID in self.d:
+            yield (self.g.sourceDB[sourceID],self.g.targetDB[targetID],
+                   self.g.edgeDB[edgeID])
+    def __getitem__(self,edge):
+        l=[]
+        for sourceID,targetID in self.d[edge.id]:
+            l.append((self.g.sourceDB[sourceID],self.g.targetDB[targetID]))
+        return l
+
+class IDGraphEdgeDescriptor(object):
+    'provides interface to edges on demand'
+    def __get__(self,obj,objtype):
+        return IDGraphEdges(obj)
+    
 class IDGraph(object):
     """Top layer graph interface implemenation using proxy dict.
        Works with dict, shelve, any mapping interface."""
@@ -394,6 +414,7 @@ class IDGraph(object):
         for node in self.d:
             yield self.sourceDB[node],self.edgeDictClass(self,node)
     items=lambda self:[v for v in self.iteritems()]
+    edges=IDGraphEdgeDescriptor()
 
     def __iadd__(self,node):
         "Add node to graph with no edges"
@@ -440,9 +461,3 @@ class IDGraph(object):
             return self._inverse
     def __hash__(self): # SO SCHEMA CAN INDEX ON GRAPHS...
         return id(self)
-
-    def edges(self):
-        "Return iterator for all edges in this graph"
-        for edgedict in self.values():
-            for edge in edgedict.edges():
-                yield edge
