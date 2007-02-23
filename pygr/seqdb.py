@@ -1195,7 +1195,7 @@ class SeqPrefixUnionDict(PrefixUnionDict):
             if k in (~self): # k ALREADY IN ONE OF OUR DATABASES
                 return self
             try:
-                k=k.db # OK, JUST ADD ITS DATABASE!
+                db=k.pathForward.db # OK, JUST ADD ITS DATABASE!
             except AttributeError:
                 try: # SAVE TO user SEQUENCE DICT
                     d=self.prefixDict['user']
@@ -1203,17 +1203,17 @@ class SeqPrefixUnionDict(PrefixUnionDict):
                     d=KeepUniqueDict()
                     self.prefixDict['user']=d
                     self.dicts[d]='user'
-                d[k.pathForward.id]=k # ADD SEQUENCE k TO user DICTIONARY
+                d[k.pathForward.id]=k.pathForward # ADD SEQUENCE TO user DICTIONARY
                 return self
-        # k MUST BE A SEQ DATABASE STYLE DICT...
-        if k in self.dicts: # ALREADY IS ONE OF OUR DATABASES
+        # db MUST BE A SEQ DATABASE STYLE DICT...
+        if db in self.dicts: # ALREADY IS ONE OF OUR DATABASES
             return self # NOTHING FURTHER TO DO
         try: # USE LAST FIELD OF ITS persistent_id
-            id=k._persistent_id.split('.')[-1]
+            id=db._persistent_id.split('.')[-1]
         except AttributeError:
             id='noname%d'%len(self.dicts) # CREATE AN ARBITRARY UNIQUE ID
-        self.prefixDict[id]=k
-        self.dicts[k]=id
+        self.prefixDict[id]=db
+        self.dicts[db]=id
         return self # IADD MUST RETURN SELF!
         
 
