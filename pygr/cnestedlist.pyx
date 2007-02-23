@@ -1537,8 +1537,8 @@ cdef class NLMSA:
   def addAnnotation(self,a):
     'save alignment of sequence interval --> an annotation object'
     ival=a.originalIval() # GET PURE SEQUENCE INTERVAL
-    self+=ival # ADD SEQ AS A NODE IN OUR ALIGNMENT
-    self[ival]+=a # ADD ALIGNMENT BETWEEN ival AND ANNOTATION
+    self.__iadd__(ival) # ADD SEQ AS A NODE IN OUR ALIGNMENT
+    self[ival].__iadd__(a) # ADD ALIGNMENT BETWEEN ival AND ANNOTATION
 
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id):
     seqnames[0].p=<char *>malloc(32)
