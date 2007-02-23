@@ -594,7 +594,10 @@ class ManyToManyRelation(object):
     def __init__(self,sourceDB,targetDB,edgeDB=None,bindAttrs=None):
         self.sourceDB=getID(sourceDB) # CONVERT TO STRING RESOURCE ID
         self.targetDB=getID(targetDB)
-        self.edgeDB=getID(edgeDB)
+        if edgeDB is not None:
+            self.edgeDB=getID(edgeDB)
+        else:
+            self.edgeDB=None
         self.bindAttrs=bindAttrs
     def saveSchema(self,source,attr,layer=None):
         'save schema bindings associated with this rule'
