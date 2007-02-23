@@ -85,10 +85,7 @@ class SQLTableBase(dict):
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __getstate__(self):
-        d={}
-        for k,v in self.data.items(): # SAVE ATTRIBUTE ALIASES
-            if isinstance(v,types.StringType):
-                d[k]=v
+        d=self.getAttrAlias() # SAVE ATTRIBUTE ALIASES
         if self.itemClass.__name__=='foo': # NO NEED TO SAVE ITEM CLASS
             return [self.name,None,None,d]
         else: # SAVE ITEM CLASS
@@ -110,7 +107,13 @@ class SQLTableBase(dict):
             if isinstance(field,types.StringType):
                 attr=field # USE ALIASED EXPRESSION FOR DATABASE SELECT INSTEAD OF attr
         return attr
-
+    def getAttrAlias(self):
+        'get a dict of attribute aliases'
+        d={}
+        for k,v in self.data.items():
+            if isinstance(v,types.StringType):
+                d[k]=v
+        return d
     def addAttrAlias(self,**kwargs):
         """Add new attributes as aliases of existing attributes.
            They can be specified either as named args:
@@ -232,6 +235,27 @@ class SQLTableMultiNoCache(SQLTableBase):
 
 
 
+class SQLEdges(SQLTableMultiNoCache):
+    '''provide iterator over edges as (source_id,target_id,edge_id)
+       and getitem[edge_id] --> [(source_id,target_id),...]'''
+    _distinct_key='edge_id'
+    def keys(self):
+        self.cursor.execute('select %s,%s,%s from %s'
+                            %(self.table._attrSQL('source_id'),
+                              self.table._attrSQL('target_id'),
+                              self.table._attrSQL('edge_id'),self.name))
+        return self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
+    __call__=keys
+    def __iter__(self):
+        for i in self.keys():
+            yield i
+    def __getitem__(self,id):
+        self.cursor.execute('select %s,%s from %s where %s=%%s'
+                            %(self.table._attrSQL('source_id'),
+                              self.table._attrSQL('target_id'),
+                              self.name,self._attrSQL(self._distinct_key)),(id,))
+        return self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
+
 class SQLEdgeDict(object):
     '2nd level graph interface to SQL database'
     def __init__(self,fromNode,table):
@@ -274,6 +298,10 @@ class SQLEdgeDict(object):
         for row in self.table.cursor.fetchall():
             yield row[k]
 
+class SQLGraphEdgeDescriptor(object):
+    'provide an SQLEdges interface on demand'
+    def __get__(self,obj,objtype):
+        return SQLEdges(obj.name,obj.cursor,attrAlias=obj.getAttrAlias())
 
 class SQLGraph(SQLTableMultiNoCache):
     '''provide a graph interface via a SQL table.  Key capabilities are:
@@ -311,10 +339,7 @@ class SQLGraph(SQLTableMultiNoCache):
     itervalues=lambda self:self.iteritems(1)
     values=lambda self:[k for k in self.iteritems(1)]
     items=lambda self:[k for k in self.iteritems()]
-    def edges(self):
-        for targetDict in self.itervalues():
-            for result in targetDict.edges():
-                yield result
+    edges=SQLGraphEdgeDescriptor()
 
 
 def describeDBTables(name,cursor,idDict):
