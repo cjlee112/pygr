@@ -1334,7 +1334,11 @@ cdef class NLMSASequence:
     except KeyError: # OK, WE REALLY DO NEED TO ADD IT...
       pass
     # CHECK FOR OVERFLOW... CREATE A NEW UNION IF NEEDED
-    if self.length+len(seq.path)>self.nlmsaLetters.maxlen: # TOO BIG!
+    try: # HANDLE ANNOTATIONS DIFFERENTLY FROM REGULAR SEQ SLICE
+      seq=seq.annot # GET THE ENTIRE ANNOTATION
+    except AttributeError:
+      seq=seq.pathForward # GET THE ENTIRE SEQUENCE
+    if self.length+len(seq)>self.nlmsaLetters.maxlen: # TOO BIG!
       if self.nlmsaLetters.use_virtual_lpo: # NEED TO CREATE CORRESPONDING LPO
         ns=self.nlmsaLetters.newSequence(None) # CREATE NEW LPO
       ns=self.nlmsaLetters.newSequence(None,is_union=1) # NEW UNION
@@ -1342,7 +1346,7 @@ cdef class NLMSASequence:
       return ns # RETURN THE NEW UNION COORDINATE SYSTEM
     # USE OUR EXISTING UNION
     self.nlmsaLetters.seqs.saveSeq(seq,self.id,self.length)
-    self.length=self.length+len(seq.path) # EXPAND COORDINATE SYSTEM
+    self.length=self.length+len(seq) # EXPAND COORDINATE SYSTEM
     return self # iadd MUST ALWAYS RETURN self!!!
 
 
