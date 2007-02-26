@@ -282,6 +282,7 @@ class SeqPath(object):
         coordinate convention i.e. -20,-10 --> -(path.pathForward[10:20])
         '''
         try: # ALLOW CONTAINER TO ENFORCE A SPECIFIC SUBCLASS ON ITS CONTENTS...
+            self.annot=path.annot # KEEP POINTING AT PARENT ANNOTATION
             self.__class__=path.annot.db.itemSliceClass # FROM ANNOTATION DB
         except AttributeError:
             try: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
