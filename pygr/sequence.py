@@ -314,6 +314,13 @@ class SeqPath(object):
         else: # STORE TOP-LEVEL SEQUENCE PATH...
             self.path=path.path
             self.step=step*path.step
+        try: # ALLOW CONTAINER TO ENFORCE A SPECIFIC SUBCLASS ON ITS CONTENTS...
+            if self is self.path: # IF DB PROVIDES AN ITEM CLASS, USE IT.
+                self.__class__=path.pathForward.db.itemClass
+            else: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
+                self.__class__=path.pathForward.db.itemSliceClass
+        except AttributeError:
+            pass
 
     def check_bounds(self,start,path,attr='start',forceBounds=False,
                      direction= -1,prefix='_'):
@@ -335,22 +342,18 @@ class SeqPath(object):
         return start # RETURN THE PROPERLY CHECKED VALUE...
 
     def __getitem__(self,k):
-        try: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
-            myclass=self.db.itemSliceClass
-        except AttributeError:
-            myclass=SeqPath
         if isinstance(k,types.IntType):
             if k== -1: # HAVE TO HANDLE THIS CASE SPECIALLY
                 k=slice(k,None,1) # -1 IS LAST LETTER, SO [-1:None] slice
             else: # REGULAR CASE, JUST [k:k+1] slice
                 k=slice(k,k+1,1)
         if isinstance(k,types.SliceType): # GET AN INTERVAL USING slice
-            return myclass(self,k.start,k.stop,k.step)
+            return SeqPath(self,k.start,k.stop,k.step)
         elif isinstance(k,SeqPath): # MODEL SEQ AS GRAPH
             if k.path is not self.path:
                 raise KeyError('node is not in this sequence!')
             try:
-                target=myclass(self.path,k.stop,k.stop+len(k)*k.step,k.step)
+                target=SeqPath(self.path,k.stop,k.stop+len(k)*k.step,k.step)
                 return {target:LetterEdge(k,target)}
             except IndexError: # OUT OF BOUNDS, SO NO NEXT NODE
                 return {}
