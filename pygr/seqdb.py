@@ -1129,7 +1129,12 @@ Set trypath to give a list of directories to search.'''
         ifile=file(filename,'w')
         print >>ifile,self.separator
         for k,v in self.prefixDict.items():
-            print >>ifile,'%s\t%s\t' %(k,v.filepath)
+            try:
+                print >>ifile,'%s\t%s\t' %(k,v.filepath)
+            except AttributeError:
+                import sys
+                print >>sys.stderr,'WARNING: seq db %s has no filepath; not saved to %s' \
+                      %(k,filename)
         ifile.close()
 
     def __invert__(self):
