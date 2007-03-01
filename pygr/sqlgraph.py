@@ -426,7 +426,9 @@ class SQLGraphClustered(object):
         try: # GET DIRECTLY FROM CACHE
             return self.d[k]
         except KeyError:
-            pass # HAVE TO LOAD THE ENTIRE CLUSTER CONTAINING THIS NODE
+            if hasattr(self,'_isLoaded'):
+                raise # ENTIRE GRAPH LOADED, SO k REALLY NOT IN THIS GRAPH
+        # HAVE TO LOAD THE ENTIRE CLUSTER CONTAINING THIS NODE
         self.table.cursor.execute('select t2.%s,t2.%s,t2.%s from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s group by t2.%s'
                                   %(self.source_id,self.target_id,
                                     self.edge_id,self.table.name,
@@ -469,7 +471,24 @@ class SQLGraphClustered(object):
                                 for (target_id,edge_id) in d.iteritems()])
         return self._inverse
     edges=SQLEdgesClusteredDescr() # CONSTRUCT EDGE INTERFACE ON DEMAND
-    
+    def __iter__(self): ################# ITERATORS
+        self.load()
+        return iter(self.d)
+    def keys(self): return [x for x in self]
+    def iteritems(self):
+        self.load()
+        return self.d.iteritems()
+    def items(self): return [x for x in self.iteritems()]
+    def itervalues(self):
+        for t in self.iteritems():
+            yield t[1]
+    def values(self): return [t[1] for t in self.iteritems()]
+    def __contains__(self,k):
+        try:
+            x=self[k]
+            return True
+        except KeyError:
+            return False
 
 class SQLEdgesClustered(SQLGraphClustered):
     'edges interface for SQLGraphClustered'
@@ -481,7 +500,6 @@ class SQLEdgesClustered(SQLGraphClustered):
         for edge_id,l in self.d.iteritems():
             for source_id,target_id in l:
                 yield source_id,target_id,edge_id
-    def keys(self): return [x for x in self]
 
 
 def describeDBTables(name,cursor,idDict):
