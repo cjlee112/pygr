@@ -281,14 +281,10 @@ class SeqPath(object):
         absoluteCoords option allows intervals to be created using Pygrs internal
         coordinate convention i.e. -20,-10 --> -(path.pathForward[10:20])
         '''
-        try: # ALLOW CONTAINER TO ENFORCE A SPECIFIC SUBCLASS ON ITS CONTENTS...
+        try: # MARK ANNOTATION SLICES
             self.annot=path.annot # KEEP POINTING AT PARENT ANNOTATION
-            self.__class__=path.annot.db.itemSliceClass # FROM ANNOTATION DB
         except AttributeError:
-            try: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
-                self.__class__=path.pathForward.db.itemSliceClass
-            except AttributeError:
-                pass
+            pass
         if reversePath is not None:
             try: # IF reversePath.stop KNOWN, USE IT
                 start= -(reversePath._stop)
@@ -342,6 +338,16 @@ class SeqPath(object):
                 start=None
         return start # RETURN THE PROPERLY CHECKED VALUE...
 
+    def classySlice(self,path,*l,**kwargs):
+        'create a subslice using appropriate class based on container'
+        try: # ALLOW CONTAINER TO ENFORCE A SPECIFIC SUBCLASS ON ITS CONTENTS...
+            klass=path.annot.db.itemSliceClass # FROM ANNOTATION DB
+        except AttributeError: # NOT AN ANNOTATION
+            try: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
+                klass=path.pathForward.db.itemSliceClass
+            except AttributeError:
+                klass=SeqPath # DEFAULT: JUST USE GENERIC SLICE CLASS
+        return klass(path,*l,**kwargs) # CONSTRUCT THE SLICE
     def __getitem__(self,k):
         if isinstance(k,types.IntType):
             if k== -1: # HAVE TO HANDLE THIS CASE SPECIALLY
@@ -349,12 +355,12 @@ class SeqPath(object):
             else: # REGULAR CASE, JUST [k:k+1] slice
                 k=slice(k,k+1,1)
         if isinstance(k,types.SliceType): # GET AN INTERVAL USING slice
-            return SeqPath(self,k.start,k.stop,k.step)
+            return self.classySlice(self,k.start,k.stop,k.step)
         elif isinstance(k,SeqPath): # MODEL SEQ AS GRAPH
             if k.path is not self.path:
                 raise KeyError('node is not in this sequence!')
             try:
-                target=SeqPath(self.path,k.stop,k.stop+len(k)*k.step,k.step)
+                target=self.classySlice(self.path,k.stop,k.stop+len(k)*k.step,k.step)
                 return {target:LetterEdge(k,target)}
             except IndexError: # OUT OF BOUNDS, SO NO NEXT NODE
                 return {}
@@ -463,7 +469,7 @@ class SeqPath(object):
             start=max(self.start,other.start)
             stop=min(self.stop,other.stop)
             if start<stop:
-                return SeqPath(self.path,start,stop)
+                return self.classySlice(self.path,start,stop)
             else:
                 return None
         else:
@@ -483,13 +489,15 @@ class SeqPath(object):
             try:
                 return self._reverse # USE EXISTING RC OBJECT FOR THIS SEQ
             except AttributeError: #  CREATE ONLY ONE RC FOR THIS SEQUENCE
-                self._reverse=SeqPath(None,None,stop=0,reversePath=self)
+                self._reverse=self.classySlice(None,None,stop=0,reversePath=self)
                 self._reverse._reverse=self
                 return self._reverse
         elif self.orientation>0: # FORWARD ORI: JUST REVERSE INDICES
-            return SeqPath(self.path,self.stop,self.start,self.step) #SWAP ==> RC
+            return self.classySlice(self.path,self.stop,self.start,
+                                    self.step) #SWAP ==> RC
         else: # REVERSE ORI: BECAUSE OF stop=0 POSSIBILITY, USE POSITIVE COORDS
-            return SeqPath(self.path._reverse,-(self.stop),-(self.start),self.step)
+            return self.classySlice(self.path._reverse,-(self.stop),
+                                    -(self.start),self.step)
 
     def __add__(self,other):
         "return merged interval spanning both self and other intervals"
@@ -503,7 +511,7 @@ class SeqPath(object):
             stop=self.stop
         else:
             stop=other.stop
-        return SeqPath(self.path,start,stop,self.step)
+        return self.classySlice(self.path,start,stop,self.step)
 
     def __iadd__(self,other):
         "return merged interval spanning both self and other intervals"
@@ -516,12 +524,12 @@ class SeqPath(object):
         return self # iadd MUST ALWAYS RETURN self!!
     def before(self):
         'get the sequence interval before this interval'
-        return SeqPath(self.path,None,self.start)
+        return self.classySlice(self.path,None,self.start)
     def after(self):
         'get the sequence interval after this interval'
         if self.stop==0:
             raise IndexError('cannot create empty sequence interval')
-        return SeqPath(self.path,self.stop,None)
+        return self.classySlice(self.path,self.stop,None)
 
     ############################################ STRING SEQUENCE METHODS
     _complement={'a':'t', 'c':'g', 'g':'c', 't':'a', 'u':'a', 'n':'n',
