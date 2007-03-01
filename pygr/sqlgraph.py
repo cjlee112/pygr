@@ -171,16 +171,16 @@ class SQLTableBase(dict):
         return o
 
 
-def iterSQLKey(self):
+def getKeys(self):
+    'uses db select; does not force load'
     self.cursor.execute('select %s from %s' %(self.primary_key,self.name))
-    l=self.cursor.fetchall() # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
-    for t in l:
-        yield t[0]
+    return self.cursor.fetchall() # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
 
 
 class SQLTable(SQLTableBase):
     "Provide on-the-fly access to rows in the database, caching the results in dict"
-    __iter__=iterSQLKey
+    keys=getKeys
+    def __iter__(self): return iter(self.keys())
     def load(self,oclass=None):
         "Load all data from the table"
         if oclass is None:
@@ -201,6 +201,22 @@ class SQLTable(SQLTableBase):
             if len(l)!=1:
                 raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
             return self.cacheItem(l[0],self.itemClass) # CACHE IT IN LOCAL DICTIONARY
+    def items(self):
+        'forces load of entire table into memory'
+        self.load()
+        return dict.items(self)
+    def iteritems(self):
+        'forces load of entire table into memory'
+        self.load()
+        return dict.iteritems(self)
+    def values(self):
+        'forces load of entire table into memory'
+        self.load()
+        return dict.values(self)
+    def itervalues(self):
+        'forces load of entire table into memory'
+        self.load()
+        return dict.itervalues(self)
 
 
 class SQLTableClustered(SQLTable):
@@ -239,7 +255,8 @@ class SQLForeignRelation(object):
 class SQLTableNoCache(SQLTableBase):
     "Provide on-the-fly access to rows in the database, but never cache results"
     itemClass=SQLRow # DEFAULT OBJECT CLASS FOR ROWS...
-    __iter__=iterSQLKey
+    keys=getKeys
+    def __iter__(self): return iter(self.keys())
     def getID(self,t): return t[0] # GET ID FROM TUPLE
     def select(self,whereClause,params):
         return SQLTableBase.select(self,whereClause,params,self.oclass,
@@ -472,10 +489,15 @@ class SQLGraphClustered(object):
         return self._inverse
     edges=SQLEdgesClusteredDescr() # CONSTRUCT EDGE INTERFACE ON DEMAND
     def __iter__(self): ################# ITERATORS
-        self.load()
-        return iter(self.d)
-    def keys(self): return [x for x in self]
+        'uses db select; does not force load'
+        return iter(self.keys())
+    def keys(self):
+        'uses db select; does not force load'
+        self.table.cursor.execute('select distinct(%s) from %s'
+                                  %(self.source_id,self.table.name))
+        return self.table.cursor.fetchall()
     def iteritems(self):
+        'forces load of entire table into memory'
         self.load()
         return self.d.iteritems()
     def items(self): return [x for x in self.iteritems()]
