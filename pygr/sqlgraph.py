@@ -49,7 +49,8 @@ ClassicUnpickler.__safe_for_unpickling__ = 1
 
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
-    def __init__(self,name,cursor=None,itemClass=None,attrAlias=None):
+    def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
+                 clusterKey=None):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
             import MySQLdb,os
@@ -81,6 +82,8 @@ class SQLTableBase(dict):
             self.objclass(itemClass) # NEED TO SET OUR DEFAULT ITEM CLASS
         if attrAlias is not None: # ADD ATTRIBUTE ALIASES
             self.data.update(attrAlias)
+        if clusterKey is not None:
+            self.clusterKey=clusterKey
 
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
@@ -97,15 +100,14 @@ class SQLTableBase(dict):
 
     def _attrSQL(self,attr):
         "Translate python attribute name to appropriate SQL expression"
-        if attr=='id':
+        try: # MAKE SURE THIS ATTRIBUTE CAN BE MAPPED TO DATABASE EXPRESSION
+            field=self.data[attr]
+        except KeyError:
+            raise AttributeError('%s not a valid column in %s' % (attr,self.name))
+        if isinstance(field,types.StringType):
+            attr=field # USE ALIASED EXPRESSION FOR DATABASE SELECT INSTEAD OF attr
+        elif attr=='id':
             attr=self.primary_key
-        else: # MAKE SURE THIS ATTRIBUTE CAN BE MAPPED TO DATABASE EXPRESSION
-            try:
-                field=self.data[attr]
-            except KeyError:
-                raise AttributeError('%s not a valid column in %s' % (attr,self.name))
-            if isinstance(field,types.StringType):
-                attr=field # USE ALIASED EXPRESSION FOR DATABASE SELECT INSTEAD OF attr
         return attr
     def getAttrAlias(self):
         'get a dict of attribute aliases'
@@ -200,6 +202,23 @@ class SQLTable(SQLTableBase):
                 raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
             return self.cacheItem(l[0],self.itemClass) # CACHE IT IN LOCAL DICTIONARY
 
+
+class SQLTableClustered(SQLTable):
+    '''use clusterKey to load a whole cluster of rows at once,
+       specifically, all rows that share the same clusterKey value.'''
+    def __getstate__(self): # ALSO NEED TO SAVE clusterKey SETTING
+        return SQLTableBase.__getstate__(self)+[self.clusterKey]
+    def __getitem__(self,k):
+        try:
+            return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
+        except KeyError: # NOT FOUND, SO TRY THE DATABASE
+            self.cursor.execute('select t2.* from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s'
+                                % (self.name,self.name,self.primary_key,
+                                   self.clusterKey,self.clusterKey),(k,))
+            l=self.cursor.fetchall()
+            for t in l: # LOAD THE ENTIRE CLUSTER INTO OUR LOCAL CACHE
+                self.cacheItem(t,self.itemClass)
+            return dict.__getitem__(self,k) # SHOULD BE IN CACHE, IF ROW k EXISTS
 
 
 class SQLForeignRelation(object):
@@ -368,6 +387,101 @@ class SQLGraph(SQLTableMultiNoCache):
     values=lambda self:[k for k in self.iteritems(1)]
     items=lambda self:[k for k in self.iteritems()]
     edges=SQLGraphEdgeDescriptor()
+
+
+class SQLEdgeDictClustered(dict):
+    'simple cache for 2nd level dictionary of target_id:edge_id'
+    def __init__(self,g,fromNode):
+        self.g=g
+        self.fromNode=fromNode
+        dict.__init__(self)
+    def __iadd__(self,l):
+        for target_id,edge_id in l:
+            dict.__setitem__(self,target_id,edge_id)
+        return self # iadd MUST RETURN SELF!
+
+class SQLEdgesClusteredDescr(object):
+    def __get__(self,obj,objtype):
+        e=SQLEdgesClustered(obj.table,obj.edge_id,obj.source_id,obj.target_id)
+        for source_id,d in obj.d.iteritems(): # COPY EDGE CACHE
+            e.load([(edge_id,source_id,target_id)
+                    for (target_id,edge_id) in d.iteritems()])
+        return e
+
+class SQLGraphClustered(object):
+    'SQL graph with clustered caching -- loads an entire cluster at a time'
+    _edgeDictClass=SQLEdgeDictClustered
+    def __init__(self,table,source_id='source_id',target_id='target_id',
+                 edge_id='edge_id'):
+        self.table=table
+        self.source_id=source_id
+        self.target_id=target_id
+        self.edge_id=edge_id
+        self.d={}
+    def __getstate__(self):
+        return dict(table=self.table,source_id=self.source_id,
+                    target_id=self.target_id,edge_id=self.edge_id)
+    def __getitem__(self,k):
+        'get edgeDict for source node k, from cache or by loading its cluster'
+        try: # GET DIRECTLY FROM CACHE
+            return self.d[k]
+        except KeyError:
+            pass # HAVE TO LOAD THE ENTIRE CLUSTER CONTAINING THIS NODE
+        self.table.cursor.execute('select t2.%s,t2.%s,t2.%s from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s group by t2.%s'
+                                  %(self.source_id,self.target_id,
+                                    self.edge_id,self.table.name,
+                                    self.table.name,self.source_id,
+                                    self.table.clusterKey,self.table.clusterKey,
+                                    self.table.primary_key),(k,))
+        self.load(self.table.cursor.fetchall()) # CACHE THIS CLUSTER
+        return self.d[k] # RETURN EDGE DICT FOR THIS NODE
+    def load(self,l=None):
+        'load the specified rows (or all, if None provided) into local cache'
+        if l is None:
+            try: # IF ALREADY LOADED, NO NEED TO DO ANYTHING
+                return self._isLoaded
+            except AttributeError:
+                pass
+            self.table.cursor.execute('select %s,%s,%s from %s'
+                                      %(self.source_id,self.target_id,
+                                        self.edge_id,self.table.name))
+            l=self.table.cursor.fetchall()
+            self._isLoaded=True
+            self.d.clear() # CLEAR OUR CACHE AS load() WILL REPLICATE EVERYTHING
+        for source_id,target_id,edge_id in l: # SAVE TO OUR CACHE
+            try:
+                self.d[source_id]+=[(target_id,edge_id)]
+            except KeyError:
+                d=self._edgeDictClass(self,source_id)
+                d+=[(target_id,edge_id)]
+                self.d[source_id]=d
+    def __invert__(self):
+        'interface to reverse graph mapping'
+        try:
+            return self._inverse # INVERSE MAP ALREADY EXISTS
+        except AttributeError:
+            pass
+        self._inverse=SQLGraphClustered(self.table,self.target_id,self.source_id,
+                                        self.edge_id) # JUST SWAP TARGET & SOURCE
+        self._inverse._inverse=self
+        for source_id,d in self.d.iteritems(): # INVERT OUR CACHE
+            self._inverse.load([(target_id,source_id,edge_id)
+                                for (target_id,edge_id) in d.iteritems()])
+        return self._inverse
+    edges=SQLEdgesClusteredDescr() # CONSTRUCT EDGE INTERFACE ON DEMAND
+    
+
+class SQLEdgesClustered(SQLGraphClustered):
+    'edges interface for SQLGraphClustered'
+    class _edgeDictClass(list):
+        def __init__(self,*l):
+            list.__init__(self)
+    def __iter__(self):
+        self.load()
+        for edge_id,l in self.d.iteritems():
+            for source_id,target_id in l:
+                yield source_id,target_id,edge_id
+    def keys(self): return [x for x in self]
 
 
 def describeDBTables(name,cursor,idDict):
