@@ -157,11 +157,11 @@ def store_seqlen_dict(d,ifile,idFilter=None):
 
 def fastacmd_seq(filepath,id,start=None,end=None):
     "Get complete sequence or slice from a BLAST formatted database"
-    len=None
+    maxlen=None
     if start is not None: # USE ABILITY TO GRAB A SLICE OF THE SEQUENCE
         if start==0 and end==1: # fastacmd FAILS ON -L 1,1: RETURNS WHOLE SEQ! UGH!
             cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end+1)
-            len=1 # GOT 2 LETTERS, SO HAVE TO SLICE DOWN TO 1... UGH!
+            maxlen=1 # GOT 2 LETTERS, SO HAVE TO SLICE DOWN TO 1... UGH!
         else: # NORMAL USAGE... AT LEAST fastacmd WORKS SOME OF THE TIME...
             cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end)
     else:
@@ -172,12 +172,15 @@ def fastacmd_seq(filepath,id,start=None,end=None):
     for line in ofile:
         for word in line.split(): # GET RID OF WHITESPACE...
             s += word
-    if ofile.close() is not None:
-        raise OSError('command %s failed' % cmd)
-    if len is None:
+    exitstatus=ofile.close()
+    if exitstatus==768:
+        raise KeyError('sequence %s not found in %s' %(id,filepath))
+    elif exitstatus is not None:
+        raise OSError('command %s failed. Not in PATH?' % cmd)
+    if maxlen is None:
         return s
     else: # PROTECT AGAINST fastacmd SCREWUPS
-        return s[:len]
+        return s[:maxlen]
 
 
 class FastacmdIntervalCache(object):
@@ -232,6 +235,10 @@ class BlastSequenceBase(SequenceBase):
         self.db=db
         self.id=id
         SequenceBase.__init__(self)
+        self.checkID() # RAISE KeyError IF THIS SEQ NOT IN db
+    def checkID(self):
+        'check whether this seq ID actually present in the DB, KeyError if not'
+        return self.strslice(0,2) # TRY TO GET TINY PIECE OF SEQUENCE
     def strslice(self,start,end,useCache=True):
         "Efficient access to slice of a sequence, useful for huge contigs"
         if useCache:
@@ -246,17 +253,21 @@ class BlastSequence(BlastSequenceBase):
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
         return self.db.seqLenDict[self.id][0]
+    def checkID(self):
+        'check whether this seq ID actually present in the DB, KeyError if not'
+        try:
+            return self.db.seqLenDict[self.id][0]
+        except TypeError: # int KEY NOT ALLOWED IN shelve
+            raise KeyError('sequence %s not found in %s'
+                           %(self.id,self.db.filepath))
 
 class FileDBSeqDescriptor(object):
     "Get sequence from a concatenated pureseq database for obj.id"
     def __get__(self,obj,objtype):
         return obj.strslice(0,obj.db.seqLenDict[obj.id][0])
 
-class FileDBSequence(BlastSequenceBase):
+class FileDBSequence(BlastSequence):
     seq=FileDBSeqDescriptor()
-    def __len__(self):
-        "Use persistent storage of sequence lengths to avoid reading whole sequence"
-        return self.db.seqLenDict[self.id][0]
     def strslice(self,start,end,useCache=True):
         "Efficient access to slice of a sequence, useful for huge contigs"
         if useCache:
@@ -1083,7 +1094,11 @@ Set trypath to give a list of directories to search.'''
     def __getitem__(self,k):
         "for ID 'foo.bar', return item 'bar' in dict f associated with prefix 'foo'"
         (prefix,id) =k.split(self.separator)
-        return self.prefixDict[prefix][id]
+        d=self.prefixDict[prefix]
+        try: # TRY TO USE int KEY FIRST
+            return d[int(id)]
+        except ValueError,KeyError: # USE DEFAULT str KEY
+            return d[id]
 
     def __contains__(self,k):
         "test whether ID in union; also check whether seq key in one of our DBs"
