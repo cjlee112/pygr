@@ -183,13 +183,17 @@ class SQLTable(SQLTableBase):
     def __iter__(self): return iter(self.keys())
     def load(self,oclass=None):
         "Load all data from the table"
+        try: # IF ALREADY LOADED, NO NEED TO DO ANYTHING
+            return self._isLoaded
+        except AttributeError:
+            pass
         if oclass is None:
             oclass=self.itemClass
         self.cursor.execute('select * from %s' % self.name)
         l=self.cursor.fetchall()
         for t in l:
             self.cacheItem(t,oclass) # CACHE IT IN LOCAL DICTIONARY
-        self.__class__=SQLTableBase # ONLY CAN LOAD ONCE, SO REVERT TO BASE CLASS
+        self._isLoaded=True # MARK THIS CONTAINER AS FULLY LOADED
 
     def __getitem__(self,k): # FIRST TRY LOCAL INDEX, THEN TRY DATABASE
         try:
@@ -429,7 +433,12 @@ class SQLGraphClustered(object):
     'SQL graph with clustered caching -- loads an entire cluster at a time'
     _edgeDictClass=SQLEdgeDictClustered
     def __init__(self,table,source_id='source_id',target_id='target_id',
-                 edge_id='edge_id'):
+                 edge_id='edge_id',clusterKey=None):
+        import types
+        if isinstance(table,types.StringType): # CREATE THE TABLE INTERFACE
+            if clusterKey is None:
+                raise ValueError('you must provide a clusterKey argument!')
+            table=SQLTableClustered(table,clusterKey=clusterKey)
         self.table=table
         self.source_id=source_id
         self.target_id=target_id
