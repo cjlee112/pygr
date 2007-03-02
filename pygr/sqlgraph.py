@@ -437,7 +437,7 @@ class SQLGraphClustered(object):
         self.d={}
     def __getstate__(self):
         return dict(table=self.table,source_id=self.source_id,
-                    target_id=self.target_id,edge_id=self.edge_id)
+                    target_id=self.target_id,edge_id=self.edge_id,d={})
     def __getitem__(self,k):
         'get edgeDict for source node k, from cache or by loading its cluster'
         try: # GET DIRECTLY FROM CACHE
