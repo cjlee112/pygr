@@ -346,7 +346,7 @@ class IDNodeDict(object):
                   self.graph.edgeDB[edgeInfo]
     keys=lambda self:[k[1] for k in self.edges()] ##### ITERATORS
     values=lambda self:[k[2] for k in self.edges()]
-    items=lambda self:[k[1:2] for k in self.edges()]
+    items=lambda self:[k[1:3] for k in self.edges()]
     def __iter__(self):
         for source,target,edgeInfo in self.edges():
             yield target
