@@ -111,30 +111,54 @@ if v1 >= 2 and v2 > 2:
     metadata['download_url'] = "http://prdownloads.sourceforge.net/pygr/pygr-%s.tar.gz" % version
     metadata['classifiers'] = [ c for c in classifiers.split('\n') if c ]
 
+def copyFile(source,target):
+   'OS independent copy function'
+   if source==target: # PROTECT AGAINST POSSIBILITY OF OVER-WRITING SELF
+      return # NO NEED TO DO ANYTHING
+   ifile=file(os.path.normpath(source))
+   ofile=file(os.path.normpath(target),'w')
+   ofile.write(ifile.read())
+   ifile.close()
+   ofile.close()
+
+def compilePyrex(cfile):
+   'for proper class pickling, pyrexc needs full-dotted-module-path filename format'
+   modulename='.'.join(cfile.split('/')) # e.g. pygr/cdict.c -> pygc.cdict.c
+   ctarget=os.path.join(os.path.dirname(cfile),modulename) # ADD DIRECTORY PATH
+   copyFile(cfile[:-2]+'.pyx',ctarget[:-2]+'.pyx') # COPY pyx FILE TO DESIRED NAME
+   try: # COPY pxd FILE IF IT EXISTS...
+      copyFile(cfile[:-2]+'.pxd',ctarget[:-2]+'.pxd') # COPY pxd FILE TO DESIRED NAME
+   except IOError:
+      pass
+   cmd='pyrexc %s.pyx'%ctarget[:-2]
+   print cmd
+   exit_status=os.system(cmd) # TRY USING PYREX TO COMPILE EXTENSIONS
+   if exit_status!=0:  # CAN'T RUN THE PYREX COMPILER TO PRODUCE C
+      print '\n\nPyrex compilation failed!  Is pyrexc missing or not in your PATH?'
+      print 'Skipping extension module... you will be lacking some functionality:',modulename
+      return False # SIGNAL COMPILATION FAILED
+   copyFile(ctarget,cfile) # COPY .c FILE BACK TO DESIRED NAME
+   return True # SIGNAL COMPILATION SUCCEEDED
+
 def runSetup(script_args=None):
-   buildExtensions=True
-   if os.access('pygr/cdict.c',os.R_OK):
-      print 'Using existing pyrexc-generated C-code...'
-   else:  # HMM, NO PYREXC COMPILED CODE, HAVE TO RUN PYREXC
-      exit_status=os.system('cd pygr;pyrexc cdict.pyx') # TRY USING PYREX TO COMPILE EXTENSIONS
-      if exit_status!=0:  # CAN'T RUN THE PYREX COMPILER TO PRODUCE C
-         print '\n\nPyrex compilation failed!  Is pyrex missing or not in your PATH?'
-         print 'Skipping all extension modules... you will be lacking some functionality: pygr.cdict'
-         buildExtensions=False
-      else:
-         print 'Generating C code using pyrexc: cdict.c...'
-         exit_status=os.system('cd pygr;pyrexc cnestedlist.pyx') # COMPILE PYREX cnestedlist
-         print 'Generating C code using pyrexc: seqfmt.c...'
-         exit_status=os.system('cd pygr;pyrexc seqfmt.pyx') # COMPILE PYREX cnestedlist
+   'prepare extension module code, run distutils setup'
+   buildExtensions=[]
+   pyrexTargets={'pygr/cdict.c':
+                 Extension('pygr.cdict',sources = ['pygr/cgraph.c', 'pygr/cdict.c']),
+                 'pygr/cnestedlist.c':
+                 Extension('pygr.cnestedlist',
+                           sources = ['pygr/intervaldb.c', 'pygr/cnestedlist.c',
+                                      'pygr/apps/maf2nclist.c']),
+                 'pygr/seqfmt.c':Extension('pygr.seqfmt',sources = ['pygr/seqfmt.c'])}
+   for cfile,extmodule in pyrexTargets.items():
+      if os.access(cfile,os.R_OK):
+         print 'Using existing pyrexc-generated C-code',cfile
+      elif not compilePyrex(cfile):  # HMM, NO PYREXC COMPILED CODE, HAVE TO RUN PYREXC
+         continue # PYREX COMPILATION FAILED, CAN'T ADD THIS MODULE TO OUR EXTENSIONS
+      buildExtensions.append(extmodule)
 
-
-   if buildExtensions:
-      cdict_module = Extension('pygr.cdict',sources = ['pygr/cgraph.c', 'pygr/cdict.c'])
-      cnestedlist_module = Extension('pygr.cnestedlist',
-                                     sources = ['pygr/intervaldb.c', 'pygr/cnestedlist.c',
-                                                'pygr/apps/maf2nclist.c'])
-      seqfmt_module = Extension('pygr.seqfmt',sources = ['pygr/seqfmt.c'])
-      metadata['ext_modules'] = [cdict_module,cnestedlist_module,seqfmt_module]
+   if len(buildExtensions)>0:
+      metadata['ext_modules'] = buildExtensions
 
    setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
 
