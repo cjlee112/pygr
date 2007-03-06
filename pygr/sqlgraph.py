@@ -174,7 +174,7 @@ class SQLTableBase(dict):
 def getKeys(self):
     'uses db select; does not force load'
     self.cursor.execute('select %s from %s' %(self.primary_key,self.name))
-    return self.cursor.fetchall() # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
+    return [t[0] for t in self.cursor.fetchall()] # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
 
 
 class SQLTable(SQLTableBase):
