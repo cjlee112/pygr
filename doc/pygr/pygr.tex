@@ -804,11 +804,8 @@ from pygr import seqdb,cnestedlist
 annoDB=seqdb.AnnotationDB(sliceDB,genome) # CREATE THE ANNOTATION DB
 nlmsa=cnestedlist.NLMSA('exonAnnot','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
                         use_virtual_lpo=True,bidirectional=False)
-for id,a in sliceDB.items(): # SAVE ALL ANNOTATION INTERVALS
-  ival=genome[a.name][a.start:a.stop] # GET CORRESPONDING INTERVAL OF genome
-  ann=annoDB[id] # ANNOTATION OBJ IS ACTUALLY SAME SEQ IVAL, BUT DIFFERENT ID,DB...
-  nlmsa+=ival # ADD THIS GENOME SEQ TO ALIGNMENT GRAPH AS A ``NODE''
-  nlmsa[ival]+=ann # ADD ALIGNMENT BETWEEN ival AND ann INTERVALS
+for a in annoDB.itervalues(): # SAVE ALL ANNOTATION INTERVALS
+  nlmsa.addAnnotation(a) # ADD ALIGNMENT BETWEEN ival AND ann INTERVALS
 nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
 pygr.Data.Bio.Genomics.ASAP2.exons=annoDB # ADD AS A PYGR.DATA RESOURCE
 pygr.Data.Bio.Genomics.ASAP2.exonmap=nlmsa # NOW SAVE MAPPING AND SCHEMA
@@ -1358,7 +1355,7 @@ There are several methods and attributes you can override to extend or customize
 the behavior of your own SeqPath-derived classes.  Typically you will derive
 either from the Sequence class, or in some cases from the SeqPath class.
 
-\begin{funcdesc}{strslice}{start, stop} 
+\begin{funcdesc}{strslice}{start, stop, useCache=True} 
   called to get the string
   sequence of the interval ({\em start, stop}).  You can provide your own strslice()
   method to customize how sequence is stored and accessed.  For example,
@@ -1366,6 +1363,10 @@ either from the Sequence class, or in some cases from the SeqPath class.
   \method{BlastSequence.strslice()} obtains it using the 
   \code{fastacmd -L start,stop} 
   UNIX shell command from the NCBI toolkit.
+  The optional \var{useCache} argument controls whether your \method{strslice} method
+  should attempt to get the sequence slice from its database cache (if any),
+  or, if false, only directly from its back-end storage (in the usual way
+  described above).
 \end{funcdesc}
 
 \begin{funcdesc}{__len__}{}
@@ -1384,9 +1385,35 @@ either from the Sequence class, or in some cases from the SeqPath class.
   See \class{seqdb.BlastSequenceCache} class for an example.
   If the sequence object has a \code{db} attribute, and that database object
   it points to has an \code{itemSliceClass} attribute, \code{SeqPath.__getitem__}
-  will use that class to construct the subinterval object.  Otherwise it will
+  will use that class to construct the subinterval object.  Similarly,
+  if the sequence object has an \code{annot} attribute, and that annotation
+  object has a \code{db} attribute, again the \code{itemSliceClass} attribute
+  of that database will be used as the class to construct the subinterval
+  object.  Otherwise it will
   use \code{SeqPath} itself as the class for constructing the subinterval object.
+
+  Note: this \code{itemSliceClass} behavior applies not only to 
+  sequence slices obtained via \method{__getitem__}, but also from all other
+  methods that return sequence slices, such as the following list:
+  \method{before}, \method{after}, \method{__mul__}, \method{__neg__}.
+  \method{__add__}, \method{__iadd__}.
 \end{funcdesc}
+
+\begin{funcdesc}{__mul__}{other}
+  get the sequence interval intersection of \var{self} and \var{other}.
+\end{funcdesc}
+
+\begin{funcdesc}{__neg__}{}
+  get the sequence interval representing the opposite strand of \var{self} 
+  i.e. the slice whose string value is the reverse complement of the string
+  value of \var{self}.
+\end{funcdesc}
+
+\begin{funcdesc}{__add__}{other}
+  get the sequence interval union of \var{self} and \var{other}, i.e.
+  the smallest sequence interval that contains both of them.
+\end{funcdesc}
+
 
 \begin{funcdesc}{__getattr__}{attr}
   if you subclass a \class{SeqPath}-derived class and supply a \method{__getattr__}
@@ -1912,6 +1939,11 @@ inconsistent results when the input data are not a true multiple-sequence alignm
   will raise a \code{KeyError}.
 \end{funcdesc}
 
+\begin{funcdesc}{addAnnotation}{annotation}
+  adds an alignment relationship to \var{annotation} from its underlying
+  sequence interval.  Note: to use this, the NLMSA must have been created with the
+  {\em use_virtual_lpo=True} option.
+\end{funcdesc}
 
 \begin{funcdesc}{__getitem__}{seqInterval}
   prepare to store an alignment relationship for the sequence interval \var{seqInterval},
@@ -2474,16 +2506,51 @@ Useful attributes:
 \begin{itemize}
 
 \item
-\member{seqClass}: the object class to use for instantiating new sequence objects from this BLAST database.  You can set this to create customized sequence behaviors.
+\member{itemClass}: the object class to use for instantiating new sequence objects from this BLAST database.  You can set this to create customized sequence behaviors.  
+This is used by \class{pygr.Data} to propagate correct attribute schemas to
+items / slices from database containers managed by it.
+
+\item
+\member{itemSliceClass}: the object class to use for instantiating new sequence slice objects (i.e. subintervals of sequences from this BLAST database).  You can set this to create customized sequence behaviors.
+This is used by \class{pygr.Data} to propagate correct attribute schemas to
+items / slices from database containers managed by it.
 
 \end{itemize}
+
+\subsubsection{BlastDBXMLRPC}
+A subclass of \class{BlastDB} that adds a couple methods needed to serve
+the data to clients connecting over XMLRPC.  For example, to make an XMLRPC
+server for a blast database, accessible on port 5020:
+\begin{verbatim}
+import coordinator
+server=coordinator.XMLRPCServerBase(name,port=5020)
+db=BlastDBXMLRPC('sp') # OPEN BlastDB AS USUAL, BUT WITH SUBCLASS
+server['sp']=db # ADD OUR DATABASE TO THE XMLRPC SERVER
+server.serve_forever() # START SERVING XMLRPC REQUESTS, UNTIL KILLED.
+\end{verbatim}
+
+\subsubsection{XMLRPCSequenceDB}
+Class for a client interface that accesses a Blast database over
+XMLRPC (from the the \class{BlastDBXMLRPC} acting as the server).
+\begin{funcdesc}{__init__}{url,name}
+  \var{url} must be the URL (including port number) for accessing the 
+  XMLRPC server; \var{name} must be the key of the BlastDBXMLRPC object
+  in that server's dictionary (in the example above, it would be 'sp').
+  Thus to access the server above (assuming it is running on leelab port 5020):
+\begin{verbatim}
+db=XMLRPCSequenceDB('http://leelab:5020','sp')
+hbb=db['HBB_HUMAN'] # GET A SEQUENCE OBJECT FROM THE DATABASE...
+\end{verbatim}
+\end{funcdesc}
+Currently, this class provides sequence access.  You can work with sequences
+exactly as you would with a \class{BlastDB}, but cannot perform actual BLAST searches
+(i.e. the \method{blast} and \method{megablast} methods don't work over XMLRPC).
 
 \subsubsection{FileDBSequence}
 The default class for sequence objects returned from BlastDB.  It provides efficient,
 fast access to sequence slices (subsequences).  When the BlastDB is initially opened,
 Pygr constructs a length and offset index that enables FileDBSequence to \code{seek()}
-to the correct location for any substring of the sequence.  This is a newly implemented
-class to be released in Pygr 0.4.
+to the correct location for any substring of the sequence.  New in Pygr 0.4.
 
 \subsubsection{BlastSequence}
 
@@ -2506,103 +2573,112 @@ it uses the NCBI tool fastacmd to retrieve sequence efficiently from a BLAST dat
 the len() method is implemented using the seqLenDict, a precalculated index of the sequence lengths.  So again no sequence has to be read by Python.
 
 \end{itemize}
-\subsubsection{BlastSequenceCache}
 
-Implements a variant of BlastSequence designed to merge and cache requests for local intervals of sequence so that repeated accesses to these regions are bundled and cached for efficiency.  You work with sequence objects of this type normally, using Python slicing to obtain subintervals, and str() to get the sequence string for a subinterval.  But behind the scenes, it does two things:
-
+\subsubsection{AnnotationDB}
+This class provides a general interface for sequence annotation databases.
+This interface follows several principles:
 \begin{itemize}
-\item
-all slicing operations are recorded, in the form of a cache of superintervals.  Overlapping or adjacent intervals are merged into a superinterval up to a maximum superinterval size (default 20000).  It will automatically create as many superintervals as needed to cover the requested subinterval slices.  Each superinterval is represented by an object of the FastacmdIntervalCache class.
+\item An {\em annotation object} acts both like a sequence interval
+(representing the region of sequence that it annotates), and as an object
+with annotation attributes that provide further information or relations
+for that annotation.  For example, an object \code{e} representing an exon annotation
+would act both like the genomic sequence interval that constitutes that exon
+(i.e. you can use any of the usual \class{SeqPath} methods to get information
+about that sequence interval), but also might have attributes that link it
+to its {\em splice graph}.  E.g.  \code{str(e)} would return the actual
+nucleotide sequence of the exon; \code{for e2,splice in e.next.items()} would iterate
+through the list of exons it is connected to by a forward splice, etc.
 
-\item 
-when the sequence string of a subinterval is requested, the cache actually retrieves (and caches) the entire superinterval containing that subinterval.  Fastacmd only needs to be called once for this superinterval.  Subsequent subinterval string requests that fall within this cached superinterval are simply returned directly from the cache, without calling fastacmd.
+\item An annotation object always has an \member{annot} attribute that
+points to the complete annotation.  Since an annotation object is a sequence interval,
+it can itself be sliced (e.g. \code{e[:10]} gets the slice representing
+the first ten bases of the exon); such annotation slices also have
+an \member{annot} attribute, which will simply point to the annotation
+object representing the complete exon (i.e. just \code{e} itself).
+To check whether an annotation \code{e} is the complete annotation
+(as opposed to just a slice of part of the annotated region), use the
+logical test \code{e.annot is e}.
 
-\end{itemize}
-
-\subsubsection{SQLSequence}
-
-Implements a subclass inheriting from SQLRow and NamedSequenceBase, to use a relational database table to obtain the actual sequence.  There are three minor variants DNASQLSequence, RNASQLSequence, ProteinSQLSequence (so that the sequence does not have to analyze itself to determine what kind of sequence it is).  Its constructor takes the same arguments as SQLRow(table, id), where table is the SQLTable object representing the table in which the sequence is stored, and id is the primary key of the row representing this sequence.  However, normally this class is simply passed to the Table object itself so that it will use it to instantiate new row objects whenever they are requested via its dictionary interface.  Here's a simple example:
-
+\item The mapping of an annotation object to the sequence region it
+represents is trivial, i.e. the object itself behaves as that sequence interval.
+The reverse mapping (for any region of sequence, find the annotation(s) 
+that map to that region) is best performed by creating an NLMSA alignment
+object and saving the mapping as follows:
 \begin{verbatim}
-class YiProteinSequence(ProteinSQLSequence): # CREATE A NEW SQL SEQUENCE CLASS
-    def __len__(self): return self.protein_length  # USE LENGTH STORED IN DATABASE
-protein=jun03[protein_seq_t] # protein IS OUR SQLTable OBJECT REPRESENTING PROTEIN SEQUENCE TABLE
-protein.objclass(YiProteinSequence) # FORCE PROTEIN SEQ TABLE TO USE THIS TO INSTANTIATE ROW OBJECTS
-pseq=protein['Hs.1162'] # GET PROTEIN SEQUENCE OBJECT FOR A SPECIFIC CLUSTER
+nlmsa=cnestedlist.NLMSA('myAnnotDB','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
+                        use_virtual_lpo=True,bidirectional=False)
+for a in annoDB.itervalues(): # GET EACH ANNOTATION OBJ IN DATABASE
+  nlmsa.addAnnotation(a) # SAVE ALIGNMENT OF ITS SEQ INTERVAL TO THIS ANNOTATION
+nlmsa.build() # CREATE FINAL INDEXES FOR THE ALIGNMENT DATABASE
+\end{verbatim}
+Later you can get the list of annotations in some sequence interval \code{s}
+as easily as 
+\begin{verbatim}
+for a in nlmsa[s]: # FIND ANNOTATIONS THAT MAP TO s
+  # DO SOMETHING...
 \end{verbatim}
 
-Let's go through this line by line:
-
-\begin{itemize}
-
-\item
-we create a subclass of ProteinSQLSequence to show how Python makes it easy to create customized behaviors that can make database access more efficient.  Here we've simply added a __len__ method that uses the protein_length attribute obtained directly from the database, courtesy of SQLRow.__getattr__, which knows what columns exist in the database, and provides them transparently as object attributes.  (The ordinary NamedSequenceBase __len__ method calculates it by obtaining the whole sequence string and calculating its length.  Clearly it's more efficient for the database to retrieve this number (stored as a column called protein_length) and return it, rather than making it send us the whole sequence).
-
-\item
-next we call the protein.objclass() method to inform the table object that it should use our new class for instantiating any row objects for this table.  It will call this class with the usual SQLRow contructor arguments (table, id).
 \end{itemize}
+\begin{funcdesc}{__init__}{sliceDB,seqDB,itemClass=AnnotationSeq,itemSliceClass=AnnotationSlice,itemAttrDict=None,sliceAttrDict={}}
+  Constructs an annotation database using several arguments:
 
-\subsubsection{StoredPathMapping}
+  \var{sliceDB}, a database that takes an annotation ID as a key, and returns
+  a slice information object with attributes that give the sequence ID and start/stop
+  coordinates of the sequence interval representing the annotation.
 
-A second major area in Pygr is representation and query of multiple sequence alignment databases in a way that is scalable to whole genomes.  We have previously showed (in our work on Partial Order Alignment) that graphs provide both a compact and algorithmically powerful way to store alignments.  Combining this with "interval alignment" makes it scalable and gives a simple interface.  In Pygr, alignments are just another kind of graph, whose nodes are sequence intervals, and edges are alignment relations.  This provides a general-purpose facility for working with sets of sequence intervals, sequence annotation databases, and multiple sequence alignments, all queryable via Pygr graph queries.  We have implemented different container subclasses to work with these data in memory or to work transparently with data stored in relational databases.  The consistency and simplicity of the Pygr framework makes it a good interface both to run external tools like BLAST, and to store or query the results in persistent storage like a MySQL database.
+  \var{seqDB}, a sequence database that takes a sequence ID as a key, and
+  returns a sequence object.
 
+  \var{itemClass}: the class to use for constructing an annotation object 
+  to be returned from the AnnotationDB.__getitem__.  You can extend the
+  behavior of annotation objects by subclassing \class{AnnotationSeq}.
+  If the AnnotationDB participates in important schema relations,
+  pygr.Data may add properties to the \var{itemClass} that implement
+  its schema relations to other database containers.  (See the reference
+  docs on \module{pygr.Data} below for details).
+
+  \var{itemSliceClass}: the class to use for slices of annotation
+  objects returned from the AnnotationDB.__getitem__.  You can extend the
+  behavior of annotation objects by subclassing \class{AnnotationSlice}.
+  If the AnnotationDB participates in important schema relations,
+  pygr.Data may add properties to the \var{itemSliceClass} that implement
+  its schema relations to other database containers.  (See the reference
+  docs on \module{pygr.Data} below for details).
+
+  \var{sliceAttrDict}, a dictionary providing the attribute names for the
+  sequence ID, start and stop coordinates in each object returned from \var{sliceDB}.
+  For example,
 \begin{verbatim}
-hg17=BlastDB('/data/ucsc/hg17') # GET CONTAINER FOR HUMAN GENOME DATABASE
-bcl2m=hg17['chr22'][16544303:16588541] # GET INTERVAL WITH BCL2L13 GENE
-al=hg17.megablast(mouse_bcl2,maxseq=1) # GET REPEAT-MASKED MEGABLAST ALIGNMENT, ONLY TOP HIT
-al[bcl2m[1000:1100] ]+=mrna[210:310] #ADD ALIGNMENT OF A 100nt SEGMENT TO mrna SEGMENT
-al.storeSQL('test.table',db_cursor) # STORE COMPLETE ALIGNMENT IN RELATIONAL DATABASE
-for e in MAFStoredPathMapping(bcl2m,'ucsc_maf8',u).edges(): #GET ITS MULTIGENOMEALIGNMENTS
-   print str(e.srcPath),str(e.destPath) # PRINT THE ACTUAL ALIGNED SEQUENCE INTERVALS
+sliceAttrDict=dict(id='chromosome',start='gen_start',stop='gen_stop')
 \end{verbatim}
+  would make it use \code{s.chromosome,s.gen_start,s.gen_stop} as the ID and interval
+  coordinates for each slice information object \code{s}.  Note: the start,stop
+  coordinates should follow the \class{SeqPath} sign convention, i.e. positive
+  coordinates mean an interval on the positive strand, and negative coordinates
+  mean an interval on the negative strand (i.e. the reverse complement of
+  the positive strand.  See the reference documentation on \class{SeqPath} above
+  for details).
+\end{funcdesc}
 
-Note: {\em We will be unifying all sequence alignment functionality under the 
-NLMSA interface design sometime in the near future.  Specifically, the
-\class{PathMapping} and related classes, while similar to \class{NLMSA},
-will be replaced with interfaces that are identical to the \class{NLMSA}
-interface.}
+\begin{funcdesc}{__getitem__}{id}
+  Get the annotation object with primary key \var{id}.  This annotation object
+  is both a sequence interval (representing the region of sequence that it
+  annotates, e.g. for an exon, the region of genomic sequence that constitutes
+  that exon), and also an annotation (i.e. it may have additional attributes
+  from the slice information object, that give useful information about this
+  annotation).
+\end{funcdesc}
 
-\subsubsection{SliceDB}
-This class enables you to apply ``slicing information'' from 
-one database to sequences from a second database.  For example,
-you could have a database that lists genes as intervals (slices)
-on genomic sequences stored in a BlastDB database.  The only
-requirements are:
-\begin{itemize}
-\item
-{\em slice database}: must accept a string identifier as a key,
-and return a slice information object as a value.
+\subsubsection{AnnotationSeq}
+\begin{funcdesc}{originalIval}{}
+  Returns a sequence interval object representing this annotation region.
+  The only difference (versus the annotation object itself) is that the
+  sequence interval object will not have an \member{annot} attribute or
+  any other attributes that would mark it as an annotation.  This is mainly
+  important for NLMSA alignments, which treat annotation objects differently
+  (as an annotation) from sequence objects.
+\end{funcdesc}
 
-\item
-{\em slice information}: a slice information object must
-have the following attributes: \member{name} gives the identifier
-of the sequence containing the slice; \member{start} and \member{stop}
-give the coordinates of the sequence interval (which should be positive
-integers following standard
-Python slice coordinate conventions); \member{ori} gives the sequence
-orientation as an integer (1 for positive orientation, -1 for
-negative orientation).
-
-\item
-{\em sequence database}: must accept a string identifier as a key,
-and return a sliceable sequence object as a value.
-
-\end{itemize}
-
-Both databases should raise \code{KeyError} for bad identifiers.
-The current \class{SliceDB} implementation caches sequence objects so
-that subsequent calls for the same identifier will not require
-repeating the database queries to the two databases.  To
-remove a sequence object from the cache, just use
-\code{del db[id]} as usual.
-
-SliceDB inherits from the builtin Python \class{dict} class,
-so all standard methods can be used.
-
-\begin{verbatim}
-db=SliceDB(sliceDB,seqDB) # CREATE OUR DATABASE
-gene=db[cluster_id] # USE IT TO GET A GENE SEQUENCE...
-\end{verbatim}
 
 
 \subsubsection{VirtualSeq}
@@ -2713,6 +2789,25 @@ id=(~db)[seq] # GET PROPERLY PREFIXED-IDENTIFIER FOR THIS SEQUENCE
   the distinct prefix groups.  See \class{PrefixUnionMemberDict}.
 \end{funcdesc}
 
+\begin{funcdesc}{cacheHint}{owner,ivalDict}
+  Communicates a set of caching hints to the appropriate member
+  databases.  \var{ivalDict} must be a dictionary whose keys are
+  sequence ID strings, and whose values are each a (start,stop) tuple
+  for the associated covering interval coordinates to
+  cache for each sequence.  \var{owner} should be a python object
+  whose existence controls the lifetime of these cache hints.
+  When \var{owner} is garbage-collected by Python (due to its 
+  reference count going to zero), the member databases will clear
+  these cache hints from their cache storage.
+
+  On \class{PrefixUnionDict}, this method simply passes along
+  the cache hints to the appropriate member databases by calling
+  their \method{cacheHint} method, without itself doing anything
+  to cache the information.
+\end{funcdesc}
+
+
+
 \subsubsection{PrefixUnionMemberDict}
 Implements membership testing on distinct prefix groups.  Specifically,
 you can bind a given prefix to a value
@@ -2743,6 +2838,142 @@ v=d[k] # raises KeyError if k not a member of 'prefix1' or other prefix group in
   this dictionary, obtained from the bound \class{PrefixUnionDict}.
 \end{funcdesc}
 
+\subsubsection{PrefixDictInverse}
+Provides the interface to the inverse mapping of the \class{PrefixUnionDict}.
+\begin{funcdesc}{__getitem__}{k}
+  Returns the fully-qualified string ID for sequence object \var{k}.  
+  Properly handles both sequence annotation object and regular sequence
+  objects.
+\end{funcdesc}
+
+\subsubsection{PrefixDictInverseAdder}
+Adds the capability of automatically adding new sequence databases to the
+\class{PrefixUnionDict}, if needed.  This is implemented by extending
+the standard \method{__getitem__} method:
+\begin{funcdesc}{__getitem__}{k}
+  Returns the fully-qualified string ID for sequence object \var{k}.  
+  Properly handles both sequence annotation object and regular sequence
+  objects.  If sequence object \var{k} is from a sequence database that
+  is not in the \class{PrefixUnionDict}, it will be automatically added
+  to the prefixUnion, if the prefixUnion has an \member{addAll} attribute
+  set to \var{True}; if not, a \code{KeyError} is raised.
+  This is used in the standard \class{NLMSA} write mode 'w'
+  to allow users to add sequences to the alignment without having to 
+  previously add the sequence databases containing those sequences, 
+  to the prefixUnion for the NLMSA.
+\end{funcdesc}
+
+
+
+\subsubsection{BlastSequenceCache}
+
+This class is deprecated; the \class{FileDBSequence} class and associated
+database container caching mechanisms provide a more powerful mechanism
+that is intended to replace \class{BlastSequenceCache}.
+
+Implements a variant of BlastSequence designed to merge and cache requests for local intervals of sequence so that repeated accesses to these regions are bundled and cached for efficiency.  You work with sequence objects of this type normally, using Python slicing to obtain subintervals, and str() to get the sequence string for a subinterval.  But behind the scenes, it does two things:
+
+\begin{itemize}
+\item
+all slicing operations are recorded, in the form of a cache of superintervals.  Overlapping or adjacent intervals are merged into a superinterval up to a maximum superinterval size (default 20000).  It will automatically create as many superintervals as needed to cover the requested subinterval slices.  Each superinterval is represented by an object of the FastacmdIntervalCache class.
+
+\item 
+when the sequence string of a subinterval is requested, the cache actually retrieves (and caches) the entire superinterval containing that subinterval.  Fastacmd only needs to be called once for this superinterval.  Subsequent subinterval string requests that fall within this cached superinterval are simply returned directly from the cache, without calling fastacmd.
+
+\end{itemize}
+
+\subsubsection{SQLSequence}
+
+Implements a subclass inheriting from SQLRow and NamedSequenceBase, to use a relational database table to obtain the actual sequence.  There are three minor variants DNASQLSequence, RNASQLSequence, ProteinSQLSequence (so that the sequence does not have to analyze itself to determine what kind of sequence it is).  Its constructor takes the same arguments as SQLRow(table, id), where table is the SQLTable object representing the table in which the sequence is stored, and id is the primary key of the row representing this sequence.  However, normally this class is simply passed to the Table object itself so that it will use it to instantiate new row objects whenever they are requested via its dictionary interface.  Here's a simple example:
+
+\begin{verbatim}
+class YiProteinSequence(ProteinSQLSequence): # CREATE A NEW SQL SEQUENCE CLASS
+    def __len__(self): return self.protein_length  # USE LENGTH STORED IN DATABASE
+protein=jun03[protein_seq_t] # protein IS OUR SQLTable OBJECT REPRESENTING PROTEIN SEQUENCE TABLE
+protein.objclass(YiProteinSequence) # FORCE PROTEIN SEQ TABLE TO USE THIS TO INSTANTIATE ROW OBJECTS
+pseq=protein['Hs.1162'] # GET PROTEIN SEQUENCE OBJECT FOR A SPECIFIC CLUSTER
+\end{verbatim}
+
+Let's go through this line by line:
+
+\begin{itemize}
+
+\item
+we create a subclass of ProteinSQLSequence to show how Python makes it easy to create customized behaviors that can make database access more efficient.  Here we've simply added a __len__ method that uses the protein_length attribute obtained directly from the database, courtesy of SQLRow.__getattr__, which knows what columns exist in the database, and provides them transparently as object attributes.  (The ordinary NamedSequenceBase __len__ method calculates it by obtaining the whole sequence string and calculating its length.  Clearly it's more efficient for the database to retrieve this number (stored as a column called protein_length) and return it, rather than making it send us the whole sequence).
+
+\item
+next we call the protein.objclass() method to inform the table object that it should use our new class for instantiating any row objects for this table.  It will call this class with the usual SQLRow contructor arguments (table, id).
+\end{itemize}
+
+\subsubsection{StoredPathMapping}
+
+Note: This class is deprecated; the \class{NLMSA} alignment database class provides
+a much more powerful interface that is intended to replace older mechanisms
+such as \class{StoredPathMapping}.
+
+A second major area in Pygr is representation and query of multiple sequence alignment databases in a way that is scalable to whole genomes.  We have previously showed (in our work on Partial Order Alignment) that graphs provide both a compact and algorithmically powerful way to store alignments.  Combining this with "interval alignment" makes it scalable and gives a simple interface.  In Pygr, alignments are just another kind of graph, whose nodes are sequence intervals, and edges are alignment relations.  This provides a general-purpose facility for working with sets of sequence intervals, sequence annotation databases, and multiple sequence alignments, all queryable via Pygr graph queries.  We have implemented different container subclasses to work with these data in memory or to work transparently with data stored in relational databases.  The consistency and simplicity of the Pygr framework makes it a good interface both to run external tools like BLAST, and to store or query the results in persistent storage like a MySQL database.
+
+\begin{verbatim}
+hg17=BlastDB('/data/ucsc/hg17') # GET CONTAINER FOR HUMAN GENOME DATABASE
+bcl2m=hg17['chr22'][16544303:16588541] # GET INTERVAL WITH BCL2L13 GENE
+al=hg17.megablast(mouse_bcl2,maxseq=1) # GET REPEAT-MASKED MEGABLAST ALIGNMENT, ONLY TOP HIT
+al[bcl2m[1000:1100] ]+=mrna[210:310] #ADD ALIGNMENT OF A 100nt SEGMENT TO mrna SEGMENT
+al.storeSQL('test.table',db_cursor) # STORE COMPLETE ALIGNMENT IN RELATIONAL DATABASE
+for e in MAFStoredPathMapping(bcl2m,'ucsc_maf8',u).edges(): #GET ITS MULTIGENOMEALIGNMENTS
+   print str(e.srcPath),str(e.destPath) # PRINT THE ACTUAL ALIGNED SEQUENCE INTERVALS
+\end{verbatim}
+
+Note: {\em We will be unifying all sequence alignment functionality under the 
+NLMSA interface design sometime in the near future.  Specifically, the
+\class{PathMapping} and related classes, while similar to \class{NLMSA},
+will be replaced with interfaces that are identical to the \class{NLMSA}
+interface.}
+
+\subsubsection{SliceDB}
+For most applications, \class{AnnotationDB} is a better choice than
+this older class.
+This class enables you to apply ``slicing information'' from 
+one database to sequences from a second database.  For example,
+you could have a database that lists genes as intervals (slices)
+on genomic sequences stored in a BlastDB database.  The only
+requirements are:
+\begin{itemize}
+\item
+{\em slice database}: must accept a string identifier as a key,
+and return a slice information object as a value.
+
+\item
+{\em slice information}: a slice information object must
+have the following attributes: \member{name} gives the identifier
+of the sequence containing the slice; \member{start} and \member{stop}
+give the coordinates of the sequence interval (which should be positive
+integers following standard
+Python slice coordinate conventions); \member{ori} gives the sequence
+orientation as an integer (1 for positive orientation, -1 for
+negative orientation).
+
+\item
+{\em sequence database}: must accept a string identifier as a key,
+and return a sliceable sequence object as a value.
+
+\end{itemize}
+
+Both databases should raise \code{KeyError} for bad identifiers.
+The current \class{SliceDB} implementation caches sequence objects so
+that subsequent calls for the same identifier will not require
+repeating the database queries to the two databases.  To
+remove a sequence object from the cache, just use
+\code{del db[id]} as usual.
+
+SliceDB inherits from the builtin Python \class{dict} class,
+so all standard methods can be used.
+
+\begin{verbatim}
+db=SliceDB(sliceDB,seqDB) # CREATE OUR DATABASE
+gene=db[cluster_id] # USE IT TO GET A GENE SEQUENCE...
+\end{verbatim}
+
+
 
 \subsubsection{Functions}
 The seqdb module also provides several convenience functions:
@@ -2762,6 +2993,720 @@ The seqdb module also provides several convenience functions:
   \code{s.id}.
 \end{funcdesc}
 
+\subsection{pygr.Data Module}
+\label{pygrData-module}
+This module provides a simple but powerful interface for creating
+a ``data namespace'' in which users can access complex datasets
+by simply requesting the name chosen for a given dataset -- much
+like Python's \code{import} mechanism enables users to access
+a specified code resource by name, without worrying about where it
+should be found or how to assemble its many parts.  For an introduction,
+see the pygr.Data tutorial.
+
+\subsubsection{What kinds of data can be saved in pygr.Data?}
+There are a few basic principles you should be aware of:
+\begin{itemize}
+\item The object should be a database (container) or mapping (graph),
+not an individual item of data.  pygr.Data is intended to provide
+a name space for commonly used resources, i.e. an entire database,
+which in turn enable you to access the items they contain.
+
+\item The object must be {\em picklable} using Python's \module{pickle}
+module.  pygr.Data uses \module{pickle} both to save your object to 
+a persistent storage (either a python \module{shelve}, MySQL database,
+or XMLRPC server), and to analyze its {\em dependencies} on other
+Python objects.  The default pickling procedure (save a dictionary of
+your object's attributes) works fine for simple Python classes.
+However, if your class accesses external data (i.e. data not actually
+stored in its attributes), you will have to define \method{__getstate__}
+and \method{__setstate__} methods that save and restore just the 
+relevant information for it to be able to access the information
+it needs (e.g. if your class reads a file, \method{__getstate__} must
+save its filename).  If your class inherits from \class{dict}, you
+will also have to define a \method{__reduce__} method.  For a simple
+example, see the classes \class{seqdb.AnnotationDB,seqdb.SeqDBbase,seqdb.XMLRPCSequenceDB}, and the \module{pickle} module documentation.
+
+\item pygr.Data provides a {\em namespace} for commonly used data resources.
+Once you import pygr.Data, you can save resources into it just as you would into
+any python namespace.  For example to save an alignment object \code{nlmsa}
+as the resource ID ``Bio.Seq.MSA.ucsc17'':
+\begin{verbatim}
+import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
+pygr.Data.Bio.Seq.MSA.ucsc17=nlmsa # NOW SAVE THE ALIGNMENT
+\end{verbatim}
+The crucial point is that this namespace is {\em persistent} between
+Python interpreter sessions.  The actual data is not saved in the pygr.Data 
+module file, but in {\em resource databases} either on your disk, in
+a remote XMLRPC server, or in a MySQL database (for details see below).
+
+\item To get a named resource from pygr.Data, you again just use this
+namespace, but with a ``constructor syntax'', i.e. add a call at the end of
+the resource name:
+\begin{verbatim}
+import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
+nlmsa=pygr.Data.Bio.Seq.MSA.ucsc17() # SYNTAX EMPHASIZES CONSTRUCTION OF INSTANCE
+\end{verbatim}
+The actual resource object is not obtained until you call the constructor.
+
+\item pygr.Data also stores {\em schema information} for the resources.
+These represent relationships between one resource and another resource
+(or their contents).  For example
+\begin{verbatim}
+pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
+  pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
+                               bindAttrs=('next','previous','exons'))
+\end{verbatim}
+indicates that the pygr.Data resource \code{Bio.Genomics.ASAP2.hg17.splicegraph}
+is a many-to-many mapping of the pygr.Data resource \var{exons} onto itself,
+with additional ``edge information'' for each exon-to-exon mapping
+provided by the pygr.Data resource \var{splices}.  Furthermore, this mapping
+is to be bound directly to items of \var{exons} (i.e. objects returned
+from \code{exons.__getitem__}) as their \member{next} attribute (giving the
+forward mapping), their \member{previous} attribute (giving the reverse
+mapping), and the \member{exons} attribute on items of \var{splices}
+(giving the mapping of the splice object to its pair of (source,target) exons
+as a tuple).
+
+\item when a user requests a resource that itself depends on other
+resources, pygr.Data automatically loads them.  Thus users do not need
+to know about the complex set of dependencies between data; all they
+have to do ask is ask for the specific data resource they want,
+and pygr.Data will take care of all the details behind the scenes.
+For example, a database of exon annotations is not very useful without
+also loading the genomic sequence database that these annotations
+refer to.  Using pygr.Data, we can simply load the exon annotation
+resource, and it will automatically get the genomic sequence data
+for us.  Thus to get an exon's sequence all we have to do is:
+\begin{verbatim}
+exons=pygr.Data.Bio.Genomics.ASAP2.hg17.exons() # ANNOTATION DATABASE
+str(exons[464]) # GET THE SEQUENCE OF THIS SPECIFIC EXON
+\end{verbatim}
+
+
+\item When one resource {\em depends} on another, the order in which you
+save them to pygr.Data matters.  Specifically, you should save them in
+order of their dependencies, i.e. if \var{B} depends on \var{A}, first save
+\var{A}, then \var{B}.  If you do it this way, \var{B} will be stored
+in pygr.Data with a reference to the pygr.Data resource ID you assigned
+to \var{A}, whereas if you saved \var{B} before \var{A}, it will be stored
+with a direct reference to object \var{A} instead of to its resource ID.
+This will still work, but will make pygr.Data less intelligent about how
+it retrieves resource \var{A}.  For example, if you opened \var{B} on
+another computer that didn't have \var{A} accessible in exactly the same
+way as on your original computer, this would simply fail -- even if
+pygr.Data had resource rules for obtaining the \var{A} resource ID
+remotely.
+
+\item It should be noted that at the moment there is only one name
+(\code{Bio}) at the top-level of the pygr.Data module namespace (since currently
+this is only being used for bioinformatics).  However it's 
+trivial to add new names as \class{ResourcePath} objects to the pygr.Data
+module.
+
+\end{itemize}
+
+\subsubsection{How does pygr.Data access resource databases?}
+The list of resource databases is read from the environment variable
+PYGRDATAPATH.  If this variable is empty or missing, the default path
+for pygr.Data to search is the user's home directory (\$HOME) and
+current directory, in that order.  PYGRDATAPATH should be a comma separated list
+of ``resource path'' strings, which must be one of the following:
+\begin{itemize}
+\item A directory path (e.g. /usr/local/pygrdata), in which pygr.Data should
+look for (or, if none present, create) a database file called ``.pygr_data''.  
+You can use the tilde character to indicate your home directory path.
+These are accessed by pygr.Data using its \class{ResourceDBShelve} class.
+
+\item a URL for accessing an XMLRPC server that is serving a pygr.Data
+resource database index (previously started by you or someone else).
+The URL must begin with ``http://''.
+These are accessed by pygr.Data using its \class{ResourceDBClient} class.
+
+\item a MySQL server, indicated by a path entry of the form 
+``mysql:\var{DBNAME.TABLENAME}'',
+where \var{DBNAME} is the name of the database in your MySQL
+server that contains the pygr.Data resource index,
+and \var{TABLENAME} is the name of the table which contains this index.
+pygr.Data will get the host, user, and password information for connecting 
+to the MySQL server as usual from your
+.my.cnf configuration file in your home directory.
+Such resource databases are accessed by pygr.Data using its 
+\class{ResourceDBMySQL} class.
+\end{itemize}
+
+\subsubsection{pygr.Data Layers}
+To provide an intuitive way to refer to different resource databases,
+pygr.Data associates ``layer names'' with them.  For example, the layer
+name for the first resource database whose path is given relative to 
+your home directory is \code{my}, and the first one whose path is given
+relative to current directory is \code{here}.  Remote resource databases
+(XMLRPC; MySQL) each store their own layer name.  For example, within the
+Lee lab, we keep a MySQL resource database whose layer name is ``leelab''.
+
+\begin{itemize}
+\item You can specify precisely which layer you want to access by prefixing
+your pygr.Data resource name with the desired layer name, e.g.
+\begin{verbatim}
+nlmsa=pygr.Data.leelab.Bio.Seq.MSA.ucsc17()
+\end{verbatim}
+
+\item Similarly, you can specify which layer you want to store a resource
+or schema, in the same way:
+\begin{verbatim}
+pygr.Data.leelab.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
+  pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
+                               bindAttrs=('next','previous','exons'))
+\end{verbatim}
+
+\item If you do not specify a layer, pygr.Data uses the first resource
+database in its list that returns the desired resource.
+
+\item You can delete a resource and its schema rules from a specific resource
+database by specifying its layer name:
+\begin{verbatim}
+del pygr.Data.leelab.Bio.Seq.MSA.ucsc17
+\end{verbatim}
+
+\item pygr.Data provides a set of default layer names:
+the first resource database whose path is given relative to 
+your home directory is \code{my}; the first one whose path is given
+relative to current directory is \code{here};the first one whose path is given
+relative to the root directory / is \code{system};
+the first one whose path begins ``http://'' is \code{remote};
+the first one whose path begins ``mysql:'' is \code{MySQL}.
+
+\end{itemize}
+
+\subsubsection{pygr.Data Schema Concepts}
+Parallel to the pygr.Data namespace, pygr.Data maintains a schema namespace 
+that records schema information for pygr.Data resources.  Broadly speaking,
+{\em schema} is any relationship that holds true over a set of data in a given
+collection (e.g. in the human genome, ``genes have exons'', a one-to-many relation).
+In traditional (relational) databases, this schema information is usually
+represented by {\em entity-relationship diagrams} showing foreign-key
+relationships between tables.  A pygr.Data resource is a collection
+of objects (referred to in these docs as a ``container'' or ``database'');
+thus in pygr, schema is a relation between pygr.Data resources, i.e.
+a relationship that holds true between the items of one pygr.Data resource
+and the items of another.  For examples, items in a ``genes'' resource
+might each have a mapping to a subset of items in an ``exons'' resource.
+This is achieved in pygr.Data by saving the mapping object itself as a pygr.Data
+resource, and then specifying its schema to pygr.Data (in this example,
+its schema would be a one-to-many relation between the ``genes''
+resource and the ``exons'' resource).  Saving the mapping object 
+as a pygr.Data resource, and saving its schema information, are
+two separate steps.
+\begin{verbatim}
+pygr.Data.Bio.Genomics.ASAP2.hg17.geneExons=geneToExons # SAVE MAPPING
+pygr.Data.schema.Bio.Genomics.ASAP2.hg17.geneExons= \
+  pygr.Data.OneToManyRelation(genes,exons,bindAttrs=('exons','gene'))
+\end{verbatim}
+assuming that \code{genes} and \code{exons} are the pygr.Data resources
+that are being mapped.  This would allow a user to obtain the mapping
+from pygr.Data and use it just as you'd expect, e.g. assuming that
+\code{gene} is an item from \code{genes}:
+\begin{verbatim}
+geneToExons=pygr.Data.Bio.Genomics.ASAP2.hg17.geneExons()
+myexons=geneToExons[gene] # GET THE SET OF EXONS FOR THIS GENE
+\end{verbatim}
+In practice, pygr.Data accomplishes this by automatically setting
+\code{geneToExon}'s \code{sourceDB} and \code{targetDB} attributes
+to point to the \code{genes} and \code{exons} resources, respectively.
+
+Since most users find it easier to remember object-oriented behavior
+(e.g. ``a gene has an exons attribute'', rather than ``there exists a 
+mapping between gene objects and exon objects, called geneToExons''),
+pygr.Data provides an option to bind attributes of the mapped
+resource items.  In the example above, we bound an \member{exons} attribute
+to each item of \code{genes}, which automatically performs this mapping,
+e.g. we can iterate over all exons in a given gene as easily as
+\begin{verbatim}
+for exon in gene.exons: # gene.exons IS EQUIVALENT TO geneToExons[gene]
+  # DO SOMETHING...
+\end{verbatim}
+Note: in this usage, the user does not even need to know about the 
+existence of the \code{geneToExons} resource; pygr.Data will load it
+automatically when the user attempts to access the \code{gene.exons}
+attribute.  It can do this because it knows the schema of the pygr.Data
+resources!
+
+One additional aspect of pygr.Data schema relations goes a bit beyond
+ordinary mapping: a mapping between one object (source) and another
+(target) can have {\em edge information} that describes this specific
+relationship.  For example, the connection
+between one exon and another in the alternative splicing of an mRNA
+isoform, is a {\em splice}.  For alternative splicing analysis, it is
+actually crucial to have detailed information about the splice (e.g.
+what experimental evidence exists for that splice; what tissues it was
+observed, in what fraction of isoforms etc.) in addition to the exons.
+Therefore, pygr.Data allows us to save edge information also as part 
+of the schema, e.g. for a \code{splicegraph} representing the set of
+all splices (edges) between pairs of exons (nodes), we can
+store the schema as follows:
+\begin{verbatim}
+pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph=splicegraph # ADD A NEW RESOURCE
+pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
+  pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
+                               bindAttrs=('next','previous','exons'))
+\end{verbatim}
+This type of mapping (``edge'' relations between pairs of ``nodes'')
+is referred to in mathematics as a {\em graph}, and has very general
+utility for many applications.  For further information on graphs in 
+pygr, see the tutorial or the \module{mapping} module reference below.
+
+What information does pygr.Data schema actually store?  In practice,
+the primary information stored is {\em attribute} relations: 
+i.e. for a specified resource ID, a specified attribute name
+should be added to the resource object (or to items obtained
+from it), which in turn maps to some specified target resource
+(or items of that resource).  
+
+Although users do not need to know
+how this information is saved, I will outline the methodology
+as a reference for developers who want to work directly with this
+internal data (skip this section otherwise).
+\begin{itemize}
+\item In a given resource database (dictionary), information for constructing a 
+given resource \code{id} is stored with its resource ID as the key.  
+i.e. if \code{rdb} is a resource database, \code{rdb[id]} gives
+the string to unpickle to construct the resource.  Schema information
+for that resource is stored as \code{rdb['SCHEMA.'+id]}.
+
+\item This schema information (for a given resource) is itself
+a dictionary, whose keys are attribute names to bind to this 
+resource, and whose associated values are themselves dictionaries
+specifying the rules for what to bind to this attribute and how.
+See below for further details.
+
+\item Attributes are added as ``shadow attributes'' provided by 
+descriptors added to the class object for the resource or to
+its \member{itemClass} or \member{itemSliceClass} object if the
+attribute is to be bound to {\em items of the resource}.  Descriptors
+(also referred to in the Python documentation as ``properties'')
+are the major mechanism by which Python new-style classes
+(i.e. subclasses of \class{object} in Python 2.2 and later)
+can execute code in response to a user attempt to get an
+object attribute, and are definitely preferable over writing
+\method{__getattr__} method code if all that's desired
+is an attribute with a specified name.  For more information
+on descriptors, see the Python Reference Manual.
+
+\item The basic principles of these ``shadow attributes'' are that
+1. they are bound to the class object, not the instance object;
+2. they are only invoked if the specified attribute name is 
+missing from the instance object's \member{__dict__}; 
+3. once invoked, they save their
+result on the instance object (in its \member{__dict__})
+as the same-named attribute; 4. thus, the descriptor method
+will only be called once; thereafter the attribute will be 
+obtained directly from the value cached on the instance object;
+5. the descriptor only loads its target resource(s) when the user
+attempts to read the value of the attribute.  Thus no extra
+resources are loaded until the user actually demands information
+that requires them.
+
+\item Currently, these shadow attributes are implemented by
+three different descriptor classes in pygr.Data: 
+\class{OneTimeDescriptor}, for binding attributes directly on a resource
+object (container);
+ \class{ItemDescriptor}, for binding attributes on items (or slices of
+items) obtained from a resource object (via its __getitem__ method);
+\class{SpecialMethodDescriptor}, for binding special Python methods like
+\method{__invert__}.
+
+\item The rule information for a given attribute is itself a dictionary,
+with the following string keys governing the behavior of the shadow attribute.
+\var{targetID}: the pygr.Data resource ID of the resource that this
+attribute links to.
+\var{itemRule}: True if the attribute should be bound to {\em items}
+(and slices of items, if defined) of the source resource, rather than
+directly to the source resource object itself (if itemRule=False).
+\var{invert}: True if the target resource should first be inverted
+(i.e. query its reverse-mapping rather than its forward-mapping), False otherwise.
+\var{getEdges}: True if the attribute should query the target resource's
+\member{edges} mapping (i.e. the mapping provided by its \member{edges} attribute)
+rather than its forward mapping, False otherwise.
+\var{mapAttr}: if not None, use this named attribute of our source object,
+instead of the source object itself, as the key for search the target resource
+mapping.
+\var{targetAttr}: if not None, return this named attribute of the result of
+the search, rather than the result of the search itself.
+\end{itemize}
+
+\subsubsection{ResourceFinder}
+The core functionality of the pygr.Data module is provided by the
+\class{ResourceFinder} class, an instance of which is created at the
+top-level of the module as \code{pygr.Data.getResource}.  It 
+provides methods for adding, deleting and controlling pygr.Data
+resources and schema.
+
+\begin{funcdesc}{getResource}{id,layer=None,*args,**kwargs}
+  Look up pygr.Data resource \var{id}, using the specified abstract
+  resource \var{layer} if provided.  Searches the resouce database(s)
+  for \var{id}, constructs it from the saved resource rule (e.g. from
+  a local resource database, by unpickling the object).  Saves the 
+  object in its cache so that subsequent calls for the same resource
+  ID will return the same object.  Applies the stored pygr.Data schema
+  rules to it using \method{applySchema}().  Marks the object with
+  its \member{_persistent_id} attribute, whose value is just \var{id}.
+\end{funcdesc}
+
+\begin{funcdesc}{getResource.addResource}{id,obj,layer=None}
+  Add \var{obj} to pygr.Data as resource ID \var{id}, specifically within
+  abstract resource \var{layer} if provided.  Saves \var{obs} to 
+  the resource database, and marks it with its \member{_persistent_id}
+  attribute, whose value is just \var{id}.  For a resource \var{id} 'A.Foo.Bar'
+  this method is equivalent to the assignment statement
+\begin{verbatim}
+pygr.Data.A.Foo.Bar=obj
+\end{verbatim}
+  This method is provided mainly to enable writing code that automates
+  saving of resources, e.g. via code like
+\begin{verbatim}
+for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
+    pygr.Data.getResource.addResource('Bio.Seq.Genome.'+id,genome)
+\end{verbatim}
+\end{funcdesc}
+
+\begin{funcdesc}{getResource.deleteResource}{id,layer=None}
+  Delete resource \var{id} from the resource database specified by
+  \var{layer} if provided (or the default resource database otherwise).
+  Also delete its associated schema information.
+\end{funcdesc}
+
+\begin{funcdesc}{getResource.newServer}{name,serverClasses=None,clientHost=None,withIndex=False,**kwargs}
+  Create and return a new XMLRPC server to serve all pygr.Data resources 
+  currently loaded in memory that are capable of XMLRPC client-server
+  operation.  The server \var{name} will be used for 
+  purposes of XMLRPC communication.  The \var{withIndex=True} option
+  will cause the server to also act as a pygr.Data resource database
+  accessible via XMLRPC (i.e. add its URL to your PYGRDATAPATH environment
+  variable, to make its resources accessible to any Python script).
+  In this case, the server will add itself as new pygr.Data layer
+  \var{name}, for any Python script that accesses its resource index.
+
+  \var{serverClasses} allows you to specify a list of tuples of
+  classes that can be served via XMLRPC.  Each tuple should consist of
+  three values: \var{(dbClass,clientClass,serverClass)}, where 
+  \var{dbClass} is a normal pygr class, \var{clientClass} is the 
+  class to use for the XMLRPC client version of this data, and
+  \var{serverClass} is the class to use for the XMLRPC server of
+  this data.  If no value is provided to this option, the current
+  default is 
+\begin{verbatim}
+[(seqdb.BlastDB,seqdb.XMLRPCSequenceDB,seqdb.BlastDBXMLRPC),
+ (cnestedlist.NLMSA,xnestedlist.NLMSAClient,xnestedlist.NLMSAServer)] 
+\end{verbatim}
+  The \var{clientHost} option allows you to override the hostname
+  that clients will be instructed to connect to.  The default is simply
+  the fully qualified hostname of your computer.  But if, for example,
+  you wished to access your server by port-forwarding localhost port 5000
+  to your server port via SSH, you could pass a \var{clientHost}='localhost'
+  setting.
+
+  Once you create a server using this method, you start it using its
+  \method{serve_forever()} method.  If the server does not provide its
+  own index (i.e. \var{withIndex=False}), then you should first register
+  it to your local resource database server (so that clients of that server
+  will know about the new services your new server is providing), by
+  calling its \method{register()} method.
+\end{funcdesc}
+
+The following methods are mainly for internal use, and are unlikely to be
+needed by users of pygr.Data.
+\begin{funcdesc}{update}{}
+  Update \code{getResource}'s list of resource databases, by parsing the environment
+  variable PYGRDATAPATH and attempting to connect to the resource databases
+  listed there.  Does not return anything.
+\end{funcdesc}
+
+\begin{funcdesc}{addLayer}{layerName,rdb}
+  Add the resource database \var{rdb} to the current resource database list,
+  as a named layer given by the string \var{layerName}.  Over-writing an 
+  existing layer name is not allowed, for security reasons; 
+  the previous layer entry must first be deleted.
+\end{funcdesc}
+
+\begin{funcdesc}{getLayer}{layerName}
+  Get the specified resource database, by its layer name.  If \var{layerName}
+  is None, returns the default (first) resource database in its list.
+\end{funcdesc}
+
+\begin{funcdesc}{resourceDBiter}{}
+  Generates all the resource databases currently listed by \code{getResource}.
+\end{funcdesc}
+
+\begin{funcdesc}{registerServer}{locationKey,serviceDict}
+  Registers the set of resources specified by \var{serviceDict} to the
+  first resource database index in PYGRDATAPATH that will accept them.
+  \var{serviceDict} must be a dictionary whose keys are resource IDs and
+  whose associated values are pickled resource objects (encoded as strings).
+  \var{locationKey} should be a string name chosen to represent the ``location''
+  where the data are stored.  This can be anything you wish, and is mainly used
+  to let the user know where the data will come from.  This might be used
+  in future versions of pygr.Data to allow preferential screening of where
+  to get data from (local disk is better than NFS mounted disk, which in turn
+  might be preferable over remote XMLRPC data access).
+\end{funcdesc}
+
+\begin{funcdesc}{findSchema}{id}
+  Returns a dictionary for the schema (if any) found for the pygr.Data resource 
+  specified by \var{id}.  The dictionary keys are attribute names (representing
+  attributes of the specified resource or its contents that should have 
+  schema relations with other pygr.Data resources), and whose values are
+  themselves dictionaries specifying the precise schema rules for constructing
+  this specific attribute relation.
+\end{funcdesc}
+
+\begin{funcdesc}{schemaAttr}{id,attr}
+  Return the target data linked to by attribute \var{attr} of pygr.Data
+  resource \var{id}, based on the stored pygr.Data schema.  The target resource
+  object will be obtained by pygr.Data.getResource as usual.
+\end{funcdesc}
+
+\begin{funcdesc}{applySchema}{id,obj}
+  Apply the pygr.Data schema for resource \var{id} to the actual data
+  object representing it (\var{obj}), by decorating it (and / or its itemClass
+  and itemSliceClass) with properties representing its schema attributes.
+  These properties are implemented by adding descriptor attributes to the
+  associated class, such as \class{OneTimeDescriptor} or \class{ItemDescriptor}.
+\end{funcdesc}
+
+\begin{funcdesc}{saveSchema}{id,attr,bindingDict,layer=None}
+  Save a schema attribute relation for attribute \var{attr} of pygr.Data
+  resource \var{id}, to the specified resource database \var{layer} (or the default,
+  first resource database in the list, if no layer specified).
+  \var{bindingDict} must be a dictionary specifying the rules for
+  binding the attribute to a pygr.Data resource target; see below for details.
+\end{funcdesc}
+
+\begin{funcdesc}{delSchema}{id,layer=None}
+  Delete schema bindings for all attributes of the resource \var{id}, in
+  the specified resource database \var{layer}, as well as all schema relations
+  on other resources that are targeted to resource \var{id}.
+\end{funcdesc}
+
+\subsubsection{ResourceDBMySQL}
+Implements an interface to storage of a resource database in a MySQL
+database table.
+\begin{funcdesc}{__init__}{tablename,finder=None,createLayer=None}
+  \var{tablename} is the table to use in the database, in the format
+  ``\var{DBNAME.TABLENAME}'', where \var{DBNAME} is the name of the
+  database in the MySQL server, and \var{TABLENAME} is the name of
+  the table in that database that you wish to use to store the
+  resource database.  Host, port, user and password info are obtained
+  from your .my.cnf config file as usual for the mysql client.
+
+  \var{finder}, if specified gives the \class{ResourceFinder} instance
+  in which the new resource DB should be registered.  If None provided,
+  defaults to pygr.Data.getResource.
+
+  \var{createLayer}, if specified forces it to create a new table
+  in the MySQL database (instead of assuming that it already exists),
+  and saves \var{createLayer} as the layer name of this resource database.
+
+  Example: create a new resource database, give it the layer name ``leelab'',
+  and register it in our list of resource databases.
+\begin{verbatim}
+rdb=pygr.Data.ResourceDBMySQL('pygrdata.index',createLayer='leelab')
+\end{verbatim}
+\end{funcdesc}
+
+\begin{funcdesc}{__getitem__}{id}
+  Get resource \var{id} from this resource database, or \code{KeyError} 
+  if not found.
+\end{funcdesc}
+
+\begin{funcdesc}{__delitem__}{id}
+  Delete resource \var{id} from this resource database, or \code{KeyError} 
+  if not found.
+\end{funcdesc}
+
+\begin{funcdesc}{__setitem__}{id,obj}
+  Save resource \var{id} to this resource database, by pickling it
+  with \code{self.finder.dumps(obj)}.
+\end{funcdesc}
+
+\begin{funcdesc}{registerServer}{locationKey,serviceDict}
+  Saves the set of resources specified by \var{serviceDict} to the
+  database.
+  \var{serviceDict} must be a dictionary whose keys are resource IDs and
+  whose associated values are pickled resource objects (encoded as strings).
+  \var{locationKey} should be a string name chosen to represent the ``location''
+  where the data are stored.  This can be anything you wish, and is mainly used
+  to let the user know where the data will come from.  This might be used
+  in future versions of pygr.Data to allow preferential screening of where
+  to get data from (local disk is better than NFS mounted disk, which in turn
+  might be preferable over remote XMLRPC data access).
+\end{funcdesc}
+
+\begin{funcdesc}{setschema}{id,attr,ruleDict}
+  Save schema information for attribute \var{attr} on resource \var{id}
+  by pickling the \var{ruleDict}.
+\end{funcdesc}
+
+\begin{funcdesc}{delschema}{id,attr}
+  Delete schema information for attribute \var{attr} on resource \var{id}.
+\end{funcdesc}
+
+\begin{funcdesc}{getschema}{id}
+  Get schema information for resource \var{id}, in the form of a dictionary
+  whose keys are attribute names, and whose values are the associated
+  schema \var{ruleDict} for each bound attribute.
+\end{funcdesc}
+
+\subsubsection{ResourceDBShelve}
+Implements an interface to storage of a resource database in a Python
+\module{shelve} (i.e. BerkeleyDB file) stored on local disk.
+Provides the same interface as \class{ResourceDBMySQL}, except for
+no \method{registerServer} method.  Note: any method call that would
+save information to the database temporarily re-opens the database
+file in write mode, saves the required information, and immediately
+closes and re-opens
+the databae in read-only mode.  Thus, unless two clients try
+to save information to the same file at exactly the same time,
+successive writes by multiple clients will not interfere with each
+other.
+\begin{funcdesc}{__init__}{dbpath,finder,mode='r'}
+  \var{dbpath} is the path to the directory in which the shelve
+  file is found (or should be created, if none present).
+\end{funcdesc}
+
+\subsubsection{ResourceDBClient}
+Implements a client interface to storage of a resource database in an XMLRPC
+server.  For security reasons, only provides the \method{__getitem__},
+and \method{registerServer} methods.
+
+\subsubsection{ResourceDBServer}
+Implements a server interface for storage of a resource database in 
+a standard Python dict, served to clients via an XMLRPC
+server (use \class{coordinator.XMLRPCServerBase} as the XMLRPC
+server to serve this object).  
+
+\begin{funcdesc}{__init__}{layerName,readOnly=False}
+  \var{layerName} is the layer name that this server will provide
+  to pygr.Data clients.  \var{readOnly} if True, makes the server reject
+  any requests to add new database rules received via XMLRPC, i.e.
+  only allows \method{getName} and \method{getResource} calls via XMLRPC.
+  If False, also allows calls to \method{registerServer} and \method{delResource}.
+\end{funcdesc}
+
+\subsubsection{ResourcePath}
+Used for providing the dynamically extensible pygr.Data namespace
+that provides the normal interface for users to access pygr.Data resources.
+\begin{funcdesc}{__init__}{namepath,layerName=None}
+  \var{namepath} specifies the ID string to use for this resourcePath.
+  \var{layerName} if specified, gives the layer name that should be used
+  for finding this resource and any subattributes of it.
+
+  For example, \code{Bio} is added at the top-level of the pygr.Data module
+  by the following code:
+\begin{verbatim}
+Bio=ResourcePath('Bio')
+\end{verbatim}
+\end{funcdesc}
+
+\begin{funcdesc}{__getattr__}{attr}
+  extends the resource path by one step, returning a
+  \class{ResourcePath} object representing the requested attribute.
+\end{funcdesc}
+
+\begin{funcdesc}{__setattr__}{attr,obj}
+  saves \var{obj} as the specified resource ID, by calling
+  \method{getResource.addResource}, with our layer name (if any).
+\end{funcdesc}
+
+\begin{funcdesc}{__delattr__}{attr}
+  deletes the specified resource ID, by calling
+  \method{getResource.deleteResource}, with our layer name (if any).
+\end{funcdesc}
+
+\begin{funcdesc}{__call__}{*args,**kwargs}
+  Construct the specified resource ID, by calling \method{getResource},
+  with our layer name (if any), and the specified arguments (if any).
+\end{funcdesc}
+
+\subsubsection{SchemaPath}
+Class for top-level object representing a schema namespace.  e.g. in the pygr.Data
+module,
+\begin{verbatim}
+schema=SchemaPath() # CREATE ROOT OF THE schema NAMESPACE
+\end{verbatim}
+
+\subsubsection{ResourceLayer}
+Class for top-level object representing a pygr.Data layer.  e.g. in the pygr.Data
+module,
+\begin{verbatim}
+here=ResourceLayer('here') # CREATE TOP-LEVEL INTERFACE TO here LAYER
+\end{verbatim}
+
+\subsubsection{DirectRelation, ItemRelation, InverseRelation}
+\class{DirectRelation} is a convenience class for constructing 
+a single schema attribute relation on a pygr.Data resource,
+linking it to another pygr.Data resource.
+\begin{funcdesc}{__init__}{target}
+  \var{target} gives a reference to a pygr.Data resource, which will
+  be the target of a bound schema attribute.  \var{target} can be either
+  a string resource ID, a \class{ResourcePath} object, or
+  an actual pygr.Data resource (automatically marked with its ID
+  as the \member{_persistent_id} attribute).
+\end{funcdesc}
+
+\begin{funcdesc}{schemaDict}{}
+  returns a basic \var{ruleDict} dictionary for saving this schema binding.
+  Can be over-ridden by subclasses to customize schema binding behavior.
+\end{funcdesc}
+
+\begin{funcdesc}{saveSchema}{source,attr,layer=None,**ruleDict}
+  Saves a schema binding for attribute \var{attr} on pygr.Data resource
+  \var{source} to the specified resource database \var{layer} (or
+  to the default resource database if not specified).  \var{ruleDict}
+  if specified provides additional binding rules (which can add to or
+  over-ride those returned by the \method{schemaDict} method).
+  \var{source} can be either
+  a string resource ID, a \class{ResourcePath} object, or
+  an actual pygr.Data resource (automatically marked with its ID
+  as the \member{_persistent_id} attribute).
+\end{funcdesc}
+
+\class{ItemRelation} provides a subclass of \class{DirectRelation}
+that binds to the {\em items} of resource \var{source} rather than to the
+\var{source} object itself.
+
+\class{InverseRelation} provides a subclass of \class{DirectRelation},
+that binds \var{source} and \var{target} as each other's inverse mappings.
+That is, it binds an \member{inverseDB} attribute to each resource
+that points to the other resource.  When either resource is loaded,
+a special \method{__invert__} method will be added, that simply
+loads and returns the resource pointed to by the \member{inverseDB}
+binding.
+
+\subsubsection{ManyToManyRelation}
+Convenience class for constructing schema relations for
+a general graph mapping from a sourceDB to targetDB with edge info.
+\begin{funcdesc}{__init__}{sourceDB,targetDB,edgeDB=None,bindAttrs=None}
+  \var{sourceDB},\var{targetDB}, and \var{edgeDB} can be either
+  a string resource ID, a \class{ResourcePath} object, or
+  an actual pygr.Data resource (automatically marked with its ID
+  as the \member{_persistent_id} attribute).
+  \var{bindAttrs}, if provided, must give a list of string attribute names to be
+  bound, in order, to items of \var{sourceDB}, \var{targetDB},
+  and \var{edgeDB}, in that order.  A None value in this list simply
+  means that no attribute binding will be made to the corresponding
+  pygr.Data resource.
+\end{funcdesc}
+Note: this class simply records the information necessary for this
+schema relation.  The information is not actually saved to the resource
+database until its \method{saveSchema} method is called by 
+the \class{SchemaPath} object.  In addition to saving attribute
+bindings given by \var{bindAttrs}, this will also create bindings
+on the mapping resource object itself (i.e. the resource whose
+schema is being set; see an example in the tutorial).  Specifically,
+it will save bindings for its \member{sourceDB},\member{targetDB},
+and \member{edgeDB} attributes to the corresponding resources
+given by the \var{sourceDB},\var{targetDB},
+and \var{edgeDB} arguments.
+
 \subsection{sqlgraph Module}
 \label{sqlgraph-module}
 This module provides back-end database access.
@@ -2772,21 +3717,40 @@ an identifier as a key, and returns a Python object representing
 the corresponding row in the database.  Typically, these ``row''
 objects have an \member{id} attribute that represents the
 primary key, and all column names in the SQL table can be
-used as attribute names on the row object. 
+used as attribute names on the row object.
 
-This class is derived from
-the Python builtin \class{dict} class, so all standard methods 
-can be used.
+This class assumes that the database table has a primary key,
+which is used as the key value for the dictionary.  For tables
+with no primary key see other variants below.
 
-\begin{funcdesc}{objclass}{oclass}
-  Specify a object class to use for creating new ``row'' objects.
-  \var{oclass} must accept a single argument, a tuple object representing
-  a row in the database.  
+This class and its variants follow a simple rule for controlling
+how data is loaded into memory: if you simply iterate over IDs
+(i.e. \code{for id in mytable}) data is not pre-loaded into memory;
+each object will be fetched individually when you try to access it
+(e.g. \code{obj=mytable[id]}).  By contrast, if you call the table's
+\method{items} method, it will load data for the entire table into
+memory, on the rational basis that making this call signals that you
+intend to work with each and every object in the database table.  Other
+``value'' iterators such as \method{iteritems}, \method{values},
+and \method{itervalues} also load all the data.
 
-  Otherwise, the default \var{oclass} for SQLTable is
-  the \class{TupleO} class, which provides a named attribute interface
-  to the tuple values representing the row.
+\begin{funcdesc}{__iter__}{}
+  Iterate over all IDs (primary key values) in the table,
+  without loading the entire table into memory.
 \end{funcdesc}
+
+\begin{funcdesc}{items}{}
+  return a list of all (id,obj) pairs representing all data in the table,
+  after first loading the entire table into memory.
+\end{funcdesc}
+
+\begin{funcdesc}{__getitem__}{id}
+  get the object whose primary key is \var{id}, and cache it in
+  our local dictionary (so that subsequent requests will return the
+  same Python object, immediately, with no need to re-run an SQL query).
+  For non-caching versions of \class{SQLTable}, see below.
+\end{funcdesc}
+
 
 \begin{funcdesc}{load}{oclass=None}
   Load all data from the table, using \var{oclass} as the row object
@@ -2795,15 +3759,76 @@ can be used.
   in the Python dictionary of this class.
 \end{funcdesc}
 
-\begin{funcdesc}{select}{whereClause,params=None,oclass=None}
+\subsubsection{SQLTableBase}
+The base class for \class{SQLTable} and other variants below.
+This class is derived from
+the Python builtin \class{dict} class, so all standard methods of \class{dict}
+can be used.
+
+\begin{funcdesc}{__init__}{name,cursor=None,itemClass=None,attrAlias=None,clusterKey=None}
+  Open a connection to the existing SQL table specified by \var{name}.
+  You can supply a Python DB API \var{cursor} providing a connection
+  to the database server.  If \var{cursor} is None, it will attempt
+  to connect to a MySQL server using authentication information from your
+  .my.cnf configuration file as usual.
+
+  \var{itemClass} indicates 
+  the class that should be used for constructing item objects (representing
+  individual rows in the database).
+
+  \var{attrAlias}, if provided, must be a dictionary whose keys are
+  attribute names that should be bound to items from your database,
+  and whose values are an SQL column name or SQL expression that should
+  be used to obtain the value of the bound attribute.
+
+  \var{clusterKey}, if provided, is a caching hint for speeding up
+  database access by ``clustering'' queries to load an entire block
+  of rows that share the same value of the specified \var{clusterKey} column.
+  This caching hint is only used by the \class{Clustered} SQLTable variants
+  described in detail below.
+\end{funcdesc}
+
+\begin{funcdesc}{objclass}{itemClass}
+  Specify a object class to use for creating new ``row'' objects.
+  \var{itemClass} must accept a single argument, a tuple object representing
+  a row in the database.  
+
+  Otherwise, the default \var{oclass} for SQLTable is
+  the \class{TupleO} class, which provides a named attribute interface
+  to the tuple values representing the row.
+\end{funcdesc}
+
+\begin{funcdesc}{select}{whereClause,params=None,oclass=None,selectCols='t1.*'}
   Generate the list of objects that satisfy the \var{whereClause}
   via a SQL SELECT query.  This function is a generator, so you
   use it as an iterator.  \var{params} is passed to the
   cursor execute statement to allow additional control over
-  the query.
+  the query.  \var{selectCols} allows you to control what subset of
+  columns should actually be retrieved.
 \end{funcdesc}
 
+\begin{funcdesc}{_attrSQL}{attr}
+  Get a string expression for accessing attribute \var{attr} in SQL.
+  This might either simply be an alias to the corresponding column
+  name in the SQL table, or possibly an SQL expression that computes
+  the desired value, executed on the database server.
+\end{funcdesc}
+
+
+
 There are several variants of this class:
+\subsubsection{SQLTableClustered}
+A subclass of \class{SQLTable} that groups its retrieval
+of data from the table (into its local dictionary, where it
+is cached), into ``clusters'' of rows that share the same value of
+a column specified by the \var{clusterKey} argument to the \class{SQLTableBase}
+constructor.  For data that naturally subdivide into large clusters,
+this can speed up performance considerably.  If the clustering
+closely mirrors how users are likely to access the data, this
+performance gain will have relatively little cost in terms
+of memory wasted on loading rows that the user will not need.
+
+
 \subsubsection{SQLTableNoCache}
 Provide on-the-fly access to rows in the database, 
 but never cache results.  Use this when memory constraints or other 
@@ -2811,7 +3836,13 @@ considerations (for example, if the data in the database may change
 during program execution, and you want to make sure your program
 is always working with the latest version of the data) 
 make it undesirable to cache recently used row objects, as the
-standard \class{SQLTable} does.
+standard \class{SQLTable} does.  Instead it returns (by default)
+\class{SQLRow} objects that simply provide an interface
+to obtain desired data attributes via database SQL queries.
+Of course this reduces performance; every attribute access
+requires an SQL query.  You can customize the class used for
+providing this interface by specifying a different \var{itemClass}
+to the constructor.
 
 \subsubsection{SQLMultiTableNoCache}
 Drops the assumption of a one-to-one
@@ -2819,7 +3850,86 @@ mapping between each key and a row object (i.e. removes the
 assertion that the key is unique, a ``primary key''), allowing
 multiple row objects to be returned for a given key.  Therefore,
 the standard \method{__getitem__} must act as a generator, returning
-an iterator for one or more row object.
+an iterator for one or more row object.  You must set a 
+\member{_distinct_key} attribute to inform it of which 
+column to use as the key for searching the database;
+this defaults to ``id''.
+
+\subsubsection{SQLGraph}
+Provides a graph interface to data stored in a table
+in a relational database.  It follows the standard pygr 
+graph interface, i.e. it behaves like a dictionary whose
+keys are IDs of {\em source nodes}, and whose associated
+values are dictionaries whose keys are IDs of {\em target nodes},
+and whose associated values are IDs for each {\em edge} between
+a pair of nodes.  This class is a subclass of 
+\class{SQLTableMultiNoCache}.  By default, it assumes that
+the column names for source, target and edge IDs are simply
+``source_id'', ``target_id'', and ``edge_id'' respectively.
+To use different column names, simply provide an \var{attrAlias}
+dictionary to the constructor, e.g.
+\begin{verbatim}
+g=SQLGraph('YOURDB.YOURTABLE',attrAlias=dict(source_id='left_exon_form_id',
+                                             target_id='right_exon_form_id',
+                                             edge_id='splice_id'))
+\end{verbatim}
+For good performance, the columns storing the source_id, target_id,
+and edge_id should each be indexed.
+
+\begin{funcdesc}{__contains__}{id}
+  Test whether \var{id} exists as a source node in this graph.
+\end{funcdesc}
+
+\begin{funcdesc}{__invert__}{}
+  Return an \class{SQLGraph} instance representing the reverse 
+  directed graph (i.e. swap target nodes for source nodes).
+\end{funcdesc}
+
+\subsubsection{SQLGraphClustered}
+Provides a graph interface with improved performance based on
+using \class{SQLTableClustered} as the interface to the database
+table.  This has several implications: 1. the table should have
+a primary key; 2. the table should have a \var{clusterKey}
+column that provides the value for clustering rows in the table.
+This class can offer much better performance than \class{SQLGraph}
+for several reasons: 1. it caches data so that subsequent requests
+for the same node or edge will be immediate, with no need to query
+the SQL database; 2. it employs clustering to group together 
+data retrieval of many rows at a time sharing the same cluster key
+value, instead of one by one; 3. it provides a \method{load}
+method for loading the entire graph into cache (local dictionary);
+4. use of the \method{items} method and other ``value iterator'' methods
+will automatically perform a load of the entire graph, so that 
+only a single database query is used for the entire dataset, 
+rather than a separate query for each row or cluster.
+
+As for \class{SQLTable}, getting a list of node IDs using
+\method{__iter__} or \method{keys} does not force an automatic load of 
+the entire table into memory, but calling \method{items} or
+other ``value'' list / iterator methods will.
+
+\begin{funcdesc}{__init__}{table,source_id='source_id',target_id='target_id',edge_id='edge_id',clusterKey=None}
+  Similar to the \class{SQLTableBase}, but not exactly the same format.
+  \var{table} can either be a string table name, or an actual 
+  \class{SQLTableClustered} object.
+\end{funcdesc}
+
+\begin{funcdesc}{load}{l=None}
+  Load all data from the table, and store in our local cache (a
+  Python dictionary).  If \var{l} is not None, it provides a
+  list of tuples obtained via the \method{select} method that
+  should be added to the cache, instead of loading the entire
+  database table.
+\end{funcdesc}
+
+\begin{funcdesc}{__contains__}{id}
+  Test whether \var{id} exists as a source node in this graph.
+\end{funcdesc}
+
+\begin{funcdesc}{__invert__}{}
+  Return an \class{SQLGraphClustered} instance representing the reverse 
+  directed graph (i.e. swap target nodes for source nodes).
+\end{funcdesc}
 
 \subsubsection{TupleO}
 Default class for ``row objects'' returned by \class{SQLTable}.
