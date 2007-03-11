@@ -2002,6 +2002,30 @@ you're doing (details below).  This dictionary is of type NLMSASeqDict (see belo
 
 \end{itemize}
 
+\subsubsection{xnestedlist.NLMSAServer, xnestedlist.NLMSAClient}
+These two classes, provided by the separate \module{xnestedlist} module,
+provide an XMLRPC client-server mechanism for querying NLMSA databases
+over a network.  
+
+\class{NLMSAServer} is constructed exactly the same as a normal \class{NLMSA};
+it {\em is} a normal NLMSA with just two methods added for serving XMLRPC client
+requests.  See the \class{coordinator.XMLRPCServerBase} reference 
+documentation below for details about starting an XMLRPC server.
+
+\class{NLMSAClient} provides a read-only client interface for querying
+data in a remote \class{NLMSAServer}.  It takes two extra arguments for
+its constructor: \var{url}, the URL for the XMLRPC server; \var{name},
+the name of the NLMSAServer server object in the XMLRPC server's dictionary.
+For example, to use an NLMSA stored on a remote XMLRPC server,
+assuming that \code{myPrefixUnion} stores a dictionary of all the
+sequence databases used by that NLMSA alignment, would just be:
+\begin{verbatim}
+from pygr import xnestedlist
+nlmsa=xnestedlist.NLMSAClient(url='http://leelab.mbi.ucla.edu:5000',
+                              name='ucsc17',seqDict=myPrefixUnion)
+\end{verbatim}
+
+
 \subsubsection{NLMSASlice}
 A temporary object created on-the-fly to represent (an interface to provide 
 information about) the portion of the alignment associated with a specific
@@ -2372,6 +2396,8 @@ be a Python string, in which case that string is used as the identifier. 2) othe
 the object should be a SeqPath instance.  If it has a {\em name} attribute, that will
 be used as the identifier. 3) Otherwise, if it has a {\em id} attribute (which is present
 by default on sequence.Sequence objects), that will be used.
+
+
 
 
 \subsection{Seqdb Module}
@@ -3948,7 +3974,7 @@ object, and an identifier for this row.  Actual data requests will
 be relayed by \class{SQLRow} to the database table object.
 
 
-\subsection{graphs and graph query module}
+\subsection{mapping module: graphs and graph query}
 \label{graphs-query}
 
 The basic idea of Pygr is that all Python data can be viewed as a graph whose nodes are objects and whose edges are object relations (in Python, references from one object to another).  This has a number of advantages. 
@@ -4016,7 +4042,11 @@ Note on current behavior: currently, GraphQuery will throw a KeyError exception 
 
 \subsubsection{dictGraph}
 
-dictGraph is Pygr's main graph class.  It provides all the standard behaviors described above.  The current reference implementation uses standard Python dict objects to store the graph.  All the usual Mapping protocol methods can be used on dictGraph objects (top-level interface, in the examples above graph) and dictEdge objects (second-level interface; in the examples above graph[node]). e.g.
+dictGraph is Pygr's main in-memory graph class.  For persistent
+graph storage and query (e.g. stored in a relational database table
+or BerkeleyDB file), see the \class{IDGraph} class below.
+
+This class provides all the standard behaviors described above.  The current reference implementation uses standard Python dict objects to store the graph.  All the usual Mapping protocol methods can be used on dictGraph objects (top-level interface, in the examples above graph) and dictEdge objects (second-level interface; in the examples above graph[node]). e.g.
 
 \begin{itemize}
 
@@ -4037,6 +4067,59 @@ if node2 in graph[node1]:  test whether node1 has an edge to node2.  Again, if n
 \subsubsection{Directionality and Reverse Traversal}
 
 Note that dictGraph stores directed edges, that is, a->b does not imply b->a; those are two distinct edges that would have to be added separately if you want an edge going both directions.  Moreover, the current implementation of dictGraph does not provide a mechanism for traveling an edge backwards.  To do so with algorithmic efficiency requires storing each edge twice: once in a forward index and once in a reverse index.  Since that doubles the memory requirements for storing a graph, the default dictGraph class does not do this.  If you want such a "forward-backwards" graph, use the dictGraphFB subclass that stores both forwad and reverse indexes, and supports the inverse operator ($\sim$).  $\sim$ graph gets the reverse mapping, e.g. ($\sim$ graph)[node2] corresponds to the set of nodes that have edges to node2.  This area of the code hasn't been tested much yet.
+
+\subsubsection{IDGraph}
+This class provides a graph interface that can work with external storage
+in an SQL database table or BerkeleyDB file, based on storing node ID and
+edgeID values in the external storage.
+\begin{funcdesc}{__init__}{proxyDict=None,sourceDB=None,targetDB=None,edgeDB=None,**kwargs}
+  \var{proxyDict} must be a graph-style interface that stores the graph
+  purely in terms of node ID and edge ID values.  This could be an \class{IntShelve}
+  or \class{sqlgraph.SQLGraphClustered} instance, for example.  If None provided,
+  the constructor will create an \class{IntShelve} storage for you, passing
+  on \var{kwargs} to its constructor.
+
+  \var{sourceDB} must be a database container (dictionary interface) whose
+  keys are source node IDs, and whose values are the associated node objects.
+
+  \var{targetDB} must be a database container (dictionary interface) whose
+  keys are target node IDs, and whose values are the associated node objects.
+
+  \var{edgeDB} must be a database container (dictionary interface) whose
+  keys are edge IDs, and whose values are the associated edge objects.
+\end{funcdesc}
+
+\begin{funcdesc}{__iadd__}{node}
+  Add \var{node} to the graph, with no edges.  \var{node} must be an
+  item of \var{sourceDB}.
+\end{funcdesc}
+
+\begin{funcdesc}{__delitem__}{node}
+  Delete \var{node} from the graph, and its edges.  \var{node} must be a
+  source node in the graph.  \method{__isub__} does exactly the same thing.
+\end{funcdesc}
+
+\begin{funcdesc}{__invert__}{}
+  Returns an \class{IDGraph} interface to the inverse mapping
+  (i.e. where source and target nodes are swapped).
+\end{funcdesc}
+
+The object's \member{edges} attribute provides an interface to iterating
+over or querying its edge dictionary.
+
+\subsubsection{IntShelve}
+Provides an interface to the Python \module{shelve} persistent dictionary
+storage, that can accept \class{int} values as keys.
+\begin{funcdesc}{__init__}{filename=None,mode='r'}
+  Open the specified \module{shelve} BerkeleyDB file, using the specified
+  mode.
+\end{funcdesc}
+
+\begin{funcdesc}{close}{}
+  calls the shelve file's \method{close} method.
+\end{funcdesc}
+In other respects the \class{IntShelve} behaves like a regular shelve
+(dictionary interface).
 
 \subsubsection{Schema: binding object attributes to graphs}
 
@@ -4114,14 +4197,119 @@ A GraphQuery is basically an iterator that returns all possible mappings of the 
 
 
 
-\subsection{Coordinator Module}
+\subsection{coordinator Module}
 \label{coord-module}
 
 {\em Framework for running subtasks distributed over many computers, in a pythonic way, using SSH for secure process invocation and XMLRPC for message passing. Also provides simple interface for queuing and managing any number of such "batch jobs".}
 
-\subsubsection{Overview}
+I will first describe some classes for simple XMLRPC services, then proceed
+to the job control classes.
 
-The coordinator module provides a simple system for running a large collection of tasks on a set of cluster nodes.  It assumes:
+\subsubsection{XMLRPCServerBase}
+Base class for creating an XMLRPC server to serve data from multiple objects.
+On the server-side, this object can be treated as a dictionary whose
+keys are object names, and whose associated values are the server
+objects that will serve functionality to XMLRPC clients.
+It provides an XMLRPC method \method{methodCall} that takes an object name,
+method name, and arguments, and if the call is permitted by its security
+rules, calls the designated method on that object.
+\begin{funcdesc}{__init__}{name,host=None,port=5000,logRequests=False}
+  \var{name} is an arbitrary string identifier for the XMLRPC server.
+
+  \var{host} allows you to override the default hostname to use for this
+  server (which defaults to the fully-qualified domain name of this computer).
+  Setting it to 'localhost' will typically make the XMLRPC server only accessible
+  to processes running on this computer.
+
+  \var{port} specifies the port number on which this server should run.
+
+  \var{logRequests} is passed on to \class{SimpleXMLRPCServer} as
+  a flag determining whether it outputs verbose log information.
+\end{funcdesc}
+
+\begin{funcdesc}{__setitem__}{name,obj}
+  Save \var{obj} as the service called \var{name} in this XMLRPC server.
+  \var{obj} must have an \member{xmlrpc_methods} dictionary whose
+  keys are the names of its methods that XMLRPC clients are allowed
+  to call.
+\end{funcdesc}
+\begin{funcdesc}{__delitem__}{name}
+  Delete the service called \var{name} in this XMLRPC server.
+\end{funcdesc}
+\begin{funcdesc}{register}{url=None,name='index',server=None}
+  Send information describing the services in this XMLRPC server,
+  stored by the user on its \member{registrationData} attribute,
+  to the resource database server, which can be specified in 
+  several ways.  If \var{url} is not None, it will make an XMLRPC
+  connection to the resource database server using \var{url} (as the
+  URL for the XMLRPC server) and \var{name} (as the name of the server
+  object that stores the resource database dictionary).  Otherwise,
+  if \var{server} is not None, it is assumed to be a resource database
+  object (or XMLRPC connection to such a database) providing a
+  \method{registerServer} method that takes two arguments,
+  a \var{locationKey} and the registration data.  Otherwise,
+  it tries to connect to pygr.Data's default resource database
+  by calling its \code{getResource.registerServer} method with the
+  same arguments.
+\end{funcdesc}
+\begin{funcdesc}{serve_forever}{}
+  Start the XMLRPC server, after detaching it from
+  stdin, stdout and stderr; this call will never exit.
+\end{funcdesc}
+
+This XMLRPC server provides several interface methods to
+XMLRPC clients contacting it:
+\begin{funcdesc}{objectList}{}
+  Returns a dictionary of its server objects, whose keys are their
+  names, and whose values are in turn dictionaries whose keys are
+  their allowed method names.
+\end{funcdesc}
+\begin{funcdesc}{objectInfo}{objname}
+  Returns a dictionary whose keys are the allowed method names for
+  the server object named \var{objname}.
+\end{funcdesc}
+\begin{funcdesc}{methodCall}{objname,methodname,args}
+  Calls the designated method on the named server object, with the
+  provided \var{args}, and returns its result to the XMLRPC client.
+\end{funcdesc}
+
+Example server objects that can be added to a \class{XMLRPCServerBase}
+include \class{seqdb.BlastDBXMLRPC}, \class{xnestedlist.NLMSAServer}.
+
+
+\subsubsection{XMLRPCClient, get_connection}
+Client for accessing a \class{XMLRPCServerBase} server.  Provides 
+a dictionary interface whose keys are names of available server objects,
+and whose associated values are client objects that provide a transparent
+interface to the server objects (i.e. calling a method on the client
+object returns the value of the result of calling the same named method
+on the server object).
+\begin{funcdesc}{__init__}{url}
+  Makes a connection to the XMLRPC server running on the specified \var{url},
+  typically consisting of both a host name and port number.
+\end{funcdesc}
+\begin{funcdesc}{__getitem__}{name}
+  Obtain a client object for the server object specified by \var{name}.
+  It will be decorated with the set of methods on the server object
+  that are allowed to be accessed by XMLRPC.
+\end{funcdesc}
+
+As a convenience, the \module{coordinator} module provides a function
+\code{get_connection} that provides an efficient connection to XMLRPC
+server objects.  Specifically, it caches past requests, so that multiple
+requests for the same server object will re-use the same client object,
+and requests for different server objects on the same XMLRPC server will
+share the same \class{XMLRPCClient} connection.  It is simply used as follows:
+\code{get_connection(url,name)}, where \code{url} is the URL of the XMLRPC
+server, and \code{name} is the name of the server object you wish to access.
+For example:
+\begin{verbatim}
+myclient=coordinator.get_connection('http://leelab.mbi.ucla.edu:5000','ucsc17')
+\end{verbatim}
+
+\subsubsection{coordinator Module Functionality Overview}
+
+The \module{coordinator} module provides a simple system for running a large collection of tasks on a set of cluster nodes.  It assumes:
 
 \begin{itemize}
 
