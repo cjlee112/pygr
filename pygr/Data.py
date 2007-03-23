@@ -45,6 +45,15 @@ class ItemDescriptor(object):
         obj.__dict__[self.attr]=result # PROVIDE DIRECTLY TO THE __dict__
         return result
 
+class ForwardingDescriptor(object):
+    'forward an attribute request to item from another container'
+    def __init__(self,targetDB,attr):
+        self.targetDB=targetDB # CONTAINER TO GET ITEMS FROM
+        self.attr=attr # ATTRIBUTE TO MAP TO
+    def __get__(self,obj,objtype):
+        target=self.targetDB[obj.id] # GET target FROM CONTAINER
+        return getattr(target,self.attr) # GET DESIRED ATTRIBUTE
+
 class SpecialMethodDescriptor(object):
     'enables shadowing of special methods like __invert__'
     def __init__(self,attrName):
@@ -652,6 +661,31 @@ def getID(obj):
             return obj._persistent_id
         except AttributeError:
             raise AttributeError('this obj has no persistent ID!')
+
+
+class ForeignKeyMapInverse(object):
+    def __init__(self,forwardMap):
+        self._inverse=forwardMap
+    def __getitem__(self,k):
+        return self._inverse.sourceDB[getattr(k,self._inverse.keyName)]
+    def __invert__(self):
+        return self._inverse
+
+
+class ForeignKeyMap(object):
+    def __init__(self,foreignKey,sourceDB=None,targetDB=None):
+        self.keyName=foreignKey
+        self.sourceDB=sourceDB
+        self.targetDB=targetDB
+    def __getitem__(self,k):
+        return self.targetDB.foreignKey(self.keyName,k.id)
+    def __invert__(self):
+        try:
+            return self._inverse
+        except AttributeError:
+            self._inverse=ForeignKeyMapInverse(self)
+            return self._inverse
+
 
 ###########################################################
 schema=SchemaPath() # ROOT OF OUR SCHEMA NAMESPACE
