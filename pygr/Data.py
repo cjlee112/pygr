@@ -673,12 +673,13 @@ class ForeignKeyMapInverse(object):
 
 
 class ForeignKeyMap(object):
+    'provide mapping interface to a foreign key accessible via a container'
     def __init__(self,foreignKey,sourceDB=None,targetDB=None):
         self.keyName=foreignKey
         self.sourceDB=sourceDB
         self.targetDB=targetDB
     def __getitem__(self,k):
-        return self.targetDB.foreignKey(self.keyName,k.id)
+        return [x for x in self.targetDB.foreignKey(self.keyName,k.id)]
     def __invert__(self):
         try:
             return self._inverse
