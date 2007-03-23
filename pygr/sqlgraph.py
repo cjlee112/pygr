@@ -169,6 +169,9 @@ class SQLTableBase(dict):
         o=self.tupleItem(t,oclass)
         dict.__setitem__(self,id,o)   # CACHE THIS ITEM IN OUR DICTIONARY
         return o
+    def foreignKey(self,attr,k):
+        'get iterator for objects with specified foreign key value'
+        return self.select('where %s=%%s'%attr,(k,))
 
 
 def getKeys(self):
@@ -239,6 +242,9 @@ class SQLTableClustered(SQLTable):
             for t in l: # LOAD THE ENTIRE CLUSTER INTO OUR LOCAL CACHE
                 self.cacheItem(t,self.itemClass)
             return dict.__getitem__(self,k) # SHOULD BE IN CACHE, IF ROW k EXISTS
+    def itercluster(self,cluster_id):
+        'iterate over all items from the specified cluster'
+        return self.select('where %s=%%s'%self.clusterKey,(cluster_id,))
 
 
 class SQLForeignRelation(object):
