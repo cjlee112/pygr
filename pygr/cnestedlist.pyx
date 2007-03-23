@@ -1369,9 +1369,8 @@ cdef class NLMSA:
     self.seqs=nlmsa_utils.NLMSASeqDict(self,pathstem,mode,**kwargs)
     self.seqlist=self.seqs.seqlist
     self.pathstem=pathstem
-    import sys
     if maxlen is None:
-      maxlen=sys.maxint-65536 # MAXIMUM VALUE REPRESENTABLE BY int
+      maxlen=C_int_max-65536 # C_int_max MAXIMUM VALUE REPRESENTABLE BY int
     self.maxlen=maxlen
     self.inlmsa=nPad
     self._ignoreShadowAttr={'sourceDB':None,'targetDB':None} # SCHEMA INFO
