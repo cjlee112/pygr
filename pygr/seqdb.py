@@ -753,9 +753,17 @@ class StoredPathMapping(PathMapping):
 def originalIval(self):
     'get this interval as pure sequence interval (not as an annotation)'
     return absoluteSlice(self,self.start,self.stop)
+def getAnnotationAttr(self,attr):
+    'forward attributes from slice object if available'
+    try:
+        return SeqPath.__getattr__(self,attr)
+    except AttributeError:
+        return getattr(self.db.sliceDB[self.id],attr)
+
 
 class AnnotationSeq(SeqPath):
     originalIval=originalIval
+    __getattr__=getAnnotationAttr
 class AnnotationDescriptor(object):
     'forwards attribute requests to self.annot'
     def __init__(self,attr):
@@ -770,15 +778,7 @@ class AnnotationSlice(SeqPath):
     id=AnnotationDescriptor('id') # ACCESS TO SCHEMA INFO VIA AnnotationSeq
     db=AnnotationDescriptor('db')
     originalIval=originalIval
-
-class ForwardingDescriptor(object):
-    'forward an attribute request to item from another container'
-    def __init__(self,targetDB,attr):
-        self.targetDB=targetDB # CONTAINER TO GET ITEMS FROM
-        self.attr=attr # ATTRIBUTE TO MAP TO
-    def __get__(self,obj,objtype):
-        target=self.targetDB[obj.id] # GET target FROM CONTAINER
-        return getattr(target,self.attr) # GET DESIRED ATTRIBUTE
+    __getattr__=getAnnotationAttr
 
 class AnnotationDB(dict):
     'container of annotations as specific slices of db sequences'
@@ -796,10 +796,10 @@ class AnnotationDB(dict):
         self.itemClass=itemClass
         self.itemSliceClass=itemSliceClass
         self.itemAttrDict=itemAttrDict
-        if itemAttrDict is not None:
-            for k,v in itemAttrDict.items():
-                setattr(itemClass,k,ForwardingDescriptor(sliceDB,v))
-                setattr(itemSliceClass,k,ForwardingDescriptor(sliceDB,v))
+##         if itemAttrDict is not None:
+##             for k,v in itemAttrDict.items():
+##                 setattr(itemClass,k,ForwardingDescriptor(sliceDB,v))
+##                 setattr(itemSliceClass,k,ForwardingDescriptor(sliceDB,v))
         self.sliceAttrDict=dict(id='id',start='start',stop='stop') # DEFAULT
         self.sliceAttrDict.update(sliceAttrDict) # ADD USER-PROVIDED ALIASES
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
@@ -818,7 +818,9 @@ class AnnotationDB(dict):
             return dict.__getitem__(self,k)
         except KeyError:
             pass
-        sliceInfo=self.sliceDB[k]
+        return self.sliceAnnotation(k,self.sliceDB[k])
+    def sliceAnnotation(self,k,sliceInfo):
+        'create annotation and cache it'
         myslice=absoluteSlice(self.seqDB[getattr(sliceInfo,self.sliceAttrDict['id'])],
                               getattr(sliceInfo,self.sliceAttrDict['start']),
                               getattr(sliceInfo,self.sliceAttrDict['stop']))
@@ -829,6 +831,13 @@ class AnnotationDB(dict):
         myslice.db=self
         self[k]=myslice # CACHE THIS IN OUR DICT
         return myslice
+    def foreignKey(self,attr,k):
+        'iterate over items matching specified foreign key'
+        for t in self.sliceDB.foreignKey(attr,k):
+            try:
+                yield dict.__getitem__(self,t.id)
+            except KeyError:
+                yield self.sliceAnnotation(t.id,t)
     def __iter__(self): return iter(self.sliceDB) ########## ITERATORS
     def keys(self): return self.sliceDB.keys()
     def iteritems(self):
