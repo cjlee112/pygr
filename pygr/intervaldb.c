@@ -1,6 +1,8 @@
 
 #include "intervaldb.h"
 
+int C_int_max=INT_MAX; /* KLUDGE TO LET PYREX CODE ACCESS VALUE OF INT_MAX MACRO */
+
 IntervalMap *read_intervals(int n,FILE *ifile)
 {
   int i=0;

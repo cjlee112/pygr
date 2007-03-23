@@ -2,6 +2,9 @@
 #ifndef INTERVALDB_HEADER_INCLUDED
 #define INTERVALDB_HEADER_INCLUDED 1
 #include "default.h"
+#include <limits.h>
+
+extern int C_int_max;
 
 typedef struct {
   int start;
