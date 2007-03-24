@@ -2002,6 +2002,56 @@ you're doing (details below).  This dictionary is of type NLMSASeqDict (see belo
 
 \end{itemize}
 
+\subsubsection{dump_textfile, textfile_to_binaries}
+These two functions enable you to dump a constructed NLMSA binary database
+to a platform-independent text format, and to restore an NLMSA binary database
+from this text format.  This can be useful for 
+\begin{itemize}
+\item speeding up the process of installing an NLMSA database on multiple
+machines.  Since the restore operation does not involve a build step, it 
+can be substantially faster than building the NLMSA separately on each machine.
+
+\item moving an NLMSA database from one machine to a machine with a different
+binary architecture.  Since the binary database format depends on platform-specific
+details (e.g. big-endian vs. little-endian integer representation), it is not
+compatible between different architectures.
+
+\item using an NLMSA database on a machine that has insufficient RAM memory
+to perform the binary database build.  You can build the NLMSA binary database
+on another machine with sufficient RAM, dump it to text, then restore it on
+the desired machine where you wish to be able to use it.
+
+\item using the text format to ``package'' an NLMSA database for distribution
+on the Internet.  Users need only to obtain a single file and run a single command
+to restore the NLMSA database.  Users only need sufficient disk space to hold
+the NLMSA; they do not need large amounts of RAM (because they will not have to
+perform a ``build'' step).
+
+\end{itemize}
+
+\begin{funcdesc}{dump_textfile}{pathstem,outfilename=None}
+  Dumps a text representation of an existing NLMSA binary database.
+  \var{pathstem} must be the path to the NLMSA.  For
+  example if you have an NLMSA database index file \code{/loaner/hg17_NLMSA/hg17_msa.idDict}
+  (and many other index files with different suffixes),
+  then you would supply a \var{pathstem} value of \code{/loaner/hg17_NLMSA/hg17_msa}.
+
+  \var{outfilename} gives the path for the output text file into which the
+  NLMSA database will be dumped.  If None, it will default to \var{pathstem} with a
+  \code{.txt} suffix added.
+\end{funcdesc}
+
+
+\begin{funcdesc}{textfile_to_binaries}{filename}
+  Creates an NLMSA binary database from input text file \var{filename}.
+  The NLMSA binary database will be created in the current directory,
+  and will be given the same name as it originally had prior to being dumped to text.
+  Since no build is required, this function does not require significant amounts
+  of RAM memory.
+\end{funcdesc}
+
+
+
 \subsubsection{xnestedlist.NLMSAServer, xnestedlist.NLMSAClient}
 These two classes, provided by the separate \module{xnestedlist} module,
 provide an XMLRPC client-server mechanism for querying NLMSA databases
@@ -3665,6 +3715,38 @@ module,
 \begin{verbatim}
 here=ResourceLayer('here') # CREATE TOP-LEVEL INTERFACE TO here LAYER
 \end{verbatim}
+
+\subsubsection{ForeignKeyMap}
+Provides a mapping between two containers, assuming that items of the target
+container have a foreign key attribute that gives the ID of an item in the source
+container.
+\begin{funcdesc}{ForeignKeyMap}{foreignKey,sourceDB=None,targetDB=None}
+  \var{foreignKey} must be a string attribute name for the foreign key on
+  items of the \var{targetDB}.  Furthermore, \var{targetDB} must provide
+  a \method{foreignKey} method that takes two arguments: the \var{foreignKey} attribute name,
+  and an identifier that will be used to search its items for those whose attribute
+  matches this identifier.  It must return an iterator or list of the matching items.
+\end{funcdesc}
+
+\begin{funcdesc}{__getitem__}{id}
+  get a list of items in \var{targetDB} whose attribute matches this \var{id}.
+\end{funcdesc}
+
+\begin{funcdesc}{__invert__}{}
+  get an interface to the reverse mapping, i.e. mapping object that takes an
+  item of \var{targetDB}, and returns its corresponding item from \var{sourceDB},
+  based on the input item's foreign key attribute value.
+\end{funcdesc}
+
+For example, given a container of clusters, and a container of exons (that each
+have a \member{cluster_id} attribute), we create a mapping between them as follows:
+\begin{verbatim}
+m=ForeignKeyMap('cluster_id',clusters,exons)
+for exon0 in m[cluster0]: # GET EXONS IN THIS CLUSTER
+    do something...
+cluster1=(~m)[exon1]  # GET CLUSTER OBJECT FOR THIS EXON
+\end{verbatim}
+
 
 \subsubsection{DirectRelation, ItemRelation, InverseRelation}
 \class{DirectRelation} is a convenience class for constructing 
