@@ -99,8 +99,8 @@ int target_qsort_cmp(const void *void_a,const void *void_b)
 }
 
 
-SublistHeader *build_nested_list(IntervalMap im[],int n,
-				 int *p_n,int *p_nlists)
+SublistHeader *build_nested_list_inplace(IntervalMap im[],int n,
+					 int *p_n,int *p_nlists)
 {
   int i=0,parent,nlists=1,isublist=0,total=0,temp=0;
   SublistHeader *subheader=NULL;
@@ -213,7 +213,7 @@ SublistHeader *build_nested_list(IntervalMap im[],int n,
 
 
 
-SublistHeader *build_nested_list_dynamic(IntervalMap im[],int n,
+SublistHeader *build_nested_list(IntervalMap im[],int n,
 				 int *p_n,int *p_nlists)
 {
   int i=0,j,k,parent,nsub=0,nlists=0;
