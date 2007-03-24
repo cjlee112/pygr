@@ -47,7 +47,7 @@ cdef class IntervalDBIterator:
 
 
 cdef class IntervalDB:
-  def __new__(self,filename='noname',nsize=0):
+  def __new__(self,filename='noname',nsize=0,**kwargs):
     cdef int i
     cdef FILE *ifile
     self.n=nsize
@@ -57,13 +57,13 @@ cdef class IntervalDB:
         self.im=read_intervals(self.n,ifile)
         fclose(ifile)
         if self.im!=NULL:
-          self.subheader=build_nested_list(self.im,self.n,
-                                           &(self.ntop),&(self.nlists))
+          self.runBuildMethod(**kwargs)
       else:
         msg='could not open file %s' % filename
         raise IOError(msg)
 
-  def save_tuples(self,l):
+  def save_tuples(self,l,**kwargs):
+    'build in-memory NLMSA from list of alignment tuples'
     cdef int i
     self.close() # DUMP OUR EXISTING MEMORY 
     self.n=len(l)
@@ -79,9 +79,16 @@ cdef class IntervalDB:
       self.im[i].target_end=t[4]
       self.im[i].sublist= -1
       i=i+1
-    self.subheader=build_nested_list(self.im,self.n,&(self.ntop),&(self.nlists))
+    self.runBuildMethod(**kwargs)
 
-  def buildFromUnsortedFile(self,filename,int n):
+  def runBuildMethod(self,buildInPlace=True):
+    'build either in-place or using older build method'
+    if buildInPlace:
+      self.subheader=build_nested_list_inplace(self.im,self.n,&(self.ntop),&(self.nlists))
+    else:
+      self.subheader=build_nested_list(self.im,self.n,&(self.ntop),&(self.nlists))
+
+  def buildFromUnsortedFile(self,filename,int n,**kwargs):
     'load unsorted binary data, and build nested list'
     cdef FILE *ifile
     cdef int i
@@ -99,7 +106,7 @@ cdef class IntervalDB:
       raise IOError('IntervalMap file corrupted?')
     self.n=n
     self.im=im_new
-    self.subheader=build_nested_list_dynamic(self.im,self.n,&(self.ntop),&(self.nlists))
+    self.runBuildMethod(**kwargs)
 
   def find_overlap(self,int start,int end):
     self.check_nonempty() # RAISE EXCEPTION IF NO DATA
@@ -1253,7 +1260,7 @@ cdef class NLMSASequence:
       fclose(self.build_ifile)
       self.build_ifile=NULL
 
-  def buildFiles(self):
+  def buildFiles(self,**kwargs):
     'build nested list from saved unsorted alignment data'
     cdef IntervalDB db
     if self.build_ifile==NULL:
@@ -1263,16 +1270,16 @@ cdef class NLMSASequence:
     filename=self.filestem+'.build'
     db=IntervalDB() # CREATE EMPTY NL IN MEMORY
     if self.nbuild>0:
-      db.buildFromUnsortedFile(filename,self.nbuild) # BUILD FROM .build
+      db.buildFromUnsortedFile(filename,self.nbuild,**kwargs) # BUILD FROM .build
     db.write_binaries(self.filestem) # SAVE AS IntervalDBFile
     db.close() # DUMP NESTEDLIST FROM MEMORY
     import os
     os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
     self.db=IntervalFileDB(self.filestem) # NOW OPEN THE IntervalFileDB
 
-  def buildInMemory(self):
+  def buildInMemory(self,**kwargs):
     if self.buildList is not None:
-      self.idb.save_tuples(self.buildList)
+      self.idb.save_tuples(self.buildList,**kwargs)
     self.buildList=None
 
   cdef int saveInterval(self,IntervalMap im[],int n,int expand_self,FILE *ifile):
@@ -1663,13 +1670,13 @@ cdef class NLMSA:
     self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
 
     
-  def buildFiles(self,saveSeqDict=True):
+  def buildFiles(self,saveSeqDict=True,**kwargs):
     'build nestedlist databases on-disk, and .seqDict index if desired'
     cdef NLMSASequence ns
     self.seqs.reopenReadOnly() # SAVE INDEXES AND OPEN READ-ONLY
     ifile=file(self.pathstem+'NLMSAindex','w')
     for ns in self.seqlist: # BUILD EACH IntervalFileDB ONE BY ONE
-      ns.buildFiles()
+      ns.buildFiles(**kwargs)
       if ns.is_lpo:
         ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,'NLMSA_LPO_Internal',0,ns.length))
       elif ns.is_union:
@@ -1680,7 +1687,7 @@ cdef class NLMSA:
     if saveSeqDict and hasattr(self.seqDict,'writeHeaderFile'):
       self.seqDict.writeHeaderFile(self.pathstem+'.seqDict')
 
-  def build(self):
+  def build(self,**kwargs):
     'build nestedlist databases from saved mappings and initialize for use'
     if self.do_build==0:
       raise ValueError('not opened in write mode')
@@ -1690,9 +1697,9 @@ cdef class NLMSA:
       pass
     if self.in_memory_mode:
       for ns in self.seqlist: # BUILD EACH IntervalDB ONE BY ONE
-        ns.buildInMemory()
+        ns.buildInMemory(**kwargs)
     else:
-      self.buildFiles()
+      self.buildFiles(**kwargs)
     self.do_build=0
 
   def seqInterval(self,int iseq,int istart,int istop):

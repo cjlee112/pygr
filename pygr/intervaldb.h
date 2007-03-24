@@ -78,7 +78,7 @@ extern int target_qsort_cmp(const void *void_a,const void *void_b);
 extern IntervalMap *read_intervals(int n,FILE *ifile);
 extern SublistHeader *build_nested_list(IntervalMap im[],int n,
 					int *p_n,int *p_nlists);
-extern SublistHeader *build_nested_list_dynamic(IntervalMap im[],int n,
+extern SublistHeader *build_nested_list_inplace(IntervalMap im[],int n,
                                                 int *p_n,int *p_nlists);
 extern IntervalMap *interval_map_alloc(int n);
 extern IntervalDB *build_interval_db(IntervalMap im[],int n);

@@ -77,7 +77,7 @@ cdef extern from "intervaldb.h":
   int target_qsort_cmp(void *void_a,void *void_b)
   IntervalMap *read_intervals(int n,FILE *ifile) except NULL
   SublistHeader *build_nested_list(IntervalMap im[],int n,int *p_n,int *p_nlists) except NULL
-  SublistHeader *build_nested_list_dynamic(IntervalMap im[],int n,int *p_n,int *p_nlists) except NULL
+  SublistHeader *build_nested_list_inplace(IntervalMap im[],int n,int *p_n,int *p_nlists) except NULL
   IntervalMap *interval_map_alloc(int n) except NULL
   IntervalIterator *interval_iterator_alloc() except NULL
   int free_interval_iterator(IntervalIterator *it)
