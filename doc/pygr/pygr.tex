@@ -864,13 +864,14 @@ nlmsa=cnestedlist.NLMSA('exonAnnot','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNM
                         use_virtual_lpo=True,bidirectional=False)
 for id,s in exonSeqs.items(): # SAVE ALL ANNOTATION INTERVALS
   ann=sequence.Sequence(s,id) # CREATE A SEQUENCE OBJECT
+  ann.annot=ann # MARK AS A TOP-LEVEL ANNOTATION OBJECT
   ann.db=annoDB # FORCE IT TO BE PART OF THE ANNOTATION DB
   genome.megablast(ann,nlmsa,maxseq=1,minIdentity=98) # SAVE ITS BEST HIT IN nlmsa
 nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
 pygr.Data.Bio.Genomics.ASAP2.exons=annoDB # ADD AS A PYGR.DATA RESOURCE
 pygr.Data.Bio.Genomics.ASAP2.exonmap=nlmsa # NOW SAVE MAPPING AND SCHEMA
 pygr.schema.Data.Bio.Genomics.ASAP2.exonmap= \
-      pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons'))
+      pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons',))
 \end{verbatim}
 
 \begin{itemize}
@@ -1963,7 +1964,7 @@ inconsistent results when the input data are not a true multiple-sequence alignm
 \end{funcdesc}
 
 
-\begin{funcdesc}{build}{}
+\begin{funcdesc}{build}{buildInPlace=True}
   to construct the final nested list databases,
   after all the desired alignment intervals have been saved (using the
   \method{iadd/getitem} above).  This method
@@ -1971,6 +1972,11 @@ inconsistent results when the input data are not a true multiple-sequence alignm
   in this alignment.  NOTE: you do not need to call \method{build}() if
   you provided a \var{mafFiles} constructor argument, since that automatically
   calls \method{build}().
+
+  \var{buildInPlace=False} forces it to use an older NLMSA construction method
+  (higher memory usage, but more tested).  The new in-place construction method
+  (made the default in release 0.7) is described in the Alekseyenko \& Lee 2007
+  paper published in {\em Bioinformatics}.
 \end{funcdesc}
 
 
