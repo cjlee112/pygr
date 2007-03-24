@@ -135,10 +135,19 @@ def compilePyrex(cfile):
    exit_status=os.system(cmd) # TRY USING PYREX TO COMPILE EXTENSIONS
    if exit_status!=0:  # CAN'T RUN THE PYREX COMPILER TO PRODUCE C
       print '\n\nPyrex compilation failed!  Is pyrexc missing or not in your PATH?'
-      print 'Skipping extension module... you will be lacking some functionality:',modulename
       return False # SIGNAL COMPILATION FAILED
    copyFile(ctarget,cfile) # COPY .c FILE BACK TO DESIRED NAME
    return True # SIGNAL COMPILATION SUCCEEDED
+
+def pyrexIsUpToDate(cfile):
+   'True if .c file is newer than the .pyx file'
+   cstat=os.stat(cfile)
+   try: 
+      pyxstat=os.stat(cfile[:-2]+'.pyx')
+   except OSError: # PYREX .pyx CODE IS MISSING??  JUST USE OUR EXISTING C CODE THEN.
+      print 'Warning: pyrex code %s is missing!  Check your distribution!' % (cfile[:-2]+'.pyx')
+      return True
+   return cstat[8]>pyxstat[8] # COMPARE THEIR st_mtime VALUES
 
 def runSetup(script_args=None):
    'prepare extension module code, run distutils setup'
@@ -151,11 +160,15 @@ def runSetup(script_args=None):
                                       'pygr/apps/maf2nclist.c']),
                  'pygr/seqfmt.c':Extension('pygr.seqfmt',sources = ['pygr/seqfmt.c'])}
    for cfile,extmodule in pyrexTargets.items():
-      if os.access(cfile,os.R_OK):
+      if os.access(cfile,os.R_OK) and pyrexIsUpToDate(cfile):
          print 'Using existing pyrexc-generated C-code',cfile
-      elif not compilePyrex(cfile):  # HMM, NO PYREXC COMPILED CODE, HAVE TO RUN PYREXC
-         continue # PYREX COMPILATION FAILED, CAN'T ADD THIS MODULE TO OUR EXTENSIONS
-      buildExtensions.append(extmodule)
+      else:
+         compilePyrex(cfile)  # HMM, NO PYREXC COMPILED CODE, HAVE TO RUN PYREXC
+      if os.access(cfile,os.R_OK): 
+         buildExtensions.append(extmodule)
+      else: # PYREX COMPILATION FAILED, CAN'T ADD THIS MODULE TO OUR EXTENSIONS
+         print 'Skipping extension module... you will be lacking some functionality:',\
+               cfile[:-2]
 
    if len(buildExtensions)>0:
       metadata['ext_modules'] = buildExtensions
