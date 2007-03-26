@@ -886,7 +886,7 @@ cdef class NLMSASlice:
                                 pMinAligned=pMinAligned,
                                 indelCut=indelCut,**kwargs)
         continue # DON'T USE GENERIC GROUPING METHOD BELOW
-      seqStart=mapping.DictQueue()
+      seqStart=mapping.DictQueue() # setitem PUSHES, delitem POPS
       maskStart=None
       for bound in bounds: # GENERIC GROUPING: APPLY MASKING, sourceOnly
         ipos,isStart,j,seq,isIndel=bound[0:5]
@@ -901,7 +901,7 @@ cdef class NLMSASlice:
             result.append((sequence.absoluteSlice(self.seq,start,end),
                            sequence.relativeSlice(seq,targetStart,
                                                   targetEnd)))
-          del seqStart[seq] # REMOVE THIS SEQ FROM START DICT
+          del seqStart[seq] # POP THIS SEQ FROM START DICT
 
         f=len(seqStart) # #ALIGNED SEQS IN THIS REGION
         if f<minAligned or f/len(seqs)<pMinAligned: # APPLY MASKING
@@ -909,8 +909,8 @@ cdef class NLMSASlice:
             if sourceOnly: # JUST SAVE MERGED SOURCE INTERVAL
               result.append(sequence.absoluteSlice(self.seq,maskStart,end))
             else: # REPORT TARGET IVALS WITHIN (maskStart,end) REGION
-              for seq,(start,i,targetStart,targetEnd) \
-                      in seqStart.iteritems():
+              for seq in seqStart: # CANNOT USE items() BECAUSE THIS IS A QUEUE!
+                (start,i,targetStart,targetEnd)=seqStart[seq]
                 if maskStart>start: # TRUNCATE TARGET IVAL START
                   targetStart=targetStart+maskStart-start
                   start=maskStart
