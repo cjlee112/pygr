@@ -1198,7 +1198,10 @@ class PrefixDictInverseAdder(PrefixDictInverse):
         try:
             return PrefixDictInverse.__getitem__(self,seq)
         except AttributeError: # NO db?  THEN TREAT AS A user SEQUENCE
-            return 'user'+self.db.separator+seq.pathForward.id
+            userID='user'+self.db.separator+seq.pathForward.id
+            s=self.db[userID] # MAKE SURE ALREADY IN user SEQ DICTIONARY
+            return userID # ALREADY THERE
+                
     def __getitem__(self,seq):
         'handles optional mode that adds seq if not already present'
         try:
