@@ -151,6 +151,14 @@ class ResourceDBClient(object):
     def registerServer(self,locationKey,serviceDict):
         'forward registation to the server'
         return self.server.registerServer(locationKey,serviceDict)
+    def getschema(self,id):
+        'return dict of {attr:{args}}'
+        d=self.server.getResource('SCHEMA.'+id)
+        if d=='': # NO SCHEMA INFORMATION FOUND
+            raise KeyError
+        for schemaDict in d.values():
+            return schemaDict # HAND BACK FIRST SCHEMA WE FIND
+        raise KeyError
 
 class ResourceDBMySQL(object):
     '''mysql schema:
@@ -453,6 +461,10 @@ Continuing with import...'''%dbpath
                 obj.name=id
             obj.__class__=clientKlass # CONVERT TO CLIENT CLASS FOR PICKLING
             clientDict[id]=self.dumps(obj) # PICKLE THE CLIENT OBJECT, SAVE
+            try: # SAVE SCHEMA INFO AS WELL...
+                clientDict['SCHEMA.'+id]=self.findSchema(id)
+            except KeyError:
+                pass # NO SCHEMA FOR THIS OBJ, SO NOTHING TO DO
             obj.__class__=serverKlass # CONVERT TO SERVER CLASS FOR SERVING
             server[id]=obj # ADD TO XMLRPC SERVER
         server.registrationData=clientDict # SAVE DATA FOR SERVER REGISTRATION
