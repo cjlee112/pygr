@@ -1077,6 +1077,8 @@ class PrefixUnionDict(object):
         '''can either be created using prefixDict, or a header file
         for a previously created PrefixUnionDict'''
         if filename is not None: # READ UNION HEADER FILE
+            if trypath is None: # DEFAULT: LOOK IN SAME DIRECTORY AS UNION HEADER
+                trypath=[os.path.dirname(filename)]
             ifile=file(filename)
             it=iter(ifile)
             separator=it.next().strip('\r\n') # DROP TRAILING CR
@@ -1305,6 +1307,8 @@ class XMLRPCSequence(SequenceBase):
 
 class XMLRPCSequenceDB(SeqDBbase):
     'XMLRPC client: access sequence database over XMLRPC'
+    itemClass=XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
+    itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
     def __init__(self,url=None,name=None):
         dict.__init__(self)
         import coordinator
@@ -1320,7 +1324,7 @@ class XMLRPCSequenceDB(SeqDBbase):
             pass
         l=self.server.getSeqLen(id)
         if l>0:
-            s=XMLRPCSequence(self,id,l)
+            s=self.itemClass(self,id,l)
             self[id]=s
             return s
         raise KeyError('%s not in this database' % id)
