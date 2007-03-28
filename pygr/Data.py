@@ -142,6 +142,8 @@ class ResourceDBClient(object):
     def __getitem__(self,id):
         'get construction rule from index server, and attempt to construct'
         d=self.server.getResource(id) # RAISES KeyError IF NOT FOUND
+        if d=='':
+            raise KeyError('resource %s not found'%id)
         for location,objData in d.items():
             try:
                 return self.finder.loads(objData)
