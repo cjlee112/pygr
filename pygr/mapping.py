@@ -461,3 +461,108 @@ class IDGraph(object):
             return self._inverse
     def __hash__(self): # SO SCHEMA CAN INDEX ON GRAPHS...
         return id(self)
+
+
+class IDDictInverse(object):
+    def __init__(self,db):
+        self._inverse=db
+        self.attr=db.inverseAttr
+    def __getitem__(self,k):
+        return self._inverse.sourceDB[getattr(k,self.attr)]
+    def __invert__(self): return self._inverse
+
+class IDDict(object):
+    '''dict-like class suitable for persistent usages.  Extracts ID values from
+    keys and values passed to it, and saves IDs into its internal dictionary
+    instead of the actual objects.  Thus, the external interface is objects,
+    but the internal storage is ID values.'''
+    def __init__(self,sourceDB,targetDB,d=None,IDAttr='id',targetIDAttr='id',
+                 itemAttr=None,multiValue=False,inverseAttr=None):
+        '''sourceDB: dictionary that maps key ID values to key objects
+        targetDB: dictionary that maps value IDs to value objects
+        d, if not None, is the internal mapping to use as our storage
+        IDAttr: attribute name to obtain an ID from a key object
+        targetIDAttr: attribute name to obtain an ID from a value object
+        itemAttr, if not None, the attribute to obtain target (value) ID
+           from an internal storage value
+        multiValue: if True, treat each value as a list of values.'''
+        if d is None:
+            self.d={}
+        else:
+            self.d=d
+        self.IDAttr=IDAttr
+        self.targetIDAttr=targetIDAttr
+        self.itemAttr=itemAttr
+        self.multiValue=multiValue
+        self.sourceDB=sourceDB
+        self.targetDB=targetDB
+        if inverseAttr is not None:
+            self.inverseAttr=inverseAttr
+    def __getitem__(self,k):
+        kID=getattr(k,self.IDAttr)
+        return self.getTarget(self.d[kID])
+    def getTarget(self,vID):
+        if self.itemAttr is not None:
+            vID=getattr(vID,self.itemAttr)
+        if self.multiValue:
+            return [self.targetDB[j] for j in vID]
+        else:
+            return self.targetDB[vID]
+    def __setitem__(self,k,v):
+        if self.multiValue:
+            v=[getattr(x,self.targetIDAttr) for x in v]
+        else:
+            v=getattr(v,self.targetIDAttr)
+        self.d[getattr(k,self.IDAttr)]=v
+    def __delitem__(self,k):
+        del self.d[getattr(k,self.IDAttr)]
+    def __contains__(self,k):
+        return getattr(k,self.IDAttr) in self.d
+    def __len__(self): return len(self.d)
+    def clear(self): self.d.clear()
+    def copy(self):
+        return IDDict(self.sourceDB,self.targetDB,self.d.copy(),self.IDAttr,
+                      self.targetIDAttr,self.itemAttr,self.multiValue)
+    def update(self,b):
+        for k,v in b.iteritems():
+            self[k]=v
+    def get(self,k,v=None):
+        try:
+            return self[k]
+        except KeyError:
+            return v
+    def setdefault(self,k,v=None):
+        try:
+            return self[k]
+        except KeyError:
+            self[k]=v
+            return v
+    def pop(self,k,v=None):
+        try:
+            v=self[k]
+        except KeyError:
+            return v
+        del self[k]
+        return v
+    def popitem(self):
+        kID,vID=self.d.popitem()
+        return kID,self.getTarget(vID)
+    def __iter__(self): ######################## ITERATORS
+        for kID in self.d:
+            yield self.sourceDB[kID]
+    def keys(self): return [k for k in self]
+    def itervalues(self):
+        for vID in self.d.itervalues():
+            yield self.getTarget(vID)
+    def values(self): return [v for v in self]
+    def iteritems(self):
+        for kID,vID in self.d.iteritems():
+            yield self.sourceDB[kID],self.getTarget(vID)
+    def items(self): return [x for x in self.iteritems()]
+    def __invert__(self):
+        try:
+            return self._inverse
+        except AttributeError:
+            self._inverse=IDDictInverse(self)
+            return self._inverse
+
