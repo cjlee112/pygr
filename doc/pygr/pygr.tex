@@ -164,6 +164,47 @@ of at most one in length, and then filters these alignment regions to
 just those (sub)regions that have at least 90\% sequence identity over
 a region of at least 14 residues in length.
 
+We can use this same idea to search for regions of ``deep conservation''.  Here
+we search the UCSC alignment of 17 vertebrate genomes for regions of 90\% identity
+or better that are at least 40 nt long, and then screen for a zone in which at
+least nine different genomes all share this level of alignment with the human 
+query:
+\begin{verbatim}
+>>> ival=nlmsa.seqDict['hg17.chr1'][7000:8000] # 1 kb REGION OF HUMAN CHROMOSOME 1
+>>> for x,y,e in nlmsa[ival].edges(minAligned=9,minAlignSize=40,pIdentityMin=0.9):
+...   print "%s\t%s\n%s\t%s\n" % (x,repr(x),y,(~(nlmsa.seqDict))[y])
+...
+GTGTTGAAGAGCAGCAAGGAGCTGAC      chr1[7480:7506]
+GTGTTGAACAGCAGTAAAGAGCTGAC      danRer3.chr18
+
+GTGTTGAAGAGCAGCAAGGAGCTGAC      chr1[7480:7506]
+GTGTTGAAGAGCAGCAAGGAGCTGAC      dasNov1.scaffold_107966
+
+GTGTTGAAGAGCAGCAAGGAGCTGAC      chr1[7480:7506]
+GTGTTGAAAAGGAGCAAGGAGCTGAC      xenTro1.scaffold_1073
+
+GTGTTGAAGAGCAGCAAGGAGCTGAC      chr1[7480:7506]
+GTGTTGAAGAGCAGCAGGGAGCTGAG      galGal2.chr1
+
+GTGTTGAAGAGCAGCAAGGAGCTGAC      chr1[7480:7506]
+GTGTTGAAGAGCAGCAAGGAGCTGAC      panTro1.chr1
+
+GTGTTGAAGAGCAGCAAGGAGCTGAC      chr1[7480:7506]
+GTGTTGAAGAGCAGCAGGGAGCTGAC      bosTau2.chr5
+
+GTGTTGAAGAGCAGCAAGGAGCTGAC      chr1[7480:7506]
+GTGTTGAATAGCAGCAACGAGCTGAC      canFam2.chr27
+
+GTGTTGAAGAGCAGCAAGGAGCTGAC      chr1[7480:7506]
+GTGTTGAAGAGCAGCAAGGAGCTGAG      monDom2.scaffold_31
+
+GTGTTGAAGAGCAGCAAGGAGCTGAC      chr1[7480:7506]
+GTGTTGAAGAGCAGCAAGGAGCTGAC      loxAfr1.scaffold_5603
+\end{verbatim}
+Each region of alignment was contained in a block of >=90\% identity and
+over 40 nt long.  The region has been masked by the minAligned option to just
+the portion in which at least nine different genomes are aligned to the human query.
+
 \item
 \code{src} and \code{dest} print the first two nucleotides
 of the site in human and in the aligned genome.
@@ -2137,7 +2178,7 @@ dictionary interface in several ways:
 \end{funcdesc}
 
 
-\begin{funcdesc}{keys}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeAll=False, minAlignSize=None, pIdentityMin=None, ivalMethod=None, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0.,seqMethod=None, **kwargs}
+\begin{funcdesc}{keys}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeMost=False, mergeAll=False, maxsize=500000000, minAlignSize=None, maxAlignSize=None, pIdentityMin=None, ivalMethod=None, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs}
   Provides a more general interface than {\em iter()}, with two types of 
   group-by capabilities, ``group-by'' operations on the alignment intervals
   contained within this slice (``horizontal'' grouping), 
@@ -2147,16 +2188,30 @@ dictionary interface in several ways:
   1. ``group-by'' operations on the alignment intervals
   contained within this slice.  It allows the user to supply
   various parameters for controlling when alignment intervals will be
-  merged or split in the results that it returns.  \var{mergeAll}
+  merged or split in the results that it returns.
+
+  \var{mergeAll}
   forces it to combine intervals of a given sequence irrespective
-  of the size of gaps or inserts separating them.  \var{maxgap} sets the
+  of the size of gaps or inserts separating them.
+
+  \var{mergeMost}
+  forces it to combine intervals of a given sequence, within reason
+  (but don't merge a whole chromosome if you get one interval from one end
+  and one interval from the other end:
+  \var{maxgap=maxinsert=10000, mininsert=-10, maxsize=50000}).
+
+  \var{maxgap} sets the
   maximum gap size for merging two adjacent intervals.  If the target sequence
   for the two alignment intervals has a gap longer than \var{maxgap} 
   letters between the two alignment intervals, they will be returned as
   separate intervals; otherwise they will be merged as a single alignment
-  region.  \var{maxinsert} sets the maximum length of insert in the target
+  region.
+
+  \var{maxinsert} sets the maximum length of insert in the target
   sequence that allows to adjacent intervals to be merged as a single alignment
-  region in the results.  \var{mininsert} is specifically for handling
+  region in the results.
+
+  \var{mininsert} is specifically for handling
   alignments that may have small ``cycles'' (due to slight inconsistencies
   in the reported alignment intervals, for example, if a portion of sequence
   can align at both the end of one interval or at the beginning of another, and
@@ -2166,7 +2221,11 @@ dictionary interface in several ways:
   \var{mininsert} value of zero (the default), prevents any such interval
   pairs from being merged.  Giving a negative \var{mininsert} value will allow
   interval pairs whose insert value is greater than or equal to this value, 
-  to be merged.  \var{filterSeqs}, if not None, should be a dict of sequences
+  to be merged.
+
+  \var{maxsize}: upper bound on maximum size for interval merging.
+
+  \var{filterSeqs}, if not None, should be a dict of sequences
   used to filter the group-by analysis; i.e. only alignment intervals 
   containing these sequences are considered in the analysis.  More
   specifically, \var{filterSeqs} can be used to mask the group-by analysis
@@ -2182,6 +2241,11 @@ overlap=d[ival] # RETURNS INTERSECTION BETWEEN ival AND someIntervals, OR KeyErr
   \var{minAlignSize} if not None, sets a minimum size for filtering the resulting
   alignment regions.  Regions smaller than the specified size will be culled
   from the output.  
+
+  \var{maxAlignSize} if not None, sets a maximum size for filtering the resulting
+  alignment regions.  Regions larger than the specified size will be culled
+  from the output.  
+
   \var{pIdentityMin} if not None, sets a minimum fractional sequence identity
   for filtering the resulting alignment regions.  Regions with lower levels
   of identity will be clipped from the output.  Specifically, within each
@@ -2189,6 +2253,7 @@ overlap=d[ival] # RETURNS INTERSECTION BETWEEN ival AND someIntervals, OR KeyErr
   permitted by \var{maxgap} and \var{maxinsert}) whose sequence identity is above the
   threshold will be returned (but only if it is larger than \var{minAlignSize}
   if set).  
+
   \var{ivalMethod},
   if not None, allows the user to provide a Python function that performs
   interval grouping.  Specifically it is called as
@@ -2200,20 +2265,25 @@ overlap=d[ival] # RETURNS INTERSECTION BETWEEN ival AND someIntervals, OR KeyErr
   \var{seqGroups}: a list of one or more lists of sequences to group.
   If None, the whole set of sequences will be treated as a single group.
   Each group will be analyzed separately, as follows:
+
   \var{sourceOnly}: output intervals will be reported giving only
   the corresponding interval on the source sequence; redundant
   output intervals (mapping to the same source interval) are
   culled.  Has the effect of giving a single interval traversal
   of each group.
+
   \var{indelCut}: for \var{sourceOnly} mode, do not merge separate 
   intervals that the groupByIntervals analysis separated due to an indel).
+
   \var{minAligned}: the minimum number of sequences that must be aligned to
   the source sequence for masking the output.  Regions below
   this threshold are masked out; no intervals will be reported
   in these regions.
+
   \var{pMinAligned}: the minimum fraction of sequences (out of the
   total in the group) that must be aligned to the source
   sequence for masking the output.
+
   \var{seqMethod}: you may supply your own function for grouping.
   Called as \function{seqMethod(bounds,seqs,**kwargs)}, where
   \var{bounds} is a sorted list of
@@ -2304,11 +2374,12 @@ graph corresponding to this slice.  For details, see NLMSASliceLetters, below.
   Uses same group-by arguments as \method{keys()}.
 \end{funcdesc}
 
-\begin{funcdesc}{groupByIntervals}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeAll=True, ivalMethod=None, **kwargs}
+\begin{funcdesc}{groupByIntervals}{maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeMost=False, maxsize=500000000, mergeAll=True, ivalMethod=None, pIdentityMin=None, minAlignSize=None, maxAlignSize=None,**kwargs}
   This method performs the interval grouping analysis for all the iterators
   described above.  Users will not need to call it directly.  Its arguments
   are described above (see \method{keys()}).  It returns a dictionary
-  whose keys are sequences aligned to this slice, and whose values are
+  whose keys are sequences aligned to this slice (represented by their integer nlmsa_id),
+  and whose values are
   the list of intervals produced by the group-by analysis for the corresponding
   sequence.  The values are tuples of the form
   \var{(source_start, source_stop, target_start, target_stop)}, showing the
@@ -2701,7 +2772,7 @@ for a in nlmsa[s]: # FIND ANNOTATIONS THAT MAP TO s
 \end{verbatim}
 
 \end{itemize}
-\begin{funcdesc}{__init__}{sliceDB,seqDB,itemClass=AnnotationSeq,itemSliceClass=AnnotationSlice,itemAttrDict=None,sliceAttrDict={}}
+\begin{funcdesc}{__init__}{sliceDB,seqDB,itemClass=AnnotationSeq,itemSliceClass=AnnotationSlice,itemAttrDict=None,sliceAttrDict=dict()}
   Constructs an annotation database using several arguments:
 
   \var{sliceDB}, a database that takes an annotation ID as a key, and returns
@@ -2727,7 +2798,9 @@ for a in nlmsa[s]: # FIND ANNOTATIONS THAT MAP TO s
   its schema relations to other database containers.  (See the reference
   docs on \module{pygr.Data} below for details).
 
-  \var{sliceAttrDict}, a dictionary providing the attribute names for the
+  \var{sliceAttrDict}, a dictionary providing the attribute name aliases
+  for attributes on annotation objects to access attributes or tuple values
+  in the sliceInfo objects.  The minimal required attributes are the
   sequence ID, start and stop coordinates in each object returned from \var{sliceDB}.
   For example,
 \begin{verbatim}
@@ -2740,6 +2813,23 @@ sliceAttrDict=dict(id='chromosome',start='gen_start',stop='gen_stop')
   mean an interval on the negative strand (i.e. the reverse complement of
   the positive strand.  See the reference documentation on \class{SeqPath} above
   for details).
+
+  If the sliceAttrDict (or sliceInfo object directly) provides a \member{orientation}
+  attribute, it will be used to be change positive intervals to negative intervals
+  if the \member{orientation} attribute is negative.  This gives the user an alternative
+  method to represent orientation: give all coordinates in positive orientation
+  (positive integer values), and give an \member{orientation} attribute that
+  is a negative value if the interval should be reversed (to negative orientation).
+
+  If a sliceAttrDict value is an integer, then it will not be treated as an
+  attribute name, but instead will be used as an index, treating the sliceInfo
+  object as a tuple.  This makes it possible to use a \var{sliceDB} whose
+  items are tuples.  Here's an example:
+\begin{verbatim}
+exon_db = AnnotationDB(exon_slices, db,
+                       sliceAttrDict=dict(id=0, orientation=3, # GIVE ATTR INTERFACE TO 2PLE
+                                          transcript_id=4, start=5, stop=6))
+\end{verbatim}
 \end{funcdesc}
 
 \begin{funcdesc}{__getitem__}{id}
@@ -2761,6 +2851,13 @@ sliceAttrDict=dict(id='chromosome',start='gen_start',stop='gen_stop')
   (as an annotation) from sequence objects.
 \end{funcdesc}
 
+\begin{funcdesc}{wholeAnnotation}{}
+  Returns True if this is the complete annotation, False if just a fragment.
+\end{funcdesc}
+
+\begin{funcdesc}{properOrientation}{}
+  Returns True if on same strand as original annotation, False if on reverse strand
+\end{funcdesc}
 
 
 \subsubsection{VirtualSeq}
@@ -3450,13 +3547,48 @@ for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
 \end{verbatim}
 \end{funcdesc}
 
+\begin{funcdesc}{getResource.addResourceDict}{saveDict,layer=None}
+  Add an entire set of resources to the pygr.Data namespace, by passing
+  a dictionary whose keys are resource names, and whose values are
+  the object you wish to save.  This method has the important advantage
+  that it automatically takes care of dependency ordering for you.
+  That is, any reference to an item listed in \var{saveDict} will be
+  saved using its resource name, regardless of whether it has already
+  been saved as that resource name or not, and regardless of the
+  order in which you specify the items in \var{saveDict}.
+
+  By contrast, if you save multiple items individually, you have to
+  follow their dependency order carefully.  For example:
+\begin{verbatim}
+foo.x=bar # foo DEPENDS ON bar
+pygr.Data.Bio.Test.Foo=foo # WRONG!  SHOULD HAVE SAVED bar FIRST!
+pygr.Data.Bio.Test.Bar=bar
+\end{verbatim}
+This order causes pygr.Data to save \code{foo} with a direct reference
+to \code{bar}, rather than by using its pygr resource ID.  This will still
+enable pygr.Data to load \code{bar} on exactly, the same platform as it
+was saved.  But it will not search the pygr.Data resource databases to find
+alternative ways to load \code{bar}.  Here's the correct order:
+\begin{verbatim}
+foo.x=bar # foo DEPENDS ON bar
+pygr.Data.Bio.Test.Bar=bar
+pygr.Data.Bio.Test.Foo=foo # THIS WAY, REFERENCE TO bar WILL BE JUST ITS RESOURCE ID
+\end{verbatim}
+Alternatively, you could just save both at once, using \method{addResouceDict},
+which solves the whole issue:
+\begin{verbatim}
+foo.x=bar # foo DEPENDS ON bar
+pygr.Data.getResource.addResourceDict({'Bio.Test.Bar':bar,'Bio.Test.Foo':foo})
+\end{verbatim}
+\end{funcdesc}
+
 \begin{funcdesc}{getResource.deleteResource}{id,layer=None}
   Delete resource \var{id} from the resource database specified by
   \var{layer} if provided (or the default resource database otherwise).
   Also delete its associated schema information.
 \end{funcdesc}
 
-\begin{funcdesc}{getResource.newServer}{name,serverClasses=None,clientHost=None,withIndex=False,**kwargs}
+\begin{funcdesc}{getResource.newServer}{name,serverClasses=None,clientHost=None,withIndex=False, host=None, port=5000, **kwargs}
   Create and return a new XMLRPC server to serve all pygr.Data resources 
   currently loaded in memory that are capable of XMLRPC client-server
   operation.  The server \var{name} will be used for 
@@ -3485,6 +3617,9 @@ for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
   you wished to access your server by port-forwarding localhost port 5000
   to your server port via SSH, you could pass a \var{clientHost}='localhost'
   setting.
+
+  \var{host, port} arguments are passed to the \class{XMLRPCServerBase} constructor.
+  For details see that section below.
 
   Once you create a server using this method, you start it using its
   \method{serve_forever()} method.  If the server does not provide its
@@ -3722,6 +3857,25 @@ module,
 here=ResourceLayer('here') # CREATE TOP-LEVEL INTERFACE TO here LAYER
 \end{verbatim}
 
+\subsubsection{Dict}
+Provides a \class{dict}-like container that can be directly saved as a
+container in pygr.Data.  Ordinary \class{dict} instances cannot be 
+conveniently saved as pygr.Data resources, because they do not allow
+attributes to be saved (which is required for storing pygr.Data information
+like _persistent_id and itemClass), and because older versions of Python
+have a bug that affects pickling of dicts with cyclic references (i.e. contents
+that refer to the container).  \class{pygr.Data.Dict} provides a drop-in
+substitute that uses \class{dict} as its internal storage, and provides
+a full dict-like interface externally.  For example,
+
+\begin{verbatim}
+ens_genes = pygr.Data.Dict(itemClass=Transcript) # DICTIONARY OF GENES
+ens_genes[gene_id] = gene
+\end{verbatim}
+pygr.Data generally needs to know the \class{itemClass} of items stored
+inside a resource, so that it can add shadow attributes (by adding properties,
+directly to the itemClass).
+
 \subsubsection{ForeignKeyMap}
 Provides a mapping between two containers, assuming that items of the target
 container have a foreign key attribute that gives the ID of an item in the source
@@ -3753,6 +3907,36 @@ for exon0 in m[cluster0]: # GET EXONS IN THIS CLUSTER
 cluster1=(~m)[exon1]  # GET CLUSTER OBJECT FOR THIS EXON
 \end{verbatim}
 
+
+\subsubsection{ManyToManyRelation, OneToManyRelation}
+Convenience class for constructing schema relations for
+a general graph mapping from a sourceDB to targetDB with edge info.
+\begin{funcdesc}{__init__}{sourceDB,targetDB,edgeDB=None,bindAttrs=None}
+  \var{sourceDB},\var{targetDB}, and \var{edgeDB} can be either
+  a string resource ID, a \class{ResourcePath} object, or
+  an actual pygr.Data resource (automatically marked with its ID
+  as the \member{_persistent_id} attribute).
+  \var{bindAttrs}, if provided, must give a list of string attribute names to be
+  bound, in order, to items of \var{sourceDB}, \var{targetDB},
+  and \var{edgeDB}, in that order.  A None value in this list simply
+  means that no attribute binding will be made to the corresponding
+  pygr.Data resource.
+\end{funcdesc}
+Note: this class simply records the information necessary for this
+schema relation.  The information is not actually saved to the resource
+database until its \method{saveSchema} method is called by 
+the \class{SchemaPath} object.  In addition to saving attribute
+bindings given by \var{bindAttrs}, this will also create bindings
+on the mapping resource object itself (i.e. the resource whose
+schema is being set; see an example in the tutorial).  Specifically,
+it will save bindings for its \member{sourceDB},\member{targetDB},
+and \member{edgeDB} attributes to the corresponding resources
+given by the \var{sourceDB},\var{targetDB},
+and \var{edgeDB} arguments.
+
+\class{OneToManyRelation} and \class{ManyToManyRelation} differ only in that
+they indicate to pygr.Data that \textasciitilde\code{m1[v] --> k} whereas 
+\textasciitilde\code{mMany[v] --> [k1,k2,...]}
 
 \subsubsection{DirectRelation, ItemRelation, InverseRelation}
 \class{DirectRelation} is a convenience class for constructing 
@@ -3794,32 +3978,6 @@ that points to the other resource.  When either resource is loaded,
 a special \method{__invert__} method will be added, that simply
 loads and returns the resource pointed to by the \member{inverseDB}
 binding.
-
-\subsubsection{ManyToManyRelation}
-Convenience class for constructing schema relations for
-a general graph mapping from a sourceDB to targetDB with edge info.
-\begin{funcdesc}{__init__}{sourceDB,targetDB,edgeDB=None,bindAttrs=None}
-  \var{sourceDB},\var{targetDB}, and \var{edgeDB} can be either
-  a string resource ID, a \class{ResourcePath} object, or
-  an actual pygr.Data resource (automatically marked with its ID
-  as the \member{_persistent_id} attribute).
-  \var{bindAttrs}, if provided, must give a list of string attribute names to be
-  bound, in order, to items of \var{sourceDB}, \var{targetDB},
-  and \var{edgeDB}, in that order.  A None value in this list simply
-  means that no attribute binding will be made to the corresponding
-  pygr.Data resource.
-\end{funcdesc}
-Note: this class simply records the information necessary for this
-schema relation.  The information is not actually saved to the resource
-database until its \method{saveSchema} method is called by 
-the \class{SchemaPath} object.  In addition to saving attribute
-bindings given by \var{bindAttrs}, this will also create bindings
-on the mapping resource object itself (i.e. the resource whose
-schema is being set; see an example in the tutorial).  Specifically,
-it will save bindings for its \member{sourceDB},\member{targetDB},
-and \member{edgeDB} attributes to the corresponding resources
-given by the \var{sourceDB},\var{targetDB},
-and \var{edgeDB} arguments.
 
 \subsection{sqlgraph Module}
 \label{sqlgraph-module}
@@ -4208,6 +4366,61 @@ storage, that can accept \class{int} values as keys.
 \end{funcdesc}
 In other respects the \class{IntShelve} behaves like a regular shelve
 (dictionary interface).
+
+
+\subsubsection{IDDict}
+This class provides dict-like class suitable for persistent usages.  
+It extracts ID values from
+keys and values passed to it, and saves these IDs into its internal dictionary
+instead of the actual objects.  Thus, the external interface is objects,
+but the internal storage is ID values.  This allows the mapping to be stored
+persistently (i.e. pickled) separately from the objects which it maps, 
+because only IDs are stored in the \class{IDDict}.
+
+You can use any object that obeys the
+Python mapping protocol (e.g. \class{dict}, or Python \module{shelve}) 
+as the internal storage.  \class{IDDict} behaves exactly like a standard
+Python dictionary, providing all the standard methods of the Mapping Protocol.
+
+\begin{funcdesc}{IDDict}{sourceDB, targetDB, d=None, IDAttr='id', targetIDAttr='id', itemAttr=None, multiValue=False, inverseAttr=None}
+  Initializes a mapping between items of \var{sourceDB} and items of \var{targetDB}.
+
+  \var{sourceDB}: container whose items will serve as keys for this IDDict.
+   i.e. \var{sourceDB} must be a dictionary that maps key ID values to key objects.
+
+  \var{targetDB}: container whose items will serve as values of this IDDict.
+  i.e. \var{targetDB} must be a dictionary that maps value IDs to value objects.
+
+  \var{d}, if not None, is the internal mapping to use as our storage.
+  If None, a standard Python dictionary will be used.
+
+  \var{IDAttr}: attribute name to obtain an ID from a key object.
+
+  \var{targetIDAttr}: attribute name to obtain an ID from a value object.
+
+  \var{itemAttr}, if not None, the attribute to obtain target (value) ID
+  from an internal storage value
+
+  \var{multiValue}: if True, treat each value as a list of values, i.e. this
+  IDDict will serve as a one-to-many mapping from \var{sourceDB} to \var{targetDB}.
+
+  \var{inverseAttr}, if not None, attribute name to obtain a source ID from
+  a value object.
+\end{funcdesc}
+
+Here's an example usage:
+\begin{verbatim}
+gene_exons = IDDict(ens_genes, exon_db, multiValue=True, inverseAttr='transcript_id')
+for exon in exon_db:
+    gene = ens_genes[exon.transcript_id]
+    exons = gene_exons.get(gene, [])
+    exons.append(exon)
+    gene_exons[gene] = exons # SAVE EXPANDED EXON MAPPING LIST
+# SAVE TO PYGR DATA, AND CREATE GENES -> EXONS SCHEMA RELATION
+pygr.Data.Bio.Titus.Test1.GeneExons = gene_exons
+pygr.Data.schema.Bio.Titus.Test1.GeneExons = \
+     pygr.Data.OneToManyRelation(ens_genes,exon_db,bindAttrs=('exons','gene'))
+\end{verbatim}
 
 \subsubsection{Schema: binding object attributes to graphs}
 
