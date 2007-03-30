@@ -34,7 +34,7 @@ class ItemDescriptor(object):
         targetDict=getResource.schemaAttr(id,self.attr) # ATTEMPT TO GET FROM pygr.Data
         if self.invert:
             targetDict= ~targetDict
-        if self.getEdges:  # NEED TO FIX THIS !!!
+        if self.getEdges:
             targetDict=targetDict.edges
         if self.mapAttr is not None: # USE mapAttr TO GET ID FOR MAPPING obj
             result=targetDict[getattr(obj,self.mapAttr)]
@@ -90,14 +90,19 @@ class PygrPickler(pickle.Pickler):
         'convert objects with _persistent_id to PYGR_ID strings during pickling'
         import types
         try:
-            if not isinstance(obj,types.TypeType) and obj is not self.root and obj._persistent_id is not None:
-                return 'PYGR_ID:%s' % obj._persistent_id
+            if not isinstance(obj,types.TypeType) and obj is not self.root:
+                try:
+                    return 'PYGR_ID:%s' % self.sourceIDs[id(obj)]
+                except KeyError:
+                    if obj._persistent_id is not None:
+                        return 'PYGR_ID:%s' % obj._persistent_id
         except AttributeError:
             pass
         return None
-    def setRoot(self,obj):
+    def setRoot(self,obj,sourceIDs={}):
         'set obj as root of pickling tree: genuinely pickle it (not just its id)'
         self.root=obj
+        self.sourceIDs=sourceIDs
 
 
 class ResourceDBServer(object):
@@ -301,6 +306,7 @@ class ResourceFinder(object):
         self.dbstr=''
         self.d={}
         self.separator=separator
+        self.sourceIDs={}
         if saveDict is not None:
             self.saveDict=saveDict # SAVE NEW LAYER NAMES HERE...
             self.update() # FORCE LOADING OF RESOURCE DBs FROM PYGRDATAPATH
@@ -376,7 +382,7 @@ Continuing with import...'''%dbpath
         'pickle to string, using persistent ID encoding'
         src=StringIO()
         pickler=PygrPickler(src) # NEED OUR OWN PICKLER, TO USE persistent_id
-        pickler.setRoot(obj) # ROOT OF THE PICKLE TREE: SAVE EVEN IF persistent_id
+        pickler.setRoot(obj,self.sourceIDs) # ROOT OF PICKLE TREE: SAVE EVEN IF persistent_id
         pickler.dump(obj) # PICKLE IT
         return src.getvalue() # RETURN THE PICKLED FORM AS A STRING
     def persistent_load(self,persid):
@@ -399,7 +405,7 @@ Continuing with import...'''%dbpath
                 try:
                     obj=db[id] # TRY TO OBTAIN FROM THIS DATABASE
                     break # SUCCESS!  NOTHING MORE TO DO
-                except KeyError,IOError:
+                except (KeyError,IOError):
                     pass # NOT IN THIS DB, OR OBJECT DATAFILES NOT LOADABLE HERE...
             if obj is None:
                 raise KeyError('unable to find %s in PYGRDATAPATH' % id)
@@ -407,12 +413,19 @@ Continuing with import...'''%dbpath
         self.d[id]=obj # SAVE TO OUR CACHE
         self.applySchema(id,obj) # BIND SHADOW ATTRIBUTES IF ANY
         return obj
-    def addResource(self,id,obj,layer=None):
+    def addResource(self,resID,obj,layer=None):
         'save the object to the specified database layer as <id>'
-        obj._persistent_id=id # MARK OBJECT WITH ITS PERSISTENT ID
+        obj._persistent_id=resID # MARK OBJECT WITH ITS PERSISTENT ID
         db=self.getLayer(layer)
-        db[id]=obj # SAVE THE OBJECT TO THE DATABASE
-        self.d[id]=obj # SAVE TO OUR CACHE
+        db[resID]=obj # SAVE THE OBJECT TO THE DATABASE
+        self.d[resID]=obj # SAVE TO OUR CACHE
+    def addResourceDict(self,saveDict,layer=None):
+        'save an entire set of resources, so dependency order is not an issue'
+        for k,v in saveDict.items(): # CREATE DICT OF OBJECT IDs FOR DEPENDENCIES
+            self.sourceIDs[id(v)]=k
+        for k,v in saveDict.items(): # NOW ACTUALLY SAVE THE OBJECTS
+            self.addResource(k,v,layer) # CALL THE PICKLER...
+        self.sourceIDs.clear() # CLEAR THE OBJECT ID DICTIONARY
     def getLayer(self,layer):
         self.update() # MAKE SURE WE HAVE LOADED CURRENT DATABASE LIST
         if layer is not None:
@@ -512,7 +525,7 @@ Continuing with import...'''%dbpath
         'create a descriptor for the attr on the appropriate obj class'
         try: # SEE IF OBJECT TELLS US TO SKIP THIS ATTRIBUTE
             return obj._ignoreShadowAttr[attr] # IF PRESENT, NOTHING TO DO
-        except AttributeError,KeyError:
+        except (AttributeError,KeyError):
             pass # PROCEED AS NORMAL
         if itemRule: # SHOULD BIND TO ITEMS FROM obj DATABASE
             targetClass=obj.itemClass # CLASS USED FOR CONSTRUCTING ITEMS
@@ -614,6 +627,7 @@ class ItemRelation(DirectRelation):
 
 class ManyToManyRelation(object):
     'a general graph mapping from sourceDB -> targetDB with edge info'
+    _relationCode='-many:many'
     def __init__(self,sourceDB,targetDB,edgeDB=None,bindAttrs=None):
         self.sourceDB=getID(sourceDB) # CONVERT TO STRING RESOURCE ID
         self.targetDB=getID(targetDB)
@@ -625,7 +639,7 @@ class ManyToManyRelation(object):
     def saveSchema(self,source,attr,layer=None):
         'save schema bindings associated with this rule'
         source=source.getPath(attr) # GET STRING ID FOR source
-        getResource.saveSchema(source,'-many:many',self,layer) #SAVE THIS RULE
+        getResource.saveSchema(source,self._relationCode,self,layer) #SAVE THIS RULE
         b=DirectRelation(self.sourceDB) # SAVE sourceDB BINDING
         b.saveSchema(source,'sourceDB',layer)
         b=DirectRelation(self.targetDB) # SAVE targetDB BINDING
@@ -649,6 +663,8 @@ class ManyToManyRelation(object):
                 if len(self.bindAttrs)>i and self.bindAttrs[i] is not None:
                     resourceDB.delschema(bindObj[i],self.bindAttrs[i])
 
+class OneToManyRelation(ManyToManyRelation):
+    _relationCode='-one:many'
 
 class InverseRelation(DirectRelation):
     "bind source and target as each other's inverse mappings"
@@ -701,6 +717,25 @@ class ForeignKeyMap(object):
             self._inverse=ForeignKeyMapInverse(self)
             return self._inverse
 
+
+class Dict(object): # WRAP dict SO IT CAN BE SAVED TO pygr.Data
+    def __init__(self,*l,**kwargs):
+        self.d=dict(*l)
+        try:
+            self.itemClass=kwargs['itemClass']
+        except KeyError:
+            pass
+    def __getitem__(self,k): return self.d[k]
+    def __setitem__(self,k,v): self.d[k]=v
+    def __delitem__(self,k): del self.d[k]
+    def __len__(self): return len(self.d)
+    def __contains__(self,k): return k in self.d
+    def __iter__(self): return iter(self.d)
+    def __getattr__(self,attr):
+        if attr=='__setstate__': # PREVENT INFINITE RECURSE IN UNPICKLE
+            raise AttributeError
+        return getattr(self.d,attr)
+    
 
 ###########################################################
 schema=SchemaPath() # ROOT OF OUR SCHEMA NAMESPACE
