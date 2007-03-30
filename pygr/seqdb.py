@@ -758,23 +758,40 @@ def getAnnotationAttr(self,attr):
     try:
         return SeqPath.__getattr__(self,attr)
     except AttributeError:
-        return getattr(self.db.sliceDB[self.id],attr)
+        try:
+            return self.db.getSliceAttr(self.db.sliceDB[self.id],attr)
+        except KeyError:
+            raise AttributeError
 
 
 class AnnotationSeq(SeqPath):
     originalIval=originalIval
     __getattr__=getAnnotationAttr
+    def wholeAnnotation(self):
+        'True if this is the complete annotation, False if just a fragment'
+        return True
+    def properOrientation(self):
+        'True if on same strand as original annotation, False if on reverse strand'
+        return True
+
 class AnnotationDescriptor(object):
     'forwards attribute requests to self.annot'
     def __init__(self,attr):
         self.attr=attr
     def __get__(self,obj,objtype):
         return getattr(obj.annot,self.attr) # RAISES AttributeError IF NONE
+
 class AnnotationSlice(SeqPath):
     'represents subslice of an annotation'
     def __init__(self,path,*args,**kwargs):
         self.annot=path.annot # KEEP POINTING AT PARENT ANNOTATION
         SeqPath.__init__(self,path,*args,**kwargs)
+    def wholeAnnotation(self):
+        'True if this is the complete annotation, False if just a fragment'
+        return self.annot in self
+    def properOrientation(self):
+        'True if on same strand as original annotation, False if on reverse strand'
+        return self.orientation==self.annot.orientation
     id=AnnotationDescriptor('id') # ACCESS TO SCHEMA INFO VIA AnnotationSeq
     db=AnnotationDescriptor('db')
     originalIval=originalIval
@@ -796,12 +813,7 @@ class AnnotationDB(dict):
         self.itemClass=itemClass
         self.itemSliceClass=itemSliceClass
         self.itemAttrDict=itemAttrDict
-##         if itemAttrDict is not None:
-##             for k,v in itemAttrDict.items():
-##                 setattr(itemClass,k,ForwardingDescriptor(sliceDB,v))
-##                 setattr(itemSliceClass,k,ForwardingDescriptor(sliceDB,v))
-        self.sliceAttrDict=dict(id='id',start='start',stop='stop') # DEFAULT
-        self.sliceAttrDict.update(sliceAttrDict) # ADD USER-PROVIDED ALIASES
+        self.sliceAttrDict=sliceAttrDict # USER-PROVIDED ALIASES
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __setstate__(self,state):
@@ -819,11 +831,26 @@ class AnnotationDB(dict):
         except KeyError:
             pass
         return self.sliceAnnotation(k,self.sliceDB[k])
+    def getSliceAttr(self,sliceInfo,attr):
+        try: # GET ATTRIBUTE AS USUAL
+            return getattr(sliceInfo,attr)
+        except AttributeError:
+            k=self.sliceAttrDict[attr]
+            try: # REMAP TO ANOTHER ATTRIBUTE NAME
+                return getattr(sliceInfo,k)
+            except TypeError: # TREAT AS int INDEX INTO A TUPLE
+                return sliceInfo[k]
     def sliceAnnotation(self,k,sliceInfo):
         'create annotation and cache it'
-        myslice=absoluteSlice(self.seqDB[getattr(sliceInfo,self.sliceAttrDict['id'])],
-                              getattr(sliceInfo,self.sliceAttrDict['start']),
-                              getattr(sliceInfo,self.sliceAttrDict['stop']))
+        start=int(self.getSliceAttr(sliceInfo,'start'))
+        stop=int(self.getSliceAttr(sliceInfo,'stop'))
+        try:
+            if int(self.getSliceAttr(sliceInfo,'orientation'))<0 and start>=0:
+                start,stop= (-stop,-start) # NEGATIVE ORIENTATION COORDINATES
+        except KeyError:
+            pass
+        myslice=absoluteSlice(self.seqDB[self.getSliceAttr(sliceInfo,'id')],start,stop)
+        length=len(myslice) # RAISE IndexError IF INTERVAL IS EMPTY!
         if self.itemClass is not None: # FORCE ITEM TO USE ANNOTATION CLASS
             myslice.__class__=self.itemClass
         myslice.annot=myslice # THIS FIELD INDICATES THIS IS AN ANNOTATION
@@ -1108,7 +1135,7 @@ Set trypath to give a list of directories to search.'''
         d=self.prefixDict[prefix]
         try: # TRY TO USE int KEY FIRST
             return d[int(id)]
-        except ValueError,KeyError: # USE DEFAULT str KEY
+        except (ValueError,KeyError): # USE DEFAULT str KEY
             return d[id]
 
     def __contains__(self,k):
