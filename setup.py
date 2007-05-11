@@ -36,7 +36,7 @@ def runTests():
    try:
       import MySQLdb
    except ImportError:
-      print "\nWarning: You do not have a required module installed (MySQLdb). While this module is not necessary to use core components, the provided apps code will not work. Installing anyway...\n"
+      print "\nWarning: You do not have a recommended module installed (MySQLdb). While this module is not necessary to use core components, some provided apps components will not be available. Installing anyway...\n"
 
 
    if (test_loader.TestFrameWork(testExtensions=False).go()):
@@ -147,10 +147,15 @@ def pyrexIsUpToDate(cfile):
    except OSError: # PYREX .pyx CODE IS MISSING??  JUST USE OUR EXISTING C CODE THEN.
       print 'Warning: pyrex code %s is missing!  Check your distribution!' % (cfile[:-2]+'.pyx')
       return True
+   try:
+      if cstat[8]<os.stat(cfile[:-2]+'.pxd')[8]:
+         return False # pxd FILE IS NEWER THAN C FILE, MUST RERUN PYREXC
+   except OSError:
+      pass
    return cstat[8]>pyxstat[8] # COMPARE THEIR st_mtime VALUES
 
-def runSetup(script_args=None):
-   'prepare extension module code, run distutils setup'
+def add_extensions():
+   'prepare extension module code, add to setup metadata'
    buildExtensions=[]
    pyrexTargets={'pygr/cdict.c':
                  Extension('pygr.cdict',sources = ['pygr/cgraph.c', 'pygr/cdict.c']),
@@ -173,12 +178,12 @@ def runSetup(script_args=None):
    if len(buildExtensions)>0:
       metadata['ext_modules'] = buildExtensions
 
-   setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
 
 
 if __name__=='__main__':
    if runTests(): # DID EVERYTHING TEST OK?
-      runSetup() # DO THE INSTALL
+      add_extensions() # DO THE INSTALL
+      setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
    else: # EXIT WITH ERROR CODE
       sys.exit(1)
       
