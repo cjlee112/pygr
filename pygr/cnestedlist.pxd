@@ -167,7 +167,7 @@ cdef class NLMSA:
   cdef readonly object lpoList,maxLPOcoord
   cdef int lpo_id
   cdef readonly int maxlen,inlmsa,is_bidirectional,use_virtual_lpo,in_memory_mode
-  cdef public object _persistent_id,_ignoreShadowAttr
+  cdef public object _persistent_id,_ignoreShadowAttr,__doc__
 
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id)
 
