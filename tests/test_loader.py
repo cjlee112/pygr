@@ -45,7 +45,7 @@ class TestMain(object):
         if testExtensions:
            import cnestedlist
            self.cnestedlist = cnestedlist
-      except:
+      except ImportError:
          raise ImportError("Unable to load Pygr modules. Set PYGRPATH accordingly.") 
 
       try:
