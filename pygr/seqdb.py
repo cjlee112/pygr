@@ -4,7 +4,7 @@ import shelve
 from sqlgraph import *
 from poa import *
 from parse_blast import *
-
+import classutil
 
 def tryPathList(filepath,pathlist,mode='r'):
     'return successful path based on trying pathlist locations'
@@ -438,15 +438,9 @@ class BlastDBinverse(object):
         except AttributeError:
             return False
 
-def ClassicUnpickler(cls, state):
-    self = cls.__new__(cls)
-    self.__setstate__(state)
-    return self
-ClassicUnpickler.__safe_for_unpickling__ = 1
-
 class SeqDBbase(dict):
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
-        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
+        return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __setstate__(self,state):
         self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
     def __invert__(self):
@@ -512,7 +506,7 @@ class BlastDBbase(SeqDBbase):
     itemClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
     def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
-                 blastReady=False):
+                 blastReady=False,**kwargs):
         "format database and build indexes if needed. Provide filepath or file object"
         if filepath is None:
             try:
@@ -542,9 +536,10 @@ class BlastDBbase(SeqDBbase):
             self.formatdb()
         if ifile is not None: # NOW THAT WE'RE DONE CONSTRUCTING, CLOSE THE FILE OBJECT
             ifile.close() # THIS SIGNALS WE'RE COMPLETELY DONE CONSTRUCTING THIS RESOURCE
+        classutil.apply_itemclass(self,kwargs)
 
-    def __getstate__(self): ################ SUPPORT FOR UNPICKLING
-        return dict(filepath=self.filepath,skipSeqLenDict=self.skipSeqLenDict)
+    __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
+    _pickleAttrs = dict(filepath=0,skipSeqLenDict=0)
 
     def checkdb(self):
         'check whether BLAST index files ready for use; return self.blastReady status'
@@ -800,7 +795,8 @@ class AnnotationSlice(SeqPath):
 class AnnotationDB(dict):
     'container of annotations as specific slices of db sequences'
     def __init__(self,sliceDB,seqDB,itemClass=AnnotationSeq,
-                 itemSliceClass=AnnotationSlice,itemAttrDict=None,
+                 itemSliceClass=AnnotationSlice,
+                 itemAttrDict=None, # GET RID OF THIS BACKWARDS-COMPATIBILITY KLUGE!!
                  sliceAttrDict={}):
         '''sliceDB must map identifier to a sliceInfo object;
         sliceInfo must have name,start,stop,ori attributes;
@@ -812,15 +808,12 @@ class AnnotationDB(dict):
         self.seqDB=seqDB
         self.itemClass=itemClass
         self.itemSliceClass=itemSliceClass
-        self.itemAttrDict=itemAttrDict
         self.sliceAttrDict=sliceAttrDict # USER-PROVIDED ALIASES
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
-        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
-    def __setstate__(self,state):
-        self.__init__(*state) #JUST PASS ARGS TO CONSTRUCTOR
-    def __getstate__(self): ################ SUPPORT FOR UNPICKLING
-        return (self.sliceDB,self.seqDB,self.itemClass,self.itemSliceClass,
-                self.itemAttrDict,self.sliceAttrDict)
+        return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
+    __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
+    __setstate__ = classutil.standard_setstate
+    _pickleAttrs = dict(sliceDB=0,seqDB=0,itemClass=0,itemSliceClass=0,sliceAttrDict=0)
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
