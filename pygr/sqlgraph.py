@@ -3,6 +3,7 @@
 from __future__ import generators
 from mapping import *
 import types
+from classutil import ClassicUnpickler
     
 
 class TupleO(object):
@@ -39,22 +40,44 @@ class SQLRow(object):
     def __getattr__(self,attr):
         return self._select(self.db._attrSQL(attr))
 
-def ClassicUnpickler(cls, state):
-    self = cls.__new__(cls)
-    self.__setstate__(state)
-    return self
-ClassicUnpickler.__safe_for_unpickling__ = 1
 
+
+def list_to_dict(names,values):
+    'return dictionary of those named args that are present'
+    d={}
+    for i in range(len(values)):
+        try:
+            d[names[i]]=values[i]
+        except IndexError:
+            pass
+    return d
+
+
+def getNameCursor(name,connect=None,configFile=None):
+    'get table name and cursor by parsing name or using configFile'
+    if connect is None:
+        import MySQLdb
+        connect=MySQLdb.connect
+    argList=name.split() # TREAT AS WS-SEPARATED LIST
+    if len(argList)>1:
+        name=argList[0] # USE 1ST ARG AS TABLE NAME
+        argnames=('host','user','passwd') # READ ARGS IN THIS ORDER
+        cursor=connect(**list_to_dict(argnames,argList[1:]))
+    else: # USE .my.cnf TO GET CONNECTION PARAMETERS
+        if configFile is None:
+            import os
+            configFile=os.environ['HOME']+'/.my.cnf'
+        cursor=connect(read_default_file=configFile,compress=True).cursor()
+    return name,cursor
 
 
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
-                 clusterKey=None):
+                 clusterKey=None,**kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
-            import MySQLdb,os
-            cursor=MySQLdb.connect(read_default_file=os.environ['HOME']+'/.my.cnf',compress=True).cursor()
+            name,cursor=getNameCursor(name,**kwargs)
         cursor.execute('describe %s' % name)
         columns=cursor.fetchall()
         self.cursor=cursor
@@ -90,11 +113,28 @@ class SQLTableBase(dict):
     def __getstate__(self):
         d=self.getAttrAlias() # SAVE ATTRIBUTE ALIASES
         if self.itemClass.__name__=='foo': # NO NEED TO SAVE ITEM CLASS
-            return [self.name,None,None,d]
+            return dict(name=self.name,attrAlias=d)
         else: # SAVE ITEM CLASS
-            return [self.name,None,self.itemClass,d]
-    def __setstate__(self,l):
-        self.__init__(*l)
+            return dict(name=self.name,itemClass=self.itemClass,attrAlias=d)
+    def __setstate__(self,state):
+        if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
+            name = state[0]
+        else:
+            name = state['name']
+        try: # SEE IF WE CAN GET CURSOR DIRECTLY FROM RESOURCE DATABASE
+            from Data import getResource
+            cursor=getResource.getTableCursor(name)
+        except ImportError:
+            cursor=None # FAILED, SO TRY TO GET A CURSOR IN THE USUAL WAYS...
+        if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
+            state[1] = cursor
+            self.__init__(*state)
+            import sys
+            print >>sys.stderr,'WARNING: obsolete list pickle %s. Update by resaving!' \
+                  % repr(self)
+        else:
+            state['cursor'] = cursor
+            self.__init__(**state)
     def __repr__(self):
         return '<SQL table '+self.name+'>'
 
@@ -230,7 +270,9 @@ class SQLTableClustered(SQLTable):
     '''use clusterKey to load a whole cluster of rows at once,
        specifically, all rows that share the same clusterKey value.'''
     def __getstate__(self): # ALSO NEED TO SAVE clusterKey SETTING
-        return SQLTableBase.__getstate__(self)+[self.clusterKey]
+        state = SQLTableBase.__getstate__(self)
+        state['clusterKey'] = self.clusterKey
+        return state
     def __getitem__(self,k):
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
@@ -357,12 +399,12 @@ class SQLEdgeDict(object):
                                      (self.fromNode,target))<1:
             raise KeyError('no edge from node to target')
         
-    __iter__=lambda self:self.iteritems(0)
-    keys=lambda self:[k for k in self]
-    itervalues=lambda self:self.iteritems(1)
-    values=lambda self:[k for k in self.iteritems(1)]
-    items=lambda self:[k for k in self.iteritems()]
-    edges=lambda self:[(self.fromNode,)+k for k in self.iteritems()]
+    def __iter__(self): return self.iteritems(0)
+    def keys(self): return [k for k in self]
+    def itervalues(self): return self.iteritems(1)
+    def values(self): return [k for k in self.iteritems(1)]
+    def items(self): return [k for k in self.iteritems()]
+    def edges(self): return [(self.fromNode,)+k for k in self.iteritems()]
     def iteritems(self,k=slice(0,2)):
         self.table.cursor.execute('select %s,%s from %s where %s=%%s'
                                   %(self.table._attrSQL('target_id'),
@@ -409,10 +451,10 @@ class SQLGraph(SQLTableMultiNoCache):
         for k in self:
             result=(k,SQLEdgeDict(k,self))
             yield result[myslice]
-    keys=lambda self:[k for k in self]
-    itervalues=lambda self:self.iteritems(1)
-    values=lambda self:[k for k in self.iteritems(1)]
-    items=lambda self:[k for k in self.iteritems()]
+    def keys(self): return [k for k in self]
+    def itervalues(self): return self.iteritems(1)
+    def values(self): return [k for k in self.iteritems(1)]
+    def items(self): return [k for k in self.iteritems()]
     edges=SQLGraphEdgeDescriptor()
 
 
