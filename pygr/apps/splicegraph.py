@@ -63,6 +63,22 @@ def loadCluster(c,exon_forms,splices,clusterExons,clusterSplices,spliceGraph,alt
 
 
 
+class ExonForm(TupleO,SeqPath): # ADD ATTRIBUTES STORING SCHEMA INFO
+    def __init__(self,t):
+        TupleO.__init__(self,t) # 1ST INITIALIZE ATTRIBUTE ACCESS
+        SeqPath.__init__(self,g[self.cluster_id], # INITIALIZE AS SEQ INTERVAL
+                         self.genomic_start-1,self.genomic_end)
+    def __getattr__(self,attr):
+        'both parent classes have getattr, so have to call them both...'
+        try:
+            return TupleO.__getattr__(self,attr)
+        except AttributeError:
+            return SeqPath.__getattr__(self,attr)
+
+class Splice(TupleO):
+    pass
+
+
 def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,
                     mrna_seq_t=None,protein_seq_t=None,loadAll=True):
     """
@@ -107,19 +123,9 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,
         protein=None
 
     exon_forms=jun03[exon_t]
-    class ExonForm(TupleO,SeqPath): # ADD ATTRIBUTES STORING SCHEMA INFO
-        __class_schema__=SchemaDict(((spliceGraph,'next'),(alt5,'alt5'),(alt3,'alt3')))
-        def __init__(self,t):
-            TupleO.__init__(self,t) # 1ST INITIALIZE ATTRIBUTE ACCESS
-            SeqPath.__init__(self,g[self.cluster_id], # INITIALIZE AS SEQ INTERVAL
-                             self.genomic_start-1,self.genomic_end)
-        def __getattr__(self,attr):
-            'both parent classes have getattr, so have to call them both...'
-            try:
-                return TupleO.__getattr__(self,attr)
-            except AttributeError:
-                return SeqPath.__getattr__(self,attr)
+    ExonForm.__class_schema__=SchemaDict(((spliceGraph,'next'),(alt5,'alt5'),(alt3,'alt3')))
     exon_forms.objclass(ExonForm) # BIND THIS CLASS TO CONTAINER, AS THE CLASS TO USE AS "ROW OBJECTS"
+
     if loadAll:
         print 'Loading %s...' % exon_forms
         exon_forms.load(ExonForm)
@@ -133,8 +139,6 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,
         clusters.load(Cluster)
 
     splices=jun03[splice_t]
-    class Splice(TupleO):
-        pass
     splices.objclass(Splice) # BIND THIS CLASS TO CONTAINER, AS THE CLASS TO USE AS "ROW OBJECTS"
     if loadAll:
         print 'Loading %s...' % splices
@@ -157,8 +161,11 @@ def loadSpliceGraph(jun03,cluster_t,exon_t,splice_t,genomic_seq_t,
         print 'Adding exons to graph...'
         for e in exon_forms.values():
             c=clusters[e.cluster_id]
-            c.exons+=e
-            spliceGraph+=e
+            try:
+                c.exons+=e
+                spliceGraph+=e
+            except IndexError:
+                pass # BAD EXON: EMPTY SEQUENCE INTERVAL... IGNORE IT
 
         print 'Adding splices to graph...'
         for s in splices.values():

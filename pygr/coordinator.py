@@ -275,19 +275,23 @@ class XMLRPCServerBase(object):
                 print >>sys.stderr,\
                       "methodCall: blocked unregistered method %s" % methodname
                 return ''
-        except KeyError,AttributeError:
+        except (KeyError,AttributeError):
             return '' # RETURN FAILURE CODE
         return m(*args) # RUN THE OBJECT METHOD
     def serve_forever(self):
         'launch the XMLRPC service.  Never exits.'
         detach_as_demon_process(self)
         serve_forever(self)
-    def register(self,url,name,server=None):
+    def register(self,url=None,name='index',server=None):
         'register our server with the designated index server'
         data=self.registrationData # RAISE ERROR IF NO DATA TO REGISTER...
-        if server is None:
+        if server is None and url is not None: # USE THE URL TO GET THE INDEX SERVER
             server=get_connection(url,name)
-        server.registerServer('%s:%d' % (self.host,self.port),data)
+        if server is not None:
+            server.registerServer('%s:%d' % (self.host,self.port),data)
+        else: # DEFAULT: SEARCH PYGRDATAPATH TO FIND INDEX SERVER
+            import pygr.Data
+            pygr.data.getResource.registerServer('%s:%d' % (self.host,self.port),data)
         
 class ResourceController(object):
     """Centralized controller for getting resources and rules for
