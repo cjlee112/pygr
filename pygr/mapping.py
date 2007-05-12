@@ -2,6 +2,7 @@
 
 from __future__ import generators
 from schema import *
+import classutil
 
 class PathList(list):
     """Internal representation for storing both nodes and edges as list
@@ -250,24 +251,62 @@ class DictQueue(dict):
 ################################ PYGR.DATA.SCHEMA - AWARE CLASSES BELOW
 
 
-def methodFactory(methodList,methodStr,localDict):
-    for methodName in methodList:
-        localDict[methodName]=eval(methodStr%methodName)
 
 
-class IntShelve(object):
+class Collection(object):
+    'flexible storage mapping ID --> OBJECT'
+    def __init__(self,saveDict=None,dictClass=dict,**kwargs):
+        '''saveDict, if not None, is the internal mapping to use as our storage.
+        filename: if provided, is a file path to a shelve (BerkeleyDB) file to
+              store the data in.
+        dictClass: if provided, is the class to use for storage of the dict data.'''
+        if saveDict is not None:
+            self.d = saveDict
+        elif 'filename' in kwargs: # USE A SHELVE (BERKELEY DB)
+            try:
+                if kwargs['intKeys']: # ALLOW INT KEYS, HAVE TO USE IntShelve
+                    self.__class__ = IntShelve
+                    return self.__init__(**kwargs)
+            except KeyError:
+                pass
+            self.__class__ = PicklableShelve
+            return self.__init__(**kwargs)
+        else:
+            self.d = dictClass()
+        classutil.apply_itemclass(self,kwargs)
+    def __getitem__(self,k): return self.d[k]
+    def __setitem__(self,k,v): self.d[k] = v
+    def __delitem__(self,k): del self.d[k]
+    def __len__(self): return len(self.d)
+    def __contains__(self,k): return k in self.d
+    def __iter__(self): return iter(self.d)
+    def __getattr__(self,attr):
+        if attr=='__setstate__': # PREVENT INFINITE RECURSE IN UNPICKLE
+            raise AttributeError
+        return getattr(self.d,attr)
+
+class PicklableShelve(Collection):
+    'persistent storage mapping ID --> OBJECT'
+    def __init__(self,filename,mode=None,**kwargs):
+        self.filename = filename
+        if mode=='c':
+            self.mode = 'w'
+        else:
+            self.mode = mode
+        self.d = classutil.open_shelve(filename,mode)
+        classutil.apply_itemclass(self,kwargs)
+    __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
+    __setstate__ = classutil.standard_setstate
+    _pickleAttrs = dict(filename=0,mode=0)
+    def __setitem__(self,k,v):
+        try:
+            self.d[k]=v
+        except TypeError:
+            raise TypeError('to allow int keys, you must pass intKeys=True to constructor!')
+
+
+class IntShelve(PicklableShelve):
     'provides an interface to shelve that can use int as key'
-    def __init__(self,filename=None,mode='r',**kwargs):
-        import shelve
-        self.filename=filename
-        if mode=='r': # READ-ONLY MODE
-            self.d=shelve.open(filename,mode)
-        else: # CREATION / WRITING: FORCE IT TO WRITEBACK AT close()
-            self.d=shelve.open(filename,mode,writeback=True)
-    def __getstate__(self): ############### PICKLING METHODS
-        return [self.filename]
-    def __setstate__(self,l):
-        self.__init__(*l)
     def saveKey(self,i):
         'convert to string key'
         if isinstance(i,int):
@@ -285,21 +324,132 @@ class IntShelve(object):
             return int(k[4:])
         else:
             return k
-    def __getitem__(self,k): ################ STANDARD ITERATOR METHODS
+    def __getitem__(self,k):
         return self.d[self.saveKey(k)]
     def __setitem__(self,k,v):
         self.d[self.saveKey(k)]=v
+    def __delitem__(self,k): del self.d[self.saveKey(k)]
     def __contains__(self,k):
         return self.saveKey(k) in self.d
-    def __iter__(self):
+    def __iter__(self): ################ STANDARD ITERATOR METHODS
         for k in self.d:
             yield self.trueKey(k)
-    keys=lambda self:[k for k in self]
+    def keys(self): return [k for k in self]
     def iteritems(self):
         for k,v in self.d.iteritems():
             yield self.trueKey(k),v
-    items=lambda self:[k for k in self.iteritems()]
-    close=lambda self:self.d.close()
+    def items(self): return [k for k in self.iteritems()]
+    def close(self): self.d.close()
+
+
+
+class MappingInverse(object):
+    def __init__(self,db):
+        self._inverse=db
+        self.attr=db.inverseAttr
+    def __getitem__(self,k):
+        return self._inverse.sourceDB[getattr(k,self.attr)]
+    def __invert__(self): return self._inverse
+
+class Mapping(object):
+    '''dict-like class suitable for persistent usages.  Extracts ID values from
+    keys and values passed to it, and saves IDs into its internal dictionary
+    instead of the actual objects.  Thus, the external interface is objects,
+    but the internal storage is ID values.'''
+    def __init__(self,sourceDB,targetDB,saveDict=None,IDAttr='id',targetIDAttr='id',
+                 itemAttr=None,multiValue=False,inverseAttr=None,**kwargs):
+        '''sourceDB: dictionary that maps key ID values to key objects
+        targetDB: dictionary that maps value IDs to value objects
+        saveDict, if not None, is the internal mapping to use as our storage
+        IDAttr: attribute name to obtain an ID from a key object
+        targetIDAttr: attribute name to obtain an ID from a value object
+        itemAttr, if not None, the attribute to obtain target (value) ID
+           from an internal storage value
+        multiValue: if True, treat each value as a list of values.
+        filename: if provided, is a file path to a shelve (BerkeleyDB) file to
+              store the data in.
+        dictClass: if not None, is the class to use for storage of the dict data'''
+        if saveDict is None:
+            self.d=classutil.get_shelve_or_dict(**kwargs)
+        else:
+            self.d=saveDict
+        self.IDAttr=IDAttr
+        self.targetIDAttr=targetIDAttr
+        self.itemAttr=itemAttr
+        self.multiValue=multiValue
+        self.sourceDB=sourceDB
+        self.targetDB=targetDB
+        if inverseAttr is not None:
+            self.inverseAttr=inverseAttr
+    def __getitem__(self,k):
+        kID=getattr(k,self.IDAttr)
+        return self.getTarget(self.d[kID])
+    def getTarget(self,vID):
+        if self.itemAttr is not None:
+            vID=getattr(vID,self.itemAttr)
+        if self.multiValue:
+            return [self.targetDB[j] for j in vID]
+        else:
+            return self.targetDB[vID]
+    def __setitem__(self,k,v):
+        if self.multiValue:
+            v=[getattr(x,self.targetIDAttr) for x in v]
+        else:
+            v=getattr(v,self.targetIDAttr)
+        self.d[getattr(k,self.IDAttr)]=v
+    def __delitem__(self,k):
+        del self.d[getattr(k,self.IDAttr)]
+    def __contains__(self,k):
+        return getattr(k,self.IDAttr) in self.d
+    def __len__(self): return len(self.d)
+    def clear(self): self.d.clear()
+    def copy(self):
+        return Mapping(self.sourceDB,self.targetDB,self.d.copy(),self.IDAttr,
+                      self.targetIDAttr,self.itemAttr,self.multiValue)
+    def update(self,b):
+        for k,v in b.iteritems():
+            self[k]=v
+    def get(self,k,v=None):
+        try:
+            return self[k]
+        except KeyError:
+            return v
+    def setdefault(self,k,v=None):
+        try:
+            return self[k]
+        except KeyError:
+            self[k]=v
+            return v
+    def pop(self,k,v=None):
+        try:
+            v=self[k]
+        except KeyError:
+            return v
+        del self[k]
+        return v
+    def popitem(self):
+        kID,vID=self.d.popitem()
+        return kID,self.getTarget(vID)
+    def __iter__(self): ######################## ITERATORS
+        for kID in self.d:
+            yield self.sourceDB[kID]
+    def keys(self): return [k for k in self]
+    def itervalues(self):
+        for vID in self.d.itervalues():
+            yield self.getTarget(vID)
+    def values(self): return [v for v in self]
+    def iteritems(self):
+        for kID,vID in self.d.iteritems():
+            yield self.sourceDB[kID],self.getTarget(vID)
+    def items(self): return [x for x in self.iteritems()]
+    def __invert__(self):
+        try:
+            return self._inverse
+        except AttributeError:
+            self._inverse=MappingInverse(self)
+            return self._inverse
+
+
 
 
 
@@ -344,9 +494,9 @@ class IDNodeDict(object):
             yield self.graph.sourceDB[self.fromNode],\
                   self.graph.targetDB[target],\
                   self.graph.edgeDB[edgeInfo]
-    keys=lambda self:[k[1] for k in self.edges()] ##### ITERATORS
-    values=lambda self:[k[2] for k in self.edges()]
-    items=lambda self:[k[1:3] for k in self.edges()]
+    def keys(self): return [k[1] for k in self.edges()] ##### ITERATORS
+    def values(self): return [k[2] for k in self.edges()]
+    def items(self): return [k[1:3] for k in self.edges()]
     def __iter__(self):
         for source,target,edgeInfo in self.edges():
             yield target
@@ -395,25 +545,25 @@ class IDGraph(object):
             self.targetDB=targetDB
         if edgeDB is not None:
             self.edgeDB=edgeDB
-    def __getstate__(self): ############### PICKLING METHODS
-        return [self.d] # JUST PICKLE THE STORAGE
-    def __setstate__(self,l):
-        self.__init__(*l)
+    __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
+    __setstate__ = classutil.standard_setstate
+    _pickleAttrs = dict(d='proxyDict')
 
     # USE METHOD FROM THE SHELVE...
-    methodFactory(['__contains__'],'lambda self,obj:self.d.%s(obj.id)',locals())
+    classutil.methodFactory(['__contains__'],'lambda self,obj:self.d.%s(obj.id)',
+                            locals())
     def __iter__(self):
         for node in self.d:
             yield self.sourceDB[node]
-    keys=lambda self:[k for k in self]
+    def keys(self): return [k for k in self]
     def itervalues(self):
         for node in self.d:
             yield self.edgeDictClass(self,node)
-    values=lambda self:[v for v in self.itervalues()]
+    def values(self): return [v for v in self.itervalues()]
     def iteritems(self):
         for node in self.d:
             yield self.sourceDB[node],self.edgeDictClass(self,node)
-    items=lambda self:[v for v in self.iteritems()]
+    def items(self): return [v for v in self.iteritems()]
     edges=IDGraphEdgeDescriptor()
 
     def __iadd__(self,node):
@@ -462,107 +612,4 @@ class IDGraph(object):
     def __hash__(self): # SO SCHEMA CAN INDEX ON GRAPHS...
         return id(self)
 
-
-class IDDictInverse(object):
-    def __init__(self,db):
-        self._inverse=db
-        self.attr=db.inverseAttr
-    def __getitem__(self,k):
-        return self._inverse.sourceDB[getattr(k,self.attr)]
-    def __invert__(self): return self._inverse
-
-class IDDict(object):
-    '''dict-like class suitable for persistent usages.  Extracts ID values from
-    keys and values passed to it, and saves IDs into its internal dictionary
-    instead of the actual objects.  Thus, the external interface is objects,
-    but the internal storage is ID values.'''
-    def __init__(self,sourceDB,targetDB,d=None,IDAttr='id',targetIDAttr='id',
-                 itemAttr=None,multiValue=False,inverseAttr=None):
-        '''sourceDB: dictionary that maps key ID values to key objects
-        targetDB: dictionary that maps value IDs to value objects
-        d, if not None, is the internal mapping to use as our storage
-        IDAttr: attribute name to obtain an ID from a key object
-        targetIDAttr: attribute name to obtain an ID from a value object
-        itemAttr, if not None, the attribute to obtain target (value) ID
-           from an internal storage value
-        multiValue: if True, treat each value as a list of values.'''
-        if d is None:
-            self.d={}
-        else:
-            self.d=d
-        self.IDAttr=IDAttr
-        self.targetIDAttr=targetIDAttr
-        self.itemAttr=itemAttr
-        self.multiValue=multiValue
-        self.sourceDB=sourceDB
-        self.targetDB=targetDB
-        if inverseAttr is not None:
-            self.inverseAttr=inverseAttr
-    def __getitem__(self,k):
-        kID=getattr(k,self.IDAttr)
-        return self.getTarget(self.d[kID])
-    def getTarget(self,vID):
-        if self.itemAttr is not None:
-            vID=getattr(vID,self.itemAttr)
-        if self.multiValue:
-            return [self.targetDB[j] for j in vID]
-        else:
-            return self.targetDB[vID]
-    def __setitem__(self,k,v):
-        if self.multiValue:
-            v=[getattr(x,self.targetIDAttr) for x in v]
-        else:
-            v=getattr(v,self.targetIDAttr)
-        self.d[getattr(k,self.IDAttr)]=v
-    def __delitem__(self,k):
-        del self.d[getattr(k,self.IDAttr)]
-    def __contains__(self,k):
-        return getattr(k,self.IDAttr) in self.d
-    def __len__(self): return len(self.d)
-    def clear(self): self.d.clear()
-    def copy(self):
-        return IDDict(self.sourceDB,self.targetDB,self.d.copy(),self.IDAttr,
-                      self.targetIDAttr,self.itemAttr,self.multiValue)
-    def update(self,b):
-        for k,v in b.iteritems():
-            self[k]=v
-    def get(self,k,v=None):
-        try:
-            return self[k]
-        except KeyError:
-            return v
-    def setdefault(self,k,v=None):
-        try:
-            return self[k]
-        except KeyError:
-            self[k]=v
-            return v
-    def pop(self,k,v=None):
-        try:
-            v=self[k]
-        except KeyError:
-            return v
-        del self[k]
-        return v
-    def popitem(self):
-        kID,vID=self.d.popitem()
-        return kID,self.getTarget(vID)
-    def __iter__(self): ######################## ITERATORS
-        for kID in self.d:
-            yield self.sourceDB[kID]
-    def keys(self): return [k for k in self]
-    def itervalues(self):
-        for vID in self.d.itervalues():
-            yield self.getTarget(vID)
-    def values(self): return [v for v in self]
-    def iteritems(self):
-        for kID,vID in self.d.iteritems():
-            yield self.sourceDB[kID],self.getTarget(vID)
-    def items(self): return [x for x in self.iteritems()]
-    def __invert__(self):
-        try:
-            return self._inverse
-        except AttributeError:
-            self._inverse=IDDictInverse(self)
-            return self._inverse
 
