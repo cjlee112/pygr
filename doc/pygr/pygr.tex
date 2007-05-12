@@ -561,6 +561,61 @@ del pygr.Data.leelab.Bio.Seq.MSA.ucsc17 # DELETE THIS RESOURCE RULE
 \end{itemize}
 
 
+\subsubsection{pygr.Data.Collection and pygr.Data.Mapping}
+One of the main challenges in persistent storage (e.g. keeping a database
+on disk) of Python objects is how to store their inter-relations
+in an efficient and transparent way.  For example, in a database
+application we want to be able to load just one object at a time
+(rather than being forced to load all the objects from the database into memory)
+even though each object may have references to many other objects
+(and we obviously want these references to work transparently for the
+user).  The standard database answer is to associate a unique identifier
+(e.g. an integer) with each object in a specific collection, and
+to store references in the database in terms of these identifiers.
+This gives the database a flexible way to refer to objects (by their unique
+identifiers) that we have not yet actually loaded into memory.  
+
+pygr.Data provides classes that make it very easy for you to store your
+data in this way.  Its \class{Collection} class acts like a dictionary
+whose keys are the unique identifiers you've chosen for your objects,
+and whose values are the associated objects.  The \class{Mapping} class
+acts like a dictionary that maps objects of a given collection to
+arbitrary objects of a second collection.  However, because internally
+it stores only identifiers, the \class{Mapping} class can be stored
+persistently, for example to a disk database.  Indeed, you can make both of
+these classes be stored as database on disk, simply by passing a \var{filename}
+argument that specifies the file in which the database should be stored.
+If you do not provide a \var{filename}, a normal (in-memory) Python dictionary
+is used.
+
+\begin{verbatim}
+ens_genes = pygr.Data.Collection(filename='genes.db',mode='c' # CREATE NEW DATABASE
+                                 itemClass=Transcript)
+for gene_id,gene_data in geneList:
+    gene = Transcript(gene_id,gene_data,ens_genes)
+    ens_genes[gene_id] = gene # STORE IN OUR DATABASE
+\end{verbatim}
+
+\class{Mapping} enables you to store a relationship between one collection
+and another collection in a way that is easily stored as a database.  For
+example, assuming that \var{ens_genes} is a collection of genes,
+and \var{exon_db} is a collection of exons, we can store the mapping from
+a gene to its exons as follows:
+
+\begin{verbatim}
+gene_exons = pygr.Data.Mapping(ens_genes, exon_db, multiValue=True, 
+                               inverseAttr='gene_id',filename='gene_exons.db',mode='c')
+for exon in exon_db:
+    gene = ens_genes[exon.gene_id] # GET ITS GENE
+    exons = gene_exons.get(gene, []) # GET ITS LIST OF EXONS, OR AN EMPTY LIST
+    exons.append(exon) # ADD OUR EXON TO ITS LIST
+    gene_exons[gene] = exons # SAVE EXPANDED EXON MAPPING LIST
+\end{verbatim}
+The optional \var{multiValue} flag indicates that this is a one-to-many
+mapping (i.e. each gene maps to a {\em list} of exons.  Again, we used the 
+\var{filename} variable to make pygr store our mapping on disk using a Python
+\module{shelve} (BerkeleyDB file).
+
 \subsection{Storing Alignments}
 \subsubsection{Alignment Basics}
 
@@ -3190,6 +3245,9 @@ not an individual item of data.  pygr.Data is intended to provide
 a name space for commonly used resources, i.e. an entire database,
 which in turn enable you to access the items they contain.
 
+\item The object must have a \member{__doc__} string that describes
+what its contents are.
+
 \item The object must be {\em picklable} using Python's \module{pickle}
 module.  pygr.Data uses \module{pickle} both to save your object to 
 a persistent storage (either a python \module{shelve}, MySQL database,
@@ -3302,16 +3360,146 @@ The URL must begin with ``http://''.
 These are accessed by pygr.Data using its \class{ResourceDBClient} class.
 
 \item a MySQL server, indicated by a path entry of the form 
-``mysql:\var{DBNAME.TABLENAME}'',
+``mysql:\var{DBNAME.TABLENAME} \var{dbinfo}'',
 where \var{DBNAME} is the name of the database in your MySQL
 server that contains the pygr.Data resource index,
 and \var{TABLENAME} is the name of the table which contains this index.
+\var{dbinfo} is optional.  If provided, it must be a whitespace separated 
+list of arguments for connecting to the MySQL server, of the form
+\var{host} \var{user} \var{passwd}.  You can provide one, two
+or three of these optional arguments.  If no \var{dbinfo} is provided,
 pygr.Data will get the host, user, and password information for connecting 
 to the MySQL server as usual from your
 .my.cnf configuration file in your home directory.
 Such resource databases are accessed by pygr.Data using its 
 \class{ResourceDBMySQL} class.
 \end{itemize}
+
+\subsubsection{Convenience functions}
+\begin{funcdesc}{addResourceDict}{saveDict,layer=None}
+  The best way to add an entire set of resources to the pygr.Data namespace,
+  by passing a dictionary whose keys are resource names, and whose values are
+  the objects you wish to save.  This method has the important advantage
+  that it automatically takes care of dependency ordering for you.
+  That is, any reference to an item listed in \var{saveDict} will be
+  saved using its resource name, regardless of whether it has already
+  been saved as that resource name or not, and regardless of the
+  order in which you specify the items in \var{saveDict}.
+
+  By contrast, if you save multiple items individually, you have to
+  follow their dependency order carefully.  For example:
+\begin{verbatim}
+foo.x=bar # foo DEPENDS ON bar
+pygr.Data.Bio.Test.Foo=foo # WRONG!  SHOULD HAVE SAVED bar FIRST!
+pygr.Data.Bio.Test.Bar=bar
+\end{verbatim}
+This order causes pygr.Data to save \code{foo} with a direct reference
+to \code{bar}, rather than by using its pygr resource ID.  This will still
+enable pygr.Data to load \code{bar} on exactly, the same platform as it
+was saved.  But it will not search the pygr.Data resource databases to find
+alternative ways to load \code{bar}.  Here's the correct order:
+\begin{verbatim}
+foo.x=bar # foo DEPENDS ON bar
+pygr.Data.Bio.Test.Bar=bar
+pygr.Data.Bio.Test.Foo=foo # THIS WAY, REFERENCE TO bar WILL BE JUST ITS RESOURCE ID
+\end{verbatim}
+Alternatively, you could just save both at once, using \method{addResourceDict},
+which solves the whole issue:
+\begin{verbatim}
+foo.x=bar # foo DEPENDS ON bar
+addResourceDict({'Bio.Test.Bar':bar,'Bio.Test.Foo':foo})
+\end{verbatim}
+  Another example:
+\begin{verbatim}
+d={}
+for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
+    genome.__doc__ = 'draft genome sequence '+id
+    d['Bio.Seq.Genome.'+id] = genome 
+addResourceDict(d)
+\end{verbatim}
+\end{funcdesc}
+
+\begin{funcdesc}{addResource}{id,obj,layer=None}
+  Add \var{obj} to pygr.Data as resource ID \var{id}, specifically within
+  abstract resource \var{layer} if provided.  Saves \var{obs} to 
+  the resource database, and marks it with its \member{_persistent_id}
+  attribute, whose value is just \var{id}.  For a resource \var{id} 'A.Foo.Bar'
+  this method is equivalent to the assignment statement
+\begin{verbatim}
+pygr.Data.A.Foo.Bar=obj
+\end{verbatim}
+  This method is provided mainly to enable writing code that automates
+  saving of resources, e.g. via code like
+\begin{verbatim}
+for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
+    genome.__doc__ = 'draft genome sequence '+id
+    addResource('Bio.Seq.Genome.'+id,genome)
+\end{verbatim}
+  For adding multiple resources,
+  it is better to use the \method{addResourceDict} method, because it 
+  automatically works out any dependency ordering for you!
+\end{funcdesc}
+
+\begin{funcdesc}{deleteResource}{id,layer=None}
+  Delete resource \var{id} from the resource database specified by
+  \var{layer} if provided (or the default resource database otherwise).
+  Also delete its associated schema information.
+\end{funcdesc}
+
+
+The pygr.Data module also provides a directory function for searching
+for resource names that begin with a given stem, either in all
+databases, or in a specific layer:
+\begin{funcdesc}{dir}{prefix,layer=None,asDict=False}
+  get list or dict of resources beginning with the specified string.
+  If the optional \var{asDict} argument is True, then they are returned
+  as a dictionary whose keys are resource names, and whose values are their
+  descriptions (taken from the resource object's \member{__doc__} string).
+  Otherwise they are returned as a list.
+\end{funcdesc}
+
+\begin{funcdesc}{newServer}{name,serverClasses=None,clientHost=None,withIndex=False, host=None, port=5000, **kwargs}
+  Create and return a new XMLRPC server to serve all pygr.Data resources 
+  currently loaded in memory that are capable of XMLRPC client-server
+  operation.  The server \var{name} will be used for 
+  purposes of XMLRPC communication.  The \var{withIndex=True} option
+  will cause the server to also act as a pygr.Data resource database
+  accessible via XMLRPC (i.e. add its URL to your PYGRDATAPATH environment
+  variable, to make its resources accessible to any Python script).
+  In this case, the server will add itself as new pygr.Data layer
+  \var{name}, for any Python script that accesses its resource index.
+
+  \var{serverClasses} allows you to specify a list of tuples of
+  classes that can be served via XMLRPC.  Each tuple should consist of
+  three values: \var{(dbClass,clientClass,serverClass)}, where 
+  \var{dbClass} is a normal pygr class, \var{clientClass} is the 
+  class to use for the XMLRPC client version of this data, and
+  \var{serverClass} is the class to use for the XMLRPC server of
+  this data.  If no value is provided to this option, the current
+  default is 
+\begin{verbatim}
+[(seqdb.BlastDB,seqdb.XMLRPCSequenceDB,seqdb.BlastDBXMLRPC),
+ (cnestedlist.NLMSA,xnestedlist.NLMSAClient,xnestedlist.NLMSAServer)] 
+\end{verbatim}
+  The \var{clientHost} option allows you to override the hostname
+  that clients will be instructed to connect to.  The default is simply
+  the fully qualified hostname of your computer.  But if, for example,
+  you wished to access your server by port-forwarding localhost port 5000
+  to your server port via SSH, you could pass a \var{clientHost}='localhost'
+  setting.
+
+  \var{host, port} arguments are passed to the \class{XMLRPCServerBase} constructor.
+  For details see that section below.
+
+  Once you create a server using this method, you start it using its
+  \method{serve_forever()} method.  If the server does not provide its
+  own index (i.e. \var{withIndex=False}), then you should first register
+  it to your local resource database server (so that clients of that server
+  will know about the new services your new server is providing), by
+  calling its \method{register()} method.
+\end{funcdesc}
+
+
 
 \subsubsection{pygr.Data Layers}
 To provide an intuitive way to refer to different resource databases,
@@ -3512,6 +3700,101 @@ mapping.
 the search, rather than the result of the search itself.
 \end{itemize}
 
+\subsubsection{Collection}
+Provides a \class{dict}-like container that can be directly saved as a
+container in pygr.Data.  Ordinary \class{dict} instances cannot be 
+conveniently saved as pygr.Data resources, because they do not allow
+attributes to be saved (which is required for storing pygr.Data information
+like _persistent_id and itemClass), and because older versions of Python
+have a bug that affects pickling of dicts with cyclic references (i.e. contents
+that refer to the container).  \class{pygr.Data.Collection} provides a drop-in
+substitute that uses \class{dict} or a Python \class{shelve} 
+as its internal storage, and provides
+a full dict-like interface externally.  It takes several arguments:
+
+\var{saveDict}, if not None, is the internal mapping to use as our storage.
+
+\var{filename}: if provided, is a file path to a shelve (BerkeleyDB) file to
+  store the data in.
+   
+\var{dictClass}: if provided, is the class to use for storage of the dict data.
+
+For example,
+\begin{verbatim}
+ens_genes = pygr.Data.Collection(itemClass=Transcript) # DICTIONARY OF GENES
+ens_genes[gene_id] = gene
+\end{verbatim}
+pygr.Data generally needs to know the \class{itemClass} of items stored
+inside a resource, so that it can add shadow attributes (by adding properties,
+directly to the itemClass).
+
+\subsubsection{Mapping}
+This class provides dict-like class suitable for persistent usages.  
+It extracts ID values from
+keys and values passed to it, and saves these IDs into its internal dictionary
+instead of the actual objects.  Thus, the external interface is objects,
+but the internal storage is ID values.  This allows the mapping to be stored
+persistently (i.e. pickled) separately from the objects which it maps, 
+because only IDs are stored in the \class{Mapping}.
+
+You can use any object that obeys the
+Python mapping protocol (e.g. \class{dict}, or Python \module{shelve}) 
+as the internal storage.  \class{Mapping} behaves exactly like a standard
+Python dictionary, providing all the standard methods of the Mapping Protocol.
+
+\begin{funcdesc}{Mapping}{sourceDB, targetDB, saveDict=None, IDAttr='id', targetIDAttr='id', itemAttr=None, multiValue=False, inverseAttr=None,filename=None,dictClass=None,mode=None}
+  Initializes a mapping between items of \var{sourceDB} and items of \var{targetDB}.
+
+  \var{sourceDB}: container whose items will serve as keys for this Mapping.
+   i.e. \var{sourceDB} must be a dictionary that maps key ID values to key objects.
+
+  \var{targetDB}: container whose items will serve as values of this Mapping.
+  i.e. \var{targetDB} must be a dictionary that maps value IDs to value objects.
+
+  \var{saveDict}, if not None, is the internal mapping to use as our storage.
+  If None, attempts to open or create a suitable storage for you.  If the
+  \var{path} argument is provided, it will open or create a Python \class{shelve}
+  using the \class{IntShelve} class (see the \module{mapping} module).
+  See also the \var{dictClass} and \var{mode} arguments.
+  If none of these arguments are provided, a standard Python dictionary will be used.
+
+  \var{IDAttr}: attribute name to obtain an ID from a key object.
+
+  \var{targetIDAttr}: attribute name to obtain an ID from a value object.
+
+  \var{itemAttr}, if not None, the attribute to obtain target (value) ID
+  from an internal storage value
+
+  \var{multiValue}: if True, treat each value as a list of values, i.e. this
+  Mapping will serve as a one-to-many mapping from \var{sourceDB} to \var{targetDB}.
+
+  \var{inverseAttr}, if not None, attribute name to obtain a source ID from
+  a value object.
+
+  \var{filename}: if not None, is a file path to a shelve (BerkeleyDB) file to
+  store the data in.
+
+  \var{mode}: if not None, specifies how the shelve file should be opened:
+  'r' (read-only), 'c' (create), 'w' (read/write).  For more details see the
+  Python Library \module{shelve} documentation.
+   
+  \var{dictClass}: if not None, is the class to use for storage of the dict data.
+\end{funcdesc}
+
+Here's an example usage:
+\begin{verbatim}
+gene_exons = Mapping(ens_genes, exon_db, multiValue=True, inverseAttr='transcript_id')
+for exon in exon_db:
+    gene = ens_genes[exon.transcript_id]
+    exons = gene_exons.get(gene, [])
+    exons.append(exon)
+    gene_exons[gene] = exons # SAVE EXPANDED EXON MAPPING LIST
+# SAVE TO PYGR DATA, AND CREATE GENES -> EXONS SCHEMA RELATION
+pygr.Data.Bio.Titus.Test1.GeneExons = gene_exons
+pygr.Data.schema.Bio.Titus.Test1.GeneExons = \
+     pygr.Data.OneToManyRelation(ens_genes,exon_db,bindAttrs=('exons','gene'))
+\end{verbatim}
+
 \subsubsection{ResourceFinder}
 The core functionality of the pygr.Data module is provided by the
 \class{ResourceFinder} class, an instance of which is created at the
@@ -3531,102 +3814,23 @@ resources and schema.
 \end{funcdesc}
 
 \begin{funcdesc}{getResource.addResource}{id,obj,layer=None}
-  Add \var{obj} to pygr.Data as resource ID \var{id}, specifically within
-  abstract resource \var{layer} if provided.  Saves \var{obs} to 
-  the resource database, and marks it with its \member{_persistent_id}
-  attribute, whose value is just \var{id}.  For a resource \var{id} 'A.Foo.Bar'
-  this method is equivalent to the assignment statement
-\begin{verbatim}
-pygr.Data.A.Foo.Bar=obj
-\end{verbatim}
-  This method is provided mainly to enable writing code that automates
-  saving of resources, e.g. via code like
-\begin{verbatim}
-for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
-    pygr.Data.getResource.addResource('Bio.Seq.Genome.'+id,genome)
-\end{verbatim}
+  Same as the top-level module function of the same name.
 \end{funcdesc}
 
 \begin{funcdesc}{getResource.addResourceDict}{saveDict,layer=None}
-  Add an entire set of resources to the pygr.Data namespace, by passing
-  a dictionary whose keys are resource names, and whose values are
-  the object you wish to save.  This method has the important advantage
-  that it automatically takes care of dependency ordering for you.
-  That is, any reference to an item listed in \var{saveDict} will be
-  saved using its resource name, regardless of whether it has already
-  been saved as that resource name or not, and regardless of the
-  order in which you specify the items in \var{saveDict}.
+  Same as the top-level module function of the same name.
+\end{funcdesc}
 
-  By contrast, if you save multiple items individually, you have to
-  follow their dependency order carefully.  For example:
-\begin{verbatim}
-foo.x=bar # foo DEPENDS ON bar
-pygr.Data.Bio.Test.Foo=foo # WRONG!  SHOULD HAVE SAVED bar FIRST!
-pygr.Data.Bio.Test.Bar=bar
-\end{verbatim}
-This order causes pygr.Data to save \code{foo} with a direct reference
-to \code{bar}, rather than by using its pygr resource ID.  This will still
-enable pygr.Data to load \code{bar} on exactly, the same platform as it
-was saved.  But it will not search the pygr.Data resource databases to find
-alternative ways to load \code{bar}.  Here's the correct order:
-\begin{verbatim}
-foo.x=bar # foo DEPENDS ON bar
-pygr.Data.Bio.Test.Bar=bar
-pygr.Data.Bio.Test.Foo=foo # THIS WAY, REFERENCE TO bar WILL BE JUST ITS RESOURCE ID
-\end{verbatim}
-Alternatively, you could just save both at once, using \method{addResouceDict},
-which solves the whole issue:
-\begin{verbatim}
-foo.x=bar # foo DEPENDS ON bar
-pygr.Data.getResource.addResourceDict({'Bio.Test.Bar':bar,'Bio.Test.Foo':foo})
-\end{verbatim}
+\begin{funcdesc}{getResource.dir}{prefix,layer=None,asDict=False}
+  Same as the top-level module function of the same name.
 \end{funcdesc}
 
 \begin{funcdesc}{getResource.deleteResource}{id,layer=None}
-  Delete resource \var{id} from the resource database specified by
-  \var{layer} if provided (or the default resource database otherwise).
-  Also delete its associated schema information.
+  Same as the top-level module function of the same name.
 \end{funcdesc}
 
 \begin{funcdesc}{getResource.newServer}{name,serverClasses=None,clientHost=None,withIndex=False, host=None, port=5000, **kwargs}
-  Create and return a new XMLRPC server to serve all pygr.Data resources 
-  currently loaded in memory that are capable of XMLRPC client-server
-  operation.  The server \var{name} will be used for 
-  purposes of XMLRPC communication.  The \var{withIndex=True} option
-  will cause the server to also act as a pygr.Data resource database
-  accessible via XMLRPC (i.e. add its URL to your PYGRDATAPATH environment
-  variable, to make its resources accessible to any Python script).
-  In this case, the server will add itself as new pygr.Data layer
-  \var{name}, for any Python script that accesses its resource index.
-
-  \var{serverClasses} allows you to specify a list of tuples of
-  classes that can be served via XMLRPC.  Each tuple should consist of
-  three values: \var{(dbClass,clientClass,serverClass)}, where 
-  \var{dbClass} is a normal pygr class, \var{clientClass} is the 
-  class to use for the XMLRPC client version of this data, and
-  \var{serverClass} is the class to use for the XMLRPC server of
-  this data.  If no value is provided to this option, the current
-  default is 
-\begin{verbatim}
-[(seqdb.BlastDB,seqdb.XMLRPCSequenceDB,seqdb.BlastDBXMLRPC),
- (cnestedlist.NLMSA,xnestedlist.NLMSAClient,xnestedlist.NLMSAServer)] 
-\end{verbatim}
-  The \var{clientHost} option allows you to override the hostname
-  that clients will be instructed to connect to.  The default is simply
-  the fully qualified hostname of your computer.  But if, for example,
-  you wished to access your server by port-forwarding localhost port 5000
-  to your server port via SSH, you could pass a \var{clientHost}='localhost'
-  setting.
-
-  \var{host, port} arguments are passed to the \class{XMLRPCServerBase} constructor.
-  For details see that section below.
-
-  Once you create a server using this method, you start it using its
-  \method{serve_forever()} method.  If the server does not provide its
-  own index (i.e. \var{withIndex=False}), then you should first register
-  it to your local resource database server (so that clients of that server
-  will know about the new services your new server is providing), by
-  calling its \method{register()} method.
+  Same as the top-level module function of the same name.
 \end{funcdesc}
 
 The following methods are mainly for internal use, and are unlikely to be
@@ -3857,25 +4061,6 @@ module,
 here=ResourceLayer('here') # CREATE TOP-LEVEL INTERFACE TO here LAYER
 \end{verbatim}
 
-\subsubsection{Dict}
-Provides a \class{dict}-like container that can be directly saved as a
-container in pygr.Data.  Ordinary \class{dict} instances cannot be 
-conveniently saved as pygr.Data resources, because they do not allow
-attributes to be saved (which is required for storing pygr.Data information
-like _persistent_id and itemClass), and because older versions of Python
-have a bug that affects pickling of dicts with cyclic references (i.e. contents
-that refer to the container).  \class{pygr.Data.Dict} provides a drop-in
-substitute that uses \class{dict} as its internal storage, and provides
-a full dict-like interface externally.  For example,
-
-\begin{verbatim}
-ens_genes = pygr.Data.Dict(itemClass=Transcript) # DICTIONARY OF GENES
-ens_genes[gene_id] = gene
-\end{verbatim}
-pygr.Data generally needs to know the \class{itemClass} of items stored
-inside a resource, so that it can add shadow attributes (by adding properties,
-directly to the itemClass).
-
 \subsubsection{ForeignKeyMap}
 Provides a mapping between two containers, assuming that items of the target
 container have a foreign key attribute that gives the ID of an item in the source
@@ -4041,8 +4226,11 @@ can be used.
   Open a connection to the existing SQL table specified by \var{name}.
   You can supply a Python DB API \var{cursor} providing a connection
   to the database server.  If \var{cursor} is None, it will attempt
-  to connect to a MySQL server using authentication information from your
-  .my.cnf configuration file as usual.
+  to connect to a MySQL server using authentication information either
+  from your the \var{name} string (treated as a whitespace separated
+  list in the form \var{tablename} \var{host} \var{user} \var{passwd};
+  at least \var{tablename} and \var{host} must be present), or from your 
+  .my.cnf configuration file in the usual MySQL way.
 
   \var{itemClass} indicates 
   the class that should be used for constructing item objects (representing
@@ -4367,60 +4555,6 @@ storage, that can accept \class{int} values as keys.
 In other respects the \class{IntShelve} behaves like a regular shelve
 (dictionary interface).
 
-
-\subsubsection{IDDict}
-This class provides dict-like class suitable for persistent usages.  
-It extracts ID values from
-keys and values passed to it, and saves these IDs into its internal dictionary
-instead of the actual objects.  Thus, the external interface is objects,
-but the internal storage is ID values.  This allows the mapping to be stored
-persistently (i.e. pickled) separately from the objects which it maps, 
-because only IDs are stored in the \class{IDDict}.
-
-You can use any object that obeys the
-Python mapping protocol (e.g. \class{dict}, or Python \module{shelve}) 
-as the internal storage.  \class{IDDict} behaves exactly like a standard
-Python dictionary, providing all the standard methods of the Mapping Protocol.
-
-\begin{funcdesc}{IDDict}{sourceDB, targetDB, d=None, IDAttr='id', targetIDAttr='id', itemAttr=None, multiValue=False, inverseAttr=None}
-  Initializes a mapping between items of \var{sourceDB} and items of \var{targetDB}.
-
-  \var{sourceDB}: container whose items will serve as keys for this IDDict.
-   i.e. \var{sourceDB} must be a dictionary that maps key ID values to key objects.
-
-  \var{targetDB}: container whose items will serve as values of this IDDict.
-  i.e. \var{targetDB} must be a dictionary that maps value IDs to value objects.
-
-  \var{d}, if not None, is the internal mapping to use as our storage.
-  If None, a standard Python dictionary will be used.
-
-  \var{IDAttr}: attribute name to obtain an ID from a key object.
-
-  \var{targetIDAttr}: attribute name to obtain an ID from a value object.
-
-  \var{itemAttr}, if not None, the attribute to obtain target (value) ID
-  from an internal storage value
-
-  \var{multiValue}: if True, treat each value as a list of values, i.e. this
-  IDDict will serve as a one-to-many mapping from \var{sourceDB} to \var{targetDB}.
-
-  \var{inverseAttr}, if not None, attribute name to obtain a source ID from
-  a value object.
-\end{funcdesc}
-
-Here's an example usage:
-\begin{verbatim}
-gene_exons = IDDict(ens_genes, exon_db, multiValue=True, inverseAttr='transcript_id')
-for exon in exon_db:
-    gene = ens_genes[exon.transcript_id]
-    exons = gene_exons.get(gene, [])
-    exons.append(exon)
-    gene_exons[gene] = exons # SAVE EXPANDED EXON MAPPING LIST
-# SAVE TO PYGR DATA, AND CREATE GENES -> EXONS SCHEMA RELATION
-pygr.Data.Bio.Titus.Test1.GeneExons = gene_exons
-pygr.Data.schema.Bio.Titus.Test1.GeneExons = \
-     pygr.Data.OneToManyRelation(ens_genes,exon_db,bindAttrs=('exons','gene'))
-\end{verbatim}
 
 \subsubsection{Schema: binding object attributes to graphs}
 
