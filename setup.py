@@ -88,6 +88,7 @@ metadata = {
 	"pygr/mapping",
         "pygr/coordinator",
         "pygr/Data",
+        "pygr/classutil",
         "pygr/nlmsa_utils",
         "pygr/nestedlist",
         "pygr/xnestedlist",
