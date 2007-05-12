@@ -2,6 +2,7 @@
 import pickle
 from StringIO import StringIO
 import shelve
+from mapping import Collection,Mapping
 
 
 class OneTimeDescriptor(object):
@@ -107,34 +108,63 @@ class PygrPickler(pickle.Pickler):
 
 class ResourceDBServer(object):
     xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0,
-                    'getName':0}
+                    'getName':0,'dir':0,'get_version':0}
+    _pygr_data_version=(0,1,0)
     def __init__(self,name,readOnly=False):
         self.name=name
         self.d={}
+        self.docs={}
         if readOnly: # LOCK THE INDEX.  DON'T ACCEPT FOREIGN DATA!!
-            self.xmlrpc_methods={'getResource':0,'getName':0} # ONLY ALLOW THESE METHODS!
+            self.xmlrpc_methods={'getResource':0,'getName':0,'dir':0,
+                                 'get_version':0} # ONLY ALLOW THESE METHODS!
     def getName(self):
         return self.name
     def getResource(self,id):
         try:
-            return self.d[id] # RETURN DICT OF PICKLED OBJECTS
+            d = self.d[id] # RETURN DICT OF PICKLED OBJECTS
         except KeyError:
             return '' # EMPTY STRING INDICATES FAILURE
+        try:
+            d['__doc__'] = self.docs[id]
+        except KeyError:
+            pass
+        return d
     def registerServer(self,locationKey,serviceDict):
         n=0
-        for id,pdata in serviceDict.items():
+        for id,(docstring,pdata) in serviceDict.items():
             try:
                 self.d[id][locationKey]=pdata # ADD TO DICT FOR THIS RESOURCE
             except KeyError:
                 self.d[id]={locationKey:pdata} # CREATE NEW DICT FOR THIS RESOURCE
+            self.docs[id]=docstring
             n+=1
         return n  # COUNT OF SUCCESSFULLY REGISTERED SERVICES
     def delResource(self,id,locationKey):
         try:
             del self.d[id][locationKey]
+            if len(self.d[id])==0:
+                del self.docs[id]
         except KeyError:
             pass
         return ''  # DUMMY RETURN VALUE FOR XMLRPC
+    def dir(self,prefix,asDict=False):
+        l=[]
+        for name in self.d:
+            if name.startswith(prefix):
+                l.append(name)
+        if asDict:
+            d={}
+            for name in l:
+                try:
+                    d[name]=self.docs[name]
+                except KeyError:
+                    d[name]=''
+            return d
+        return l
+    def get_version(self):
+        return self._pygr_data_version
+
+            
 
 class ResourceDBClient(object):
     def __init__(self,url,finder):
@@ -149,14 +179,21 @@ class ResourceDBClient(object):
         d=self.server.getResource(id) # RAISES KeyError IF NOT FOUND
         if d=='':
             raise KeyError('resource %s not found'%id)
+        try:
+            docstring = d['__doc__']
+            del d['__doc__']
+        except KeyError:
+            docstring = None
         for location,objData in d.items():
             try:
-                return self.finder.loads(objData)
+                obj = self.finder.loads(objData)
+                obj.__doc__ = docstring
+                return obj
             except KeyError:
                 pass # HMM, TRY ANOTHER LOCATION
         raise KeyError('unable to construct %s from remote services'%id)
     def registerServer(self,locationKey,serviceDict):
-        'forward registation to the server'
+        'forward registration to the server'
         return self.server.registerServer(locationKey,serviceDict)
     def getschema(self,id):
         'return dict of {attr:{args}}'
@@ -166,44 +203,68 @@ class ResourceDBClient(object):
         for schemaDict in d.values():
             return schemaDict # HAND BACK FIRST SCHEMA WE FIND
         raise KeyError
+    def dir(self,prefix,asDict=False):
+        'return list or dict of resources starting with prefix'
+        return self.server.dir(prefix,asDict)
 
 class ResourceDBMySQL(object):
     '''mysql schema:
     (pygr_id varchar(255) not null,location varchar(255) not null,
     objdata text not null,unique(pygr_id,location))'''
+    _pygr_data_version=(0,1,0)
     def __init__(self,tablename,finder=None,createLayer=None):
-        import MySQLdb,os
-        self.cursor=MySQLdb.connect(read_default_file=os.environ['HOME']
-                                    +'/.my.cnf').cursor()
-        self.tablename=tablename
+        from sqlgraph import getNameCursor
+        self.tablename,self.cursor=getNameCursor(tablename)
         if finder is None: # USE DEFAULT FINDER IF NOT PROVIDED
             finder=getResource
         self.finder=finder
+        self.rootNames={}
         if createLayer is not None: # CREATE DATABASE FROM SCRATCH
-            self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,objdata text not null,unique(pygr_id,location))'%tablename)
-            self.cursor.execute('insert into %s values (%%s,%%s,%%s)'
-                                %self.tablename,('PYGRLAYERNAME',createLayer,'a'))
+            self.cursor.execute('drop table if exists %s' % tablename)
+            self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,docstring varchar(255),objdata text not null,unique(pygr_id,location))'%tablename)
+            self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s)'
+                                %self.tablename,('PYGRLAYERNAME',createLayer,None,'a'))
+            self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s)'
+                                %self.tablename,('0version',
+                                                 '%d.%d.%d' % self._pygr_data_version,
+                                                 None,'a')) # SAVE VERSION STAMP
             self.name=createLayer
             finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
-        elif self.cursor.execute('select location from %s where pygr_id=%%s'
-                               % self.tablename,('PYGRLAYERNAME',))>0:
-            self.name=self.cursor.fetchone()[0] # GET LAYERNAME FROM DB
-            finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
+        else:
+            if self.cursor.execute('select location from %s where pygr_id=%%s'
+                                   % self.tablename,('PYGRLAYERNAME',))>0:
+                self.name=self.cursor.fetchone()[0] # GET LAYERNAME FROM DB
+                finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
+            if self.cursor.execute('select location from %s where pygr_id=%%s'
+                                   % self.tablename,('0root',))>0:
+                for row in self.cursor.fetchall():
+                    self.rootNames[row[0]]=None
+                finder.save_root_names(self.rootNames)
+    def save_root_name(self,name):
+        self.rootNames[name]=None
+        self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s)'
+                            %self.tablename,('0root',name,None,'a'))
     def __getitem__(self,id):
         'get construction rule from mysql, and attempt to construct'
-        self.cursor.execute('select location,objdata from %s where pygr_id=%%s'
+        self.cursor.execute('select location,objdata,docstring from %s where pygr_id=%%s'
                             % self.tablename,(id,))
-        for location,objData in self.cursor.fetchall():
+        for location,objData,docstring in self.cursor.fetchall():
             try:
-                return self.finder.loads(objData)
-            except KeyError:
+                obj = self.finder.loads(objData,self.cursor)
+                obj.__doc__ = docstring
+                return obj
+            except KeyError: # MUST HAVE FAILED TO LOAD A REQUIRED DEPENDENCY
                 pass # HMM, TRY ANOTHER LOCATION
         raise KeyError('unable construct %s from remote services')
     def __setitem__(self,id,obj):
         'add an object to this resource database'
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
-        self.cursor.execute('replace into %s values (%%s,%%s,%%s)'
-                            %self.tablename,(id,'mysql:'+self.tablename,s))
+        self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s)'
+                            %self.tablename,(id,'mysql:'+self.tablename,
+                                             obj.__doc__,s))
+        root=id.split('.')[0]
+        if root not in self.rootNames:
+            self.save_root_name(root)
     def __delitem__(self,id):
         'delete this resource and its schema rules'
         if self.cursor.execute('delete from %s where pygr_id=%%s'
@@ -212,17 +273,17 @@ class ResourceDBMySQL(object):
     def registerServer(self,locationKey,serviceDict):
         'register the specified services to mysql database'
         n=0
-        for id,pdata in serviceDict.items():
-            n+=self.cursor.execute('replace into %s values (%%s,%%s,%%s)' %
-                                   self.tablename,(id,locationKey,pdata))
+        for id,(docstring,pdata) in serviceDict.items():
+            n+=self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s)' %
+                                   self.tablename,(id,locationKey,docstring,pdata))
         return n
     def setschema(self,id,attr,kwargs):
         'save a schema binding for id.attr --> targetID'
         if not attr.startswith('-'): # REAL ATTRIBUTE
             targetID=kwargs['targetID'] # RAISES KeyError IF NOT PRESENT
         kwdata=self.finder.dumps(kwargs)
-        self.cursor.execute('replace into %s values (%%s,%%s,%%s)'
-                            %self.tablename,('SCHEMA.'+id,attr,kwdata))
+        self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s)'
+                            %self.tablename,('SCHEMA.'+id,attr,None,kwdata))
     def delschema(self,id,attr):
         'delete schema binding for id.attr'
         self.cursor.execute('delete from %s where pygr_id=%%s and location=%%s'
@@ -235,29 +296,59 @@ class ResourceDBMySQL(object):
         for attr,objData in self.cursor.fetchall():
             d[attr]=self.finder.loads(objData)
         return d
-            
+    def dir(self,prefix,asDict=False):
+        self.cursor.execute('select pygr_id,docstring from %s where pygr_id like %%s'
+                            % self.tablename,(prefix+'%',))
+        d={}
+        for name,docstring in self.cursor.fetchall():
+            d[name]=docstring
+        if asDict:
+            return d
+        else:
+            return [name for name in d]
 
 class ResourceDBShelve(object):
+    _pygr_data_version=(0,1,0)
     def __init__(self,dbpath,finder,mode='r'):
         import anydbm,os
         self.dbpath=os.path.join(dbpath,'.pygr_data') # CONSTRUCT FILENAME
         self.finder=finder
         try: # OPEN DATABASE FOR READING
             self.db=shelve.open(self.dbpath,mode)
+            try:
+                finder.save_root_names(self.db['0root'])
+            except KeyError:
+                pass
         except anydbm.error: # CREATE NEW FILE IF NEEDED
             self.db=shelve.open(self.dbpath,'c')
+            self.db['0version']=self._pygr_data_version # SAVE VERSION STAMP
+            self.db['0root']={}
     def reopen(self,mode):
         self.db.close()
         self.db=shelve.open(self.dbpath,mode)
     def __getitem__(self,id):
         'get an item from this resource database'
         s=self.db[id] # RAISES KeyError IF NOT PRESENT
-        return self.finder.loads(s) # RUN THE UNPICKLER ON THE STRING
+        obj = self.finder.loads(s) # RUN THE UNPICKLER ON THE STRING
+        try:
+            obj.__doc__ = self.db['__doc__.'+id]
+        except KeyError:
+            pass
+        return obj
     def __setitem__(self,id,obj):
         'add an object to this resource database'
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
         self.db[id]=s # SAVE TO OUR SHELVE FILE
+        self.db['__doc__.'+id]=obj.__doc__ # SAVE ITS DOC STRING
+        root=id.split('.')[0] # SEE IF ROOT NAME IS IN THIS SHELVE
+        try:
+            d=self.db['0root']
+        except KeyError:
+            d={}
+        if root not in d:
+            d[root]=None # ADD NEW ENTRY
+            self.db['0root']=d # SAVE BACK TO SHELVE
         self.reopen('r') # REOPEN READ-ONLY
     def __delitem__(self,id):
         'delete this item from the database, with a modicum of safety'
@@ -265,16 +356,30 @@ class ResourceDBShelve(object):
         missingKey=False
         try: 
             del self.db[id] # DELETE THE SPECIFIED RULE
+            try:
+                del self.db['__doc__.'+id]
+            except KeyError:
+                pass
         except KeyError:
             missingKey=True
         self.reopen('r') # REOPEN READ-ONLY
         if missingKey: # NOW IT'S SAFE TO RAISE THE EXCEPTION...
             raise KeyError('ID %s not found in %s' % (id,self.dbpath))
-    def dir(self,prefix):
+    def dir(self,prefix,asDict=False):
         'generate all item IDs starting with this prefix'
-        for id in self.db:
-            if id.startswith(prefix):
-                yield id
+        l=[]
+        for name in self.db:
+            if name.startswith(prefix):
+                l.append(name)
+        if asDict:
+            d={}
+            for name in l:
+                try:
+                    d[name]=self.db['__doc__.'+name]
+                except KeyError:
+                    d[name]=None
+            return d
+        return l
     def setschema(self,id,attr,kwargs):
         'save a schema binding for id.attr --> targetID'
         if not attr.startswith('-'): # REAL ATTRIBUTE
@@ -307,6 +412,7 @@ class ResourceFinder(object):
         self.d={}
         self.separator=separator
         self.sourceIDs={}
+        self.cursors=[]
         if saveDict is not None:
             self.saveDict=saveDict # SAVE NEW LAYER NAMES HERE...
             self.update() # FORCE LOADING OF RESOURCE DBs FROM PYGRDATAPATH
@@ -342,7 +448,7 @@ class ResourceFinder(object):
                             self.layer['my']=rdb
                         if dbpath.startswith('.') and 'here' not in self.layer:
                             self.layer['here']=rdb
-                except: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
+                except StandardError: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
                     if hasattr(self,'saveDict'): # IN THE MIDDLE OF MODULE IMPORT
                         import traceback,sys
                         traceback.print_exc(10,sys.stderr) # JUST PRINT TRACEBACK
@@ -365,6 +471,12 @@ Continuing with import...'''%dbpath
             self.saveDict[layerName]=ResourceLayer(layerName)
         except AttributeError:
             pass
+    def save_root_names(self,rootNames):
+        'add resource path root to the module dictionary'
+        if hasattr(self,'saveDict'): # ONLY SAVE IF INITIALIZING THE MODULE
+            for name in rootNames:
+                if name not in self.saveDict:
+                    self.saveDict[name]=ResourcePath(name)
     def resourceDBiter(self):
         'iterate over all available databases, read from PYGRDATAPATH env var.'
         self.update()
@@ -372,12 +484,17 @@ Continuing with import...'''%dbpath
             raise ValueError('empty PYGRDATAPATH! Please check environment variable.')
         for db in self.db:
             yield db
-    def loads(self,data):
+    def loads(self,data,cursor=None):
         'unpickle from string, using persistent ID expansion'
         src=StringIO(data)
         unpickler=pickle.Unpickler(src)
         unpickler.persistent_load=self.persistent_load # WE PROVIDE PERSISTENT LOOKUP
-        return unpickler.load()
+        if cursor is not None: # PUSH OUR CURSOR ONTO THE STACK
+            self.cursors.append(cursor)
+        obj=unpickler.load() # ACTUALLY UNPICKLE THE DATA
+        if cursor is not None: # POP OUR CURSOR STACK
+            self.cursors.pop()
+        return obj
     def dumps(self,obj):
         'pickle to string, using persistent ID encoding'
         src=StringIO()
@@ -391,6 +508,18 @@ Continuing with import...'''%dbpath
             return self(persid[8:]) # RUN OUR STANDARD RESOURCE REQUEST PROCESS
         else: # UNKNOWN PERSISTENT ID... NOT FROM PYGR!
             raise pickle.UnpicklingError, 'Invalid persistent ID %s' % persid
+    def getTableCursor(self,tablename):
+        'try to get the desired table using our current resource database cursor, if any'
+        try:
+            cursor=self.cursors[-1]
+        except IndexError:
+            return None
+        try: # MAKE SURE THIS CURSOR CAN PROVIDE tablename
+            cursor.execute('describe %s' % tablename)
+            return cursor # SUCCEEDED IN ACCESSING DESIRED TABLE
+        except StandardError:
+            return None
+        
     def __call__(self,id,layer=None,*args,**kwargs):
         'get the requested resource ID by searching all databases'
         try:
@@ -413,8 +542,17 @@ Continuing with import...'''%dbpath
         self.d[id]=obj # SAVE TO OUR CACHE
         self.applySchema(id,obj) # BIND SHADOW ATTRIBUTES IF ANY
         return obj
+    def check_docstring(self,obj):
+        'enforce requirement for docstring, by raising exception if not present'
+        try:
+            if obj.__doc__ is None or (hasattr(obj.__class__,'__doc__')
+                                       and obj.__doc__==obj.__class__.__doc__):
+                raise AttributeError
+        except AttributeError:
+            raise ValueError('to save a resource object, you MUST give it a __doc__ string attribute describing it!')
     def addResource(self,resID,obj,layer=None):
         'save the object to the specified database layer as <id>'
+        self.check_docstring(obj)
         obj._persistent_id=resID # MARK OBJECT WITH ITS PERSISTENT ID
         db=self.getLayer(layer)
         db[resID]=obj # SAVE THE OBJECT TO THE DATABASE
@@ -422,6 +560,7 @@ Continuing with import...'''%dbpath
     def addResourceDict(self,saveDict,layer=None):
         'save an entire set of resources, so dependency order is not an issue'
         for k,v in saveDict.items(): # CREATE DICT OF OBJECT IDs FOR DEPENDENCIES
+            self.check_docstring(v)
             self.sourceIDs[id(v)]=k
         for k,v in saveDict.items(): # NOW ACTUALLY SAVE THE OBJECTS
             self.addResource(k,v,layer) # CALL THE PICKLER...
@@ -553,8 +692,28 @@ Continuing with import...'''%dbpath
             if attr.startswith('-'): # A SCHEMA OBJECT
                 obj.delschema(db) # DELETE ITS SCHEMA RELATIONS
             db.delschema(id,attr) # DELETE THIS ATTRIBUTE SCHEMA RULE
+    def dir(self,prefix,layer=None,asDict=False):
+        'get list or dict of resources beginning with the specified string'
+        if layer is not None:
+            db=self.getLayer(layer)
+            return db.dir(prefix,asDict=asDict)
+        d={}
+        def iteritems(s):
+            try:
+                return s.iteritems()
+            except AttributeError:
+                return iter([(x,None) for x in s])
+        for db in self.resourceDBiter():
+            for k,v in iteritems(db.dir(prefix,asDict=asDict)):
+                if k not in d: # ALLOW EARLIER DB TO TAKE PRECEDENCE
+                    d[k]=v
+        if asDict:
+            return d
+        else:
+            l=[k for k in d]
+            l.sort()
+            return l
         
-
 
 
 
@@ -718,24 +877,7 @@ class ForeignKeyMap(object):
             return self._inverse
 
 
-class Dict(object): # WRAP dict SO IT CAN BE SAVED TO pygr.Data
-    def __init__(self,*l,**kwargs):
-        self.d=dict(*l)
-        try:
-            self.itemClass=kwargs['itemClass']
-        except KeyError:
-            pass
-    def __getitem__(self,k): return self.d[k]
-    def __setitem__(self,k,v): self.d[k]=v
-    def __delitem__(self,k): del self.d[k]
-    def __len__(self): return len(self.d)
-    def __contains__(self,k): return k in self.d
-    def __iter__(self): return iter(self.d)
-    def __getattr__(self,attr):
-        if attr=='__setstate__': # PREVENT INFINITE RECURSE IN UNPICKLE
-            raise AttributeError
-        return getattr(self.d,attr)
-    
+
 
 ###########################################################
 schema=SchemaPath() # ROOT OF OUR SCHEMA NAMESPACE
@@ -753,3 +895,8 @@ MySQL=ResourceLayer('MySQL')
 
 ################# CREATE AN INTERFACE TO THE RESOURCE DATABASE
 getResource=ResourceFinder(saveDict=locals())
+addResourceDict=getResource.addResourceDict
+addResource=getResource.addResource
+deleteResource=getResource.deleteResource
+dir=getResource.dir
+newServer=getResource.newServer
