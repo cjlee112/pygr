@@ -31,6 +31,7 @@ def standard_getstate(self):
 
 
 def standard_setstate(self,state):
+    'apply dict of saved state by passing as kwargs to constructor'
     if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
         self.__init__(*state)
         import sys
@@ -46,6 +47,19 @@ def apply_itemclass(self,state):
     except KeyError:
         pass
 
+
+def item_unpickler(db,*args):
+    'get an item or subslice of a database'
+    obj = db
+    for arg in args:
+        obj = obj[arg]
+    return obj
+item_unpickler.__safe_for_unpickling__ = 1
+
+
+def item_reducer(self): ############################# SUPPORT FOR PICKLING
+    'pickle an item of a database just as a reference'
+    return (item_unpickler, (self.db,self.id))
 
 def methodFactory(methodList,methodStr,localDict):
     for methodName in methodList:
