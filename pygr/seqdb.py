@@ -268,6 +268,7 @@ class FileDBSeqDescriptor(object):
 
 class FileDBSequence(BlastSequence):
     seq=FileDBSeqDescriptor()
+    __reduce__ = classutil.item_reducer
     def strslice(self,start,end,useCache=True):
         "Efficient access to slice of a sequence, useful for huge contigs"
         if useCache:
