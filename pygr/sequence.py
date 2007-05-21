@@ -368,7 +368,9 @@ class SeqPath(object):
 
     def __getattr__(self,attr):
         'automatically generate start and stop if needed'
-        if self.__dict__['path'] is self: # TOP-LEVEL SEQUENCE OBJECT
+        if attr=='__setstate__': # PROTECT PICKLING OPERATIONS...
+            raise AttributeError
+        elif self.__dict__['path'] is self: # TOP-LEVEL SEQUENCE OBJECT
             if attr=='start':
                 if self.orientation>0:
                     return 0 # FORWARD ORI
