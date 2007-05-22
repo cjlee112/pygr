@@ -3931,6 +3931,12 @@ database table.
 \begin{verbatim}
 rdb=pygr.Data.ResourceDBMySQL('pygrdata.index',createLayer='leelab')
 \end{verbatim}
+  Note that you must provide the \var{createLayer} argument, in order to 
+  create a new resource database table.  \class{ResourceDBMySQL} will not
+  automatically create a new table without this argument, simply because the
+  \var{tablename} you provided does not exist.  In that case, it will
+  raise an exception to alert you to the fact that either the correct table name
+  was not given, or the table does not exist.
 \end{funcdesc}
 
 \begin{funcdesc}{__getitem__}{id}
