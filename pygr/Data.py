@@ -125,18 +125,18 @@ class ResourceDBServer(object):
         except KeyError:
             return '' # EMPTY STRING INDICATES FAILURE
         try:
-            d['__doc__'] = self.docs[id]
+            d['__doc__'] = self.docs[id]['__doc__']
         except KeyError:
             pass
         return d
     def registerServer(self,locationKey,serviceDict):
         n=0
-        for id,(docstring,pdata) in serviceDict.items():
+        for id,(infoDict,pdata) in serviceDict.items():
             try:
                 self.d[id][locationKey]=pdata # ADD TO DICT FOR THIS RESOURCE
             except KeyError:
                 self.d[id]={locationKey:pdata} # CREATE NEW DICT FOR THIS RESOURCE
-            self.docs[id]=docstring
+            self.docs[id]=infoDict
             n+=1
         return n  # COUNT OF SUCCESSFULLY REGISTERED SERVICES
     def delResource(self,id,locationKey):
@@ -158,7 +158,7 @@ class ResourceDBServer(object):
                 try:
                     d[name]=self.docs[name]
                 except KeyError:
-                    d[name]=''
+                    d[name]={} # EMPTY DICT -- NO INFO FOUND
             return d
         return l
     def get_version(self):
@@ -208,9 +208,10 @@ class ResourceDBClient(object):
         return self.server.dir(prefix,asDict)
 
 class ResourceDBMySQL(object):
-    '''mysql schema:
-    (pygr_id varchar(255) not null,location varchar(255) not null,
-    objdata text not null,unique(pygr_id,location))'''
+    '''To create a new resource table, call:
+ResourceDBMySQL("DBNAME.TABLENAME",createLayer="LAYERNAME")
+where DBNAME is the name of your database, TABLENAME is the name of the
+table you want to create, and LAYERNAME is the layer name you want to assign it'''
     _pygr_data_version=(0,1,0)
     def __init__(self,tablename,finder=None,createLayer=None):
         from sqlgraph import getNameCursor
@@ -220,19 +221,33 @@ class ResourceDBMySQL(object):
         self.finder=finder
         self.rootNames={}
         if createLayer is not None: # CREATE DATABASE FROM SCRATCH
+            from datetime import datetime
+            creation_time = datetime.now()
             self.cursor.execute('drop table if exists %s' % tablename)
-            self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,docstring varchar(255),objdata text not null,unique(pygr_id,location))'%tablename)
-            self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s)'
-                                %self.tablename,('PYGRLAYERNAME',createLayer,None,'a'))
-            self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s)'
-                                %self.tablename,('0version',
-                                                 '%d.%d.%d' % self._pygr_data_version,
-                                                 None,'a')) # SAVE VERSION STAMP
+            self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,docstring varchar(255),user varchar(255),creation_time datetime,pickle_size int,info_blob text,objdata text not null,unique(pygr_id,location))'%tablename)
+            self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+                                %self.tablename,
+                                ('PYGRLAYERNAME',createLayer,None,None,
+                                 creation_time,None,None,'a'))
+            self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+                                %self.tablename,
+                                ('0version','%d.%d.%d' % self._pygr_data_version,
+                                 None,None,None,None,None,'a')) # SAVE VERSION STAMP
             self.name=createLayer
             finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
         else:
-            if self.cursor.execute('select location from %s where pygr_id=%%s'
-                                   % self.tablename,('PYGRLAYERNAME',))>0:
+            try:
+                n = self.cursor.execute('select location from %s where pygr_id=%%s'
+                                        % self.tablename,('PYGRLAYERNAME',))
+            except StandardError:
+                import sys
+                print >>sys.stderr,'''%s
+Database table %s appears to be missing or has no layer name!
+To create this table, call pygr.Data.ResourceDBMySQL("%s",createLayer=<LAYERNAME>)
+where <LAYERNAME> is the layer name you want to assign it.
+%s'''  %('!'*40,tablename,tablename,'!'*40)
+                raise
+            if n>0:
                 self.name=self.cursor.fetchone()[0] # GET LAYERNAME FROM DB
                 finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
             if self.cursor.execute('select location from %s where pygr_id=%%s'
@@ -242,8 +257,9 @@ class ResourceDBMySQL(object):
                 finder.save_root_names(self.rootNames)
     def save_root_name(self,name):
         self.rootNames[name]=None
-        self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s)'
-                            %self.tablename,('0root',name,None,'a'))
+        self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+                            %self.tablename,
+                            ('0root',name,None,None,None,None,None,'a'))
     def __getitem__(self,id):
         'get construction rule from mysql, and attempt to construct'
         self.cursor.execute('select location,objdata,docstring from %s where pygr_id=%%s'
@@ -259,9 +275,11 @@ class ResourceDBMySQL(object):
     def __setitem__(self,id,obj):
         'add an object to this resource database'
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
-        self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s)'
-                            %self.tablename,(id,'mysql:'+self.tablename,
-                                             obj.__doc__,s))
+        d = getResource.get_info_dict(obj,s)
+        self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+                            %self.tablename,
+                            (id,'mysql:'+self.tablename,obj.__doc__,d['user'],
+                             d['creation_time'],d['pickle_size'],None,s))
         root=id.split('.')[0]
         if root not in self.rootNames:
             self.save_root_name(root)
@@ -273,17 +291,20 @@ class ResourceDBMySQL(object):
     def registerServer(self,locationKey,serviceDict):
         'register the specified services to mysql database'
         n=0
-        for id,(docstring,pdata) in serviceDict.items():
-            n+=self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s)' %
-                                   self.tablename,(id,locationKey,docstring,pdata))
+        for id,(d,pdata) in serviceDict.items():
+            n+=self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+                                   % self.tablename,
+                                   (id,locationKey,d['__doc__'],d['user'],
+                                    d['creation_time'],d['pickle_size'],None,pdata))
         return n
     def setschema(self,id,attr,kwargs):
         'save a schema binding for id.attr --> targetID'
         if not attr.startswith('-'): # REAL ATTRIBUTE
             targetID=kwargs['targetID'] # RAISES KeyError IF NOT PRESENT
         kwdata=self.finder.dumps(kwargs)
-        self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s)'
-                            %self.tablename,('SCHEMA.'+id,attr,None,kwdata))
+        self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+                            %self.tablename,
+                            ('SCHEMA.'+id,attr,None,None,None,None,None,kwdata))
     def delschema(self,id,attr):
         'delete schema binding for id.attr'
         self.cursor.execute('delete from %s where pygr_id=%%s and location=%%s'
@@ -297,11 +318,11 @@ class ResourceDBMySQL(object):
             d[attr]=self.finder.loads(objData)
         return d
     def dir(self,prefix,asDict=False):
-        self.cursor.execute('select pygr_id,docstring from %s where pygr_id like %%s'
+        self.cursor.execute('select pygr_id,docstring,user,creation_time,pickle_size from %s where pygr_id like %%s'
                             % self.tablename,(prefix+'%',))
         d={}
-        for name,docstring in self.cursor.fetchall():
-            d[name]=docstring
+        for l in self.cursor.fetchall():
+            d[l[0]] = dict(__doc__=l[1],user=l[2],creation_time=l[3],pickle_size=l[4])
         if asDict:
             return d
         else:
@@ -331,7 +352,7 @@ class ResourceDBShelve(object):
         s=self.db[id] # RAISES KeyError IF NOT PRESENT
         obj = self.finder.loads(s) # RUN THE UNPICKLER ON THE STRING
         try:
-            obj.__doc__ = self.db['__doc__.'+id]
+            obj.__doc__ = self.db['__doc__.'+id]['__doc__']
         except KeyError:
             pass
         return obj
@@ -340,7 +361,7 @@ class ResourceDBShelve(object):
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
         self.db[id]=s # SAVE TO OUR SHELVE FILE
-        self.db['__doc__.'+id]=obj.__doc__ # SAVE ITS DOC STRING
+        self.db['__doc__.'+id]=getResource.get_info_dict(obj,s)
         root=id.split('.')[0] # SEE IF ROOT NAME IS IN THIS SHELVE
         try:
             d=self.db['0root']
@@ -614,7 +635,8 @@ Continuing with import...'''%dbpath
                 obj.url='http://%s:%d' % (clientHost,server.port)
                 obj.name=id
             obj.__class__=clientKlass # CONVERT TO CLIENT CLASS FOR PICKLING
-            clientDict[id]=self.dumps(obj) # PICKLE THE CLIENT OBJECT, SAVE
+            pickleString = self.dumps(obj) # PICKLE THE CLIENT OBJECT, SAVE
+            clientDict[id]=(self.get_info_dict(obj,pickleString),pickleString)
             try: # SAVE SCHEMA INFO AS WELL...
                 clientDict['SCHEMA.'+id]=self.findSchema(id)
             except KeyError:
@@ -713,7 +735,16 @@ Continuing with import...'''%dbpath
             l=[k for k in d]
             l.sort()
             return l
-        
+    def get_info_dict(self,obj,pickleString):
+        'get dict of standard info about a resource'
+        import os,datetime
+        d = dict(creation_time=datetime.datetime.now(),
+                 pickle_size=len(pickleString),__doc__=obj.__doc__)
+        try:
+            d['user'] = os.environ['USER']
+        except KeyError:
+            d['user'] = None
+        return d
 
 
 
