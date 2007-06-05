@@ -616,6 +616,8 @@ def save_graph_db_refs(self,sourceDB=None,targetDB=None,
     'apply kwargs to reference DB objects for this graph'
     if sourceDB is not None:
         self.sourceDB=sourceDB
+    else:
+        simpleKeys = True # NO SOURCE DB, SO STORE KEYS AS INTERNAL REPRESENTATION
     if targetDB is not None:
         self.targetDB=targetDB
     if edgeDB is not None:
