@@ -3,7 +3,7 @@
 from __future__ import generators
 from mapping import *
 import types
-from classutil import ClassicUnpickler
+from classutil import ClassicUnpickler,methodFactory
     
 
 class TupleO(object):
@@ -74,7 +74,7 @@ def getNameCursor(name,connect=None,configFile=None):
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
-                 clusterKey=None,**kwargs):
+                 clusterKey=None,graph=None,**kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
             name,cursor=getNameCursor(name,**kwargs)
@@ -107,15 +107,24 @@ class SQLTableBase(dict):
             self.data.update(attrAlias)
         if clusterKey is not None:
             self.clusterKey=clusterKey
+        if graph is not None:
+            self.graph = graph
+        save_graph_db_refs(self,**kwargs)
 
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __getstate__(self):
         d=self.getAttrAlias() # SAVE ATTRIBUTE ALIASES
-        if self.itemClass.__name__=='foo': # NO NEED TO SAVE ITEM CLASS
-            return dict(name=self.name,attrAlias=d)
-        else: # SAVE ITEM CLASS
-            return dict(name=self.name,itemClass=self.itemClass,attrAlias=d)
+        state = dict(name=self.name,attrAlias=d)
+        if self.itemClass.__name__ != 'foo':  # SAVE ITEM CLASS
+            state['itemClass'] = self.itemClass
+        try:
+            state['clusterKey'] = self.clusterKey
+        except AttributeError: pass
+        try:
+            state['graph'] = self.graph
+        except AttributeError: pass
+        return state
     def __setstate__(self,state):
         if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
             name = state[0]
@@ -352,51 +361,69 @@ class SQLTableMultiNoCache(SQLTableBase):
 
 
 class SQLEdges(SQLTableMultiNoCache):
-    '''provide iterator over edges as (source_id,target_id,edge_id)
-       and getitem[edge_id] --> [(source_id,target_id),...]'''
+    '''provide iterator over edges as (source,target,edge)
+       and getitem[edge] --> [(source,target),...]'''
     _distinct_key='edge_id'
     def keys(self):
         self.cursor.execute('select %s,%s,%s from %s'
                             %(self._attrSQL('source_id'),
                               self._attrSQL('target_id'),
                               self._attrSQL('edge_id'),self.name))
-        return self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
+        l = [] # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
+        for source_id,target_id,edge_id in self.cursor.fetchall():
+            l.append((self.graph.unpack_source(source_id),
+                      self.graph.unpack_target(target_id),
+                      self.graph.unpack_edge(edge_id)))
+        return l
     __call__=keys
     def __iter__(self):
-        for i in self.keys():
-            yield i
-    def __getitem__(self,id):
+        return iter(self.keys())
+    def __getitem__(self,edge):
         self.cursor.execute('select %s,%s from %s where %s=%%s'
                             %(self._attrSQL('source_id'),
                               self._attrSQL('target_id'),
-                              self.name,self._attrSQL(self._distinct_key)),(id,))
-        return self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
+                              self.name,self._attrSQL(self._distinct_key)),
+                            (self.graph.pack_edge(edge),))
+        l = [] # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
+        for source_id,target_id in self.cursor.fetchall():
+            l.append((self.graph.unpack_source(source_id),
+                      self.graph.unpack_target(target_id)))
+        return l
+
 
 class SQLEdgeDict(object):
     '2nd level graph interface to SQL database'
     def __init__(self,fromNode,table):
         self.fromNode=fromNode
         self.table=table
+        if self.table.cursor.execute('select %s from %s where %s=%%s limit 1'
+                                     %(self.table._attrSQL('source_id'),
+                                       self.table.name,
+                                       self.table._attrSQL('source_id')),
+                                     (self.fromNode,))<1:
+            raise KeyError('node not in graph!')
+
     def __getitem__(self,target):
         self.table.cursor.execute('select %s from %s where %s=%%s and %s=%%s'
                                   %(self.table._attrSQL('edge_id'),
                                     self.table.name,self.table._attrSQL('source_id'),
                                     self.table._attrSQL('target_id')),
-                                  (self.fromNode,target))
+                                  (self.fromNode,self.table.pack_target(target)))
         l=self.table.cursor.fetchall()
         try:
-            return l[0][0] # RETURN EDGE
+            return self.table.unpack_edge(l[0][0]) # RETURN EDGE
         except IndexError:
             raise KeyError('no edge from node to target')
     def __setitem__(self,target,edge):
-        self.table.cursor.execute('insert into %s values (%%s,%%s,%%s)'
+        self.table.cursor.execute('replace into %s values (%%s,%%s,%%s)'
                                   %self.table.name,
-                                  (self.fromNode,target,edge))
+                                  (self.fromNode,self.table.pack_target(target),
+                                   self.table.pack_edge(edge)))
     def __delitem__(self,target):
         if self.table.cursor.execute('delete from %s where %s=%%s and %s=%%s'
                                      %(self.table.name,self.table._attrSQL('source_id'),
                                        self.table._attrSQL('target_id')),
-                                     (self.fromNode,target))<1:
+                                     (self.fromNode,self.table.pack_target(target)))<1:
             raise KeyError('no edge from node to target')
         
     def __iter__(self): return self.iteritems(0)
@@ -404,38 +431,48 @@ class SQLEdgeDict(object):
     def itervalues(self): return self.iteritems(1)
     def values(self): return [k for k in self.iteritems(1)]
     def items(self): return [k for k in self.iteritems()]
-    def edges(self): return [(self.fromNode,)+k for k in self.iteritems()]
+    def edges(self): return [(self.table.unpack_source(self.fromNode),)
+                             +k for k in self.iteritems()]
     def iteritems(self,k=slice(0,2)):
-        self.table.cursor.execute('select %s,%s from %s where %s=%%s'
+        self.table.cursor.execute('select %s,%s from %s where %s=%%s and %s is not null'
                                   %(self.table._attrSQL('target_id'),
                                     self.table._attrSQL('edge_id'),
-                                    self.table.name,self.table._attrSQL('source_id')),
+                                    self.table.name,self.table._attrSQL('source_id'),
+                                    self.table._attrSQL('target_id')),
                                   (self.fromNode,))
-        for row in self.table.cursor.fetchall():
+        for target_id,edge_id in self.table.cursor.fetchall():
+            row = (self.table.unpack_target(target_id),
+                   self.table.unpack_edge(edge_id))
             yield row[k]
 
 class SQLGraphEdgeDescriptor(object):
     'provide an SQLEdges interface on demand'
     def __get__(self,obj,objtype):
-        return SQLEdges(obj.name,obj.cursor,attrAlias=obj.getAttrAlias())
+        return SQLEdges(obj.name,obj.cursor,attrAlias=obj.getAttrAlias(),
+                        graph=obj)
 
 class SQLGraph(SQLTableMultiNoCache):
     '''provide a graph interface via a SQL table.  Key capabilities are:
        - setitem with an empty dictionary: a dummy operation
        - getitem with a key that exists: return a placeholder
        - setitem with non empty placeholder: again a dummy operation
-       TABLE SCHEMA:
-       create table mygraph (source_id int not null,target_id int not null,edge_id int,
+       EXAMPLE TABLE SCHEMA:
+       create table mygraph (source_id int not null,target_id int,edge_id int,
               unique(source_id,target_id));
        '''
     _distinct_key='source_id'
     def __getitem__(self,k):
-        return SQLEdgeDict(k,self)
+        return SQLEdgeDict(self.pack_source(k),self)
+    def __iadd__(self,k):
+        self.cursor.execute('insert ignore into %s values (%%s,NULL,NULL)'
+                            % self.name,(self.pack_source(k),))
+        return self # iadd MUST RETURN SELF!
     def __setitem__(self,k,v):
         pass
     def __contains__(self,k):
         return self.cursor.execute('select * from %s where %s=%%s'
-                                   %(self.name,self._attrSQL('source_id')),(k,))>0
+                                   %(self.name,self._attrSQL('source_id')),
+                                   (self.pack_source(k),))>0
     def __invert__(self):
         'get an interface to the inverse graph mapping'
         try: # CACHED
@@ -444,18 +481,25 @@ class SQLGraph(SQLTableMultiNoCache):
             self._inverse=SQLGraph(self.name,self.cursor, # SWAP SOURCE & TARGET
                                    attrAlias=dict(source_id=self.data['target_id'],
                                                   target_id=self.data['source_id'],
-                                                  edge_id=self.data['edge_id']))
+                                                  edge_id=self.data['edge_id']),
+                                   **graph_db_inverse_refs(self))
             self._inverse._inverse=self
             return self._inverse
     def iteritems(self,myslice=slice(0,2)):
         for k in self:
-            result=(k,SQLEdgeDict(k,self))
+            result=(self.pack_source(k),SQLEdgeDict(k,self))
             yield result[myslice]
     def keys(self): return [k for k in self]
     def itervalues(self): return self.iteritems(1)
     def values(self): return [k for k in self.iteritems(1)]
     def items(self): return [k for k in self.iteritems()]
     edges=SQLGraphEdgeDescriptor()
+    add_standard_packing_methods(locals())  ############ PACK / UNPACK METHODS
+
+class SQLIDGraph(SQLGraph):
+    add_trivial_packing_methods(locals())
+SQLGraph._IDGraphClass = SQLIDGraph
+
 
 
 class SQLEdgeDictClustered(dict):
@@ -471,7 +515,8 @@ class SQLEdgeDictClustered(dict):
 
 class SQLEdgesClusteredDescr(object):
     def __get__(self,obj,objtype):
-        e=SQLEdgesClustered(obj.table,obj.edge_id,obj.source_id,obj.target_id)
+        e=SQLEdgesClustered(obj.table,obj.edge_id,obj.source_id,obj.target_id,
+                            **graph_db_inverse_refs(obj,True))
         for source_id,d in obj.d.iteritems(): # COPY EDGE CACHE
             e.load([(edge_id,source_id,target_id)
                     for (target_id,edge_id) in d.iteritems()])
@@ -481,7 +526,7 @@ class SQLGraphClustered(object):
     'SQL graph with clustered caching -- loads an entire cluster at a time'
     _edgeDictClass=SQLEdgeDictClustered
     def __init__(self,table,source_id='source_id',target_id='target_id',
-                 edge_id='edge_id',clusterKey=None):
+                 edge_id='edge_id',clusterKey=None,**kwargs):
         import types
         if isinstance(table,types.StringType): # CREATE THE TABLE INTERFACE
             if clusterKey is None:
@@ -492,6 +537,7 @@ class SQLGraphClustered(object):
         self.target_id=target_id
         self.edge_id=edge_id
         self.d={}
+        save_graph_db_refs(self,**kwargs)
     def __getstate__(self):
         return dict(table=self.table,source_id=self.source_id,
                     target_id=self.target_id,edge_id=self.edge_id,d={})
@@ -508,10 +554,11 @@ class SQLGraphClustered(object):
                                     self.edge_id,self.table.name,
                                     self.table.name,self.source_id,
                                     self.table.clusterKey,self.table.clusterKey,
-                                    self.table.primary_key),(k,))
+                                    self.table.primary_key),
+                                  (self.pack_source(k),))
         self.load(self.table.cursor.fetchall()) # CACHE THIS CLUSTER
         return self.d[k] # RETURN EDGE DICT FOR THIS NODE
-    def load(self,l=None):
+    def load(self,l=None,unpack=True):
         'load the specified rows (or all, if None provided) into local cache'
         if l is None:
             try: # IF ALREADY LOADED, NO NEED TO DO ANYTHING
@@ -524,27 +571,33 @@ class SQLGraphClustered(object):
             l=self.table.cursor.fetchall()
             self._isLoaded=True
             self.d.clear() # CLEAR OUR CACHE AS load() WILL REPLICATE EVERYTHING
-        for source_id,target_id,edge_id in l: # SAVE TO OUR CACHE
+        for source,target,edge in l: # SAVE TO OUR CACHE
+            if unpack:
+                source = self.unpack_source(source)
+                target = self.unpack_target(target)
+                edge = self.unpack_edge(edge)
             try:
-                self.d[source_id]+=[(target_id,edge_id)]
+                self.d[source] += [(target,edge)]
             except KeyError:
-                d=self._edgeDictClass(self,source_id)
-                d+=[(target_id,edge_id)]
-                self.d[source_id]=d
+                d = self._edgeDictClass(self,source)
+                d += [(target,edge)]
+                self.d[source] = d
     def __invert__(self):
         'interface to reverse graph mapping'
         try:
             return self._inverse # INVERSE MAP ALREADY EXISTS
         except AttributeError:
             pass
+        # JUST CREATE INTERFACE WITH SWAPPED TARGET & SOURCE
         self._inverse=SQLGraphClustered(self.table,self.target_id,self.source_id,
-                                        self.edge_id) # JUST SWAP TARGET & SOURCE
+                                        self.edge_id,**graph_db_inverse_refs(self))
         self._inverse._inverse=self
-        for source_id,d in self.d.iteritems(): # INVERT OUR CACHE
-            self._inverse.load([(target_id,source_id,edge_id)
-                                for (target_id,edge_id) in d.iteritems()])
+        for source,d in self.d.iteritems(): # INVERT OUR CACHE
+            self._inverse.load([(target,source,edge)
+                                for (target,edge) in d.iteritems()],unpack=False)
         return self._inverse
     edges=SQLEdgesClusteredDescr() # CONSTRUCT EDGE INTERFACE ON DEMAND
+    add_standard_packing_methods(locals())  ############ PACK / UNPACK METHODS
     def __iter__(self): ################# ITERATORS
         'uses db select; does not force load'
         return iter(self.keys())
@@ -552,16 +605,10 @@ class SQLGraphClustered(object):
         'uses db select; does not force load'
         self.table.cursor.execute('select distinct(%s) from %s'
                                   %(self.source_id,self.table.name))
-        return self.table.cursor.fetchall()
-    def iteritems(self):
-        'forces load of entire table into memory'
-        self.load()
-        return self.d.iteritems()
-    def items(self): return [x for x in self.iteritems()]
-    def itervalues(self):
-        for t in self.iteritems():
-            yield t[1]
-    def values(self): return [t[1] for t in self.iteritems()]
+        return [self.unpack_source(source_id)
+                for source_id in self.table.cursor.fetchall()]
+    methodFactory(['iteritems','items','itervalues','values'],
+                  'lambda self:(self.load(),self.d.%s())[1]',locals())
     def __contains__(self,k):
         try:
             x=self[k]
@@ -569,11 +616,13 @@ class SQLGraphClustered(object):
         except KeyError:
             return False
 
+class SQLIDGraphClustered(SQLGraphClustered):
+    add_trivial_packing_methods(locals())
+SQLGraphClustered._IDGraphClass = SQLIDGraphClustered
+
 class SQLEdgesClustered(SQLGraphClustered):
     'edges interface for SQLGraphClustered'
-    class _edgeDictClass(list):
-        def __init__(self,*l):
-            list.__init__(self)
+    _edgeDictClass = list
     def __iter__(self):
         self.load()
         for edge_id,l in self.d.iteritems():
