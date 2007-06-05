@@ -637,9 +637,14 @@ def graph_db_inverse_refs(self,edgeIndex=False):
             d['edgeDB'] = getattr(self,db[2]) # EDGE INFO IS OPTIONAL
         except AttributeError:
             pass
-        return d
     except AttributeError:
-        return dict(simpleKeys=True) # NO SOURCE / TARGET DB, SO USE IDs AS KEYS
+        d = dict(simpleKeys=True) # NO SOURCE / TARGET DB, SO USE IDs AS KEYS
+    try: # COPY THE LOCAL UNPACKING METHOD, IF ANY
+        if not edgeIndex:
+            d['unpack_edge'] = self.__dict__['unpack_edge']
+    except KeyError:
+        pass
+    return d
 
 
 class Graph(object):
