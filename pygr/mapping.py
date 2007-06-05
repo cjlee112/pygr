@@ -266,10 +266,10 @@ class Collection(object):
             try:
                 if kwargs['intKeys']: # ALLOW INT KEYS, HAVE TO USE IntShelve
                     self.__class__ = IntShelve
-                    return self.__init__(**kwargs)
+                else:
+                    raise KeyError
             except KeyError:
-                pass
-            self.__class__ = PicklableShelve
+                self.__class__ = PicklableShelve
             return self.__init__(**kwargs)
         else:
             self.d = dictClass()
@@ -287,13 +287,13 @@ class Collection(object):
 
 class PicklableShelve(Collection):
     'persistent storage mapping ID --> OBJECT'
-    def __init__(self,filename,mode=None,**kwargs):
+    def __init__(self,filename,mode=None,writeback=True,**kwargs):
         self.filename = filename
         if mode=='c':
-            self.mode = 'w'
+            self.mode = 'w' # STORE FOR SUBSEQUENT REOPENING BY UNPICKLE...
         else:
             self.mode = mode
-        self.d = classutil.open_shelve(filename,mode)
+        self.d = classutil.open_shelve(filename,mode,writeback)
         classutil.apply_itemclass(self,kwargs)
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
@@ -303,6 +303,10 @@ class PicklableShelve(Collection):
             self.d[k]=v
         except TypeError:
             raise TypeError('to allow int keys, you must pass intKeys=True to constructor!')
+    def reopen(self,mode='r'):
+        self.d.close()
+        import shelve
+        self.d = shelve.open(self.filename,mode)
 
 
 class IntShelve(PicklableShelve):
@@ -341,6 +345,60 @@ class IntShelve(PicklableShelve):
     def items(self): return [k for k in self.iteritems()]
     def close(self): self.d.close()
 
+
+
+## PACKING / UNPACKING METHODS FOR SEPARATING INTERNAL VS. EXTERNAL
+## REPRESENTATIONS OF GRAPH NODES AND EDGES
+## 1. ID-BASED PACKING: USE obj.id AS INTERNAL REPRESENTATION
+##
+## 2. TRIVIAL: INTERNAL AND EXTERNAL REPRESENTATIONS IDENTICAL
+##    WORKS WELL FOR STRING OR INT NODES / EDGES.
+##
+## 3. PICKLE PACKING: USE PICKLE AS INTERNAL REPRESENTATION
+def pack_id(self,obj):
+    'extract id attribute from obj'
+    try:
+        return obj.id
+    except AttributeError:
+        if obj is None:
+            return None
+        raise
+
+def unpack_source(self,objID):
+    return self.sourceDB[objID]
+def unpack_target(self,objID):
+    return self.targetDB[objID]
+def unpack_edge(self,objID):
+    try:
+        return self.edgeDB[objID]
+    except KeyError:
+        if objID is None:
+            return None
+        raise
+
+def add_standard_packing_methods(localDict):
+    localDict['pack_source'] = pack_id
+    localDict['pack_target'] = pack_id
+    localDict['pack_edge'] = pack_id
+    localDict['unpack_source'] = unpack_source
+    localDict['unpack_target'] = unpack_target
+    localDict['unpack_edge'] = unpack_edge
+
+def add_trivial_packing_methods(localDict):
+    for name in ('pack_source','pack_target','pack_edge',
+                 'unpack_source','unpack_target','unpack_edge'):
+        localDict[name] = lambda self,obj:obj
+
+
+def pack_pickle(self,obj):
+    'get pickle string for obj'
+    import pickle
+    return pickle.dumps(obj)
+
+def unpack_pickle(self,s):
+    'unpickle string to get obj'
+    import pickle
+    return pickle.loads(s)
 
 
 class MappingInverse(object):
@@ -462,19 +520,19 @@ class IDNodeDict(object):
         self.fromNode=fromNode
 
     def __getitem__(self,target): ############# ACCESS METHODS
-        edgeID=self.graph.d[self.fromNode][target.id]
-        return self.graph.edgeDB[edgeID]
+        edgeID=self.graph.d[self.fromNode][self.graph.pack_target(target)]
+        return self.graph.unpack_edge(edgeID)
 
     def __setitem__(self,target,edgeInfo):
         "Add edge from fromNode to target with edgeInfo"
-        if edgeInfo is not None:
-            self.graph.d[self.fromNode][target.id]=edgeInfo.id
+        self.graph.d[self.fromNode][self.graph.pack_target(target)] \
+             = self.graph.pack_edge(edgeInfo)
         self.graph+=target # ADD NEW NODE TO THE NODE DICT
 
     def __delitem__(self,target):
         "Delete edge from fromNode to target"
         try:
-            del self.graph.d[self.fromNode][target.id]
+            del self.graph.d[self.fromNode][self.graph.pack_target(target)]
         except KeyError: # GENERATE A MORE INFORMATIVE ERROR MESSAGE
             raise KeyError('No edge from node to target')
     ######### CONVENIENCE METHODS THAT USE THE ACCESS METHODS ABOVE
@@ -491,9 +549,9 @@ class IDNodeDict(object):
     def edges(self):
         "Return iterator for accessing edges from fromNode"
         for target,edgeInfo in self.graph.d[self.fromNode].items():
-            yield self.graph.sourceDB[self.fromNode],\
-                  self.graph.targetDB[target],\
-                  self.graph.edgeDB[edgeInfo]
+            yield (self.graph.unpack_source(self.fromNode),
+                   self.graph.unpack_target(target),
+                   self.graph.unpack_edge(edgeInfo))
     def keys(self): return [k[1] for k in self.edges()] ##### ITERATORS
     def values(self): return [k[2] for k in self.edges()]
     def items(self): return [k[1:3] for k in self.edges()]
@@ -507,6 +565,29 @@ class IDNodeDict(object):
         for source,target,edgeInfo in self.edges():
             yield target,edgeInfo
 
+
+class IDNodeDictWriteback(IDNodeDict):
+    'forces writing of subdictionary in shelve opened without writeback=True'
+    def __setitem__(self,target,edgeInfo):
+        d = self.graph.d[self.fromNode]
+        d[self.graph.pack_target(target)] = self.graph.pack_edge(edgeInfo)
+        self.graph.d[self.fromNode] = d # WRITE IT BACK... REQUIRED FOR SHELVE
+        self.graph += target # ADD NEW NODE TO THE NODE DICT
+    def __delitem__(self,target):
+        d = self.graph.d[self.fromNode]
+        del d[self.graph.pack_target(target)]
+        self.graph.d[self.fromNode] = d # WRITE IT BACK... REQUIRED FOR SHELVE
+
+class IDNodeDictWriteNow(IDNodeDictWriteback):
+    'opens shelve for writing, writes an item, immediately reopens read-only'
+    def __setitem__(self,target,edgeInfo):
+        self.graph.d.reopen('w')
+        IDNodeDictWriteback.__setitem__(self,target,edgeInfo)
+        self.graph.d.reopen('r')
+    def __delitem__(self,target):
+        self.graph.d.reopen('w')
+        IDNodeDictWriteback.__delitem__(self,target)
+        self.graph.d.reopen('r')
 
 class IDGraphEdges(object):
     '''provides iterator over edges as (source,target,edge) tuples
@@ -529,32 +610,70 @@ class IDGraphEdgeDescriptor(object):
     def __get__(self,obj,objtype):
         return IDGraphEdges(obj)
     
-class IDGraph(object):
+
+def save_graph_db_refs(self,sourceDB=None,targetDB=None,
+                       edgeDB=None,simpleKeys=False,unpack_edge=None,**kwargs):
+    'apply kwargs to reference DB objects for this graph'
+    if sourceDB is not None:
+        self.sourceDB=sourceDB
+    if targetDB is not None:
+        self.targetDB=targetDB
+    if edgeDB is not None:
+        self.edgeDB=edgeDB
+    if simpleKeys: # SWITCH TO USING TRIVIAL PACKING: OBJECT IS ITS OWN ID
+        self.__class__ = self._IDGraphClass
+    if unpack_edge is not None:
+        self.unpack_edge = unpack_edge # UNPACKING METHOD OVERRIDES DEFAULT
+
+def graph_db_inverse_refs(self,edgeIndex=False):
+    'return kwargs for inverse of this graph, or edge index of this graph'
+    if edgeIndex: # TO CONSTRUCT AN EDGE INDEX
+        db = ('edgeDB','sourceDB','targetDB')
+    else: # DEFAULT: TO CONSTRUCT AN INVERSE MAPPING OF THE GRAPH
+        db = ('targetDB','sourceDB','edgeDB')
+    try:
+        d = dict(sourceDB=getattr(self,db[0]),targetDB=getattr(self,db[1]))
+        try:
+            d['edgeDB'] = getattr(self,db[2]) # EDGE INFO IS OPTIONAL
+        except AttributeError:
+            pass
+        return d
+    except AttributeError:
+        return dict(simpleKeys=True) # NO SOURCE / TARGET DB, SO USE IDs AS KEYS
+
+
+class Graph(object):
     """Top layer graph interface implemenation using proxy dict.
        Works with dict, shelve, any mapping interface."""
     edgeDictClass=IDNodeDict # DEFAULT EDGE DICT
-    def __init__(self,proxyDict=None,sourceDB=None,targetDB=None,
-                 edgeDB=None,**kwargs):
-        if proxyDict is not None: # USE THE SUPPLIED STORAGE
-            self.d=proxyDict
-        else: # ACCESS THE DATA VIA A SHELVE
-            self.d=IntShelve(**kwargs)
-        if sourceDB is not None:
-            self.sourceDB=sourceDB
-        if targetDB is not None:
-            self.targetDB=targetDB
-        if edgeDB is not None:
-            self.edgeDB=edgeDB
+    def __init__(self,saveDict=None,dictClass=dict,writeNow=False,**kwargs):
+        if saveDict is not None: # USE THE SUPPLIED STORAGE
+            self.d = saveDict
+        elif 'filename' in kwargs: # USE A SHELVE (BERKELEY DB)
+            try:
+                if kwargs['intKeys']: # ALLOW INT KEYS, HAVE TO USE IntShelve
+                    self.d = IntShelve(writeback=False,**kwargs)
+                else:
+                    raise KeyError
+            except KeyError:
+                self.d = PicklableShelve(writeback=False,**kwargs)
+            if writeNow:
+                self.edgeDictClass = IDNodeDictWriteNow # WRITE IMMEDIATELY
+            else:
+                self.edgeDictClass = IDNodeDictWriteback # USE OUR OWN WRITEBACK
+        else:
+            self.d = dictClass()
+        save_graph_db_refs(self,**kwargs)
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(d='proxyDict')
-
+    add_standard_packing_methods(locals())  ############ PACK / UNPACK METHODS
     # USE METHOD FROM THE SHELVE...
     classutil.methodFactory(['__contains__'],'lambda self,obj:self.d.%s(obj.id)',
                             locals())
     def __iter__(self):
         for node in self.d:
-            yield self.sourceDB[node]
+            yield self.unpack_source(node)
     def keys(self): return [k for k in self]
     def itervalues(self):
         for node in self.d:
@@ -562,24 +681,26 @@ class IDGraph(object):
     def values(self): return [v for v in self.itervalues()]
     def iteritems(self):
         for node in self.d:
-            yield self.sourceDB[node],self.edgeDictClass(self,node)
+            yield self.unpack_source(node),self.edgeDictClass(self,node)
     def items(self): return [v for v in self.iteritems()]
     edges=IDGraphEdgeDescriptor()
 
     def __iadd__(self,node):
         "Add node to graph with no edges"
-        node=node.id # INTERNALL JUST USE ITS id
+        node=self.pack_source(node)
         if node not in self.d:
             self.d[node]={} # INITIALIZE TOPLEVEL DICTIONARY
         return self # THIS IS REQUIRED FROM iadd()!!
 
+    def __contains__(self,node):
+        return self.pack_source(node) in self.d
     def __getitem__(self,node):
         if node in self:
-            return self.edgeDictClass(self,node.id)
+            return self.edgeDictClass(self,self.pack_source(node))
         raise KeyError('node not in graph')
     def __setitem__(self,node,target):
         "This method exists only to support g[n]+=o.  Do not use as g[n]=foo."
-        node=node.id # INTERNALL JUST USE ITS id
+        node=self.pack_source(node)
         try:
             if node==target.fromNode:
                 return
@@ -589,7 +710,7 @@ class IDGraph(object):
 
     def __delitem__(self,node):
         "Delete node from graph."
-        node=node.id # INTERNALL JUST USE ITS id
+        node=self.pack_source(node)
         # GRR, WE REALLY NEED TO FIND ALL EDGES THAT GO TO THIS NODE, DELETE THEM TOO
         try:
             del self.d[node]  # DO STUFF TO REMOVE IT HERE...
@@ -601,15 +722,20 @@ class IDGraph(object):
         self.__delitem__(node)
         return self # THIS IS REQUIRED FROM isub()!!
 
-    def __invert__(self):
-        'get an interface to the inverse graph mapping'
-        try: # CACHED
-            return self._inverse
-        except AttributeError: # NEED TO CONSTRUCT INVERSE MAPPING
-            self._inverse=IDGraph(~(self.d),self.targetDB,self.sourceDB,self.edgeDB)
-            self._inverse._inverse=self
-            return self._inverse
+# NEED TO PROVIDE A REAL INVERT METHOD!!
+##     def __invert__(self):
+##         'get an interface to the inverse graph mapping'
+##         try: # CACHED
+##             return self._inverse
+##         except AttributeError: # NEED TO CONSTRUCT INVERSE MAPPING
+##             self._inverse=IDGraph(~(self.d),self.targetDB,self.sourceDB,self.edgeDB)
+##             self._inverse._inverse=self
+##             return self._inverse
     def __hash__(self): # SO SCHEMA CAN INDEX ON GRAPHS...
         return id(self)
 
 
+class IDGraph(Graph):
+    add_trivial_packing_methods(locals())
+
+Graph._IDGraphClass = IDGraph
