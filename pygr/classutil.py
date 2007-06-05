@@ -66,7 +66,7 @@ def methodFactory(methodList,methodStr,localDict):
         localDict[methodName]=eval(methodStr%methodName)
 
 
-def open_shelve(filename,mode=None):
+def open_shelve(filename,mode=None,writeback=True):
     import shelve,anydbm
     if mode=='r': # READ-ONLY MODE, RAISE EXCEPTION IF NOT FOUND
         return shelve.open(filename,mode)
@@ -76,7 +76,7 @@ def open_shelve(filename,mode=None):
         except anydbm.error:
             mode='c' # CREATE NEW SHELVE FOR THE USER
     # CREATION / WRITING: FORCE IT TO WRITEBACK AT close()
-    return shelve.open(filename,mode,writeback=True)
+    return shelve.open(filename,mode,writeback=writeback)
 
 
 def get_shelve_or_dict(filename=None,dictClass=None,**kwargs):
