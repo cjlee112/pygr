@@ -2,7 +2,7 @@
 import pickle
 from StringIO import StringIO
 import shelve
-from mapping import Collection,Mapping
+from mapping import Collection,Mapping,Graph
 
 
 class OneTimeDescriptor(object):
@@ -107,6 +107,7 @@ class PygrPickler(pickle.Pickler):
 
 
 class ResourceDBServer(object):
+    'simple XMLRPC resource database server'
     xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0,
                     'getName':0,'dir':0,'get_version':0}
     _pygr_data_version=(0,1,0)
@@ -164,9 +165,14 @@ class ResourceDBServer(object):
     def get_version(self):
         return self._pygr_data_version
 
-            
+
+def raise_illegal_save(self,*l):
+    raise ValueError('''You cannot save data to a remote XMLRPC server.
+Give a user-editable resource database as the first entry in your PYGRDATAPATH!''')
+
 
 class ResourceDBClient(object):
+    'client interface to remote XMLRPC resource database'
     def __init__(self,url,finder):
         from coordinator import get_connection
         self.server=get_connection(url,'index')
@@ -206,6 +212,12 @@ class ResourceDBClient(object):
     def dir(self,prefix,asDict=False):
         'return list or dict of resources starting with prefix'
         return self.server.dir(prefix,asDict)
+    __setitem__ = raise_illegal_save # RAISE USEFUL EXPLANATORY ERROR MESSAGE
+    __delitem__ = raise_illegal_save
+    setschema = raise_illegal_save
+    delschema = raise_illegal_save
+
+
 
 class ResourceDBMySQL(object):
     '''To create a new resource table, call:
@@ -214,12 +226,13 @@ where DBNAME is the name of your database, TABLENAME is the name of the
 table you want to create, and LAYERNAME is the layer name you want to assign it'''
     _pygr_data_version=(0,1,0)
     def __init__(self,tablename,finder=None,createLayer=None):
-        from sqlgraph import getNameCursor
+        from sqlgraph import getNameCursor,SQLGraph
         self.tablename,self.cursor=getNameCursor(tablename)
         if finder is None: # USE DEFAULT FINDER IF NOT PROVIDED
             finder=getResource
         self.finder=finder
         self.rootNames={}
+        schemaTable = tablename+'_schema' # SEPARATE TABLE FOR SCHEMA GRAPH
         if createLayer is not None: # CREATE DATABASE FROM SCRATCH
             from datetime import datetime
             creation_time = datetime.now()
@@ -235,6 +248,8 @@ table you want to create, and LAYERNAME is the layer name you want to assign it'
                                  None,None,None,None,None,'a')) # SAVE VERSION STAMP
             self.name=createLayer
             finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
+            self.cursor.execute('drop table if exists %s' % schemaTable)
+            self.cursor.execute('create table %s (source_id varchar(255) not null,target_id varchar(255),edge_id varchar(255),unique(source_id,target_id))' % schemaTable)
         else:
             try:
                 n = self.cursor.execute('select location from %s where pygr_id=%%s'
@@ -255,6 +270,10 @@ where <LAYERNAME> is the layer name you want to assign it.
                 for row in self.cursor.fetchall():
                     self.rootNames[row[0]]=None
                 finder.save_root_names(self.rootNames)
+        self.graph = SQLGraph(schemaTable,self.cursor,attrAlias=
+                              dict(source_id='source_id',target_id='target_id',
+                                   edge_id='edge_id'),simpleKeys=True,
+                              unpack_edge=SchemaEdge(self))
     def save_root_name(self,name):
         self.rootNames[name]=None
         self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
@@ -328,8 +347,33 @@ where <LAYERNAME> is the layer name you want to assign it.
         else:
             return [name for name in d]
 
+
+class SchemaEdge(object):
+    'provides unpack_edge method for schema graph storage'
+    def __init__(self,schemaDB):
+        self.schemaDB = schemaDB
+    def __call__(self,edgeID):
+        'get the actual schema object describing this ID'
+        return self.schemaDB.getschema(edgeID)['-schemaEdge']
+
+
+
+class ResourceDBGraphDescr(object):
+    'this property provides graph interface to schema'
+    def __get__(self,obj,objtype):
+        g = Graph(filename=obj.dbpath+'_schema',writeNow=True,
+                  simpleKeys=True,unpack_edge=SchemaEdge(obj))
+        obj.graph = g
+        return g
+
 class ResourceDBShelve(object):
+    '''BerkeleyDB-based storage of pygr.Data resource databases, using the python
+    shelve module.  Users will not need to create instances of this class themselves,
+    as pygr.Data automatically creates one for each appropriate entry in your
+    PYGRDATAPATH; if the corresponding database file does not already exist, 
+    it is automatically created for you.'''
     _pygr_data_version=(0,1,0)
+    graph = ResourceDBGraphDescr() # INTERFACE TO SCHEMA GRAPH
     def __init__(self,dbpath,finder,mode='r'):
         import anydbm,os
         self.dbpath=os.path.join(dbpath,'.pygr_data') # CONSTRUCT FILENAME
@@ -425,7 +469,12 @@ class ResourceDBShelve(object):
         self.reopen('r')  # REOPEN READ-ONLY
 
 
+
 class ResourceFinder(object):
+    '''Primary interface for pygr.Data resource database access.  A single instance
+    of this class is created upon import of the pygr.Data module, accessible as
+    pygr.Data.getResource.  Users normally will have no need to create additional
+    instances of this class themselves.'''
     def __init__(self,separator=',',saveDict=None):
         self.db=None
         self.layer={}
@@ -706,6 +755,12 @@ Continuing with import...'''%dbpath
         'save an attribute binding rule to the schema'
         db=self.getLayer(layer)
         db.setschema(id,attr,args)
+    def saveSchemaEdge(self,schema,layer):
+        'save schema edge to schema graph'
+        self.saveSchema(schema.name,'-schemaEdge',schema,layer)
+        db = self.getLayer(layer)
+        db.graph += schema.sourceDB # ADD NODE TO SCHEMA GRAPH
+        db.graph[schema.sourceDB][schema.targetDB] = schema.name # ADD EDGE TO GRAPH
     def delSchema(self,id,layer=None):
         'delete schema bindings TO and FROM this resource ID'
         db=self.getLayer(layer)
@@ -787,6 +842,8 @@ class SchemaPath(ResourcePath):
         except AttributeError:
             AttributeError('not a valid schema object!')
         m(self,name) # SAVE THIS SCHEMA INFO
+    def __delattr__(self,attr):
+        raise NotImplementedError('schema deletion is not yet implemented.')
 SchemaPath._pathClass=SchemaPath
 
 class ResourceLayer(object):
@@ -817,7 +874,7 @@ class ItemRelation(DirectRelation):
 
 class ManyToManyRelation(object):
     'a general graph mapping from sourceDB -> targetDB with edge info'
-    _relationCode='-many:many'
+    _relationCode='many:many'
     def __init__(self,sourceDB,targetDB,edgeDB=None,bindAttrs=None):
         self.sourceDB=getID(sourceDB) # CONVERT TO STRING RESOURCE ID
         self.targetDB=getID(targetDB)
@@ -829,7 +886,8 @@ class ManyToManyRelation(object):
     def saveSchema(self,source,attr,layer=None):
         'save schema bindings associated with this rule'
         source=source.getPath(attr) # GET STRING ID FOR source
-        getResource.saveSchema(source,self._relationCode,self,layer) #SAVE THIS RULE
+        self.name = source
+        getResource.saveSchemaEdge(self,layer) #SAVE THIS RULE
         b=DirectRelation(self.sourceDB) # SAVE sourceDB BINDING
         b.saveSchema(source,'sourceDB',layer)
         b=DirectRelation(self.targetDB) # SAVE targetDB BINDING
@@ -854,14 +912,16 @@ class ManyToManyRelation(object):
                     resourceDB.delschema(bindObj[i],self.bindAttrs[i])
 
 class OneToManyRelation(ManyToManyRelation):
-    _relationCode='-one:many'
+    _relationCode='one:many'
 
 class InverseRelation(DirectRelation):
     "bind source and target as each other's inverse mappings"
+    _relationCode = 'inverse'
     def saveSchema(self,source,attr,layer=None,**kwargs):
         'save schema bindings associated with this rule'
         source=source.getPath(attr) # GET STRING ID FOR source
-        getResource.saveSchema(source,'-inverse',self,layer) # THIS RULE
+        self.name = source
+        getResource.saveSchemaEdge(self,layer) #SAVE THIS RULE
         DirectRelation.saveSchema(self,source,'inverseDB',
                                   layer,**kwargs) # source -> target
         b=DirectRelation(source) # CREATE REVERSE MAPPING
