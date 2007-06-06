@@ -826,14 +826,14 @@ class AnnotationDB(dict):
             pass
         return self.sliceAnnotation(k,self.sliceDB[k])
     def getSliceAttr(self,sliceInfo,attr):
-        try: # GET ATTRIBUTE AS USUAL
-            return getattr(sliceInfo,attr)
-        except AttributeError:
-            k=self.sliceAttrDict[attr]
-            try: # REMAP TO ANOTHER ATTRIBUTE NAME
-                return getattr(sliceInfo,k)
-            except TypeError: # TREAT AS int INDEX INTO A TUPLE
-                return sliceInfo[k]
+        try:
+            k = self.sliceAttrDict[attr] # USE ALIAS IF PROVIDED
+        except KeyError:
+            return getattr(sliceInfo,attr) # GET ATTRIBUTE AS USUAL
+        try: # REMAP TO ANOTHER ATTRIBUTE NAME
+            return getattr(sliceInfo,k)
+        except TypeError: # TREAT AS int INDEX INTO A TUPLE
+            return sliceInfo[k]
     def sliceAnnotation(self,k,sliceInfo):
         'create annotation and cache it'
         start=int(self.getSliceAttr(sliceInfo,'start'))
