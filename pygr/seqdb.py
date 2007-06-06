@@ -841,7 +841,7 @@ class AnnotationDB(dict):
         try:
             if int(self.getSliceAttr(sliceInfo,'orientation'))<0 and start>=0:
                 start,stop= (-stop,-start) # NEGATIVE ORIENTATION COORDINATES
-        except KeyError:
+        except AttributeError:
             pass
         myslice=absoluteSlice(self.seqDB[self.getSliceAttr(sliceInfo,'id')],start,stop)
         length=len(myslice) # RAISE IndexError IF INTERVAL IS EMPTY!
