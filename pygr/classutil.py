@@ -27,6 +27,10 @@ def standard_getstate(self):
             d['itemSliceClass'] = self.itemSliceClass
     except AttributeError:
         pass
+    try: # SAVE CUSTOM UNPACKING METHOD
+        d['unpack_edge'] = self.__dict__['unpack_edge']
+    except KeyError:
+        pass
     return d
 
 
