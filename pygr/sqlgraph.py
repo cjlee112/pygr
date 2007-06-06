@@ -107,7 +107,6 @@ class SQLTableBase(dict):
             self.data.update(attrAlias)
         if clusterKey is not None:
             self.clusterKey=clusterKey
-        save_graph_db_refs(self,**kwargs)
 
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
@@ -456,6 +455,9 @@ class SQLGraph(SQLTableMultiNoCache):
     _distinct_key='source_id'
     _pickleAttrs = SQLTableMultiNoCache._pickleAttrs.copy()
     _pickleAttrs.update(dict(sourceDB=0,targetDB=0,edgeDB=0))
+    def __init__(self,*l,**kwargs):
+        SQLTableMultiNoCache.__init__(self,*l,**kwargs)
+        save_graph_db_refs(self,**kwargs)
     def __getitem__(self,k):
         return SQLEdgeDict(self.pack_source(k),self)
     def __iadd__(self,k):
