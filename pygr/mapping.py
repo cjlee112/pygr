@@ -611,8 +611,9 @@ class IDGraphEdgeDescriptor(object):
         return IDGraphEdges(obj)
     
 
-def save_graph_db_refs(self,sourceDB=None,targetDB=None,
-                       edgeDB=None,simpleKeys=False,unpack_edge=None,**kwargs):
+def save_graph_db_refs(self,sourceDB=None,targetDB=None,edgeDB=None,
+                       simpleKeys=False,unpack_edge=None,
+                       edgeDictClass=None,graph=None,**kwargs):
     'apply kwargs to reference DB objects for this graph'
     if sourceDB is not None:
         self.sourceDB=sourceDB
@@ -626,6 +627,10 @@ def save_graph_db_refs(self,sourceDB=None,targetDB=None,
         self.__class__ = self._IDGraphClass
     if unpack_edge is not None:
         self.unpack_edge = unpack_edge # UNPACKING METHOD OVERRIDES DEFAULT
+    if graph is not None:
+        self.graph = graph
+    if edgeDictClass is not None:
+        self.edgeDictClass = edgeDictClass
 
 def graph_db_inverse_refs(self,edgeIndex=False):
     'return kwargs for inverse of this graph, or edge index of this graph'
@@ -673,7 +678,8 @@ class Graph(object):
         save_graph_db_refs(self,**kwargs)
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
-    _pickleAttrs = dict(d='proxyDict')
+    _pickleAttrs = dict(d='saveDict',sourceDB=0,targetDB=0,edgeDB=0,
+                        edgeDictClass=0)
     add_standard_packing_methods(locals())  ############ PACK / UNPACK METHODS
     # USE METHOD FROM THE SHELVE...
     classutil.methodFactory(['__contains__'],'lambda self,obj:self.d.%s(obj.id)',
