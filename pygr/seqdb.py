@@ -862,8 +862,8 @@ class AnnotationDB(dict):
     def __iter__(self): return iter(self.sliceDB) ########## ITERATORS
     def keys(self): return self.sliceDB.keys()
     def iteritems(self):
-        for k in self.sliceDB:
-            yield k,self[k]
+        for k,sliceInfo in self.sliceDB.iteritems():
+            yield k,self.sliceAnnotation(k,sliceInfo)
     def itervalues(self):
         for k,v in self.iteritems():
             yield v
