@@ -3,7 +3,7 @@
 from __future__ import generators
 from mapping import *
 import types
-from classutil import ClassicUnpickler,methodFactory
+from classutil import ClassicUnpickler,methodFactory,standard_getstate
     
 
 class TupleO(object):
@@ -74,7 +74,7 @@ def getNameCursor(name,connect=None,configFile=None):
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
-                 clusterKey=None,graph=None,**kwargs):
+                 clusterKey=None,**kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
             name,cursor=getNameCursor(name,**kwargs)
@@ -107,23 +107,16 @@ class SQLTableBase(dict):
             self.data.update(attrAlias)
         if clusterKey is not None:
             self.clusterKey=clusterKey
-        if graph is not None:
-            self.graph = graph
         save_graph_db_refs(self,**kwargs)
 
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
+    _pickleAttrs = dict(name=0)
     def __getstate__(self):
-        d=self.getAttrAlias() # SAVE ATTRIBUTE ALIASES
-        state = dict(name=self.name,attrAlias=d)
-        if self.itemClass.__name__ != 'foo':  # SAVE ITEM CLASS
-            state['itemClass'] = self.itemClass
-        try:
-            state['clusterKey'] = self.clusterKey
-        except AttributeError: pass
-        try:
-            state['graph'] = self.graph
-        except AttributeError: pass
+        state = standard_getstate(self)
+        state['attrAlias'] = self.getAttrAlias() # SAVE ATTRIBUTE ALIASES
+        if self.itemClass.__name__ == 'foo':  # NO NEED TO SAVE ITEM CLASS
+            del state['itemClass']
         return state
     def __setstate__(self,state):
         if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
@@ -278,10 +271,8 @@ class SQLTable(SQLTableBase):
 class SQLTableClustered(SQLTable):
     '''use clusterKey to load a whole cluster of rows at once,
        specifically, all rows that share the same clusterKey value.'''
-    def __getstate__(self): # ALSO NEED TO SAVE clusterKey SETTING
-        state = SQLTableBase.__getstate__(self)
-        state['clusterKey'] = self.clusterKey
-        return state
+    _pickleAttrs = SQLTable._pickleAttrs.copy()
+    _pickleAttrs.update(dict(clusterKey=0))
     def __getitem__(self,k):
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
@@ -364,6 +355,8 @@ class SQLEdges(SQLTableMultiNoCache):
     '''provide iterator over edges as (source,target,edge)
        and getitem[edge] --> [(source,target),...]'''
     _distinct_key='edge_id'
+    _pickleAttrs = SQLTableMultiNoCache._pickleAttrs.copy()
+    _pickleAttrs.update(dict(graph=0))
     def keys(self):
         self.cursor.execute('select %s,%s,%s from %s'
                             %(self._attrSQL('source_id'),
@@ -461,6 +454,8 @@ class SQLGraph(SQLTableMultiNoCache):
               unique(source_id,target_id));
        '''
     _distinct_key='source_id'
+    _pickleAttrs = SQLTableMultiNoCache._pickleAttrs.copy()
+    _pickleAttrs.update(dict(sourceDB=0,targetDB=0,edgeDB=0))
     def __getitem__(self,k):
         return SQLEdgeDict(self.pack_source(k),self)
     def __iadd__(self,k):
@@ -516,7 +511,7 @@ class SQLEdgeDictClustered(dict):
 class SQLEdgesClusteredDescr(object):
     def __get__(self,obj,objtype):
         e=SQLEdgesClustered(obj.table,obj.edge_id,obj.source_id,obj.target_id,
-                            **graph_db_inverse_refs(obj,True))
+                            graph=obj,**graph_db_inverse_refs(obj,True))
         for source_id,d in obj.d.iteritems(): # COPY EDGE CACHE
             e.load([(edge_id,source_id,target_id)
                     for (target_id,edge_id) in d.iteritems()])
@@ -538,9 +533,12 @@ class SQLGraphClustered(object):
         self.edge_id=edge_id
         self.d={}
         save_graph_db_refs(self,**kwargs)
+    _pickleAttrs = dict(table=0,source_id=0,target_id=0,edge_id=0,sourceDB=0,targetDB=0,
+                        edgeDB=0)
     def __getstate__(self):
-        return dict(table=self.table,source_id=self.source_id,
-                    target_id=self.target_id,edge_id=self.edge_id,d={})
+        state = standard_getstate(self)
+        state['d'] = {} # UNPICKLE SHOULD RESTORE GRAPH WITH EMPTY CACHE
+        return state
     def __getitem__(self,k):
         'get edgeDict for source node k, from cache or by loading its cluster'
         try: # GET DIRECTLY FROM CACHE
@@ -623,11 +621,17 @@ SQLGraphClustered._IDGraphClass = SQLIDGraphClustered
 class SQLEdgesClustered(SQLGraphClustered):
     'edges interface for SQLGraphClustered'
     _edgeDictClass = list
-    def __iter__(self):
+    _pickleAttrs = SQLGraphClustered._pickleAttrs.copy()
+    _pickleAttrs.update(dict(graph=0))
+    def keys(self):
         self.load()
+        result = []
         for edge_id,l in self.d.iteritems():
             for source_id,target_id in l:
-                yield source_id,target_id,edge_id
+                result.append((self.graph.unpack_source(source_id),
+                               self.graph.unpack_target(target_id),
+                               self.graph.unpack_edge(edge_id)))
+        return result
 
 
 def describeDBTables(name,cursor,idDict):
