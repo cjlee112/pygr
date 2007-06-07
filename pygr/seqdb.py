@@ -1125,7 +1125,14 @@ Set trypath to give a list of directories to search.'''
 
     def __getitem__(self,k):
         "for ID 'foo.bar', return item 'bar' in dict f associated with prefix 'foo'"
-        (prefix,id) =k.split(self.separator)
+        try:
+            (prefix,id) = k.split(self.separator)
+        except ValueError: # id CONTAINS separator CHARACTER?
+            t = k.split(self.separator)
+            if len(t)<2:
+                raise ValueError('invalid id format; no prefix: '+k)
+            prefix = t[0] # ASSUME PREFIX DOESN'T CONTAIN separator
+            id = k[len(prefix)+1:] # SKIP PAST PREFIX
         d=self.prefixDict[prefix]
         try: # TRY TO USE int KEY FIRST
             return d[int(id)]
