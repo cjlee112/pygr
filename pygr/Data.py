@@ -841,7 +841,7 @@ class SchemaPath(ResourcePath):
             m=schema.saveSchema
         except AttributeError:
             AttributeError('not a valid schema object!')
-        m(self,name) # SAVE THIS SCHEMA INFO
+        m(self,name,layer=self._layer) # SAVE THIS SCHEMA INFO
     def __delattr__(self,attr):
         raise NotImplementedError('schema deletion is not yet implemented.')
 SchemaPath._pathClass=SchemaPath
