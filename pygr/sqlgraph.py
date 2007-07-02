@@ -62,7 +62,7 @@ def getNameCursor(name,connect=None,configFile=None):
     if len(argList)>1:
         name=argList[0] # USE 1ST ARG AS TABLE NAME
         argnames=('host','user','passwd') # READ ARGS IN THIS ORDER
-        cursor=connect(**list_to_dict(argnames,argList[1:]))
+        cursor=connect(**list_to_dict(argnames,argList[1:])).cursor()
     else: # USE .my.cnf TO GET CONNECTION PARAMETERS
         if configFile is None:
             import os
