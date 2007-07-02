@@ -3509,6 +3509,16 @@ for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
   Also delete its associated schema information.
 \end{funcdesc}
 
+\begin{funcdesc}{addSchema}{name,schemaObj,layer=None}
+  Save a schema object for the pygr.Data resource indicated by the
+  string passed as \var{name}, to the specified \var{layer} if provided
+  (or the default resource database otherwise).  For example:
+\begin{verbatim}
+addSchema('Bio.Genomics.ASAP2.hg17.geneExons',
+          pygr.Data.OneToManyRelation(genes,exons,bindAttrs=('exons','gene')))
+\end{verbatim}
+\end{funcdesc}
+
 
 The pygr.Data module also provides a directory function for searching
 for resource names that begin with a given stem, either in all
@@ -3909,6 +3919,10 @@ resources and schema.
 \end{funcdesc}
 
 \begin{funcdesc}{getResource.addResourceDict}{saveDict,layer=None}
+  Same as the top-level module function of the same name.
+\end{funcdesc}
+
+\begin{funcdesc}{getResource.addSchema}{name,schemaObj,layer=None}
   Same as the top-level module function of the same name.
 \end{funcdesc}
 
