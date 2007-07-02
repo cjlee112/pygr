@@ -751,8 +751,13 @@ Continuing with import...'''%dbpath
                 pass
         if attr=='inverseDB': # ADD SHADOW __invert__ TO ACCESS THIS
             addSpecialMethod(obj,'__invert__',getInverseDB)
+    def addSchema(self,name,schemaObj,layer=None):
+        'use this public method to assign a schema relation object to a pygr.Data resource name'
+        l = name.split('.')
+        schemaPath = SchemaPath('.'.join(l[:-1]),layer)
+        setattr(schemaPath,l[-1],schemaObj)
     def saveSchema(self,id,attr,args,layer=None):
-        'save an attribute binding rule to the schema'
+        'save an attribute binding rule to the schema; DO NOT use this internal interface unless you know what you are doing!'
         db=self.getLayer(layer)
         db.setschema(id,attr,args)
     def saveSchemaEdge(self,schema,layer):
@@ -988,6 +993,7 @@ MySQL=ResourceLayer('MySQL')
 getResource=ResourceFinder(saveDict=locals())
 addResourceDict=getResource.addResourceDict
 addResource=getResource.addResource
+addSchema=getResource.addSchema
 deleteResource=getResource.deleteResource
 dir=getResource.dir
 newServer=getResource.newServer
