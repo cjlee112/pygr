@@ -232,12 +232,12 @@ table you want to create, and LAYERNAME is the layer name you want to assign it'
             finder=getResource
         self.finder=finder
         self.rootNames={}
-        schemaTable = tablename+'_schema' # SEPARATE TABLE FOR SCHEMA GRAPH
+        schemaTable = self.tablename+'_schema' # SEPARATE TABLE FOR SCHEMA GRAPH
         if createLayer is not None: # CREATE DATABASE FROM SCRATCH
             from datetime import datetime
             creation_time = datetime.now()
-            self.cursor.execute('drop table if exists %s' % tablename)
-            self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,docstring varchar(255),user varchar(255),creation_time datetime,pickle_size int,info_blob text,objdata text not null,unique(pygr_id,location))'%tablename)
+            self.cursor.execute('drop table if exists %s' % self.tablename)
+            self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,docstring varchar(255),user varchar(255),creation_time datetime,pickle_size int,info_blob text,objdata text not null,unique(pygr_id,location))'%self.tablename)
             self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
                                 %self.tablename,
                                 ('PYGRLAYERNAME',createLayer,None,None,
@@ -260,7 +260,7 @@ table you want to create, and LAYERNAME is the layer name you want to assign it'
 Database table %s appears to be missing or has no layer name!
 To create this table, call pygr.Data.ResourceDBMySQL("%s",createLayer=<LAYERNAME>)
 where <LAYERNAME> is the layer name you want to assign it.
-%s'''  %('!'*40,tablename,tablename,'!'*40)
+%s'''  %('!'*40,self.tablename,self.tablename,'!'*40)
                 raise
             if n>0:
                 self.name=self.cursor.fetchone()[0] # GET LAYERNAME FROM DB
