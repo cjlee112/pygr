@@ -3576,10 +3576,15 @@ databases, or in a specific layer:
 \begin{funcdesc}{ResourceDBMySQL}{tablename,createLayer=LAYERNAME}
   Create a resource database in a MySQL database table.
   \var{tablename} is the table to use in the database, in the format
-  ``\var{DBNAME.TABLENAME}'', where \var{DBNAME} is the name of the
+  ``\var{DBNAME.TABLENAME} \var{dbinfo}'', where \var{DBNAME} is the name of the
   database in the MySQL server, and \var{TABLENAME} is the name of
   the table in that database that you wish to use to store the
-  resource database.  Host, port, user and password info are obtained
+  resource database.  \var{dbinfo} is optional.
+  If provided, it must be a whitespace separated 
+  list of arguments for connecting to the MySQL server, of the form
+  \var{host} \var{user} \var{passwd}.  You can provide one, two
+  or three of these optional arguments.
+  If no \var{dbinfo} is provided, host, port, user and password info are obtained
   from your .my.cnf config file as usual for the mysql client.
 
   \var{createLayer}, must be provided, to create a new table
@@ -4017,10 +4022,15 @@ Implements an interface to storage of a resource database in a MySQL
 database table.
 \begin{funcdesc}{__init__}{tablename,finder=None,createLayer=None}
   \var{tablename} is the table to use in the database, in the format
-  ``\var{DBNAME.TABLENAME}'', where \var{DBNAME} is the name of the
+  ``\var{DBNAME.TABLENAME} \var{dbinfo}'', where \var{DBNAME} is the name of the
   database in the MySQL server, and \var{TABLENAME} is the name of
   the table in that database that you wish to use to store the
-  resource database.  Host, port, user and password info are obtained
+  resource database.  \var{dbinfo} is optional.
+  If provided, it must be a whitespace separated 
+  list of arguments for connecting to the MySQL server, of the form
+  \var{host} \var{user} \var{passwd}.  You can provide one, two
+  or three of these optional arguments.
+  If no \var{dbinfo} is provided, host, port, user and password info are obtained
   from your .my.cnf config file as usual for the mysql client.
 
   \var{finder}, if specified gives the \class{ResourceFinder} instance
@@ -4341,7 +4351,8 @@ can be used.
   from your the \var{name} string (treated as a whitespace separated
   list in the form \var{tablename} \var{host} \var{user} \var{passwd};
   at least \var{tablename} and \var{host} must be present), or from your 
-  .my.cnf configuration file in the usual MySQL way.
+  .my.cnf configuration file in the usual MySQL way (in which case only
+  \var{tablename} needs to be specified).
 
   \var{itemClass} indicates 
   the class that should be used for constructing item objects (representing
