@@ -105,7 +105,7 @@ extern int free_interval_dbfile(IntervalDBFile *db_file);
 extern int save_text_file(char filestem[],char err_msg[],
 			  char basestem[],FILE *ofile);
 extern int text_file_to_binaries(FILE *infile,char err_msg[]);
-
+extern void reorient_intervals(int n,IntervalMap im[],int ori_sign);
 
 #define FIND_FILE_MALLOC_ERR -2
 
@@ -139,8 +139,9 @@ extern int text_file_to_binaries(FILE *infile,char err_msg[]);
 
 #define POP_ITERATOR_STACK(it) (it->up && (it=it->up))
 
-#define MERGE_INTERVAL_ORIENTATIONS 1
+
 #ifdef MERGE_INTERVAL_ORIENTATIONS
+/* MACROS FOR MERGING POSITIVE AND NEGATIVE ORIENTATIONS */
 #define START_POSITIVE(IM) (((IM).start>=0) ? ((IM).start) : -((IM).end))
 #define END_POSITIVE(IM) (((IM).start>=0) ? ((IM).end) : -((IM).start))
 #define SET_INTERVAL_POSITIVE(IM,START,END) if ((IM).start>=0) {\
@@ -154,10 +155,19 @@ extern int text_file_to_binaries(FILE *infile,char err_msg[]);
 #define HAS_OVERLAP_POSITIVE(IM,START,END) (((IM).start>=0) ? \
     ((IM).start<(END) && (START)<(IM).end) \
   : (-((IM).end)<(END) && (START) < -((IM).start)))
+ /* ????? MERGE_INTERVAL_ORIENTATIONS ??????? */
 
-#endif /* ????? MERGE_INTERVAL_ORIENTATIONS ??????? */
+#else
+/* STANDARD MACROS */
+#define START_POSITIVE(IM) ((IM).start)
+#define END_POSITIVE(IM) ((IM).end)
+#define HAS_OVERLAP_POSITIVE(IM,START,END) ((IM).start<(END) && (START)<(IM).end)
 
+#endif
 
+/* STORE ALL INTERVALS IN POSITIVE SOURCE ORIENTATION */
+#define ALL_POSITIVE_ORIENTATION 1
+/* ONLY LOAD SUBLISTS INDIVIDUALLY WHEN NEEDED */
 #define ON_DEMAND_SUBLIST_HEADER 1
 
 
