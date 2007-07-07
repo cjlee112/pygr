@@ -8,15 +8,14 @@ IntervalMap *read_intervals(int n,FILE *ifile)
   int i=0;
   IntervalMap *im=NULL;
   CALLOC(im,n,IntervalMap); /* ALLOCATE THE WHOLE ARRAY */
-  while (fscanf(ifile," %d %d %d %d %d",&im[i].start,&im[i].end,
-		&im[i].target_id,&im[i].target_start,
-		&im[i].target_end)==5) {
+  while (i<n && fscanf(ifile," %d %d %d %d %d",&im[i].start,&im[i].end,
+		       &im[i].target_id,&im[i].target_start,
+		       &im[i].target_end)==5) {
     im[i].sublist= -1; /* DEFAULT: NO SUBLIST */
     i++;
   }
   if (i!=n) {
-    fprintf(stderr,"Error: number of records read %d does not match allocation %d\n",i,n);
-    exit(1);
+    fprintf(stderr,"WARNING: number of records read %d does not match allocation %d\n",i,n);
   }
   return im;
  handle_malloc_failure:
