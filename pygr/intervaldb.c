@@ -28,8 +28,7 @@ IntervalMap *read_intervals(int n,FILE *ifile)
 
 
 
-#ifndef MERGE_INTERVAL_ORIENTATIONS
-int im_qsort_cmp(const void *void_a,const void *void_b)
+int imstart_qsort_cmp(const void *void_a,const void *void_b)
 { /* STRAIGHTFORWARD COMPARISON OF SIGNED start VALUES, LONGER INTERVALS 1ST */
   IntervalMap *a=(IntervalMap *)void_a,*b=(IntervalMap *)void_b;
   if (a->start<b->start)
@@ -46,7 +45,8 @@ int im_qsort_cmp(const void *void_a,const void *void_b)
 
 
 
-#else
+
+#ifdef MERGE_INTERVAL_ORIENTATIONS
 int im_qsort_cmp(const void *void_a,const void *void_b)
 { /* MERGE FORWARD AND REVERSE INTERVALS AS IF THEY WERE ALL IN FORWARD ORI */
   int a_start,a_end,b_start,b_end;
@@ -108,7 +108,11 @@ SublistHeader *build_nested_list_inplace(IntervalMap im[],int n,
 #ifdef ALL_POSITIVE_ORIENTATION
   reorient_intervals(n,im,1); /* FORCE ALL INTERVALS INTO POSITIVE ORI */
 #endif
+#ifdef MERGE_INTERVAL_ORIENTATIONS
   qsort(im,n,sizeof(IntervalMap),im_qsort_cmp); /* SORT BY start, CONTAINMENT */
+#else
+  qsort(im,n,sizeof(IntervalMap),imstart_qsort_cmp); /* SORT BY start, CONTAINMENT */
+#endif
   nlists=1;
   for(i=1;i<n;++i){
     if(!(END_POSITIVE(im[i])>END_POSITIVE(im[i-1]) /* i NOT CONTAINED */
@@ -226,7 +230,11 @@ SublistHeader *build_nested_list(IntervalMap im[],int n,
 #ifdef ALL_POSITIVE_ORIENTATION
   reorient_intervals(n,im,1); /* FORCE ALL INTERVALS INTO POSITIVE ORI */
 #endif
+#ifdef MERGE_INTERVAL_ORIENTATIONS
   qsort(im,n,sizeof(IntervalMap),im_qsort_cmp); /* SORT BY start, CONTAINMENT */
+#else
+  qsort(im,n,sizeof(IntervalMap),imstart_qsort_cmp); /* SORT BY start, CONTAINMENT */
+#endif
   while (i<n) { /* TOP LEVEL LIST SCAN */
     parent=i;
     i=parent+1;
