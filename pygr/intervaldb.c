@@ -28,8 +28,8 @@ IntervalMap *read_intervals(int n,FILE *ifile)
 
 
 
-
-int imstart_qsort_cmp(const void *void_a,const void *void_b)
+#ifndef MERGE_INTERVAL_ORIENTATIONS
+int im_qsort_cmp(const void *void_a,const void *void_b)
 { /* STRAIGHTFORWARD COMPARISON OF SIGNED start VALUES, LONGER INTERVALS 1ST */
   IntervalMap *a=(IntervalMap *)void_a,*b=(IntervalMap *)void_b;
   if (a->start<b->start)
@@ -46,7 +46,7 @@ int imstart_qsort_cmp(const void *void_a,const void *void_b)
 
 
 
-
+#else
 int im_qsort_cmp(const void *void_a,const void *void_b)
 { /* MERGE FORWARD AND REVERSE INTERVALS AS IF THEY WERE ALL IN FORWARD ORI */
   int a_start,a_end,b_start,b_end;
@@ -64,7 +64,7 @@ int im_qsort_cmp(const void *void_a,const void *void_b)
   else
     return 0;
 }
-
+#endif
 
 int sublist_qsort_cmp(const void *void_a,const void *void_b)
 { /* SORT IN SUBLIST ORDER, SECONDARILY BY start */
@@ -73,9 +73,9 @@ int sublist_qsort_cmp(const void *void_a,const void *void_b)
     return -1;
   else if (a->sublist>b->sublist)
     return 1;
-  else if (a->start < b->start)
+  else if (START_POSITIVE(*a) < START_POSITIVE(*b))
     return -1;
-  else if (a->start > b->start)
+  else if (START_POSITIVE(*a) > START_POSITIVE(*b))
     return 1;
   else
     return 0;
@@ -104,7 +104,10 @@ SublistHeader *build_nested_list_inplace(IntervalMap im[],int n,
 {
   int i=0,parent,nlists=1,isublist=0,total=0,temp=0;
   SublistHeader *subheader=NULL;
-  
+
+#ifdef ALL_POSITIVE_ORIENTATION
+  reorient_intervals(n,im,1); /* FORCE ALL INTERVALS INTO POSITIVE ORI */
+#endif
   qsort(im,n,sizeof(IntervalMap),im_qsort_cmp); /* SORT BY start, CONTAINMENT */
   nlists=1;
   for(i=1;i<n;++i){
@@ -220,6 +223,9 @@ SublistHeader *build_nested_list(IntervalMap im[],int n,
   IntervalMap *imsub=NULL;
   SublistHeader *subheader=NULL;
 
+#ifdef ALL_POSITIVE_ORIENTATION
+  reorient_intervals(n,im,1); /* FORCE ALL INTERVALS INTO POSITIVE ORI */
+#endif
   qsort(im,n,sizeof(IntervalMap),im_qsort_cmp); /* SORT BY start, CONTAINMENT */
   while (i<n) { /* TOP LEVEL LIST SCAN */
     parent=i;
@@ -411,7 +417,7 @@ int find_intervals(IntervalIterator *it0,int start,int end,
   else 
     it=it0;
 
-#ifdef MERGE_INTERVAL_ORIENTATIONS
+#if defined(ALL_POSITIVE_ORIENTATION) || defined(MERGE_INTERVAL_ORIENTATIONS)
   if (start<0) { /* NEED TO CONVERT TO POSITIVE ORIENTATION */
     j=start;
     start= -end;
@@ -444,7 +450,7 @@ int find_intervals(IntervalIterator *it0,int start,int end,
   it=NULL;  /* ITERATOR IS EXHAUSTED */
 
  finally_return_result:  
-#ifdef MERGE_INTERVAL_ORIENTATIONS
+#if defined(ALL_POSITIVE_ORIENTATION) || defined(MERGE_INTERVAL_ORIENTATIONS)
   reorient_intervals(ibuf,buf,ori_sign); /* REORIENT INTERVALS TO MATCH QUERY ORI */
 #endif
   *p_nreturn=ibuf; /* #INTERVALS FOUND IN THIS PASS */
@@ -589,7 +595,7 @@ int find_file_intervals(IntervalIterator *it0,int start,int end,
   else 
     it=it0;
 
-#ifdef MERGE_INTERVAL_ORIENTATIONS
+#if defined(ALL_POSITIVE_ORIENTATION) || defined(MERGE_INTERVAL_ORIENTATIONS)
   if (start<0) { /* NEED TO CONVERT TO POSITIVE ORIENTATION */
     k=start;
     start= -end;
@@ -634,7 +640,7 @@ int find_file_intervals(IntervalIterator *it0,int start,int end,
   it=NULL;  /* ITERATOR IS EXHAUSTED */
 
  finally_return_result:  
-#ifdef MERGE_INTERVAL_ORIENTATIONS
+#if defined(ALL_POSITIVE_ORIENTATION) || defined(MERGE_INTERVAL_ORIENTATIONS)
   reorient_intervals(ibuf,buf,ori_sign); /* REORIENT INTERVALS TO MATCH QUERY ORI */
 #endif
   *p_nreturn=ibuf; /* #INTERVALS FOUND IN THIS PASS */
