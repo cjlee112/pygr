@@ -53,7 +53,7 @@ def list_to_dict(names,values):
     return d
 
 
-def getNameCursor(name,connect=None,configFile=None):
+def getNameCursor(name,connect=None,configFile=None,**kwargs):
     'get table name and cursor by parsing name or using configFile'
     if connect is None:
         import MySQLdb
@@ -74,10 +74,12 @@ def getNameCursor(name,connect=None,configFile=None):
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
-                 clusterKey=None,**kwargs):
+                 clusterKey=None,createTable=None,**kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
             name,cursor=getNameCursor(name,**kwargs)
+        if createTable is not None: # RUN COMMAND TO CREATE THIS TABLE
+            cursor.execute(createTable)
         cursor.execute('describe %s' % name)
         columns=cursor.fetchall()
         self.cursor=cursor
@@ -443,6 +445,34 @@ class SQLGraphEdgeDescriptor(object):
         return SQLEdges(obj.name,obj.cursor,attrAlias=obj.getAttrAlias(),
                         graph=obj)
 
+def getColumnTypes(createTable,attrAlias={},defaultColumnType='int',
+                  columnAttrs=('source','target','edge'),**kwargs):
+    'return list of [(colname,coltype),...] for source,target,edge'
+    l = []
+    for attr in columnAttrs:
+        try:
+            attrName = attrAlias[attr+'_id']
+        except KeyError:
+            attrName = attr+'_id'
+        try:
+            db = kwargs[attr+'DB']
+        except KeyError:
+            try: # SEE IF USER SPECIFIED A DESIRED TYPE
+                l.append((attrName,createTable[attr+'_id']))
+            except (KeyError,TypeError): # OTHERWISE USE THE DEFAULT
+                l.append((attrName,defaultColumnType))
+        else: # INFER THE COLUMN TYPE FROM THE ASSOCIATED DATABASE KEYS...
+            it = iter(db)
+            k = it.next()
+            if isinstance(k,int):
+                l.append((attrName,'int'))
+            elif isinstance(k,str):
+                l.append((attrName,'varchar(32)'))
+            else:
+                raise ValueError('SQLGraph node / edge must be int or str!')
+    return l
+
+
 class SQLGraph(SQLTableMultiNoCache):
     '''provide a graph interface via a SQL table.  Key capabilities are:
        - setitem with an empty dictionary: a dummy operation
@@ -455,8 +485,13 @@ class SQLGraph(SQLTableMultiNoCache):
     _distinct_key='source_id'
     _pickleAttrs = SQLTableMultiNoCache._pickleAttrs.copy()
     _pickleAttrs.update(dict(sourceDB=0,targetDB=0,edgeDB=0))
-    def __init__(self,*l,**kwargs):
-        SQLTableMultiNoCache.__init__(self,*l,**kwargs)
+    def __init__(self,name,*l,**kwargs):
+        if 'createTable' in kwargs: # CREATE A SCHEMA FOR THIS TABLE
+            c = getColumnTypes(**kwargs)
+            kwargs['createTable'] = \
+              'create table %s (%s %s not null,%s %s,%s %s,unique(%s,%s))' \
+              % (name,c[0][0],c[0][1],c[1][0],c[1][1],c[2][0],c[2][1],c[0][0],c[1][0])
+        SQLTableMultiNoCache.__init__(self,name,*l,**kwargs)
         save_graph_db_refs(self,**kwargs)
     def __getitem__(self,k):
         return SQLEdgeDict(self.pack_source(k),self)
