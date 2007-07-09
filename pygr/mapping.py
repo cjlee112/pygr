@@ -4,6 +4,16 @@ from __future__ import generators
 from schema import *
 import classutil
 
+
+def update_graph(self,graph):
+    'save nodes and edges of graph to self'
+    for node,d in graph.iteritems():
+        self += node
+        saveDict = self[node]
+        for target,edge in d.iteritems():
+            saveDict[target] = edge
+        
+
 class PathList(list):
     """Internal representation for storing both nodes and edges as list
     So filter functions can see both nodes and edges"""
@@ -118,7 +128,7 @@ class dictEdge(dict):
             if isinstance(edgeInfo,Edge):
                 yield edgeInfo
             else:
-                yield Edge(self.graph,(self.fromNode,target),edgeInfo)
+                yield Edge(self.graph,(self.fromNode,target,edgeInfo),edgeInfo)
 
                 
 
@@ -174,6 +184,7 @@ class dictGraph(dict):
         for edgedict in self.values():
             for edge in edgedict.edges():
                 yield edge
+    update = update_graph
 
 
 
@@ -508,6 +519,24 @@ class Mapping(object):
             return self._inverse
 
 
+def graph_cmp(self,other):
+    'compare two graph dictionaries'
+    import sys
+    diff = cmp(len(self),len(other))
+    if diff!=0:
+        print >>sys.stderr,'len diff:',len(self),len(other)
+        return diff
+    for node,d in self.iteritems():
+        try:
+            d2 = other[node]
+        except KeyError:
+            print >>sys.stderr,'other missing key'
+            return 1
+        diff = cmp(d,d2)
+        if diff!=0:
+            print >>sys.stderr,'value diff',d,d2
+            return diff
+    return 0
 
 
 
@@ -552,6 +581,8 @@ class IDNodeDict(object):
             yield (self.graph.unpack_source(self.fromNode),
                    self.graph.unpack_target(target),
                    self.graph.unpack_edge(edgeInfo))
+    def __len__(self):
+        return len(self.graph.d[self.fromNode])
     def keys(self): return [k[1] for k in self.edges()] ##### ITERATORS
     def values(self): return [k[2] for k in self.edges()]
     def items(self): return [k[1:3] for k in self.edges()]
@@ -564,6 +595,7 @@ class IDNodeDict(object):
     def iteritems(self):
         for source,target,edgeInfo in self.edges():
             yield target,edgeInfo
+    __cmp__ = graph_cmp
 
 
 class IDNodeDictWriteback(IDNodeDict):
@@ -594,16 +626,17 @@ class IDGraphEdges(object):
        and getitem[edge] --> [(source,target),...]'''
     def __init__(self,g):
         self.g=g
-        self.d=g.d.edges # GET EDGES INTERFACE IN ID-SPACE
     def __iter__(self):
-        for sourceID,targetID,edgeID in self.d:
-            yield (self.g.sourceDB[sourceID],self.g.targetDB[targetID],
-                   self.g.edgeDB[edgeID])
+        for d in self.g.itervalues():
+            for edge in d.edges():
+                yield edge
     def __getitem__(self,edge):
         l=[]
         for sourceID,targetID in self.d[edge.id]:
             l.append((self.g.sourceDB[sourceID],self.g.targetDB[targetID]))
         return l
+    def __call__(self):
+        return self
 
 class IDGraphEdgeDescriptor(object):
     'provides interface to edges on demand'
@@ -654,6 +687,17 @@ def graph_db_inverse_refs(self,edgeIndex=False):
     return d
 
 
+def graph_setitem(self,node,target):
+    "This method exists only to support g[n]+=o.  Do not use as g[n]=foo."
+    node=self.pack_source(node)
+    try:
+        if node==target.fromNode:
+            return
+    except AttributeError:
+        pass
+    raise ValueError('Incorrect usage.  Add edges using g[n]+=o or g[n][o]=edge.')
+
+
 class Graph(object):
     """Top layer graph interface implemenation using proxy dict.
        Works with dict, shelve, any mapping interface."""
@@ -684,6 +728,8 @@ class Graph(object):
     # USE METHOD FROM THE SHELVE...
     classutil.methodFactory(['__contains__'],'lambda self,obj:self.d.%s(obj.id)',
                             locals())
+    def __len__(self):
+        return len(self.d)
     def __iter__(self):
         for node in self.d:
             yield self.unpack_source(node)
@@ -711,16 +757,7 @@ class Graph(object):
         if node in self:
             return self.edgeDictClass(self,self.pack_source(node))
         raise KeyError('node not in graph')
-    def __setitem__(self,node,target):
-        "This method exists only to support g[n]+=o.  Do not use as g[n]=foo."
-        node=self.pack_source(node)
-        try:
-            if node==target.fromNode:
-                return
-        except AttributeError:
-            pass
-        raise ValueError('Incorrect usage.  Add edges using g[n]+=o or g[n][o]=edge.')
-
+    __setitem__ = graph_setitem
     def __delitem__(self,node):
         "Delete node from graph."
         node=self.pack_source(node)
@@ -734,6 +771,8 @@ class Graph(object):
         "Delete node from graph"
         self.__delitem__(node)
         return self # THIS IS REQUIRED FROM isub()!!
+    update = update_graph
+    __cmp__ = graph_cmp
 
 # NEED TO PROVIDE A REAL INVERT METHOD!!
 ##     def __invert__(self):
