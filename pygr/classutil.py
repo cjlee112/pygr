@@ -117,3 +117,13 @@ class PathSaver(object):
         trypath = os.path.join(self.origDir,self.origPath)
         if os.access(trypath,os.R_OK):
             return trypath
+
+def override_rich_cmp(localDict):
+    'create rich comparison methods that just use __cmp__'
+    mycmp = localDict['__cmp__']
+    localDict['__lt__'] = lambda self,other: mycmp(self,other)<0
+    localDict['__le__'] = lambda self,other: mycmp(self,other)<=0
+    localDict['__eq__'] = lambda self,other: mycmp(self,other)==0
+    localDict['__ne__'] = lambda self,other: mycmp(self,other)!=0
+    localDict['__gt__'] = lambda self,other: mycmp(self,other)>0
+    localDict['__ge__'] = lambda self,other: mycmp(self,other)>=0
