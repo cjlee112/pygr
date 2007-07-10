@@ -23,6 +23,9 @@ class Seq_Test(object):
         correct = pygrData.Bio.Seq.sp()['HBB1_TORMA'][10:35]
         assert frag == correct, 'seq ival should match'
         assert frag.__doc__ == 'fragment', 'docstring should match'
+        store = PygrDataTextFile('results/seqdb1.pickle')
+        saved = store['hbb1 fragment']
+        assert frag == saved, 'seq ival should matched stored result'
     def dir_test(self):
         pygrData = self.tempdir.force_reload()
         l = pygrData.dir('Bio')
