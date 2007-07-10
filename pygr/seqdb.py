@@ -388,6 +388,8 @@ def read_interval_alignment(ofile,srcSet,destSet,al=None):
     p=BlastHitParser()
     for t in p.parse_file(ofile):
         save_interval_alignment(al,BlastIval(t),srcSet,destSet,edgeClass)
+    if p.nline==0: # NO BLAST OUTPUT??
+        raise IOError('no BLAST output.  Check that blastall is in your PATH')
     if needToBuild:
         al.build()
     return al
@@ -402,7 +404,6 @@ def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     id=write_fasta(ifile,seqString)
     ifile.close()
     al=read_interval_alignment(ofile,{id:seq},seqDB,al)
-    print ofile.readline()
     if ofile.close() is not None:
         raise OSError('command %s failed' % cmd)
     return al
@@ -558,7 +559,8 @@ class BlastDBbase(SeqDBbase):
         cmd='formatdb -i %s -o T' % self.filepath
         if self._seqtype!=PROTEIN_SEQTYPE:
             cmd += ' -p F' # SPECIAL FLAG REQUIRED FOR NUCLEOTIDE SEQS
-        print 'Building index:',cmd
+        import sys
+        print >>sys.stderr,'Building index:',cmd
         if os.system(cmd)!=0: # BAD EXIT CODE, SO COMMAND FAILED
             raise OSError('command %s failed' % cmd)
         self.blastReady=True
