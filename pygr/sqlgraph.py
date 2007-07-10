@@ -3,7 +3,7 @@
 from __future__ import generators
 from mapping import *
 import types
-from classutil import ClassicUnpickler,methodFactory,standard_getstate
+from classutil import ClassicUnpickler,methodFactory,standard_getstate,override_rich_cmp
     
 
 class TupleO(object):
@@ -74,7 +74,7 @@ def getNameCursor(name,connect=None,configFile=None,**kwargs):
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
-                 clusterKey=None,createTable=None,**kwargs):
+                 clusterKey=None,createTable=None,graph=None,**kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
             name,cursor=getNameCursor(name,**kwargs)
@@ -88,6 +88,8 @@ class SQLTableBase(dict):
         self.indexed={}
         self.data={}
         self.description={}
+        if graph is not None:
+            self.graph = graph
         icol=0
         cursor.execute('select * from %s limit 1' % name)
         for c in columns:
@@ -359,10 +361,11 @@ class SQLEdges(SQLTableMultiNoCache):
     _pickleAttrs = SQLTableMultiNoCache._pickleAttrs.copy()
     _pickleAttrs.update(dict(graph=0))
     def keys(self):
-        self.cursor.execute('select %s,%s,%s from %s'
-                            %(self._attrSQL('source_id'),
-                              self._attrSQL('target_id'),
-                              self._attrSQL('edge_id'),self.name))
+        self.cursor.execute('select %s,%s,%s from %s where %s is not null order by %s,%s'
+                            %(self._attrSQL('source_id'),self._attrSQL('target_id'),
+                              self._attrSQL('edge_id'),self.name,
+                              self._attrSQL('target_id'),self._attrSQL('source_id'),
+                              self._attrSQL('target_id')))
         l = [] # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
         for source_id,target_id,edge_id in self.cursor.fetchall():
             l.append((self.graph.unpack_source(source_id),
@@ -413,6 +416,10 @@ class SQLEdgeDict(object):
                                   %self.table.name,
                                   (self.fromNode,self.table.pack_target(target),
                                    self.table.pack_edge(edge)))
+    def __iadd__(self,target):
+        self[target] = None
+        self.table += target # ADD AS NODE TO GRAPH
+        return self # iadd MUST RETURN self!
     def __delitem__(self,target):
         if self.table.cursor.execute('delete from %s where %s=%%s and %s=%%s'
                                      %(self.table.name,self.table._attrSQL('source_id'),
@@ -438,6 +445,9 @@ class SQLEdgeDict(object):
             row = (self.table.unpack_target(target_id),
                    self.table.unpack_edge(edge_id))
             yield row[k]
+    def __len__(self):
+        return len(self.keys())
+    __cmp__ = graph_cmp
 
 class SQLGraphEdgeDescriptor(object):
     'provide an SQLEdges interface on demand'
@@ -496,11 +506,20 @@ class SQLGraph(SQLTableMultiNoCache):
     def __getitem__(self,k):
         return SQLEdgeDict(self.pack_source(k),self)
     def __iadd__(self,k):
+        self.cursor.execute('delete from %s where %s=%%s and %s is null'
+                            % (self.name,self._attrSQL('source_id'),
+                               self._attrSQL('target_id')),
+                            (self.pack_source(k),))
         self.cursor.execute('insert ignore into %s values (%%s,NULL,NULL)'
                             % self.name,(self.pack_source(k),))
         return self # iadd MUST RETURN SELF!
-    def __setitem__(self,k,v):
-        pass
+    def __isub__(self,k):
+        if self.cursor.execute('delete from %s where %s=%%s'
+                               % (self.name,self._attrSQL('source_id')),
+                               (self.pack_source(k),))==0:
+            raise KeyError('node not found in graph')
+        return self # iadd MUST RETURN SELF!
+    __setitem__ = graph_setitem
     def __contains__(self,k):
         return self.cursor.execute('select * from %s where %s=%%s'
                                    %(self.name,self._attrSQL('source_id')),
@@ -526,6 +545,46 @@ class SQLGraph(SQLTableMultiNoCache):
     def values(self): return [k for k in self.iteritems(1)]
     def items(self): return [k for k in self.iteritems()]
     edges=SQLGraphEdgeDescriptor()
+    update = update_graph
+    def __len__(self):
+        'get number of nodes in graph'
+        return self.cursor.execute('select distinct(%s) from %s'
+                                   %(self._attrSQL('source_id'),self.name))
+    __cmp__ = graph_cmp
+    override_rich_cmp(locals()) # MUST OVERRIDE __eq__ ETC. TO USE OUR __cmp__!
+##     def __cmp__(self,other):
+##         node = ()
+##         n = 0
+##         d = None
+##         it = iter(self.edges)
+##         while True:
+##             try:
+##                 source,target,edge = it.next()
+##             except StopIteration:
+##                 source = None
+##             if source!=node:
+##                 if d is not None:
+##                     diff = cmp(n_target,len(d))
+##                     if diff!=0:
+##                         return diff
+##                 if source is None:
+##                     break
+##                 node = source
+##                 n += 1 # COUNT SOURCE NODES
+##                 n_target = 0
+##                 try:
+##                     d = other[node]
+##                 except KeyError:
+##                     return 1
+##             try:
+##                 diff = cmp(edge,d[target])
+##             except KeyError:
+##                 return 1
+##             if diff!=0:
+##                 return diff
+##             n_target += 1 # COUNT TARGET NODES FOR THIS SOURCE
+##         return cmp(n,len(other))
+            
     add_standard_packing_methods(locals())  ############ PACK / UNPACK METHODS
 
 class SQLIDGraph(SQLGraph):
@@ -563,7 +622,14 @@ class SQLGraphClustered(object):
         if isinstance(table,types.StringType): # CREATE THE TABLE INTERFACE
             if clusterKey is None:
                 raise ValueError('you must provide a clusterKey argument!')
-            table=SQLTableClustered(table,clusterKey=clusterKey)
+            if 'createTable' in kwargs: # CREATE A SCHEMA FOR THIS TABLE
+                c = getColumnTypes(attrAlias=dict(source_id=source_id,target_id=target_id,
+                                                  edge_id=edge_id),**kwargs)
+                kwargs['createTable'] = \
+                  'create table %s (%s %s not null,%s %s,%s %s,unique(%s,%s))' \
+                  % (table,c[0][0],c[0][1],c[1][0],c[1][1],
+                     c[2][0],c[2][1],c[0][0],c[1][0])
+            table = SQLTableClustered(table,clusterKey=clusterKey,**kwargs)
         self.table=table
         self.source_id=source_id
         self.target_id=target_id
@@ -632,6 +698,7 @@ class SQLGraphClustered(object):
                                 for (target,edge) in d.iteritems()],unpack=False)
         return self._inverse
     edges=SQLEdgesClusteredDescr() # CONSTRUCT EDGE INTERFACE ON DEMAND
+    update = update_graph
     add_standard_packing_methods(locals())  ############ PACK / UNPACK METHODS
     def __iter__(self): ################# ITERATORS
         'uses db select; does not force load'
