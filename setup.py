@@ -182,9 +182,6 @@ def add_extensions():
 
 
 if __name__=='__main__':
-   if runTests(): # DID EVERYTHING TEST OK?
-      add_extensions() # DO THE INSTALL
-      setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
-   else: # EXIT WITH ERROR CODE
-      sys.exit(1)
+   add_extensions() # DO THE INSTALL
+   setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
       
