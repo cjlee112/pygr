@@ -86,6 +86,52 @@ def skip_errors(*skipErrors):
     return decorate
     
 
+class PygrDataTextFile(object):
+    '''dict interface to a text file storage that is pygr.Data-smart,
+    i.e. it uses pygr.Data.getResource.loads(), so data will be saved
+    and loaded in terms of pygr.Data resource IDs, which will be loaded
+    from pygr.Data in the usual way.  Intended for storing test results
+    in a platform-independent text format.'''
+    def __init__(self,path,mode='r'):
+        'open in mode r, a or w'
+        self.path = path
+        self.mode = mode
+        if mode=='r' or mode=='a':
+            ifile = file(path)
+            import pickle
+            self.d = pickle.load(ifile)
+            ifile.close()
+        elif mode=='w':
+            self.d = {}
+        else:
+            raise ValueError('unknown file mode %s.  Use r, w, or a.' % mode)
+    def __getitem__(self,k):
+        s = self.d[k]
+        import pygr.Data
+        return pygr.Data.getResource.loads(s)
+    def __setitem__(self,k,obj):
+        if self.mode=='r':
+            raise ValueError('this PygrDataTextFile was opened read-only! Use append mode')
+        import pygr.Data
+        s = pygr.Data.getResource.dumps(obj)
+        self.d[k] = s
+        self.save()
+    def __delitem__(self,k):
+        if self.mode=='r':
+            raise ValueError('this PygrDataTextFile was opened read-only! Use append mode')
+        del self.d[k]
+        self.save()
+    def __iter__(self): return iter(self.d)
+    def save(self):
+        'save our dictionary to text file by pickling'
+        if self.mode=='r':
+            raise ValueError('this PygrDataTextFile was opened read-only! Use append mode')
+        ifile = file(self.path,'w')
+        import pickle
+        pickle.dump(self.d,ifile)
+        ifile.close()
+
+
 class TestBase(object):
     '''base class for tests that can skip on setup errors.
        You can subclass the following attributes:
