@@ -52,6 +52,18 @@ def skiptest():
     import nose
     raise nose.SkipTest
 
+def skip_errors(*skipErrors):
+    'decorator will force skipping of tests on specified error types'
+    def decorate(f):
+        def new_f(*args,**kwargs):
+            try:
+                return f(*args,**kwargs)
+            except skipErrors:
+                skiptest()
+        return new_f
+    return decorate
+    
+
 class TestBase(object):
     '''base class for tests that can skip on setup errors.
        You can subclass the following attributes:
