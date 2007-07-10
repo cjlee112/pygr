@@ -33,6 +33,7 @@ class BlastHitParser(object):
     gapchar='-'
     def __init__(self):
         self.hit_id=0
+        self.nline = 0
         self.reset()
     def reset(self):
         "flush any alignment info, so we can start reading new alignment"
@@ -143,6 +144,7 @@ class BlastHitParser(object):
     def parse_file(self,myfile):
         "generate interval tuples by parsing BLAST output from myfile"
         for line in myfile:
+            self.nline += 1
             if self.is_valid_hit() and \
                (is_line_start('>',line) or is_line_start(' Score =',line) \
                 or is_line_start('  Database:',line)):
