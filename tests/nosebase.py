@@ -16,35 +16,57 @@ class TempDir(object):
                 os.remove(os.path.join(dirpath,name))
             os.rmdir(dirpath) # FINALLY DELETE dirpath DIRECTORY
     def subfile(self,name):
+        'return full path by appending name to temp dir path'
         return os.path.join(self.path,name)
+    def copyFile(self,path):
+        'copy file into the temp dir and return its new path'
+        infile = file(path)
+        filename = self.subfile(os.path.basename(path))
+        outfile = file(filename,'w')
+        outfile.write(infile.read())
+        infile.close()
+        outfile.close()
+        return filename
 
 class TempPygrData(TempDir):
     'restrict pygr.Data to an initially empty temp directory'
     def __init__(self):
-        TempDir.__init__()
+        TempDir.__init__(self)
         os.environ['PYGRDATAPATH'] = str(self)
         self.force_reload()
     def force_reload(self):
         import pygr.Data
         reload(pygr.Data) # IN CASE IT WAS PREVIOUSLY IMPORTED
+        return pygr.Data # HAND BACK THE CURRENT VERSION
 
 class TempPygrDataMySQL(TempPygrData):
     'restrict pygr.Data to an initially empty MySQL resource database'
-    def __init__(self,dbname,args=''):
+    def __init__(self,dbname='test',args=''):
         TempDir.__init__(self) # GENERATE A TEMPORARY TABLENAME
-        self.tablename =  dbname+'.'+os.path.basename(str(self))
+        import random
+        l = [c for c in 'TeMpBiGdAcDy']
+        random.shuffle(l)
+        tablename = dbname+'.'+''.join(l)
         import pygr.Data
-        pygr.Data.ResourceDBMySQL(self.tablename,createLayer='temp') # CREATE TABLE
-        os.environ['PYGRDATAPATH'] = 'mysql:'+self.tablename+args
+        pygr.Data.ResourceDBMySQL(tablename+args,createLayer='temp') # CREATE TABLE
+        self.tablename = tablename
+        os.environ['PYGRDATAPATH'] = 'mysql:'+tablename+args
         self.force_reload() # RELOAD PYGR.DATA USING NEW TABLE
     def __del__(self):
         'drop the temporary resource database table'
         TempDir.__del__(self)
+        try:
+            t = self.tablename
+        except AttributeError: # APPARENTLY NO TABLE CREATED, SO NOTHING TO DO.
+            return
         import pygr.Data
         cursor = pygr.Data.getResource.db[0].cursor
         cursor.execute('drop table if exists %s' % self.tablename)
         cursor.execute('drop table if exists %s_schema' % self.tablename)
-        del pygr.Data.getResource.layer['temp'] # REMOVE FROM LAYER INDEX
+        try:
+            del pygr.Data.getResource.layer['temp'] # REMOVE FROM LAYER INDEX
+        except KeyError:
+            pass
 
 
 def skiptest():
