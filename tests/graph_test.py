@@ -1,4 +1,5 @@
 import unittest
+from nosebase import skip_errors
 from pygr import mapping,graphquery
 
 
@@ -127,12 +128,17 @@ class GraphShelveSuite(MappingSuite):
 
 class SQLGraphSuite(MappingSuite):
     'run same tests on mapping.SQLGraph class'
+    @skip_errors(ImportError)
     def setUp(self):
         from pygr import sqlgraph
-        self.datagraph = sqlgraph.SQLGraph('test.dumbo_foo_test',
-                                           createTable=dict(source_id='int',
-                                                            target_id='int',
-                                                            edge_id='int'))
+        import MySQLdb # TEST WILL BE SKIPPED IF UNAVAILABLE
+        try:
+            self.datagraph = sqlgraph.SQLGraph('test.dumbo_foo_test',
+                                               createTable=dict(source_id='int',
+                                                                target_id='int',
+                                                                edge_id='int'))
+        except MySQLdb.MySQLError:
+            raise ImportError # NO SERVER, DATABASE OR PRIVILEGES? SKIP TESTS.
     def tearDown(self):
         self.datagraph.cursor.execute('drop table test.dumbo_foo_test')
 
