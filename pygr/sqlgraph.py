@@ -82,7 +82,7 @@ def getNameCursor(name,connect=None,configFile=None,**kwargs):
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
-                 clusterKey=None,createTable=None,graph=None,**kwargs):
+                 clusterKey=None,createTable=None,graph=None,maxCache=None,**kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
             name,cursor=getNameCursor(name,**kwargs)
@@ -98,6 +98,8 @@ class SQLTableBase(dict):
         self.description={}
         if graph is not None:
             self.graph = graph
+        if maxCache is not None:
+            self.maxCache = maxCache
         icol=0
         cursor.execute('select * from %s limit 1' % name)
         for c in columns:
@@ -227,9 +229,10 @@ class SQLTableBase(dict):
         return self.select('where %s=%%s'%attr,(k,))
 
 
-def getKeys(self):
+def getKeys(self,queryOption=''):
     'uses db select; does not force load'
-    self.cursor.execute('select %s from %s' %(self.primary_key,self.name))
+    self.cursor.execute('select %s from %s %s' 
+                        %(self.primary_key,self.name,queryOption))
     return [t[0] for t in self.cursor.fetchall()] # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
 
 
@@ -284,10 +287,17 @@ class SQLTableClustered(SQLTable):
        specifically, all rows that share the same clusterKey value.'''
     _pickleAttrs = SQLTable._pickleAttrs.copy()
     _pickleAttrs.update(dict(clusterKey=0))
+    def keys(self):
+        return getKeys(self,'order by %s' %self.clusterKey)
     def __getitem__(self,k):
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
+            try:
+                if self.maxCache<dict.__len__(self):
+                    self.clear() # CACHE IS TOO BIG, SO CLEAR IT.
+            except AttributeError:
+                pass
             self.cursor.execute('select t2.* from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s'
                                 % (self.name,self.name,self.primary_key,
                                    self.clusterKey,self.clusterKey),(k,))
