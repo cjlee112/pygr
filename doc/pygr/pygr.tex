@@ -5182,4 +5182,112 @@ Internal communication between Processors, Coordinators and ResourceController i
 
 In the same spirit, the current implementation does not seek to block users from issuing commands that could let them "hog" resources, for the simple reason that in an SSH-enabled environment, they would be able to do so regardless of this module's policy.  I.e. the user can simply not use this module, and spawn lots of processes directly using SSH.  In the current implementation, every user can send directives to the ResourceController that affect resource allocation to other users' jobs.  This means everybody has to "play nice", only giving their Coordinator(s) higher priority if it is really appropriate and agreed by other users.  Unless a different process invocation mechanism (other than SSH by each user) were adopted, it doesn't really make sense to me to try to enforce a policy that is stricter than the policy of the underlying process invocation mechanism (i.e. SSH).  Since every user can use SSH to spawn as many jobs as they want, without regard for sharing with others, making this module's policy "strict" doesn't really secure anything.
 
+
+\section{Testing}
+\label{testing-doc}
+
+The following subsections provide details about how the testing of different
+modules of Pygr functionality. 
+
+\subsection{Testing Approach and Utilities}
+\label{test-utils}
+Based on advice from Titus Brown, we've adopted \code{nose} as the testing
+framework for testing Pygr.  Tests are included with the source code package
+in \code{pygr/tests} in files with names like ``foo_test.py''.
+
+\subsubsection{nosebase Module}
+This module is included in the pygr/tests directory and provides the following
+convenience classes and functions:
+\begin{funcdesc}{TempDir}{}
+  Creates a temporary directory, which will be automatically deleted
+  when the \class{TempDir} instance is released.  You can use it as follows:
+\begin{verbatim}
+tmp = TempDir()
+path = str(tmp) # GET THE PATH TO THIS TEMPORARY DIRECTORY
+targetPath = tmp.subfile('foo.test') # APPEND foo.test TO THE DIRECTORY PATH
+newPath = tmp.copyFile('/some/path/to/some/file') # COPY TO TMP DIR AND RETURN ITS PATH
+\end{verbatim}
+\end{funcdesc}
+
+\begin{funcdesc}{TempPygrData}{}
+  Creates a temporary directory, and forces pygr.Data to use it as an (initially
+  empty) resource database.  Useful for testing pygr.Data functionality.  
+\end{funcdesc}
+
+\begin{funcdesc}{TempPygrDataMySQL}{dbname='test',args=''}
+  Creates a temporary table in MySQL, and forces pygr.Data to use it as an (initially
+  empty) resource database.  Useful for testing pygr.Data functionality. 
+
+  \var{dbname} should be the name of the MySQL database in which the temp
+  table should be created.  \var{args}, if provided, should be a whitespace
+  separated list of one or more of {\em host, user, password}.  NOTE: \var{args}
+  MUST begin with a space, because it is simply appended to the tablename for
+  calling the standard pygr.Data creation mechanism.
+\end{funcdesc}
+
+\begin{funcdesc}{skip_errors}{errors...}
+  Decorator for making a setup function skip a specified list of errors
+  (i.e. if one of those errors occurs, cause the associated test(s) to be skipped).
+  For example, to protect against the user either lacking the necessary 
+  database module, or access to a database server that can run the test:
+\begin{verbatim}
+    @skip_errors(ImportError)
+    def setup(self):
+        import MySQLdb
+        try:
+            Seq_Test.setup(self,**self.mysqlArgs)
+        except MySQLdb.MySQLError:
+            raise ImportError
+\end{verbatim}
+\end{funcdesc}
+
+\begin{funcdesc}{PygrDataTextFile}{path,mode='r'}
+  dict-like interface to a text file storage that is pygr.Data-smart,
+  i.e. it uses pygr.Data.getResource.loads(), so data will be saved
+  and loaded in terms of pygr.Data resource IDs, which will be loaded
+  from pygr.Data in the usual way.  Intended for storing test results
+  in a platform-independent text format.  \var{mode} can be ``r'' (read),
+  ``w'' (write) or ``a'' (append).
+  
+  For example, to save a correct test result, just give it a unique
+  name:
+\begin{verbatim}
+store = nosebase.PygrDataTextFile('tryme.pickle','w')
+store['hbb1 fragment'] = ival # SAVE AS PICKLE IN TEXT FILE
+\end{verbatim}
+  The data is saved to the disk file immediately, each time you
+  execute such a ``key assignment'' statement.
+  You can now write a testcase that runs the appropriate steps to 
+  construct \var{ival}, and check whether your test result matches the correct 
+  answer you previously stored:
+\begin{verbatim}
+store = nosebase.PygrDataTextFile('tryme.pickle')
+saved = store['hbb1 fragment']
+assert ival == saved, 'seq ival should match stored result'
+\end{verbatim}
+  By convention, our correct test results are stored in \code{pygr/tests/results}.
+  So a convenient way to save a new test result (which you have verified is
+  correct, and now wish to store), is to append it to an existing 
+  \class{PygrDataTextFile}:
+\begin{verbatim}
+store = nosebase.PygrDataTextFile('results/seqdb1.pickle','a')
+store['hbb1 fragment'] = ival # SAVE AS PICKLE IN TEXT FILE
+\end{verbatim}
+\end{funcdesc}
+
+\subsection{Running Tests}
+First, you must have \code{nose} installed.  Then simply go to 
+the testing directory and run the tests:
+\begin{verbatim}
+cd pygr/tests
+nosetests
+\end{verbatim}
+To run ALL tests, including very time-consuming and resource-intensive
+NLMSA build tests, tell it to include our ``megatests'':
+\begin{verbatim}
+nosetests -i megatest
+\end{verbatim}
+Note: depending on what modules you have installed, and what data resources
+you have available locally, some tests may be skipped; nose will indicate
+which tests were skipped.
 \end{document}
