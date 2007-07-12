@@ -286,7 +286,7 @@ class SQLTableClustered(SQLTable):
     '''use clusterKey to load a whole cluster of rows at once,
        specifically, all rows that share the same clusterKey value.'''
     _pickleAttrs = SQLTable._pickleAttrs.copy()
-    _pickleAttrs.update(dict(clusterKey=0))
+    _pickleAttrs.update(dict(clusterKey=0,maxCache=0))
     def keys(self):
         return getKeys(self,'order by %s' %self.clusterKey)
     def __getitem__(self,k):
