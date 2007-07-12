@@ -28,16 +28,25 @@ class TempDir(object):
         outfile.close()
         return filename
 
+def get_pygr_data_path(newpath=''):
+    'force pygr.Data to use newpath, without side-effects on environment'
+    import pygr.Data
+    pygr.Data.pygrDataPath = newpath
+    reload(pygr.Data)
+    del pygr.Data.pygrDataPath
+    return pygr.Data
+
 class TempPygrData(TempDir):
     'restrict pygr.Data to an initially empty temp directory'
     def __init__(self):
         TempDir.__init__(self)
-        os.environ['PYGRDATAPATH'] = str(self)
-        self.force_reload()
-    def force_reload(self):
-        import pygr.Data
-        reload(pygr.Data) # IN CASE IT WAS PREVIOUSLY IMPORTED
-        return pygr.Data # HAND BACK THE CURRENT VERSION
+        self.force_reload(str(self))
+    def force_reload(self,newpath=None):
+        if newpath is None:
+            newpath = self.pygrdatapath
+        else:
+            self.pygrdatapath = newpath
+        return get_pygr_data_path(newpath)
 
 class TempPygrDataMySQL(TempPygrData):
     'restrict pygr.Data to an initially empty MySQL resource database'
@@ -50,23 +59,23 @@ class TempPygrDataMySQL(TempPygrData):
         import pygr.Data
         pygr.Data.ResourceDBMySQL(tablename+args,createLayer='temp') # CREATE TABLE
         self.tablename = tablename
-        os.environ['PYGRDATAPATH'] = 'mysql:'+tablename+args
-        self.force_reload() # RELOAD PYGR.DATA USING NEW TABLE
+        self.force_reload('mysql:'+tablename+args) # RELOAD PYGR.DATA USING NEW TABLE
     def __del__(self):
         'drop the temporary resource database table'
         TempDir.__del__(self)
         try:
             t = self.tablename
         except AttributeError: # APPARENTLY NO TABLE CREATED, SO NOTHING TO DO.
-            return
-        import pygr.Data
-        cursor = pygr.Data.getResource.db[0].cursor
-        cursor.execute('drop table if exists %s' % self.tablename)
-        cursor.execute('drop table if exists %s_schema' % self.tablename)
-        try:
-            del pygr.Data.getResource.layer['temp'] # REMOVE FROM LAYER INDEX
-        except KeyError:
             pass
+        else:
+            import pygr.Data
+            cursor = pygr.Data.getResource.db[0].cursor
+            cursor.execute('drop table if exists %s' % self.tablename)
+            cursor.execute('drop table if exists %s_schema' % self.tablename)
+            try:
+                del pygr.Data.getResource.layer['temp'] # REMOVE FROM LAYER INDEX
+            except KeyError:
+                pass
 
 
 def skiptest():
@@ -131,6 +140,48 @@ class PygrDataTextFile(object):
         pickle.dump(self.d,ifile)
         ifile.close()
 
+
+def find_unused_port(port=5123):
+    'look for an unused port begining at the specified port number.'
+    import xmlrpclib,socket
+    while port<9999:
+        s = xmlrpclib.ServerProxy('http://localhost:%d' %port)
+        try:
+            s.listMethods()
+            port += 1
+        except socket.error:
+            return port
+    raise OSError('unable to find any open port')
+
+class TestXMLRPCServer(object):
+    """runs XMLRPC server in the background with a list of pygr.Data resources
+    Makes server exit when this object is released.
+    Because we want this to work even on Windows (gag! choke!),
+    we can't use fork, backgrounding or any other quasi-sensible method for
+    running the server process in the background.  So we just use a separate
+    thread to keep our caller from blocking..."""
+    def __init__(self,*pygrDataNames):
+        'starts server, returns without blocking'
+        self.port = find_unused_port()
+        self.pygrDataNames = pygrDataNames
+        from threading import Thread
+        t = Thread(target=self.run_server)
+        t.start()
+        import time
+        time.sleep(1) # WAIT TO MAKE SURE THE CHILD IS STARTED
+    def run_server(self):
+        'this method blocks, so run it in a separate thread'
+        print 'starting server on port',self.port
+        os.system('python pygrdata_server.py %d %s'
+                  %(self.port,' '.join(self.pygrDataNames)))
+        print 'server exited.'
+    def access_server(self):
+        'force pygr.Data to only use the XMLRPC server'
+        return get_pygr_data_path('http://localhost:%d' % self.port)
+    def close(self):
+        import xmlrpclib
+        s = xmlrpclib.ServerProxy('http://localhost:%d' % self.port)
+        s.exit_now() # TELL THE SERVER TO EXIT
 
 class TestBase(object):
     '''base class for tests that can skip on setup errors.
