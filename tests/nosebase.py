@@ -47,6 +47,8 @@ class TempPygrData(TempDir):
         else:
             self.pygrdatapath = newpath
         return get_pygr_data_path(newpath)
+    def __del__(self):
+        get_pygr_data_path(None)
 
 class TempPygrDataMySQL(TempPygrData):
     'restrict pygr.Data to an initially empty MySQL resource database'
@@ -76,6 +78,7 @@ class TempPygrDataMySQL(TempPygrData):
                 del pygr.Data.getResource.layer['temp'] # REMOVE FROM LAYER INDEX
             except KeyError:
                 pass
+        get_pygr_data_path(None)
 
 
 def skiptest():
@@ -163,6 +166,9 @@ class TestXMLRPCServer(object):
     def __init__(self,*pygrDataNames):
         'starts server, returns without blocking'
         self.port = find_unused_port()
+        import pygr.Data
+        for name in pygrDataNames: # ENSURE ALL RES FOR THE TEST ARE AVAILABLE
+            obj = pygr.Data.getResource(name)
         self.pygrDataNames = pygrDataNames
         from threading import Thread
         t = Thread(target=self.run_server)
