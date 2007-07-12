@@ -475,7 +475,7 @@ class ResourceFinder(object):
     of this class is created upon import of the pygr.Data module, accessible as
     pygr.Data.getResource.  Users normally will have no need to create additional
     instances of this class themselves.'''
-    def __init__(self,separator=',',saveDict=None):
+    def __init__(self,separator=',',saveDict=None,PYGRDATAPATH=None):
         self.db=None
         self.layer={}
         self.dbstr=''
@@ -485,15 +485,28 @@ class ResourceFinder(object):
         self.cursors=[]
         if saveDict is not None:
             self.saveDict=saveDict # SAVE NEW LAYER NAMES HERE...
-            self.update() # FORCE LOADING OF RESOURCE DBs FROM PYGRDATAPATH
+            self.update(PYGRDATAPATH) # LOAD RESOURCE DBs FROM PYGRDATAPATH
             del self.saveDict
-    def update(self):
-        'get the latest list of resource databases'
+    def get_pygr_data_path(self):
+        'use internal attribute, environment var, or default in that order'
+        try:
+            return self.PYGRDATAPATH
+        except AttributeError:
+            pass
         import os
         try:
-            PYGRDATAPATH=os.environ['PYGRDATAPATH']
+            return os.environ['PYGRDATAPATH']
         except KeyError: # DEFAULT: HOME, CURRENT DIR, IN THAT ORDER
-            PYGRDATAPATH=self.separator.join(['~','.'])
+            return self.separator.join(['~','.'])
+    def update(self,PYGRDATAPATH=None):
+        'get the latest list of resource databases'
+        import os
+        if PYGRDATAPATH is not None: # USE MANUALLY SUPPLIED SETTING
+            self.PYGRDATAPATH  = PYGRDATAPATH
+            self.d.clear() # DUMP LOADED RESOURCE CACHE
+            self.dbstr = None # FORCE RELOAD
+        else: # OBTAIN BEST SETTING
+            PYGRDATAPATH = self.get_pygr_data_path()
         if self.dbstr!=PYGRDATAPATH: # LOAD NEW RESOURCE PYGRDATAPATH
             self.dbstr=PYGRDATAPATH
             self.db=[]
@@ -787,7 +800,7 @@ Continuing with import...'''%dbpath
                 return iter([(x,None) for x in s])
         for db in self.resourceDBiter():
             for k,v in iteritems(db.dir(prefix,asDict=asDict)):
-                if k not in d: # ALLOW EARLIER DB TO TAKE PRECEDENCE
+                if k[0].isalpha() and k not in d: # ALLOW EARLIER DB TO TAKE PRECEDENCE
                     d[k]=v
         if asDict:
             return d
@@ -990,10 +1003,22 @@ remote=ResourceLayer('remote')
 MySQL=ResourceLayer('MySQL')
 
 ################# CREATE AN INTERFACE TO THE RESOURCE DATABASE
-getResource=ResourceFinder(saveDict=locals())
+def check_test_env():
+    try:
+        return pygrDataPath
+    except NameError:
+        return None
+getResource=ResourceFinder(saveDict=locals(),PYGRDATAPATH=check_test_env())
 addResourceDict=getResource.addResourceDict
 addResource=getResource.addResource
 addSchema=getResource.addSchema
 deleteResource=getResource.deleteResource
 dir=getResource.dir
 newServer=getResource.newServer
+
+try:
+    firstLoad
+except NameError:
+    firstLoad = True
+else:
+    firstLoad = False
