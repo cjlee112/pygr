@@ -556,7 +556,9 @@ class IDNodeDict(object):
         "Add edge from fromNode to target with edgeInfo"
         self.graph.d[self.fromNode][self.graph.pack_target(target)] \
              = self.graph.pack_edge(edgeInfo)
-        self.graph+=target # ADD NEW NODE TO THE NODE DICT
+        if not hasattr(self.graph,'sourceDB') or \
+           (hasattr(self.graph,'targetDB') and self.graph.sourceDB==self.graph.targetDB):
+            self.graph+=target # ADD NEW NODE TO THE NODE DICT
 
     def __delitem__(self,target):
         "Delete edge from fromNode to target"

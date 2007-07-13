@@ -434,9 +434,11 @@ class SQLEdgeDict(object):
                                   %self.table.name,
                                   (self.fromNode,self.table.pack_target(target),
                                    self.table.pack_edge(edge)))
+        if not hasattr(self.table,'sourceDB') or \
+           (hasattr(self.table,'targetDB') and self.table.sourceDB==self.table.targetDB):
+            self.table += target # ADD AS NODE TO GRAPH
     def __iadd__(self,target):
         self[target] = None
-        self.table += target # ADD AS NODE TO GRAPH
         return self # iadd MUST RETURN self!
     def __delitem__(self,target):
         if self.table.cursor.execute('delete from %s where %s=%%s and %s=%%s'
