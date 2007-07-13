@@ -359,21 +359,23 @@ namespace for data.  A given resource is given a unique name that then becomes
 its universal handle for accessing it, no matter where you are (just as Python's
 \code{import} command provides a consistent name for accessing a given code
 resource, regardless of where you are).  For example, say we want to add the
-hg17 (release 17 of the human genome sequence) as ``Bio.Seq.Genome.hg17''
+hg17 (release 17 of the human genome sequence) as ``Bio.Seq.Genome.Hs.hg17''
 (the choice of name is arbitrary, but it's best to choose a good convention and follow
 it consistently):
 
 \begin{verbatim}
 from pygr import seqdb
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-pygr.Data.Bio.Seq.Genome.hg17=seqdb.BlastDB('hg17') # SAVE AS THIS NAME
+hg17 = seqdb.BlastDB('hg17')
+hg17.__doc__ = 'human genome sequence draft 17' # REQUIRED!
+pygr.Data.Bio.Seq.Genome.Hs.hg17 = hg17 # SAVE AS THIS NAME
 \end{verbatim}
 
 In any subsequent Python session, we can now access it directly by its
 pygr.Data name:
 \begin{verbatim}
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-hg17=pygr.Data.Bio.Seq.Genome.hg17() # FIND THE RESOURCE
+hg17=pygr.Data.Bio.Seq.Genome.Hs.hg17() # FIND THE RESOURCE
 \end{verbatim}
 The call syntax (\code{hg17()}) emphasizes that this acts like a Python
 constructor: it constructs a Python object for us (in this case, the
@@ -401,7 +403,9 @@ as follows:
 \begin{verbatim}
 from pygr import cnestedlist
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-pygr.Data.Bio.Seq.MSA.ucsc17=cnestedlist.NLMSA('/loaner/ucsc17')
+nlmsa = cnestedlist.NLMSA('/loaner/ucsc17')
+nlmsa.__doc__ = 'UCSC 17way multiz alignment, rooted on hg17'
+pygr.Data.Bio.Seq.MSA.ucsc17 = nlmsa
 \end{verbatim}
 This works, even though using this 17-genome alignment (behind the
 scenes) involves accessing 17 BlastDB sequence databases (one for each
@@ -416,7 +420,9 @@ from pygr import cnestedlist
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
 nlmsa=cnestedlist.NLMSA('/loaner/ucsc17')
 for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
+    genome.__doc__ = 'genome sequence '+id
     pygr.Data.getResource.addResource('Bio.Seq.Genome.'+id,genome)
+nlmsa.__doc__ = 'UCSC 17way multiz alignment, rooted on hg17'
 pygr.Data.Bio.Seq.MSA.ucsc17=nlmsa # NOW SAVE THE ALIGNMENT
 \end{verbatim}
 
@@ -432,6 +438,12 @@ as on our original machine, the first method above would fail, whereas in
 the second approach pygr.Data now will automatically scan all its resource databases to
 figure out how to load each of the genomes on that machine.
 
+NOTE: Python pickling is not secure.  In particular, you should not unpickle
+data provided by someone else unless you trust the data not to contain 
+attempted security exploits.  Because Python unpickling has access to \code{import},
+it has the potential to access system calls and execute malicious code on your
+computer.
+
 \subsubsection{pygr.Data.schema: a Simple Framework For Managing Database Schemas}
 {\em Schema} refers to any relationship between two or more collections of
 data.  It captures the structure of relationships that define these particular
@@ -439,6 +451,7 @@ kinds of data.  For example ``a genome has genes, and genes have exons'', or
 ``an exon is connected to another exon by a splice''.  In pygr.Data we can
 store such schema information as easily as:
 \begin{verbatim}
+splicegraph.__doc__ = 'graph of exon:splice:exon relations in human genes'
 pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph=splicegraph # ADD A NEW RESOURCE
 pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
   pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
@@ -502,7 +515,7 @@ if the user tries to actually use the \code{next} attribute.
 
 \subsubsection{pygr.Data Sharing Over a Network via XMLRPC}
 Sometimes individual compute nodes may not have sufficient disk space to
-store all the data resources (for example, just the single the ucsc17 17-genome alignment and 
+store all the data resources (for example, just the single ucsc17 17-genome alignment and 
 associated genome databases takes about 200 GB).  Yet it would be useful
 to run compute-intensive analyses on those machines accessing such data.
 pygr.Data makes that easy.  We first create an XMLRPC server on a machine that
@@ -592,14 +605,14 @@ it stores only identifiers, the \class{Mapping} class can be stored
 persistently, for example to a disk database.  
 
 \item Indeed, you can make both of
-these classes be stored as database on disk, simply by passing a \var{filename}
+these classes be stored as a database on disk, simply by passing a \var{filename}
 argument that specifies the file in which the database should be stored.
 If you do not provide a \var{filename}, a normal (in-memory) Python dictionary
 is used.  
 
 \item Alternatively you can use the \class{SQLTable} classes that
-provide an analogous interface to data from an SQL database server
-such as MySQL.
+provide a dict-like interface to data from an SQL database server
+such as MySQL, that is analogous to the \class{Collection} class.
 
 \item The \class{Graph} class provides a general extension of the
 mapping concept to represent a {\em graph of nodes connected by edges}.
@@ -611,12 +624,20 @@ section 1.5 below.  Like \class{Mapping}, \class{Graph} can store its graph data
 in memory in a Python dict, or on disk using a BerkeleyDB file.
 
 \item Alternatively you can use the \class{SQLGraph} classes that
-provide an analogous interface to store graph data in an SQL database server
-such as MySQL.
+provide an interface to store graph data in an SQL database server
+such as MySQL, that provides an SQL database version of the functionality
+provided by the \class{Graph} or \class{Mapping} classes.
 
 \item All of these classes can be saved as resources in pygr.Data, making
 it very easy for you to capture entire datasets of complex bioinformatics
 data in pygr.Data.
+
+\item It's important to distinguish that these classes divide into
+{\em primary data} (e.g. \class{Collection}, \class{SQLTable}), versus
+{\em relations} between data (e.g. \class{Mapping}, \class{Graph},
+\class{SQLGraph}).  The latter should be given pygr.Data.schema information,
+so that pygr.Data can automatically construct the appropriate data inter-relations
+for any user of these data.
 
 \end{itemize}
 Here's a simple example of using a pygr \class{Collection}:
@@ -850,7 +871,7 @@ def map_clusters(server,dbname='HUMAN_SPLICE_03',
                  rmOpts='',**kwargs):
     "CLIENT FUNCTION: map clusters one by one"
     # CONSTRUCT RESOURCE FOR US IF NEEDED
-    genome=pygr.Data.Bio.Seq.Genome.hg17()
+    genome=pygr.Data.Bio.Seq.Genome.Hs.hg17()
     # LOAD DB SCHEMA
     (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna, 
     protein, clusterExons,clusterSplices)=getSpliceGraphFromDB(spliceCalcs[dbname])
@@ -966,9 +987,11 @@ nlmsa=cnestedlist.NLMSA('exonAnnot','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNM
 for a in annoDB.itervalues(): # SAVE ALL ANNOTATION INTERVALS
   nlmsa.addAnnotation(a) # ADD ALIGNMENT BETWEEN ival AND ann INTERVALS
 nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
+annoDB.__doc__ = 'exon annotation on the human genome'
 pygr.Data.Bio.Genomics.ASAP2.exons=annoDB # ADD AS A PYGR.DATA RESOURCE
+nlmsa.__doc__ = 'map human genome regions to contained exons'
 pygr.Data.Bio.Genomics.ASAP2.exonmap=nlmsa # NOW SAVE MAPPING AND SCHEMA
-pygr.schema.Data.Bio.Genomics.ASAP2.exonmap= \
+pygr.Data.schema.Bio.Genomics.ASAP2.exonmap= \
       pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons'))
 \end{verbatim}
 \begin{itemize}
@@ -1027,9 +1050,11 @@ for id,s in exonSeqs.items(): # SAVE ALL ANNOTATION INTERVALS
   ann.db=annoDB # FORCE IT TO BE PART OF THE ANNOTATION DB
   genome.megablast(ann,nlmsa,maxseq=1,minIdentity=98) # SAVE ITS BEST HIT IN nlmsa
 nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
+annoDB.__doc__ = 'exon annotation on the human genome'
 pygr.Data.Bio.Genomics.ASAP2.exons=annoDB # ADD AS A PYGR.DATA RESOURCE
+nlmsa.__doc__ = 'map human genome regions to contained exons'
 pygr.Data.Bio.Genomics.ASAP2.exonmap=nlmsa # NOW SAVE MAPPING AND SCHEMA
-pygr.schema.Data.Bio.Genomics.ASAP2.exonmap= \
+pygr.Data.schema.Bio.Genomics.ASAP2.exonmap= \
       pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons',))
 \end{verbatim}
 
@@ -3405,6 +3430,55 @@ module.
 
 \end{itemize}
 
+\subsubsection{pygr.Data Namespace Conventions}
+At this point, we're still just making this up as we go along.
+However, it is clearly advantageous to adopt some simple conventions
+that make it easy for people to use the same name for a given data resource,
+and to find what they're looking for.  We are adopting the following conventions:
+\begin{itemize}
+\item The general pattern is \var{Area.Category.Database.release}.  For example,
+Swissprot release 42 is ``Bio.Seq.Swissprot.sp42''.  This is a very straightforward
+pattern to follow for well-known databases.
+\item In other cases, the dataset is not strictly speaking a well-known database,
+but is instead an ``instance of a larger class of data''.  For example, genome
+sequences.  In this case we follow the general pattern 
+\var{Area.Category.Class.Instance.release}.  For example, the human genome draft
+17 is ``Bio.Seq.Genome.Hs.hg17''.  
+\item To identify specific genomes, we use the Unigene names (which are in turn
+based on the binomial species name, e.g. ``Hs'' for human (Homo sapiens).  For more
+information, see the NCBI website.
+\item  Often a database may itself contain many different resources.  These
+individual resource names are simply appended to the pygr.Data name, for example,
+the ASAP database contains a resource called \code{exons}.  This would be 
+accessed as ``Bio.Genomics.ASAP.asap2.exons''.  This pattern can be extended,
+for as many layers are required to specify a unique resource in the database.
+\item In cases where the original data provider does not assign a release name, 
+we use the approximate release date as the release name (chosen appropriately
+for the release frequency of the database).  e.g. ``jan06''.
+\item Capitalization: we capitalize Area, Category, Database, Class and Instance
+names.  Release names are chosen to match the name used by the original data 
+provider, which are usually not capitalized.
+\end{itemize}
+Existing Area categories:
+\begin{itemize}
+\item Bio.Seq: currently, the main category in pygr.Data is sequence databases.
+\item Bio.MSA: Another major category is multiple sequence alignments (e.g. genome alignments).
+For example: ``Bio.MSA.UCSC.hg18_multiz28way''.
+\item Bio.Genomics: category representing genomics datasets.
+\end{itemize}
+You may obtain a directory of available resources available using
+the \code{pygr.Data.dir}() function:
+\begin{verbatim}
+>>> pygr.Data.dir('Bio.Seq.Swiss')
+['Bio.Seq.Swissprot.sp42']
+\end{verbatim}
+This returns the list of items beginning with the string
+you provided.  Use its \code{asDict=True} argument to make it return a dictionary
+of matches with detailed information such as their docstring descriptions.
+
+We suggest that you follow these conventions and extend them as needed.
+Please report new category names to us so we can add them to the list.
+
 \subsubsection{How does pygr.Data access resource databases?}
 The list of resource databases is read from the environment variable
 PYGRDATAPATH.  If this variable is empty or missing, the default path
@@ -3430,7 +3504,8 @@ and \var{TABLENAME} is the name of the table which contains this index.
 \var{dbinfo} is optional.  If provided, it must be a whitespace separated 
 list of arguments for connecting to the MySQL server, of the form
 \var{host} \var{user} \var{passwd}.  You can provide one, two
-or three of these optional arguments.  If no \var{dbinfo} is provided,
+or three of these optional arguments, always beginning with \var{host}.  
+If no \var{dbinfo} is provided,
 pygr.Data will get the host, user, and password information for connecting 
 to the MySQL server as usual from your
 .my.cnf configuration file in your home directory.
@@ -3587,9 +3662,17 @@ databases, or in a specific layer:
   If no \var{dbinfo} is provided, host, port, user and password info are obtained
   from your .my.cnf config file as usual for the mysql client.
 
-  \var{createLayer}, must be provided, to create a new table
-  in the MySQL database (instead of assuming that it already exists),
-  and saves \var{createLayer} as the layer name of this resource database.
+  To create a new table in the MySQL database (automatically initializing its schema),
+  instead of assuming that it already exists, you must provide
+  the \var{createLayer} argument, which is saved as the layer name
+  of the new resource database.  If pygr.Data finds that it is unable
+  to connect to a MySQL database table specified in your PYGRDATAPATH
+  it will print a warning message, and ignore the offending database table.
+  It will NOT silently create a database table for you in this case.
+  The rationale is that whereas a misspelled directory name will result in
+  an IOError (thus allowing pygr.Data to detect a bad directory name in PYGRDATAPATH),
+  there would be no easy way for pygr.Data to tell whether you simply mistyped the name
+  of an existing MySQL table, or whether you actually wanted to create a new MySQL table.
 
   Example: create a new resource database, give it the layer name ``leelab'',
   and register it in our list of resource databases.
@@ -4441,9 +4524,9 @@ this defaults to ``id''.
 Provides a graph interface to data stored in a table
 in a relational database.  It follows the standard pygr 
 graph interface, i.e. it behaves like a dictionary whose
-keys are IDs of {\em source nodes}, and whose associated
-values are dictionaries whose keys are IDs of {\em target nodes},
-and whose associated values are IDs for each {\em edge} between
+keys are {\em source nodes}, and whose associated
+values are dictionaries whose keys are {\em target nodes},
+and whose associated values are {\em edges} between
 a pair of nodes.  This class is a subclass of 
 \class{SQLTableMultiNoCache}.  By default, it assumes that
 the column names for source, target and edge IDs are simply
@@ -4478,7 +4561,7 @@ and edge_id should each be indexed.
 
   \var{sourceDB}, if provided, must be a database container (dictionary interface) whose
   keys are source node IDs, and whose values are the associated node objects.
-  If no \var{sourceDB} is provided, that implies \var{simpleKey}=True.
+  If no \var{sourceDB} is provided, that implies \var{simpleKeys}=True.
 
   \var{targetDB}, if provided, must be a database container (dictionary interface) whose
   keys are target node IDs, and whose values are the associated node objects.
@@ -5189,18 +5272,50 @@ In the same spirit, the current implementation does not seek to block users from
 The following subsections provide details about how the testing of different
 modules of Pygr functionality. 
 
-\subsection{Testing Approach and Utilities}
-\label{test-utils}
-Based on advice from Titus Brown, we've adopted \code{nose} as the testing
-framework for testing Pygr.  Tests are included with the source code package
-in \code{pygr/tests} in files with names like ``foo_test.py''.
+\subsection{Running Tests}
+First, you must have \code{nose} installed.  Then simply go to 
+the testing directory and run the tests:
+\begin{verbatim}
+cd pygr/tests
+nosetests
+\end{verbatim}
+To run ALL tests, including very time-consuming and resource-intensive
+NLMSA build tests, tell it to include our ``megatests'':
+\begin{verbatim}
+nosetests -i megatest
+\end{verbatim}
+Note: depending on what modules you have installed, and what data resources
+you have available locally, some tests may be skipped; nose will indicate
+which tests were skipped.
 
+\subsection{Testing Approach}
+\label{test-utils}
+Given Pygr's focus on working with large datasets, testing has been a bit of a puzzle.  
+We have always included an automated test suite with the source code package.  
+However, we obviously can't include big datasets in the package, so how can 
+we code our tests so that they will automatically run only those tests that 
+are possible in the user's local environment and resources?  
+
+Here's a summary of the testing approach we've developed to solve these challenges:
+\begin{itemize}
+\item Based on advice from Titus Brown, we've adopted \code{nose} as the testing
+framework for testing Pygr.
+\item Tests are included with the source code package
+in \code{pygr/tests} in files with names like ``foo_test.py''.
+\item We moved our existing unit tests to be run by nose.
+\item We are adding our extensive tutorial examples as a wide-ranging set of functional tests.  The main goal is for the complete set of tests to be sensitive to failures in just about any area of pygr functionality.  So, for example, checking that the calculated percent identity for each result in a multigenome alignment query matches the stored correct result is very sensitive to many functions working right (correct construction of the alignment; correct query results; correct sequence interval retrieval; etc.)
+\item Major data dependencies for individual tests will be managed with pygr.Data.  That is, each test setup() will simply try to obtain the data it needs by requesting named pygr.Data resources.  If required data are missing, the test will be skipped.  In my lab, we will keep a nightly test platform where ALL tests must pass (no skipping!).
+\item Tests that take a long time or a lot of resources (e.g. 28 vertebrate genome alignment NLMSA build) will have the suffix "_megatest" (instead of the default suffix "_test"), and thus will be omitted by a normal nosetests run.  We will include all megatests on our nightly test platform.  
+\end{itemize}
+
+\subsection{Testing Utilities}
 \subsubsection{nosebase Module}
 This module is included in the pygr/tests directory and provides the following
 convenience classes and functions:
 \begin{funcdesc}{TempDir}{}
   Creates a temporary directory, which will be automatically deleted
-  when the \class{TempDir} instance is released.  You can use it as follows:
+  when the \class{TempDir} instance is released.  Provides convenience methods
+  \method{subfile}() and \method{copyFile}() used as follows:
 \begin{verbatim}
 tmp = TempDir()
 path = str(tmp) # GET THE PATH TO THIS TEMPORARY DIRECTORY
@@ -5210,12 +5325,14 @@ newPath = tmp.copyFile('/some/path/to/some/file') # COPY TO TMP DIR AND RETURN I
 \end{funcdesc}
 
 \begin{funcdesc}{TempPygrData}{}
-  Creates a temporary directory, and forces pygr.Data to use it as an (initially
+  Subclass of \class{TempDir}; creates a temporary directory,
+  and forces pygr.Data to use it as an (initially
   empty) resource database.  Useful for testing pygr.Data functionality.  
 \end{funcdesc}
 
 \begin{funcdesc}{TempPygrDataMySQL}{dbname='test',args=''}
-  Creates a temporary table in MySQL, and forces pygr.Data to use it as an (initially
+  Subclass of \class{TempPygrData}; creates a temporary table in MySQL,
+  and forces pygr.Data to use it as an (initially
   empty) resource database.  Useful for testing pygr.Data functionality. 
 
   \var{dbname} should be the name of the MySQL database in which the temp
@@ -5265,6 +5382,10 @@ store = nosebase.PygrDataTextFile('tryme.pickle')
 saved = store['hbb1 fragment']
 assert ival == saved, 'seq ival should match stored result'
 \end{verbatim}
+  Note: when you open a \class{PygrDataTextFile} in read or append mode, the
+  file is read into memory as text.  Only when you request a specific key name
+  will it attempt to obtain the pygr.Data resource associated with that key name.
+
   By convention, our correct test results are stored in \code{pygr/tests/results}.
   So a convenient way to save a new test result (which you have verified is
   correct, and now wish to store), is to append it to an existing 
@@ -5275,19 +5396,27 @@ store['hbb1 fragment'] = ival # SAVE AS PICKLE IN TEXT FILE
 \end{verbatim}
 \end{funcdesc}
 
-\subsection{Running Tests}
-First, you must have \code{nose} installed.  Then simply go to 
-the testing directory and run the tests:
+\begin{funcdesc}{TestXMLRPCServer}{*pygrDataNames}
+  create an XMLRPC server loaded with the pygr.Data resources specified
+  by the arguments provided as \var{pygrDataNames}.  Note: the XMLRPC server
+  runs in a separate process (see the script \code{pygrdata_server.py})
+  launched using \method{os.system}, to simulate
+  real client-server usage patterns.  Note: this class will first attempt to
+  load the specified pygr.Data resources (using your PYGRDATAPATH as usual)
+  to ensure that they exist, before launching the XMLRPC server.  If a pygr.Data
+  resource cannot be found, \class{KeyError} will be raised.
+
+  To access the XMLRPC server
+  using pygr.Data, call the object's \method{access_server} method to receive a reference
+  to pygr.Data that will load data only from the XMLRPC server.  To shut down the
+  XMLRPC server, call the object's \method{close} method.
 \begin{verbatim}
-cd pygr/tests
-nosetests
+self.server = nosebase.TestXMLRPCServer('Bio.Seq.Swissprot.sp42')
+pygrData = self.server.access_server()
+sp = pygrData.Bio.Seq.Swissprot.sp42() # TRY TO ACCESS FROM XMLRPC SERVER
+self.server.close() # SHUT DOWN THE XMLRPC SERVER
 \end{verbatim}
-To run ALL tests, including very time-consuming and resource-intensive
-NLMSA build tests, tell it to include our ``megatests'':
-\begin{verbatim}
-nosetests -i megatest
-\end{verbatim}
-Note: depending on what modules you have installed, and what data resources
-you have available locally, some tests may be skipped; nose will indicate
-which tests were skipped.
+\end{funcdesc}
+
+
 \end{document}
