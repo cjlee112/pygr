@@ -188,6 +188,7 @@ class TestXMLRPCServer(object):
         import xmlrpclib
         s = xmlrpclib.ServerProxy('http://localhost:%d' % self.port)
         s.exit_now() # TELL THE SERVER TO EXIT
+        get_pygr_data_path(None) # FORCE IT TO RESTORE STANDARD PYGRDATAPATH
 
 
 
