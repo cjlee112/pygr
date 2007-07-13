@@ -59,7 +59,8 @@ class TempPygrDataMySQL(TempPygrData):
         random.shuffle(l)
         tablename = dbname+'.'+''.join(l)
         import pygr.Data
-        pygr.Data.ResourceDBMySQL(tablename+args,createLayer='temp') # CREATE TABLE
+        db = pygr.Data.ResourceDBMySQL(tablename+args,createLayer='temp') # CREATE TABLE
+        self.cursor = db.cursor
         self.tablename = tablename
         self.force_reload('mysql:'+tablename+args) # RELOAD PYGR.DATA USING NEW TABLE
     def __del__(self):
@@ -71,9 +72,8 @@ class TempPygrDataMySQL(TempPygrData):
             pass
         else:
             import pygr.Data
-            cursor = pygr.Data.getResource.db[0].cursor
-            cursor.execute('drop table if exists %s' % self.tablename)
-            cursor.execute('drop table if exists %s_schema' % self.tablename)
+            self.cursor.execute('drop table if exists %s' % self.tablename)
+            self.cursor.execute('drop table if exists %s_schema' % self.tablename)
             try:
                 del pygr.Data.getResource.layer['temp'] # REMOVE FROM LAYER INDEX
             except KeyError:
