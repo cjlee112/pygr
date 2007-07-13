@@ -1,7 +1,7 @@
 
 from nosebase import *
 
-class Seq_Test(object):
+class PygrSwissprotBase(object):
     'save seq db and interval to pygr.Data shelve'
     tempDirClass = TempPygrData
     def setup(self,**kwargs):
@@ -13,14 +13,19 @@ class Seq_Test(object):
         sp.__doc__ = 'little swissprot'
         hbb = sp['HBB1_TORMA']
         import pygr.Data
-        pygr.Data.Bio.Seq.sp = sp
+        pygr.Data.Bio.Seq.Swissprot.sp42 = sp
         ival= hbb[10:35]
         ival.__doc__ = 'fragment'
         pygr.Data.Bio.Seq.frag = ival
+        self.tempdir.force_reload()
+    def teardown(self):
+        del self.tempdir # FORCE IT TO RELEASE PYGR DATA
+
+class Seq_Test(PygrSwissprotBase):
     def match_test(self):
-        pygrData = self.tempdir.force_reload()
-        frag = pygrData.Bio.Seq.frag()
-        correct = pygrData.Bio.Seq.sp()['HBB1_TORMA'][10:35]
+        import pygr.Data
+        frag = pygr.Data.Bio.Seq.frag()
+        correct = pygr.Data.Bio.Seq.Swissprot.sp42()['HBB1_TORMA'][10:35]
         assert frag == correct, 'seq ival should match'
         assert frag.__doc__ == 'fragment', 'docstring should match'
         assert str(frag) == 'IQHIWSNVNVVEITAKALERVFYVY', 'letters should match'
@@ -28,10 +33,10 @@ class Seq_Test(object):
         saved = store['hbb1 fragment']
         assert frag == saved, 'seq ival should matched stored result'
     def dir_test(self):
-        pygrData = self.tempdir.force_reload()
-        l = pygrData.dir('Bio')
+        import pygr.Data
+        l = pygr.Data.dir('Bio')
         print 'dir:',l
-        assert l == ['Bio.Seq.frag','Bio.Seq.sp']
+        assert l == ['Bio.Seq.Swissprot.sp42','Bio.Seq.frag']
         
 
 class Seq_SQL_Test(Seq_Test):
