@@ -1,5 +1,6 @@
 import unittest
 from pygr import sequence
+from nosebase import *
 
 class SequenceSuite(unittest.TestCase):
     'basic sequence class tests'
@@ -44,3 +45,32 @@ class SequenceSuite(unittest.TestCase):
                          sequence.RNA_SEQTYPE)
         self.assertEqual(sequence.Sequence('kqwestvvarphal','foo').seqtype(),
                          sequence.PROTEIN_SEQTYPE)
+
+from pygrdata_test import PygrSwissprotBase
+class Blast_Test(PygrSwissprotBase):
+    @skip_errors(OSError,KeyError)
+    def setup(self):
+        PygrSwissprotBase.setup(self)
+        import pygr.Data
+        self.sp = pygr.Data.Bio.Seq.Swissprot.sp42()
+        self.sp.formatdb()
+    def blast_test(self):
+        hbb = self.sp['HBB1_TORMA']
+        hits = self.sp.blast(hbb)
+        edges = hits[hbb].edges(maxgap=1,maxinsert=1,
+                                minAlignSize=14,pIdentityMin=0.5)
+        for t in edges:
+            assert len(t[0])>=14, 'result shorter than minAlignSize!'
+        result = [(t[0],t[1],t[2].pIdentity()) for t in edges]
+        store = PygrDataTextFile('results/seqdb1.pickle')
+        correct = store['hbb blast 1']
+        assert approximate_cmp(result,correct,.0001)==0, 'blast results should match'
+        result = [(t[0],t[1],t[2].pIdentity()) for t in hits[hbb].generateSeqEnds()]
+        correct = store['hbb blast 2']
+        assert approximate_cmp(result,correct,.0001)==0, 'blast results should match'
+        trypsin = self.sp['PRCA_ANASP']
+        try:
+            hits[trypsin]
+            raise ValueError('failed to catch bad alignment query')
+        except KeyError:
+            pass
