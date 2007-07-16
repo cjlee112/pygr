@@ -361,7 +361,7 @@ class SchemaEdge(object):
 class ResourceDBGraphDescr(object):
     'this property provides graph interface to schema'
     def __get__(self,obj,objtype):
-        g = Graph(filename=obj.dbpath+'_schema',writeNow=True,
+        g = Graph(filename=obj.dbpath+'_schema',mode='c',writeNow=True,
                   simpleKeys=True,unpack_edge=SchemaEdge(obj))
         obj.graph = g
         return g
