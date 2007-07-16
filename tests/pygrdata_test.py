@@ -37,6 +37,32 @@ class Seq_Test(PygrSwissprotBase):
         l = pygr.Data.dir('Bio')
         print 'dir:',l
         assert l == ['Bio.Seq.Swissprot.sp42','Bio.Seq.frag']
+    def schema_test(self):
+        from pygr import seqdb
+        sp2 = seqdb.BlastDB(self.filename)
+        sp2.__doc__ = 'another sp'
+        import pygr.Data
+        pygr.Data.Bio.Seq.sp2 = sp2
+        sp = pygr.Data.Bio.Seq.Swissprot.sp42()
+        m = pygr.Data.Mapping(sourceDB=sp,targetDB=sp2)
+        m.__doc__ = 'sp -> sp2'
+        pygr.Data.Bio.Seq.testmap = m
+        pygr.Data.schema.Bio.Seq.testmap = pygr.Data.OneToManyRelation(sp,sp2)
+        pygrData = self.tempdir.force_reload()
+        sp3 = seqdb.BlastDB(self.filename)
+        sp3.__doc__ = 'sp number 3'
+        pygrData.Bio.Seq.sp3 = sp3
+        sp2 = pygrData.Bio.Seq.sp2()
+        m = pygrData.Mapping(sourceDB=sp3,targetDB=sp2)
+        m.__doc__ = 'sp3 -> sp2'
+        pygrData.Bio.Seq.testmap2 = m
+        pygrData.schema.Bio.Seq.testmap2 = pygr.Data.OneToManyRelation(sp3,sp2)
+        pygrData = self.tempdir.force_reload()
+        g = pygrData.getResource.db[0].graph
+        l = g.keys()
+        l.sort()
+        assert l == ['Bio.Seq.Swissprot.sp42','Bio.Seq.sp2','Bio.Seq.sp3']
+        
         
 
 class Seq_SQL_Test(Seq_Test):
