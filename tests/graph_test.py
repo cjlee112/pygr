@@ -125,6 +125,8 @@ class GraphShelveSuite(MappingSuite):
         self.datagraph = mapping.Graph(filename=tmp.subfile('mygraph'),
                                        intKeys=True)
         self.tempdir = tmp # KEEP BOUND SO NOT DELETED UNTIL THIS TEST COMPLETED
+    def tearDown(self):
+        self.tempdir.__del__() # FORCE IT TO DELETE TEMPORARY DIRECTORY
 
 class SQLGraphSuite(MappingSuite):
     'run same tests on mapping.SQLGraph class'
