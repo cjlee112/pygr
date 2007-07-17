@@ -515,7 +515,8 @@ class BlastDBbase(SeqDBbase):
                 filepath=ifile.name
             except AttributeError:
                 raise  TypeError("unable to obtain a filename")
-        self.filepath=filepath
+        from pygr.classutil import SourceFileName
+        self.filepath = SourceFileName(str(filepath)) # MARKS THIS STR AS A FILE PATH
         dict.__init__(self)
         self.set_seqtype()
         self.skipSeqLenDict=skipSeqLenDict
