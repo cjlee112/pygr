@@ -86,6 +86,14 @@ def getInverseDB(self):
     return self.inverseDB # TRIGGER CONSTRUCTION OF THE TARGET RESOURCE
 
 
+class PygrDataNotPortableError(ValueError):
+    'indicates that object has a local data dependency and cannnot be transferred to a remote client'
+    pass
+
+class PygrDataNotFoundError(KeyError):
+    'unable to find a loadable resource for the requested pygr.Data identifier from PYGRDATAPATH'
+    pass
+
 class PygrPickler(pickle.Pickler):
     def persistent_id(self,obj):
         'convert objects with _persistent_id to PYGR_ID strings during pickling'
@@ -99,11 +107,15 @@ class PygrPickler(pickle.Pickler):
                         return 'PYGR_ID:%s' % obj._persistent_id
         except AttributeError:
             pass
+        for klass in self.badClasses: # CHECK FOR LOCAL DEPENDENCIES
+            if isinstance(obj,klass):
+                raise PygrDataNotPortableError('this object has a local data dependency and cannnot be transferred to a remote client')
         return None
-    def setRoot(self,obj,sourceIDs={}):
+    def setRoot(self,obj,sourceIDs={},badClasses=()):
         'set obj as root of pickling tree: genuinely pickle it (not just its id)'
         self.root=obj
         self.sourceIDs=sourceIDs
+        self.badClasses = badClasses
 
 
 class ResourceDBServer(object):
@@ -129,6 +141,12 @@ class ResourceDBServer(object):
             d['__doc__'] = self.docs[id]['__doc__']
         except KeyError:
             pass
+        if id.startswith('SCHEMA.'):
+            for location in d: # -schemaEdge DATA NOT SENDABLE BY XMLRPC
+                try:
+                    del d[location]['-schemaEdge']
+                except KeyError:
+                    pass
         return d
     def registerServer(self,locationKey,serviceDict):
         n=0
@@ -137,7 +155,8 @@ class ResourceDBServer(object):
                 self.d[id][locationKey]=pdata # ADD TO DICT FOR THIS RESOURCE
             except KeyError:
                 self.d[id]={locationKey:pdata} # CREATE NEW DICT FOR THIS RESOURCE
-            self.docs[id]=infoDict
+            if infoDict is not None:
+                self.docs[id]=infoDict
             n+=1
         return n  # COUNT OF SUCCESSFULLY REGISTERED SERVICES
     def delResource(self,id,locationKey):
@@ -184,7 +203,7 @@ class ResourceDBClient(object):
         'get construction rule from index server, and attempt to construct'
         d=self.server.getResource(id) # RAISES KeyError IF NOT FOUND
         if d=='':
-            raise KeyError('resource %s not found'%id)
+            raise PygrDataNotFoundError('resource %s not found'%id)
         try:
             docstring = d['__doc__']
             del d['__doc__']
@@ -290,7 +309,7 @@ where <LAYERNAME> is the layer name you want to assign it.
                 return obj
             except KeyError: # MUST HAVE FAILED TO LOAD A REQUIRED DEPENDENCY
                 pass # HMM, TRY ANOTHER LOCATION
-        raise KeyError('unable construct %s from remote services')
+        raise PgyrDataNotFoundError('unable construct %s from remote services')
     def __setitem__(self,id,obj):
         'add an object to this resource database'
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
@@ -306,7 +325,7 @@ where <LAYERNAME> is the layer name you want to assign it.
         'delete this resource and its schema rules'
         if self.cursor.execute('delete from %s where pygr_id=%%s'
                                %self.tablename,(id,))<1:
-            raise KeyError('no resource %s in this database'%id)
+            raise PygrDataNotFoundError('no resource %s in this database'%id)
     def registerServer(self,locationKey,serviceDict):
         'register the specified services to mysql database'
         n=0
@@ -429,7 +448,7 @@ class ResourceDBShelve(object):
             missingKey=True
         self.reopen('r') # REOPEN READ-ONLY
         if missingKey: # NOW IT'S SAFE TO RAISE THE EXCEPTION...
-            raise KeyError('ID %s not found in %s' % (id,self.dbpath))
+            raise PygrDataNotFoundError('ID %s not found in %s' % (id,self.dbpath))
     def dir(self,prefix,asDict=False):
         'generate all item IDs starting with this prefix'
         l=[]
@@ -578,11 +597,12 @@ Continuing with import...'''%dbpath
         if cursor is not None: # POP OUR CURSOR STACK
             self.cursors.pop()
         return obj
-    def dumps(self,obj):
+    def dumps(self,obj,**kwargs):
         'pickle to string, using persistent ID encoding'
         src=StringIO()
         pickler=PygrPickler(src) # NEED OUR OWN PICKLER, TO USE persistent_id
-        pickler.setRoot(obj,self.sourceIDs) # ROOT OF PICKLE TREE: SAVE EVEN IF persistent_id
+        pickler.setRoot(obj,self.sourceIDs, # ROOT OF PICKLE TREE: SAVE EVEN IF persistent_id
+                        **kwargs)
         pickler.dump(obj) # PICKLE IT
         return src.getvalue() # RETURN THE PICKLED FORM AS A STRING
     def persistent_load(self,persid):
@@ -620,7 +640,7 @@ Continuing with import...'''%dbpath
                 except (KeyError,IOError):
                     pass # NOT IN THIS DB, OR OBJECT DATAFILES NOT LOADABLE HERE...
             if obj is None:
-                raise KeyError('unable to find %s in PYGRDATAPATH' % id)
+                raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % id)
         obj._persistent_id=id  # MARK WITH ITS PERSISTENT ID
         self.d[id]=obj # SAVE TO OUR CACHE
         self.applySchema(id,obj) # BIND SHADOW ATTRIBUTES IF ANY
@@ -683,6 +703,10 @@ Continuing with import...'''%dbpath
                     skipThis=False # OK, WE CAN SERVE THIS CLASS
                     break
             if skipThis: # CAN'T SERVE THIS CLASS, SO SKIP IT
+                try: # SAVE IT AS ITSELF
+                    self.client_dict_setitem(clientDict,id,obj,badClasses=nonPortableClasses)
+                except PygrDataNotPortableError:
+                    pass # HAS NON-PORTABLE LOCAL DEPENDENCIES, SO SKIP IT
                 continue
             try: # TEST WHETHER obj CAN BE RE-CLASSED TO CLIENT / SERVER
                 obj.__class__=serverKlass # CONVERT TO SERVER CLASS FOR SERVING
@@ -697,12 +721,7 @@ Continuing with import...'''%dbpath
                 obj.url='http://%s:%d' % (clientHost,server.port)
                 obj.name=id
             obj.__class__=clientKlass # CONVERT TO CLIENT CLASS FOR PICKLING
-            pickleString = self.dumps(obj) # PICKLE THE CLIENT OBJECT, SAVE
-            clientDict[id]=(self.get_info_dict(obj,pickleString),pickleString)
-            try: # SAVE SCHEMA INFO AS WELL...
-                clientDict['SCHEMA.'+id]=self.findSchema(id)
-            except KeyError:
-                pass # NO SCHEMA FOR THIS OBJ, SO NOTHING TO DO
+            self.client_dict_setitem(clientDict,id,obj)
             obj.__class__=serverKlass # CONVERT TO SERVER CLASS FOR SERVING
             server[id]=obj # ADD TO XMLRPC SERVER
         server.registrationData=clientDict # SAVE DATA FOR SERVER REGISTRATION
@@ -711,6 +730,15 @@ Continuing with import...'''%dbpath
             server['index']=myIndex # ADD TO OUR XMLRPC SERVER
             server.register('','',server=myIndex) # ADD OUR RESOURCES TO THE INDEX
         return server
+    def client_dict_setitem(self,clientDict,k,obj,**kwargs):
+        'save pickle and schema for obj into clientDict'
+        pickleString = self.dumps(obj,**kwargs) # PICKLE THE CLIENT OBJECT, SAVE
+        clientDict[k] = (self.get_info_dict(obj,pickleString),pickleString)
+        try: # SAVE SCHEMA INFO AS WELL...
+            clientDict['SCHEMA.'+k] = (dict(schema_version='1.0'),
+                                       self.findSchema(k))
+        except KeyError:
+            pass # NO SCHEMA FOR THIS OBJ, SO NOTHING TO DO
     def registerServer(self,locationKey,serviceDict):
         'register the serviceDict with the first index server in PYGRDATAPATH'
         for db in self.resourceDBiter():
@@ -932,6 +960,12 @@ class ManyToManyRelation(object):
 class OneToManyRelation(ManyToManyRelation):
     _relationCode='one:many'
 
+class OneToOneRelation(ManyToManyRelation):
+    _relationCode='one:one'
+
+class ManyToOneRelation(ManyToManyRelation):
+    _relationCode='many:one'
+
 class InverseRelation(DirectRelation):
     "bind source and target as each other's inverse mappings"
     _relationCode = 'inverse'
@@ -1022,3 +1056,8 @@ except NameError:
     firstLoad = True
 else:
     firstLoad = False
+try:
+    nonPortableClasses
+except NameError: # DEFAULT LIST OF CLASSES NOT PORTABLE TO REMOTE CLIENTS
+    from pygr.classutil import SourceFileName
+    nonPortableClasses = [SourceFileName]
