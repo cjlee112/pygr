@@ -299,7 +299,8 @@ class Collection(object):
 class PicklableShelve(Collection):
     'persistent storage mapping ID --> OBJECT'
     def __init__(self,filename,mode=None,writeback=True,**kwargs):
-        self.filename = filename
+        from pygr.classutil import SourceFileName
+        self.filename = SourceFileName(str(filename)) # MARKS THIS STR AS A FILE PATH
         if mode=='c':
             self.mode = 'w' # STORE FOR SUBSEQUENT REOPENING BY UNPICKLE...
         else:
