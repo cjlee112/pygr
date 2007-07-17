@@ -25,3 +25,4 @@ class NestedListSuite(unittest.TestCase):
                          [(0, 10, 1, -110, -100), (5, 20, 2, -315, -300)])
         self.assertEqual(fdb.find_overlap_list(-11,-7),
                          [(-10, 0, 1, 100, 110), (-20, -5, 2, 300, 315)])
+        tmp.__del__() # FORCE IT TO DELETE TEMPORARY DIRECTORY
