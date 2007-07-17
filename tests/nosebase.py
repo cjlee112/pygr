@@ -49,6 +49,7 @@ class TempPygrData(TempDir):
         return get_pygr_data_path(newpath)
     def __del__(self):
         get_pygr_data_path(None)
+        TempDir.__del__(self)
 
 class TempPygrDataMySQL(TempPygrData):
     'restrict pygr.Data to an initially empty MySQL resource database'
@@ -162,14 +163,25 @@ class TestXMLRPCServer(object):
     Because we want this to work even on Windows (gag! choke!),
     we can't use fork, backgrounding or any other quasi-sensible method for
     running the server process in the background.  So we just use a separate
-    thread to keep our caller from blocking..."""
-    def __init__(self,*pygrDataNames):
+    thread to keep our caller from blocking...
+    Optional arguments:
+    PYGRDATAPATH: passed to the server process command line as its PYGRDATAPATH
+    checkResources: if True, first check that all pygrDataNames are loadable."""
+    def __init__(self,*pygrDataNames,**kwargs):
         'starts server, returns without blocking'
         self.port = find_unused_port()
         import pygr.Data
-        for name in pygrDataNames: # ENSURE ALL RES FOR THE TEST ARE AVAILABLE
-            obj = pygr.Data.getResource(name)
+        try:
+            if kwargs['checkResources']:                
+                for name in pygrDataNames: # ENSURE ALL RES FOR THE TEST ARE AVAILABLE
+                    obj = pygr.Data.getResource(name)
+        except KeyError:
+            pass
         self.pygrDataNames = pygrDataNames
+        try:
+            self.pygrDataPath = kwargs['PYGRDATAPATH']
+        except KeyError:
+            self.pygrDataPath = 'PYGRDATAPATH'
         from threading import Thread
         t = Thread(target=self.run_server)
         t.start()
@@ -178,8 +190,8 @@ class TestXMLRPCServer(object):
     def run_server(self):
         'this method blocks, so run it in a separate thread'
         print 'starting server on port',self.port
-        os.system('python pygrdata_server.py %d %s'
-                  %(self.port,' '.join(self.pygrDataNames)))
+        os.system('python pygrdata_server.py %d %s %s'
+                  %(self.port,self.pygrDataPath,' '.join(self.pygrDataNames)))
         print 'server exited.'
     def access_server(self):
         'force pygr.Data to only use the XMLRPC server'
