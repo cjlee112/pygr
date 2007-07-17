@@ -7,7 +7,7 @@ def ClassicUnpickler(cls, state):
 ClassicUnpickler.__safe_for_unpickling__ = 1
 
 
-def filename_unpickler(cls,path):
+def filename_unpickler(cls,path,kwargs):
     'raise IOError if path not readable'
     file(path).close() # WILL RAISE IOError IF path NOT ACCESSIBLE, READABLE
     return cls(path)
@@ -16,7 +16,7 @@ filename_unpickler.__safe_for_unpickling__ = 1
 class SourceFileName(str):
     'store a filepath string, raise IOError on unpickling if filepath not readable'
     def __reduce__(self):
-        return (filename_unpickler,(self.__class__,str(self)))
+        return (filename_unpickler,(self.__class__,str(self),{}))
 
 
 def standard_getstate(self):
