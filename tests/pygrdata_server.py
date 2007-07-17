@@ -11,9 +11,12 @@ def exit_now(self):
     return 0
 
 port = int(sys.argv[1]) # GET THE PORT NUMBER TO USE
+if sys.argv[2] != 'PYGRDATAPATH': # SET PYGRDATAPATH FROM COMMAND-LINE ARG
+    import os
+    os.environ['PYGRDATAPATH'] = sys.argv[2]
 # LOAD THE SPECIFIED RESOURCES FROM PYGR.DATA
 import pygr.Data
-l = [pygr.Data.getResource(name) for name in sys.argv[2:]]
+l = [pygr.Data.getResource(name) for name in sys.argv[3:]]
 # CREATE A NEW SERVER THAT WILL SERVE THE RESOURCES WE JUST LOADED
 server=pygr.Data.getResource.newServer('testy',withIndex=True,host='localhost',port=port)
 import new
