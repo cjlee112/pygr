@@ -4297,7 +4297,7 @@ cluster1=(~m)[exon1]  # GET CLUSTER OBJECT FOR THIS EXON
 \end{verbatim}
 
 
-\subsubsection{ManyToManyRelation, OneToManyRelation}
+\subsubsection{ManyToManyRelation, OneToManyRelation, ManyToOneRelation, OneToOneRelation}
 Convenience class for constructing schema relations for
 a general graph mapping from a sourceDB to targetDB with edge info.
 \begin{funcdesc}{__init__}{sourceDB,targetDB,edgeDB=None,bindAttrs=None}
@@ -4323,8 +4323,10 @@ and \member{edgeDB} attributes to the corresponding resources
 given by the \var{sourceDB},\var{targetDB},
 and \var{edgeDB} arguments.
 
-\class{OneToManyRelation} and \class{ManyToManyRelation} differ only in that
-they indicate to pygr.Data that \textasciitilde\code{m1[v] --> k} whereas 
+\class{OneToOneRelation}, \class{OneToManyRelation}, \class{ManyToOneRelation}
+and \class{ManyToManyRelation} differ only in the uniqueness vs. multiplicity
+of the mapping indicated.
+E.g.  \textasciitilde\code{m1[v] --> k} vs. 
 \textasciitilde\code{mMany[v] --> [k1,k2,...]}
 
 \subsubsection{DirectRelation, ItemRelation, InverseRelation}
@@ -4367,6 +4369,34 @@ that points to the other resource.  When either resource is loaded,
 a special \method{__invert__} method will be added, that simply
 loads and returns the resource pointed to by the \member{inverseDB}
 binding.
+
+\subsubsection{nonPortableClasses,SourceFileName}
+The variable \var{pygr.Data.nonPortableClasses} specifies a list of
+classes which have local data dependencies (e.g. requires reading a file
+that is on your local disk),
+and therefore cannot be transferred over XMLRPC to a remote client
+by simple pickling / unpickling.  \method{pygr.Data.newServer} will
+automatically cull any data that has such dependencies from the list
+of resources it loads into the XMLRPC server it constructs, so that
+the server will not attempt to serve data that actually will not work
+on remote clients.  You can add your own classes to this list if
+needed.
+
+By default, the \var{pygr.Data.nonPortableClasses} list consists of simply a single
+class, \class{pygr.Data.SourceFileName}, which is a subclass of str
+that marks a string as representing a path to a file.  It behaves
+just like a string, but allows pygr.Data to be smart about checking
+whether the required file actually exists and is readable before returning
+a resource to the user.  If you save filenames on your own objects using
+this class, pygr.Data will therefore be able to handle them properly for
+many issues such as XMLRPC portability to remote clients.  You do this simply
+as follows:
+\begin{verbatim}
+class Foo(object):
+  def __init__(self,filename):
+    self.filename = SourceFileName(str(filename)) # MARK THIS A BEING A FILE NAME
+    ifile = file(self.filename) # OPEN THIS FILE NOW IF YOU WANT...
+\end{verbatim}
 
 \subsection{sqlgraph Module}
 \label{sqlgraph-module}
