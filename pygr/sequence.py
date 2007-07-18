@@ -720,7 +720,6 @@ class Seq2SeqEdge(object):
                              segment[j][1],segment[i][1]+segment[i][2],ni+nm)
                 nm+=segment[j][3]
         if besthit[4]>=minAlignSize:
-            print 'longestSegment',minAlignSize,besthit
             return besthit[:4]
         else:
             return None
