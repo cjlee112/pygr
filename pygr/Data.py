@@ -616,7 +616,15 @@ Continuing with import...'''%dbpath
         try:
             cursor=self.cursors[-1]
         except IndexError:
-            return None
+            try:
+                cursor = self.defaultCursor # USE IF WE HAVE ONE...
+            except AttributeError: # TRY TO GET ONE...
+                import sqlgraph
+                try:
+                    basename,cursor = sqlgraph.getNameCursor(tablename)
+                    self.defaultCursor = cursor # SAVE FOR RE-USE
+                except StandardError:
+                    return None
         try: # MAKE SURE THIS CURSOR CAN PROVIDE tablename
             cursor.execute('describe %s' % tablename)
             return cursor # SUCCEEDED IN ACCESSING DESIRED TABLE
