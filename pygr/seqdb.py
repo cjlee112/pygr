@@ -37,7 +37,7 @@ class SQLSequence(SQLRow,SequenceBase):
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return self._select('substring(%s FROM %d FOR %d)'
-                            %(self._attrSQL('seq'),start+1,end-start))
+                            %(self.db._attrSQL('seq'),start+1,end-start))
     def __getattr__(self,attr):
         'both parent classes have getattr, so have to call both'
         try:
