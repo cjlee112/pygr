@@ -1047,6 +1047,14 @@ class PrefixDictInverse(object):
             return self.db.dicts[seq.db] \
                    +self.db.separator+str(seq.id)
         except KeyError:
+            try:
+                seq = seq.originalIval()
+            except AttributeError:
+                pass
+            else:
+                return self.db.dicts[seq.db] \
+                       +self.db.separator+str(seq.id)
+
             raise KeyError('seq not in PrefixUnionDict')
         except AttributeError:
             pass
