@@ -88,33 +88,40 @@ def write_fasta(ofile,s,chunk=60,id=None):
     return id # IN CASE CALLER WANTS TEMP ID WE MAY HAVE ASSIGNED
 
 def read_fasta(ifile,onlyReadOneLine=False):
-    "Get one sequence at a time from stream ifile"
+    "iterate over id,title,seq from stream ifile"
     id=None
     title=''
     seq=''
+    isEmpty = True
     for line in ifile:
         if '>'==line[0]:
-            if id!=None and len(seq)>0:
+            if id is not None and len(seq)>0:
                 yield id,title,seq
+                isEmpty = False
                 seq = ''
             id=line[1:].split()[0]
             title=line[len(id)+2:]
-        elif id!=None: # READ SEQUENCE
+        elif id is not None: # READ SEQUENCE
             for word in line.split(): # GET RID OF WHITESPACE
                 seq += word
             if onlyReadOneLine and len(seq)>0:
                 yield id,title,seq
-    if id!=None and len(seq)>0:
+                isEmpty = False
+    if id is not None and len(seq)>0:
         yield id,title,seq
+    elif isEmpty:
+        raise IOError('no readable sequence in FASTA file!')
 
 def read_fasta_lengths(ifile):
     "Generate sequence ID,length from stream ifile"
     id=None
     seqLength=0
+    isEmpty = True
     for line in ifile:
         if '>'==line[0]:
             if id is not None and seqLength>0:
                 yield id,seqLength
+                isEmpty = False
             id=line[1:].split()[0]
             seqLength=0
         elif id is not None: # READ SEQUENCE
@@ -122,6 +129,8 @@ def read_fasta_lengths(ifile):
                 seqLength += len(word)
     if id is not None and seqLength>0:
         yield id,seqLength
+    elif isEmpty:
+        raise IOError('no readable sequence in FASTA file!')
 
 
 def store_seqlen_dict(d,ifile,idFilter=None):
