@@ -158,10 +158,10 @@ def store_seqlen_dict(d,ifile,idFilter=None):
     
     if idFilter is not None: # HAVE TO CLEAN UP BLAST'S MESSY IDs
         for id,seqLength in read_fasta_lengths(ifile):
-            d[idFilter(id)]=seqLength # SAVE TO DICTIONARY
+            d[idFilter(id)] = (seqLength,) # SAVE TO DICTIONARY
     else: # JUST USE id AS-IS
         for id,seqLength in read_fasta_lengths(ifile):
-            d[id]=seqLength # SAVE TO DICTIONARY
+            d[id] = (seqLength,) # SAVE TO DICTIONARY
         
 
 def fastacmd_seq(filepath,id,start=None,end=None):
@@ -264,11 +264,7 @@ class BlastSequence(BlastSequenceBase):
         return self.db.seqLenDict[self.id][0]
     def checkID(self):
         'check whether this seq ID actually present in the DB, KeyError if not'
-        try:
-            return self.db.seqLenDict[self.id][0]
-        except TypeError: # int KEY NOT ALLOWED IN shelve
-            raise KeyError('sequence %s not found in %s'
-                           %(self.id,self.db.filepath))
+        return self.db.seqLenDict[self.id][0]
 
 class FileDBSeqDescriptor(object):
     "Get sequence from a concatenated pureseq database for obj.id"
