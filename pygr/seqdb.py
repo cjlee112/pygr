@@ -572,7 +572,7 @@ class BlastDBbase(SeqDBbase):
         self.blastReady = self.test_db_location(self.filepath)
         if self.blastReady:
             return self.blastReady
-        self.blastReady = self.test_db_location(os.path.join(os.curdir,os.path.basename(self.filepath)))
+        self.blastReady = self.test_db_location(os.path.join(os.getcwd(),os.path.basename(self.filepath)))
         return self.blastReady
         
 
@@ -613,7 +613,7 @@ class BlastDBbase(SeqDBbase):
             import sys # TRY TO BUILD IN CURRENT DIRECTORY
             print >>sys.stderr,'''directory containing FASTA file %s is not writable!
 Trying to build blast index files in current directory...''' % self.filepath
-            self.run_formatdb(os.path.join(os.curdir,os.path.basename(self.filepath)))
+            self.run_formatdb(os.path.join(os.getcwd(),os.path.basename(self.filepath)))
             
     def set_seqtype(self):
         "Determine whether this database is DNA or protein"
