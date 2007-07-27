@@ -18,6 +18,15 @@ class SourceFileName(str):
     def __reduce__(self):
         return (filename_unpickler,(self.__class__,str(self),{}))
 
+def file_dirpath(filename):
+    'return path to directory containing filename'
+    import os
+    dirname = os.path.dirname(filename)
+    if dirname=='':
+        return os.curdir
+    else:
+        return dirname
+
 
 def standard_getstate(self):
     'get dict of attributes to save, using self._pickleAttrs dictionary'
