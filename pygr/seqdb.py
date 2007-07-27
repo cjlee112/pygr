@@ -513,7 +513,7 @@ class BlastDBbase(SeqDBbase):
     itemClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
     def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
-                 blastReady=False,**kwargs):
+                 blastReady=False,blastIndexPath=None,**kwargs):
         "format database and build indexes if needed. Provide filepath or file object"
         if filepath is None:
             try:
@@ -525,6 +525,8 @@ class BlastDBbase(SeqDBbase):
         dict.__init__(self)
         self.set_seqtype()
         self.skipSeqLenDict=skipSeqLenDict
+        if blastIndexPath is not None:
+            self.blastIndexPath = blastIndexPath
         if skipSeqLenDict:
             self.itemClass=BlastSequenceBase # DON'T USE seqLenDict
         else:
@@ -547,22 +549,39 @@ class BlastDBbase(SeqDBbase):
         classutil.apply_itemclass(self,kwargs)
 
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
-    _pickleAttrs = dict(filepath=0,skipSeqLenDict=0)
+    _pickleAttrs = dict(filepath=0,skipSeqLenDict=0,blastIndexPath=0)
 
-    def checkdb(self):
+    def test_db_location(self,filepath):
         'check whether BLAST index files ready for use; return self.blastReady status'
-        if not os.access(self.filepath+'.nsd',os.R_OK) \
-               and not os.access(self.filepath+'.psd',os.R_OK) \
-               and not os.access(self.filepath+'.00.nsd',os.R_OK) \
-               and not os.access(self.filepath+'.00.psd',os.R_OK):
-            self.blastReady=False
-        else:
-            self.blastReady=True
+        if not os.access(filepath+'.nsd',os.R_OK) \
+               and not os.access(filepath+'.psd',os.R_OK) \
+               and not os.access(filepath+'.00.nsd',os.R_OK) \
+               and not os.access(filepath+'.00.psd',os.R_OK):
+            return False
+        else: # FOUND INDEX FILES IN THIS LOCATION
+            if filepath!=self.filepath:
+                self.blastIndexPath = filepath
+            return True
+    def checkdb(self):
+        'look for blast index files in blastIndexPath, filepath, current dir'
+        try:
+            self.blastReady = self.test_db_location(self.blastIndexPath)
+            return self.blastReady
+        except AttributeError:
+            pass
+        self.blastReady = self.test_db_location(self.filepath)
+        if self.blastReady:
+            return self.blastReady
+        self.blastReady = self.test_db_location(os.path.join(os.curdir,os.path.basename(self.filepath)))
         return self.blastReady
+        
 
-    def formatdb(self):
-        'ATTEMPT TO BUILD BLAST DATABASE & INDEXES'
-        cmd='formatdb -i %s -o T' % self.filepath
+    def run_formatdb(self,filepath):
+        'ATTEMPT TO BUILD BLAST DATABASE INDEXES at filepath'
+        dirname = classutil.file_dirpath(filepath)
+        if not os.access(dirname,os.W_OK): # CHECK WHETHER DIRECTORY IS WRITABLE
+            raise IOError('run_formatdb: directory %s is not writable!' % dirname)
+        cmd='formatdb -i "%s" -n "%s" -o T' % (self.filepath,filepath)
         if self._seqtype!=PROTEIN_SEQTYPE:
             cmd += ' -p F' # SPECIAL FLAG REQUIRED FOR NUCLEOTIDE SEQS
         import sys
@@ -570,21 +589,51 @@ class BlastDBbase(SeqDBbase):
         if os.system(cmd)!=0: # BAD EXIT CODE, SO COMMAND FAILED
             raise OSError('command %s failed' % cmd)
         self.blastReady=True
-
+        if filepath!=self.filepath:
+            self.blastIndexPath = filepath
+    def get_blast_index_path(self):
+        'get path to base name for BLAST index files'
+        try:
+            return self.blastIndexPath
+        except AttributeError:
+            return self.filepath
+    def formatdb(self,filepath=None):
+        'try to build BLAST index files in an appropriate location'
+        if filepath is not None: # JUST USE THE SPECIFIED PATH
+            return self.run_formatdb(filepath)
+        try:
+            filepath = self.blastIndexPath
+        except AttributeError:
+            pass
+        else: # BUILD IN self.blastIndexPath DIRECTORY
+            return self.run_formatdb(filepath)
+        try: # BUILD IN SAME DIRECTORY AS THE FASTA SOURCE FILE
+            return self.run_formatdb(self.filepath)
+        except IOError: # DIRECTORY IS NOT WRITABLE!
+            import sys # TRY TO BUILD IN CURRENT DIRECTORY
+            print >>sys.stderr,'''directory containing FASTA file %s is not writable!
+Trying to build blast index files in current directory...''' % self.filepath
+            self.run_formatdb(os.path.join(os.curdir,os.path.basename(self.filepath)))
+            
     def set_seqtype(self):
         "Determine whether this database is DNA or protein"
-        if os.path.isfile(self.filepath+'.psd') \
-               or os.path.isfile(self.filepath+'.00.psd'):
+        if os.path.isfile(self.get_blast_index_path()+'.psd') \
+               or os.path.isfile(self.get_blast_index_path()+'.00.psd'):
             self._seqtype=PROTEIN_SEQTYPE
-        elif os.path.isfile(self.filepath+'.nsd') \
-                 or os.path.isfile(self.filepath+'.00.nsd'):
+            return
+        elif os.path.isfile(self.get_blast_index_path()+'.nsd') \
+                 or os.path.isfile(self.get_blast_index_path()+'.00.nsd'):
             self._seqtype=DNA_SEQTYPE
+            return
         else:
             ofile=file(self.filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
             for id,title,seq in read_fasta(ofile,onlyReadOneLine=True):
                 self._seqtype=guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
-                break # JUST READ ONE SEQUENCE
+                ofile.close()
+                return  # JUST READ ONE SEQUENCE
             ofile.close()
+            raise IOError('unable to obtain any sequence from FASTA file %s'
+                          % self.filepath)
 
     def raw_fasta_stream(self,ifile=None,idFilter=None):
         'return a stream of fasta-formatted sequences, and ID filter function if needed'
@@ -593,7 +642,7 @@ class BlastDBbase(SeqDBbase):
         try: # DEFAULT: JUST READ THE FASTA FILE, IF IT EXISTS
             return file(self.filepath),idFilter
         except IOError: # TRY READING FROM FORMATTED BLAST DATABASE
-            cmd='fastacmd -D -d '+self.filepath
+            cmd='fastacmd -D -d "%s"' % self.get_blast_index_path()
             return os.popen(cmd),NCBI_ID_PARSER #BLAST ADDS lcl| TO id
 
 
@@ -626,7 +675,7 @@ class BlastDBbase(SeqDBbase):
         "Run blast search for seq in database, return aligned intervals"
         if blastprog is None:
             blastprog=blast_program(seq.seqtype(),self._seqtype)
-        cmd='%s -d %s -p %s -e %e'  %(blastpath,self.filepath,
+        cmd='%s -d "%s" -p %s -e %e'  %(blastpath,self.get_blast_index_path(),
                                       blastprog,float(expmax))
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd+=' -b %d -v %d' % (maxseq,maxseq)
@@ -636,7 +685,8 @@ class BlastDBbase(SeqDBbase):
                   maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts=''):
         "Run megablast search with repeat masking."
         masked_seq=repeat_mask(seq,opts=rmOpts)  # MASK REPEATS TO lowercase
-        cmd='%s %s -d %s -D 2 -e %e -i stdin' % (blastpath,maskOpts,self.filepath,float(expmax))
+        cmd='%s %s -d "%s" -D 2 -e %e -i stdin' \
+             % (blastpath,maskOpts,self.get_blast_index_path(),float(expmax))
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd+=' -b %d -v %d' % (maxseq,maxseq)
         if minIdentity is not None:
