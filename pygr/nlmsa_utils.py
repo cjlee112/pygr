@@ -28,6 +28,47 @@ class NLMSASeqList(list):
   def nextID(self):
       return len(self)
 
+class EmptySliceError(KeyError):
+  pass
+  
+
+class EmptySlice():
+  'Empty slice for use by NLMSASlice'
+  def __init__(self, seq):
+    self.seq = seq
+  def edges(self,**kwargs):
+    return []
+  def items(self, **kwargs):
+    return []
+  def iteritems(self, **kwargs):
+    return iter([])
+  def keys(self, **kwargs):
+    return []
+  def __iter__(self):
+    return iter([])
+  def __getitem__(self, k):
+    raise KeyError
+  def __len__(self):
+    return 0
+  def matchIntervals(self, seq=None):
+    return []
+  def findSeqEnds(self, seq):
+    raise KeyError('seq not aligned in this interval')
+  def generateSeqEnds(self):
+    return []
+  def groupByIntervals(self,**kwargs):
+    return {}
+  def groupBySequences(self,**kwargs):
+    return []
+  def split(self, **kwargs):
+    return []
+  def regions(self, **kwargs):
+    return []
+  def __cmp__(self,other):
+    return cmp(self.seq, other.seq)
+  def rawIvals(self):
+    return []
+    
 
 
 class NLMSASeqDict(dict):
