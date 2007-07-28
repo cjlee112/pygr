@@ -401,8 +401,6 @@ def read_interval_alignment(ofile,srcSet,destSet,al=None):
 
 def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
-    if not seqDB.blastReady: # HAVE TO BUILD THE formatdb FILES...
-        seqDB.formatdb()
     ifile,ofile=os.popen2(cmd)
     if seqString is None:
         seqString=seq
@@ -513,7 +511,7 @@ class BlastDBbase(SeqDBbase):
     itemClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
     def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
-                 blastReady=False,blastIndexPath=None,**kwargs):
+                 blastReady=False,blastIndexPath=None,blastIndexDirs=None,**kwargs):
         "format database and build indexes if needed. Provide filepath or file object"
         if filepath is None:
             try:
@@ -526,6 +524,8 @@ class BlastDBbase(SeqDBbase):
         self.skipSeqLenDict=skipSeqLenDict
         if blastIndexPath is not None:
             self.blastIndexPath = blastIndexPath
+        if blastIndexDirs is not None:
+            self.blastIndexDirs = blastIndexDirs
         if skipSeqLenDict:
             self.itemClass=BlastSequenceBase # DON'T USE seqLenDict
         else:
@@ -682,6 +682,8 @@ class BlastDBbase(SeqDBbase):
     def blast(self,seq,al=None,blastpath='blastall',
               blastprog=None,expmax=0.001,maxseq=None):
         "Run blast search for seq in database, return aligned intervals"
+        if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
+            self.formatdb()
         if blastprog is None:
             blastprog=blast_program(seq.seqtype(),self._seqtype)
         cmd='%s -d "%s" -p %s -e %e'  %(blastpath,self.get_blast_index_path(),
@@ -693,6 +695,8 @@ class BlastDBbase(SeqDBbase):
     def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
                   maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts=''):
         "Run megablast search with repeat masking."
+        if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
+            self.formatdb()
         masked_seq=repeat_mask(seq,opts=rmOpts)  # MASK REPEATS TO lowercase
         cmd='%s %s -d "%s" -D 2 -e %e -i stdin' \
              % (blastpath,maskOpts,self.get_blast_index_path(),float(expmax))
