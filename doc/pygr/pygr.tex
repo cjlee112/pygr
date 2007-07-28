@@ -2745,7 +2745,7 @@ The expression m[s][myg] obtains the "edge information" for the graph relationsh
 Options for constructing a BlastDB:
 
 \begin{funcdesc}{BlastDB}{filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
-                 blastReady=False}
+                 blastReady=False,blastIndexPath=None,blastIndexDirs=None,**kwargs}
   Open a sequence file as a ``database'' object, giving the user access to its sequences,
   easy searching via \code{blast} or \code{megablast}, etc.
   \var{skipSeqLenDict} prevents construction of a sequence length index file 
@@ -2764,6 +2764,21 @@ Options for constructing a BlastDB:
   \var{blastReady} option specifies whether BLAST index files should be automatically
   constructed (using \code{formatdb}).  Note, if you attempt to run the \code{blast}()
   method, it will automatically create the index files for you if they are missing.
+  \var{blastIndexPath}, if not None, specifies the path to the BLAST index
+  files for this database.  For example, if the BLAST index files are
+  \code{/some/path/foo.psd} etc., then \var{blastIndexPath}\code{='/some/path/foo'}.
+  \var{blastIndexDirs}, if not None, specifies a list of directories in which
+  to search for and create BLAST index files.  Entries in the list can be
+  either a string, or a function that takes no parameters and returns 
+  a string path.  A string value ``FILEPATH'' instructs it to use the 
+  filepath of the FASTA file associated with the BlastDB.
+  The default value of this attribute on the \class{BlastDB} class is 
+\begin{verbatim}
+['FILEPATH',os.getcwd,os.path.expanduser,pygr.classutil.default_tmp_path]
+\end{verbatim}
+This corresponds to: self.filepath, current directory, the user's HOME
+directory, and the default temporary directory used by the Python 
+function \method{os.tempnam}().
 \end{funcdesc}
 
 Useful methods:
@@ -2797,6 +2812,16 @@ id=(~db)[seq] # GET IDENTIFIER FOR THIS SEQUENCE FROM ITS DATABASE
 \end{verbatim}
 \end{funcdesc}
 
+\begin{funcdesc}{formatdb}{filepath=None}
+  Forces the BlastDB to construct new BLAST index files, either at the
+  location specified by \var{filepath}, if not None, or in the first
+  directory in the \member{blastIndexDirs} list where the index files
+  can be succesfully built.  Index files are generated using the 
+  \code{formatdb} program provided by NCBI, which must be in your
+  PATH for this method to work.
+\end{funcdesc}
+
+
 
 Useful attributes:
 \begin{itemize}
@@ -2810,6 +2835,20 @@ items / slices from database containers managed by it.
 \member{itemSliceClass}: the object class to use for instantiating new sequence slice objects (i.e. subintervals of sequences from this BLAST database).  You can set this to create customized sequence behaviors.
 This is used by \class{pygr.Data} to propagate correct attribute schemas to
 items / slices from database containers managed by it.
+
+\item
+\member{filepath}: the location of the FASTA sequence file upon which
+this \class{BlastDB} is based.
+
+\item
+\member{blastIndexPath}: if present, the location of the BLAST index files
+associated with this \class{BlastDB}.  If not present, the location is assumed
+to be the same as the FASTA file.
+
+\item
+\member{blastIndexDirs}: the list of directories in which to search for
+or build BLAST index files for this \class{BlastDB}.  For details, see
+the explanation for the constructor method, above.
 
 \end{itemize}
 
