@@ -488,7 +488,7 @@ cdef class NLMSASlice:
         it=IntervalFileDBIterator(start+offset,stop+offset,ns=ns)
         n=it.loadAll() # GET ALL OVERLAPPING INTERVALS
         if n<=0:
-          raise KeyError('this interval is not aligned!')
+          raise nlmsa_utils.EmptySliceError('this interval is not aligned!')
         for i from 0 <= i < n: # CLIP INTERVALS TO FIT [start:stop]
           it.im_buf[i].start=it.im_buf[i].start-offset # XLATE TO SRC SEQ COORDS
           it.im_buf[i].end=it.im_buf[i].end-offset
@@ -1526,7 +1526,10 @@ cdef class NLMSA:
       if self.do_build:
         return nlmsa_utils.BuildMSASlice(ns,k.start,k.stop,id,offset,0,k)
       else: # QUERY THE ALIGNMENT
-        return NLMSASlice(ns,k.start,k.stop,id,offset,k)
+        try:
+          return NLMSASlice(ns,k.start,k.stop,id,offset,k)
+        except nlmsa_utils.EmptySliceError:
+          return nlmsa_utils.EmptySlice(k)
     try: # TREAT k AS A PYTHON SLICE OBJECT
       i=k.start
     except AttributeError:
