@@ -520,8 +520,7 @@ class BlastDBbase(SeqDBbase):
                 filepath=ifile.name
             except AttributeError:
                 raise  TypeError("unable to obtain a filename")
-        from pygr.classutil import SourceFileName
-        self.filepath = SourceFileName(str(filepath)) # MARKS THIS STR AS A FILE PATH
+        self.filepath = classutil.SourceFileName(str(filepath)) # MARKS AS A FILE PATH
         dict.__init__(self)
         self.set_seqtype()
         self.skipSeqLenDict=skipSeqLenDict
@@ -563,19 +562,12 @@ class BlastDBbase(SeqDBbase):
                 self.blastIndexPath = filepath
             return True
     def checkdb(self):
-        'look for blast index files in blastIndexPath, filepath, current dir'
-        try:
-            self.blastReady = self.test_db_location(self.blastIndexPath)
-            return self.blastReady
-        except AttributeError:
-            pass
-        self.blastReady = self.test_db_location(self.filepath)
-        if self.blastReady:
-            return self.blastReady
-        self.blastReady = self.test_db_location(os.path.join(os.getcwd(),os.path.basename(self.filepath)))
+        'look for blast index files in blastIndexPath, standard list of locations'
+        for filepath in self.blast_index_paths():
+            self.blastReady = self.test_db_location(filepath)
+            if self.blastReady:
+                break
         return self.blastReady
-        
-
     def run_formatdb(self,filepath):
         'ATTEMPT TO BUILD BLAST DATABASE INDEXES at filepath'
         dirname = classutil.file_dirpath(filepath)
@@ -597,23 +589,40 @@ class BlastDBbase(SeqDBbase):
             return self.blastIndexPath
         except AttributeError:
             return self.filepath
+    # DEFAULT: BUILD INDEX FILES IN self.filepath . HOME OR /tmp 
+    blastIndexDirs = ['FILEPATH',os.getcwd,os.path.expanduser,
+                      classutil.default_tmp_path]
+    def blast_index_paths(self):
+        'iterate over possible blast index directories'
+        try: # 1ST TRY ACTUAL SAVED LOCATION IF ANY
+            yield self.blastIndexPath
+        except AttributeError:
+            pass
+        for m in self.blastIndexDirs: # NOW TRY STANDARD LOCATIONS
+            if m=='FILEPATH':
+                yield self.filepath
+                continue
+            elif m == os.path.expanduser:
+                s = m('~') # GET HOME DIRECTORY
+            elif callable(m):
+                s = m()
+            else: # TREAT AS STRING
+                s = str(m)
+            yield os.path.join(s,os.path.basename(self.filepath))
     def formatdb(self,filepath=None):
         'try to build BLAST index files in an appropriate location'
         if filepath is not None: # JUST USE THE SPECIFIED PATH
             return self.run_formatdb(filepath)
-        try:
-            filepath = self.blastIndexPath
-        except AttributeError:
-            pass
-        else: # BUILD IN self.blastIndexPath DIRECTORY
-            return self.run_formatdb(filepath)
-        try: # BUILD IN SAME DIRECTORY AS THE FASTA SOURCE FILE
-            return self.run_formatdb(self.filepath)
-        except IOError: # DIRECTORY IS NOT WRITABLE!
-            import sys # TRY TO BUILD IN CURRENT DIRECTORY
-            print >>sys.stderr,'''directory containing FASTA file %s is not writable!
-Trying to build blast index files in current directory...''' % self.filepath
-            self.run_formatdb(os.path.join(os.getcwd(),os.path.basename(self.filepath)))
+        notFirst = False
+        for filepath in self.blast_index_paths():
+            if notFirst:
+                import sys
+                print >>sys.stderr,'Trying next entry in self.blastIndexDirs...'
+            notFirst = True
+            try: # BUILD IN TARGET DIRECTORY
+                return self.run_formatdb(filepath)
+            except (IOError,OSError): # BUILD FAILED 
+                classutil.report_exception() # REPORT IT AND CONTINUE
             
     def set_seqtype(self):
         "Determine whether this database is DNA or protein"
