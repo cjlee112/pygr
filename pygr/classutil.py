@@ -9,14 +9,24 @@ ClassicUnpickler.__safe_for_unpickling__ = 1
 
 def filename_unpickler(cls,path,kwargs):
     'raise IOError if path not readable'
-    file(path).close() # WILL RAISE IOError IF path NOT ACCESSIBLE, READABLE
+    try:
+        file(path).close() # WILL RAISE IOError IF path NOT ACCESSIBLE, READABLE
+    except IOError:
+        try:
+            import os
+            path = os.path.join(kwargs['curdir'],path) # CONVERT TO ABSOLUTE PATH
+            file(path).close() # WILL RAISE IOError IF path NOT ACCESSIBLE, READABLE
+        except KeyError:
+            raise IOError('unable to open file %s' % path)
     return cls(path)
 filename_unpickler.__safe_for_unpickling__ = 1
 
 class SourceFileName(str):
     'store a filepath string, raise IOError on unpickling if filepath not readable'
     def __reduce__(self):
-        return (filename_unpickler,(self.__class__,str(self),{}))
+        import os
+        return (filename_unpickler,(self.__class__,str(self),
+                                    dict(curdir=os.getcwd())))
 
 def file_dirpath(filename):
     'return path to directory containing filename'
@@ -27,6 +37,17 @@ def file_dirpath(filename):
     else:
         return dirname
 
+def default_tmp_path():
+    'find out default location for temp files, e.g. /tmp'
+    import os
+    return os.path.dirname(os.tempnam())
+
+def report_exception():
+    'print string message from exception to stderr'
+    import sys,traceback
+    info = sys.exc_info()[:2]
+    l = traceback.format_exception_only(info[0],info[1])
+    print >>sys.stderr,'Warning: caught %s\nContinuing...' % l[0]
 
 def standard_getstate(self):
     'get dict of attributes to save, using self._pickleAttrs dictionary'
