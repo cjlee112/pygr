@@ -32,7 +32,7 @@ class EmptySliceError(KeyError):
   pass
   
 
-class EmptySlice():
+class EmptySlice:
   'Empty slice for use by NLMSASlice'
   def __init__(self, seq):
     self.seq = seq
