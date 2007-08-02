@@ -518,7 +518,34 @@ Sometimes individual compute nodes may not have sufficient disk space to
 store all the data resources (for example, just the single ucsc17 17-genome alignment and 
 associated genome databases takes about 200 GB).  Yet it would be useful
 to run compute-intensive analyses on those machines accessing such data.
-pygr.Data makes that easy.  We first create an XMLRPC server on a machine that
+pygr.Data makes that easy.  The default setting of PYGRDATAPATH (if you
+do not set it yourself) is 
+\begin{verbatim}~,.,http://biodb2.bioinformatics.ucla.edu:5000\end{verbatim}
+respectively your HOME directory, current directory, and the XMLRPC
+server provided at UCLA as a service to pygr users.  Thus you can
+simply import pygr.Data and start accessing data:
+\begin{verbatim}
+>>> import pygr.Data
+>>> pygr.Data.dir('Bio')
+['Bio.MSA.UCSC.canFam2_multiz4way',...]
+>>> msa = pygr.Data.Bio.MSA.UCSC.hg17_multiz17way()
+>>> chr1 = msa.seqDict['hg17.chr1']
+>>> ival = chr1[4000:4400]
+>>> myslice = msa[ival]
+>>> for s1,s2,e in myslice.edges():
+...     print '%s\n%s\n' %(s1,s2)
+...
+AAGGGCCA
+AAGGGCCA
+\end{verbatim}
+This provides a convenient way to begin trying out pygr and working
+with comparative genomics data, but clearly is not efficient for analysis
+of large amounts of data, which must be transmitted to you by the server
+via XMLRPC, since potentially many users must share the access to the 
+biodb2.bioinformatics.ucla.edu server.
+
+To setup your own XMLRPC client-server using pygr.Data,
+first create an XMLRPC server on a machine that
 has access to the data:
 
 \begin{verbatim}
@@ -3482,10 +3509,11 @@ pattern to follow for well-known databases.
 but is instead an ``instance of a larger class of data''.  For example, genome
 sequences.  In this case we follow the general pattern 
 \var{Area.Category.Class.Instance.release}.  For example, the human genome draft
-17 is ``Bio.Seq.Genome.Hs.hg17''.  
-\item To identify specific genomes, we use the Unigene names (which are in turn
-based on the binomial species name, e.g. ``Hs'' for human (Homo sapiens).  For more
-information, see the NCBI website.
+17 is ``Bio.Seq.Genome.HUMAN.hg17''.  
+\item To identify specific genomes, we use the Uniprot / Swissprot 
+controlled vocabulary for species names, e.g. ``HUMAN'' for human.  For more
+information, see the Swissprot website
+\url{http://www.expasy.org/cgi-bin/speclist}.
 \item  Often a database may itself contain many different resources.  These
 individual resource names are simply appended to the pygr.Data name, for example,
 the ASAP database contains a resource called \code{exons}.  This would be 
@@ -3503,7 +3531,10 @@ Existing Area categories:
 \item Bio.Seq: currently, the main category in pygr.Data is sequence databases.
 \item Bio.MSA: Another major category is multiple sequence alignments (e.g. genome alignments).
 For example: ``Bio.MSA.UCSC.hg18_multiz28way''.
-\item Bio.Genomics: category representing genomics datasets.
+\item Bio.Annotation: category representing annotation information bound
+to sequence intervals.
+\item Bio.Expression: category representing gene expression analysis,
+including microarray data.
 \end{itemize}
 You may obtain a directory of available resources available using
 the \code{pygr.Data.dir}() function:
@@ -3645,7 +3676,7 @@ databases, or in a specific layer:
   Otherwise they are returned as a list.
 \end{funcdesc}
 
-\begin{funcdesc}{newServer}{name,serverClasses=None,clientHost=None,withIndex=False, host=None, port=5000, **kwargs}
+\begin{funcdesc}{newServer}{name,serverClasses=None,clientHost=None,withIndex=False, host=None, port=5000, excludeClasses=None, **kwargs}
   Create and return a new XMLRPC server to serve all pygr.Data resources 
   currently loaded in memory that are capable of XMLRPC client-server
   operation.  The server \var{name} will be used for 
@@ -3674,6 +3705,13 @@ databases, or in a specific layer:
   you wished to access your server by port-forwarding localhost port 5000
   to your server port via SSH, you could pass a \var{clientHost}='localhost'
   setting.
+
+  \var{excludeClasses}, if not None, should be a list of classes that
+  should be excluded from the new server.  If None, the default is
+  [pygr.sqlgraph.SQLTableBase,pygr.sqlgraph.SQLGraphClustered], since
+  such relational database resources are better accessed directly from
+  the relational database server, rather than via the XMLRPC server as
+  an intermediate step.
 
   \var{host, port} arguments are passed to the \class{XMLRPCServerBase} constructor.
   For details see that section below.
