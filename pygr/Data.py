@@ -516,7 +516,8 @@ class ResourceFinder(object):
         try:
             return os.environ['PYGRDATAPATH']
         except KeyError: # DEFAULT: HOME, CURRENT DIR, IN THAT ORDER
-            return self.separator.join(['~','.'])
+            return self.separator.join(['~','.',
+                                        'http://biodb2.bioinformatics.ucla.edu:5000'])
     def update(self,PYGRDATAPATH=None):
         'get the latest list of resource databases'
         import os
@@ -688,8 +689,11 @@ Continuing with import...'''%dbpath
         del db[id]
         self.delSchema(id,layer)
     def newServer(self,name,serverClasses=None,clientHost=None,
-                  withIndex=False,**kwargs):
+                  withIndex=False,excludeClasses=None,**kwargs):
         'construct server for the designated classes'
+        if excludeClasses is None: # DEFAULT: NO POINT IN SERVING SQL TABLES...
+            from sqlgraph import SQLTableBase,SQLGraphClustered
+            excludeClasses = [SQLTableBase,SQLGraphClustered]
         if serverClasses is None: # DEFAULT TO ALL CLASSES WE KNOW HOW TO SERVE
             from seqdb import BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC
             serverClasses=[(BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC)]
@@ -705,17 +709,24 @@ Continuing with import...'''%dbpath
             clientHost=server.host
         clientDict={}
         for id,obj in self.d.items(): # SAVE ALL OBJECTS MATCHING serverClasses
+            skipThis = False
+            for skipClass in excludeClasses: # CHECK LIST OF CLASSES TO EXCLUDE
+                if isinstance(obj,skipClass):
+                    skipThis = True
+                    break
+            if skipThis:
+                continue # DO NOT INCLUDE THIS OBJECT IN SERVER
             skipThis=True
             for baseKlass,clientKlass,serverKlass in serverClasses:
                 if isinstance(obj,baseKlass) and not isinstance(obj,clientKlass):
                     skipThis=False # OK, WE CAN SERVE THIS CLASS
                     break
-            if skipThis: # CAN'T SERVE THIS CLASS, SO SKIP IT
+            if skipThis: # HAS NO XMLRPC CLIENT-SERVER CLASS PAIRING
                 try: # SAVE IT AS ITSELF
                     self.client_dict_setitem(clientDict,id,obj,badClasses=nonPortableClasses)
                 except PygrDataNotPortableError:
                     pass # HAS NON-PORTABLE LOCAL DEPENDENCIES, SO SKIP IT
-                continue
+                continue # GO ON TO THE NEXT DATA RESOURCE
             try: # TEST WHETHER obj CAN BE RE-CLASSED TO CLIENT / SERVER
                 obj.__class__=serverKlass # CONVERT TO SERVER CLASS FOR SERVING
             except TypeError: # GRR, EXTENSION CLASS CAN'T BE RE-CLASSED...
