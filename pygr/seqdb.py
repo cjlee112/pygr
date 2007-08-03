@@ -68,7 +68,7 @@ def new_seq_id():
     return str(seq_id_counter-1)
 
 
-def write_fasta(ofile,s,chunk=60,id=None):
+def write_fasta(ofile,s,chunk=60,id=None,reformatter=None):
     "Trivial FASTA output"
     if id is None:
         try:
@@ -78,6 +78,8 @@ def write_fasta(ofile,s,chunk=60,id=None):
 
     ofile.write('>'+id+'\n')
     seq=str(s)
+    if reformatter is not None: # APPLY THE DESIRED REFORMATTING
+        seq = reformatter(seq)
     end=len(seq)
     pos=0
     while 1:
@@ -416,7 +418,7 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
     'Run RepeatMasker on a sequence, return lowercase-masked string'
     temppath=os.tempnam()
     ofile=file(temppath,'w')
-    write_fasta(ofile,seq)
+    write_fasta(ofile,seq,reformatter=lambda x:x.upper()) # SAVE IN UPPERCASE!
     ofile.close()
     cmd=progname+' '+opts+' '+temppath
     if os.system(cmd)!=0:
@@ -428,7 +430,7 @@ def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
     cmd='rm -f %s %s.*' % (temppath,temppath)
     if os.system(cmd)!=0:
         raise OSError('command '+cmd+' failed')
-    return seq_masked
+    return seq_masked # ONLY THE REPEATS ARE IN LOWERCASE NOW
 
 
 class BlastDBinverse(object):
