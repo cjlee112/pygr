@@ -319,6 +319,9 @@ class PicklableShelve(Collection):
         self.d.close()
         import shelve
         self.d = shelve.open(self.filename,mode)
+    def __del__(self):
+        'must ensure that shelve object is closed to save pending data'
+        self.d.close()
 
 
 class IntShelve(PicklableShelve):
