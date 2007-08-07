@@ -16,42 +16,8 @@ import os
 import sys
 from distutils.core import setup, Extension
 
-def runTests():
-   testdir = os.path.join(os.getcwd(),"tests")
-   sys.path.append(testdir)
-   os.environ['PYGRPATH'] = os.path.join(os.getcwd(),"pygr")
-
-   # version check
-   v1, v2 = sys.version_info[:2]
-   if v1 < 2:
-      raise 'pygr does not support python 1.x'
-   if v1 == 2 and v2 < 2:
-      raise 'pygr does not support python2.1 or earlier version'
-
-   try:
-      import test_loader
-   except ImportError:
-      raise "Unable to load test code. Please check to see that test_loader.py resides in (%s)\n" % (testdir)
-
-   try:
-      import MySQLdb
-   except ImportError:
-      print "\nWarning: You do not have a recommended module installed (MySQLdb). While this module is not necessary to use core components, some provided apps components will not be available. Installing anyway...\n"
-
-
-   if (test_loader.TestFrameWork(testExtensions=False).go()):
-      print "\nAll tests passed, continuing install...\n"
-      return True
-   else:
-      print "\nSource tainted! This code has been tampered with, or has not been QA'd. Please retrieve a new archive.\n"
-      return False
-
-
-
-
-
 name = "pygr"
-version = "1.0"
+version = "0.7"
 
 classifiers = """
 Development Status :: 5 - Production/Stable
@@ -78,10 +44,6 @@ metadata = {
     'license': "GPL",
     'platforms': "ALL",
     'url': "http://sourceforge.net/projects/pygr",
-    #'download_url': "http://prdownloads.sourceforge.net/pygr/" \
-    #                "pygr-%s.tar.gz" % version, 
-    #'classifiers': [ c for c in classifiers.split('\n') if c ],
-
     'py_modules': [
 	"pygr/__init__",
 	"pygr/graphquery",
@@ -107,28 +69,14 @@ metadata = {
         ]
    }
 
-v1, v2 = sys.version_info[:2]
-if v1 >= 2 and v2 > 2:
-    metadata['download_url'] = "http://prdownloads.sourceforge.net/pygr/pygr-%s.tar.gz" % version
-    metadata['classifiers'] = [ c for c in classifiers.split('\n') if c ]
-
-def copyFile(source,target):
-   'OS independent copy function'
-   if source==target: # PROTECT AGAINST POSSIBILITY OF OVER-WRITING SELF
-      return # NO NEED TO DO ANYTHING
-   ifile=file(os.path.normpath(source))
-   ofile=file(os.path.normpath(target),'w')
-   ofile.write(ifile.read())
-   ifile.close()
-   ofile.close()
-
 def compilePyrex(cfile):
    'for proper class pickling, pyrexc needs full-dotted-module-path filename format'
+   from shutil import copyfile
    modulename='.'.join(cfile.split('/')) # e.g. pygr/cdict.c -> pygc.cdict.c
    ctarget=os.path.join(os.path.dirname(cfile),modulename) # ADD DIRECTORY PATH
-   copyFile(cfile[:-2]+'.pyx',ctarget[:-2]+'.pyx') # COPY pyx FILE TO DESIRED NAME
+   copyfile(cfile[:-2]+'.pyx',ctarget[:-2]+'.pyx') # COPY pyx FILE TO DESIRED NAME
    try: # COPY pxd FILE IF IT EXISTS...
-      copyFile(cfile[:-2]+'.pxd',ctarget[:-2]+'.pxd') # COPY pxd FILE TO DESIRED NAME
+      copyfile(cfile[:-2]+'.pxd',ctarget[:-2]+'.pxd') # COPY pxd FILE TO DESIRED NAME
    except IOError:
       pass
    cmd='pyrexc %s.pyx'%ctarget[:-2]
@@ -137,7 +85,7 @@ def compilePyrex(cfile):
    if exit_status!=0:  # CAN'T RUN THE PYREX COMPILER TO PRODUCE C
       print '\n\nPyrex compilation failed!  Is pyrexc missing or not in your PATH?'
       return False # SIGNAL COMPILATION FAILED
-   copyFile(ctarget,cfile) # COPY .c FILE BACK TO DESIRED NAME
+   copyfile(ctarget,cfile) # COPY .c FILE BACK TO DESIRED NAME
    return True # SIGNAL COMPILATION SUCCEEDED
 
 def pyrexIsUpToDate(cfile):
@@ -155,7 +103,7 @@ def pyrexIsUpToDate(cfile):
       pass
    return cstat[8]>pyxstat[8] # COMPARE THEIR st_mtime VALUES
 
-def add_extensions():
+def add_pyrex_extensions():
    'prepare extension module code, add to setup metadata'
    buildExtensions=[]
    pyrexTargets={'pygr/cdict.c':
@@ -180,8 +128,57 @@ def add_extensions():
       metadata['ext_modules'] = buildExtensions
 
 
+try:
+   v1, v2, v3 = sys.version_info[:3] # ONLY AVAILABLE IN >= 2.0
+   if v1 == 2 and v2 < 2: # 2.1 LACKS GENERATORS... SO NOT GOOD ENOUGH
+      raise AttributeError
+except AttributeError:
+   raise EnvironmentError('Sorry, pygr does not support python versions before 2.2')
+else:
+   if v1>2 or v2>2 or v3>=3: # ONLY ALLOWED IF >=2.2.3
+      metadata['download_url'] = "http://prdownloads.sourceforge.net/pygr/pygr-%s.tar.gz" % version
+      metadata['classifiers'] = [ c for c in classifiers.split('\n') if c ]
+
+
+def check_extensions(dist,ext_modules):
+   from distutils.command.build import build
+   b = build(dist)
+   b.finalize_options()
+   sys.path.append(os.path.join(b.build_lib,'pygr'))
+   for extmodule in ext_modules:
+      try:
+         exec 'import %s' % extmodule.name.split('.')[-1]
+      except ImportError:
+         print >>sys.stderr,'Build of module %s appears to have failed!' % extmodule.name
+         return False
+   return True
+      
+def clean_up_pyrex_files(ext_modules,base='pygr'):
+   for ext_module in ext_modules:
+      name = ext_module.name.split('.')[-1]
+      rmfiles = ['%s/%s.c' %(base,name),'%s/%s.%s.c' %(base,base,name)]
+      for filename in rmfiles:
+         try:
+            os.remove(filename)
+         except OSError:
+            pass
+
 
 if __name__=='__main__':
-   add_extensions() # DO THE INSTALL
-   setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
-      
+   add_pyrex_extensions() # PREPARE EXTENSION CODE FOR COMPILATION
+   retry = False
+   try:
+      dist = setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
+   except SystemExit: # SOMETHING WENT WRONG WITH THE BUILD, CLEAN UP AND RETRY IT...
+      retry = True
+   if retry or not check_extensions(dist,metadata['ext_modules']):
+      print >>sys.stderr,'Attempting to clean up pyrex files and try again...'
+      clean_up_pyrex_files(metadata['ext_modules'])
+      add_pyrex_extensions()
+      dist = setup(**metadata)
+      if not check_extensions(dist,metadata['ext_modules']):
+         raise OSError('Build failed. You are either missing pyrex or a C compiler.\nPlease fix this, and run the build command again!')
+      else:
+         print 'Build succeeded!'
+
+   
