@@ -262,6 +262,16 @@ class DictQueue(dict):
 ################################ PYGR.DATA.SCHEMA - AWARE CLASSES BELOW
 
 
+def close_if_possible(self):
+    'close storage to ensure any pending data is written'
+    try:
+        do_close = self.d.close
+    except AttributeError:
+        pass
+    else:
+        do_close()
+
+
 
 
 class Collection(object):
@@ -295,6 +305,10 @@ class Collection(object):
         if attr=='__setstate__': # PREVENT INFINITE RECURSE IN UNPICKLE
             raise AttributeError
         return getattr(self.d,attr)
+    close = close_if_possible
+    def __del__(self):
+        'must ensure that shelve object is closed to save pending data'
+        close_if_possible(self)
 
 class PicklableShelve(Collection):
     'persistent storage mapping ID --> OBJECT'
@@ -319,9 +333,6 @@ class PicklableShelve(Collection):
         self.d.close()
         import shelve
         self.d = shelve.open(self.filename,mode)
-    def __del__(self):
-        'must ensure that shelve object is closed to save pending data'
-        self.d.close()
 
 
 class IntShelve(PicklableShelve):
@@ -358,7 +369,6 @@ class IntShelve(PicklableShelve):
         for k,v in self.d.iteritems():
             yield self.trueKey(k),v
     def items(self): return [k for k in self.iteritems()]
-    def close(self): self.d.close()
 
 
 
@@ -521,6 +531,9 @@ class Mapping(object):
         except AttributeError:
             self._inverse=MappingInverse(self)
             return self._inverse
+    close = close_if_possible
+    def __del__(self):
+        close_if_possible(self)
 
 
 def graph_cmp(self,other):
@@ -731,9 +744,6 @@ class Graph(object):
     _pickleAttrs = dict(d='saveDict',sourceDB=0,targetDB=0,edgeDB=0,
                         edgeDictClass=0)
     add_standard_packing_methods(locals())  ############ PACK / UNPACK METHODS
-    # USE METHOD FROM THE SHELVE...
-    classutil.methodFactory(['__contains__'],'lambda self,obj:self.d.%s(obj.id)',
-                            locals())
     def __len__(self):
         return len(self.d)
     def __iter__(self):
@@ -779,6 +789,10 @@ class Graph(object):
         return self # THIS IS REQUIRED FROM isub()!!
     update = update_graph
     __cmp__ = graph_cmp
+    close = close_if_possible
+    def __del__(self):
+        close_if_possible(self)
+
 
 # NEED TO PROVIDE A REAL INVERT METHOD!!
 ##     def __invert__(self):
