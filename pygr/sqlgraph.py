@@ -727,8 +727,8 @@ class SQLGraphClustered(object):
         'uses db select; does not force load'
         self.table.cursor.execute('select distinct(%s) from %s'
                                   %(self.source_id,self.table.name))
-        return [self.unpack_source(source_id)
-                for source_id in self.table.cursor.fetchall()]
+        return [self.unpack_source(t[0])
+                for t in self.table.cursor.fetchall()]
     methodFactory(['iteritems','items','itervalues','values'],
                   'lambda self:(self.load(),self.d.%s())[1]',locals())
     def __contains__(self,k):
