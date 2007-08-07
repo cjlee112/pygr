@@ -309,7 +309,7 @@ where <LAYERNAME> is the layer name you want to assign it.
                 return obj
             except KeyError: # MUST HAVE FAILED TO LOAD A REQUIRED DEPENDENCY
                 pass # HMM, TRY ANOTHER LOCATION
-        raise PgyrDataNotFoundError('unable construct %s from remote services')
+        raise PygrDataNotFoundError('unable construct %s from remote services')
     def __setitem__(self,id,obj):
         'add an object to this resource database'
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
