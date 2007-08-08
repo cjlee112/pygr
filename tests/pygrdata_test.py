@@ -23,6 +23,21 @@ class PygrSwissprotBase(object):
         m.__doc__ = 'map sp to itself'
         pygr.Data.Bio.Seq.spmap = m
         pygr.Data.schema.Bio.Seq.spmap = pygr.Data.OneToManyRelation(sp,sp,bindAttrs=('buddy',))
+        # CREATE AN ANNOTATION DATABASE AND BIND AS exons ATTRIBUTE
+        annoDB = seqdb.AnnotationDB({1:('HBB1_TORMA',10,50)},sp,
+                                    sliceAttrDict=dict(id=0,start=1,stop=2))
+        exon = annoDB[1]
+        from pygr import cnestedlist
+        filename = tmp.subfile('exonAnnot')
+        nlmsa = cnestedlist.NLMSA(filename,'w',use_virtual_lpo=True,bidirectional=False)
+        nlmsa.addAnnotation(exon)
+        nlmsa.build()
+        annoDB.__doc__ = 'a little annotation db'
+        nlmsa.__doc__ = 'a little map'
+        pygr.Data.Bio.Annotation.annoDB = annoDB
+        pygr.Data.Bio.Annotation.map = nlmsa
+        pygr.Data.schema.Bio.Annotation.map = \
+             pygr.Data.ManyToManyRelation(sp,annoDB,bindAttrs=('exons',))
         self.tempdir.force_reload()
     def teardown(self):
         self.tempdir.__del__() # FORCE IT TO RELEASE PYGR DATA
@@ -39,11 +54,12 @@ def check_match(self):
     store = PygrDataTextFile('results/seqdb1.pickle')
     saved = store['hbb1 fragment']
     assert frag == saved, 'seq ival should matched stored result'
-def check_dir(self):
+def check_dir(self,correct=['Bio.Annotation.annoDB','Bio.Annotation.map',
+                            'Bio.Seq.Swissprot.sp42','Bio.Seq.frag','Bio.Seq.spmap']):
     import pygr.Data
     l = pygr.Data.dir('Bio')
     print 'dir:',l
-    assert l == ['Bio.Seq.Swissprot.sp42','Bio.Seq.frag','Bio.Seq.spmap']
+    assert l == correct
 def check_bind(self):
     import pygr.Data
     sp = pygr.Data.Bio.Seq.Swissprot.sp42()
@@ -51,6 +67,16 @@ def check_bind(self):
     trypsin =  sp['PRCA_ANAVA']
     assert hbb.buddy == trypsin,'automatic schema attribute binding'
 
+def check_bind2(self):
+    import pygr.Data
+    sp = pygr.Data.Bio.Seq.Swissprot.sp42()
+    hbb = sp['HBB1_TORMA']
+    exons = hbb.exons.keys()
+    assert len(exons)==1, 'number of expected annotations'
+    annoDB = pygr.Data.Bio.Annotation.annoDB()
+    exon = annoDB[1]
+    assert exons[0]==exon, 'test annotation comparison'
+    assert exons[0].annot is exon,'annotation parent match'
 
 class Seq_Test(PygrSwissprotBase):
     def match_test(self):
@@ -87,7 +113,9 @@ class Seq_Test(PygrSwissprotBase):
         g = pygrData.getResource.db[0].graph
         l = g.keys()
         l.sort()
-        assert l == ['Bio.Seq.Swissprot.sp42','Bio.Seq.sp2','Bio.Seq.sp3']
+        print 'nodes are',l
+        assert l == ['Bio.Annotation.annoDB',
+                     'Bio.Seq.Swissprot.sp42','Bio.Seq.sp2','Bio.Seq.sp3']
         
         
 
@@ -106,6 +134,9 @@ class Seq_SQL_Test(Seq_Test):
 class Seq_SQL2_Test(Seq_SQL_Test):
     'test arg passing mechanism to save to a specific database'
     mysqlArgs = dict(args=' lldb.mbi.ucla.edu')
+    def bind_test(self):
+        check_bind(self)
+        check_bind2(self)
 
 class XMLRPC_Test(PygrSwissprotBase):
     'create an XMLRPC server and access seqdb from it'
@@ -117,7 +148,7 @@ class XMLRPC_Test(PygrSwissprotBase):
     def xmlrpc_test(self):
         pygrData = self.server.access_server()
         check_match(self)
-        check_dir(self)
+        check_dir(self,correct=['Bio.Seq.Swissprot.sp42','Bio.Seq.frag','Bio.Seq.spmap'])
         check_bind(self)
         from pygr import seqdb
         sp2 = seqdb.BlastDB(self.filename)
