@@ -866,6 +866,18 @@ class AnnotationSlice(SeqPath):
     originalIval=originalIval
     __getattr__=getAnnotationAttr
 
+class StrictAnnotation(object):
+    '''wrapper that behaves strictly as annotation, i.e. even originaIval()
+    just returns the same StrictAnnotation object.  In all other respects,
+    just acts as a wrapper around the annotation object'''
+    def __init__(self,annot):
+        'wrap an annotation object'
+        self._annot = annot
+    def __getattr__(self,attr):
+        return getattr(self._annot,attr)
+    def originalIval(self):
+        return self
+
 class AnnotationDB(dict):
     'container of annotations as specific slices of db sequences'
     def __init__(self,sliceDB,seqDB,itemClass=AnnotationSeq,
@@ -1334,23 +1346,22 @@ class SeqPrefixUnionDict(PrefixUnionDict):
 
     def __iadd__(self,k):
         'add a sequence or database to prefix-union, with a unique prefix'
-        if isinstance(k,SeqPath): # k IS A SEQUENCE...
-            if k in (~self): # k ALREADY IN ONE OF OUR DATABASES
+        if k in (~self): # k ALREADY IN ONE OF OUR DATABASES
+            return self
+        try: # OK, JUST ADD ITS DATABASE!
+            db=k.db # GET DB DIRECTLY FROM SeqPath object
+        except AttributeError:
+            try:
+                db=k.pathForward.db # GET DB FROM pathForward
+            except AttributeError: # USER SEQUENCE, NOT FROM ANY CONTAINER?!
+                try: # SAVE TO user SEQUENCE DICT
+                    d=self.prefixDict['user']
+                except KeyError: # NEED TO CREATE A user DICT
+                    d=KeepUniqueDict()
+                    self.prefixDict['user']=d
+                    self.dicts[d]='user'
+                d[k.pathForward.id]=k.pathForward # ADD TO user DICTIONARY
                 return self
-            try: # OK, JUST ADD ITS DATABASE!
-                db=k.db # GET DB DIRECTLY FROM SeqPath object
-            except AttributeError:
-                try:
-                    db=k.pathForward.db # GET DB FROM pathForward
-                except AttributeError: # USER SEQUENCE, NOT FROM ANY CONTAINER?!
-                    try: # SAVE TO user SEQUENCE DICT
-                        d=self.prefixDict['user']
-                    except KeyError: # NEED TO CREATE A user DICT
-                        d=KeepUniqueDict()
-                        self.prefixDict['user']=d
-                        self.dicts[d]='user'
-                    d[k.pathForward.id]=k.pathForward # ADD TO user DICTIONARY
-                    return self
         # db MUST BE A SEQ DATABASE STYLE DICT...
         if db in self.dicts: # ALREADY IS ONE OF OUR DATABASES
             return self # NOTHING FURTHER TO DO
