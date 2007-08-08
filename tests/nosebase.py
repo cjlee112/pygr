@@ -11,21 +11,18 @@ class TempDir(object):
         return self.path
     def __del__(self):
         'recursively delete the temp dir and its subdirs'
-        for dirpath,subdirs,files in os.walk(self.path):
-            for name in files: # DELETE ALL FILES IN dirpath
-                os.remove(os.path.join(dirpath,name))
-            os.rmdir(dirpath) # FINALLY DELETE dirpath DIRECTORY
+        if self.path is not None:
+            from shutil import rmtree
+            rmtree(self.path)
+            self.path = None
     def subfile(self,name):
         'return full path by appending name to temp dir path'
         return os.path.join(self.path,name)
     def copyFile(self,path):
         'copy file into the temp dir and return its new path'
-        infile = file(path)
         filename = self.subfile(os.path.basename(path))
-        outfile = file(filename,'w')
-        outfile.write(infile.read())
-        infile.close()
-        outfile.close()
+        from shutil import copyfile
+        copyfile(path,filename)
         return filename
 
 def get_pygr_data_path(newpath=''):
