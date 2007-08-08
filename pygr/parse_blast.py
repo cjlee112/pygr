@@ -61,9 +61,11 @@ class BlastHitParser(object):
     def save_query_line(self,line):
         "save a Query: line"
         c=line.split()
+        self.query_end=int(c[3])
         if not self.query_seq:
             self.query_start=int(c[1])
-        self.query_end=int(c[3])
+            if self.query_start < self.query_end:  # handles forward orientation
+                self.query_start -= 1
         self.query_seq+=c[2]
         self.seq_start_char=line.find(c[2]) # IN CASE BLAST SCREWS UP Sbjct:
     def save_subject_line(self,line):
@@ -75,9 +77,11 @@ class BlastHitParser(object):
             # THE SEQUENCE, WITH NO SPACE!!
             c=['Sbjct:',line[6:self.seq_start_char]] \
                +line[self.seq_start_char:].split() # FIX BLAST SCREW-UP
+        self.subject_end=int(c[3])
         if not self.subject_seq:
             self.subject_start=int(c[1])
-        self.subject_end=int(c[3])
+            if self.subject_start < self.subject_end:  # handles forward orientation
+                self.subject_start -= 1
         self.subject_seq+=c[2]
         lendiff=len(self.query_seq)-len(self.subject_seq)
         if lendiff>0: # HANDLE TBLASTN SCREWINESS: Sbjct SEQ OFTEN TOO SHORT!!
@@ -96,10 +100,10 @@ class BlastHitParser(object):
     def repr_tuple(self,q_start,q_end,s_start,s_end,
                    query_ori,query_factor,subject_ori,subject_factor):
         "return as tuple following our orientation, location conventions"
-        query_start=self.query_start+q_start*query_ori*query_factor -1
-        query_end=self.query_start+q_end*query_ori*query_factor -1
-        subject_start=self.subject_start+s_start*subject_ori*subject_factor -1
-        subject_end=self.subject_start+s_end*subject_ori*subject_factor -1
+        query_start=self.query_start+q_start*query_ori*query_factor
+        query_end=self.query_start+q_end*query_ori*query_factor
+        subject_start=self.subject_start+s_start*subject_ori*subject_factor
+        subject_end=self.subject_start+s_end*subject_ori*subject_factor
         l=[self.hit_id,self.query_id,self.subject_id,self.blast_score,
            self.e_value,self.identity_percent,query_ori,subject_ori]
         if query_start<query_end:
