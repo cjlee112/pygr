@@ -536,6 +536,8 @@ cdef class NLMSASlice:
             it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
             assert ns_lpo.id!=im2[j].target_id
 
+    if it.nhit<=0:
+      raise nlmsa_utils.EmptySliceError('this interval is not aligned!')
     it2.copy(it) # COPY FULL SET OF SAVED INTERVALS
     self.nseqBounds=it2.mergeSeq() # MERGE TO ONE INTERVAL PER SEQUENCE ORIENTATION
     self.seqBounds=it2.getIntervalMap() # SAVE SORTED ARRAY & DETACH FROM ITERATOR
@@ -1549,8 +1551,10 @@ cdef class NLMSA:
     return self  # iadd MUST ALWAYS RETURN self!
   def addAnnotation(self,a):
     'save alignment of sequence interval --> an annotation object'
+    from seqdb import StrictAnnotation
     ival=a.originalIval() # GET PURE SEQUENCE INTERVAL
     self.__iadd__(ival) # ADD SEQ AS A NODE IN OUR ALIGNMENT
+    a = StrictAnnotation(a) # ENSURE THIS IS SAVED AS ANNOTATION, NOT ORIGINAL IVAL
     self[ival].__iadd__(a) # ADD ALIGNMENT BETWEEN ival AND ANNOTATION
 
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id):
