@@ -359,7 +359,7 @@ namespace for data.  A given resource is given a unique name that then becomes
 its universal handle for accessing it, no matter where you are (just as Python's
 \code{import} command provides a consistent name for accessing a given code
 resource, regardless of where you are).  For example, say we want to add the
-hg17 (release 17 of the human genome sequence) as ``Bio.Seq.Genome.Hs.hg17''
+hg17 (release 17 of the human genome sequence) as ``Bio.Seq.Genome.HUMAN.hg17''
 (the choice of name is arbitrary, but it's best to choose a good convention and follow
 it consistently):
 
@@ -368,14 +368,22 @@ from pygr import seqdb
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
 hg17 = seqdb.BlastDB('hg17')
 hg17.__doc__ = 'human genome sequence draft 17' # REQUIRED!
-pygr.Data.Bio.Seq.Genome.Hs.hg17 = hg17 # SAVE AS THIS NAME
+pygr.Data.Bio.Seq.Genome.HUMAN.hg17 = hg17 # SAVE AS THIS NAME
+pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
+Note that you {\em must} call the function \code{pygr.Data.save()} to 
+complete the transaction and save all pending data resources
+(i.e. all those added since your last \code{pygr.Data.save()} or
+\code{pygr.Data.rollback()}).  In particular, if you have added
+data to pygr.Data during a given Python interpreter session, you
+should always call \code{pygr.Data.save()} or
+\code{pygr.Data.rollback()} prior to exiting from that session.
 
 In any subsequent Python session, we can now access it directly by its
 pygr.Data name:
 \begin{verbatim}
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-hg17=pygr.Data.Bio.Seq.Genome.Hs.hg17() # FIND THE RESOURCE
+hg17=pygr.Data.Bio.Seq.Genome.HUMAN.hg17() # FIND THE RESOURCE
 \end{verbatim}
 The call syntax (\code{hg17()}) emphasizes that this acts like a Python
 constructor: it constructs a Python object for us (in this case, the
@@ -406,6 +414,7 @@ import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
 nlmsa = cnestedlist.NLMSA('/loaner/ucsc17')
 nlmsa.__doc__ = 'UCSC 17way multiz alignment, rooted on hg17'
 pygr.Data.Bio.Seq.MSA.ucsc17 = nlmsa
+pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 This works, even though using this 17-genome alignment (behind the
 scenes) involves accessing 17 BlastDB sequence databases (one for each
@@ -424,6 +433,7 @@ for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
     pygr.Data.getResource.addResource('Bio.Seq.Genome.'+id,genome)
 nlmsa.__doc__ = 'UCSC 17way multiz alignment, rooted on hg17'
 pygr.Data.Bio.Seq.MSA.ucsc17=nlmsa # NOW SAVE THE ALIGNMENT
+pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 
 This has several advantages.  First, we can now access other genome databases
@@ -456,6 +466,7 @@ pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph=splicegraph # ADD A NEW RESOURCE
 pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
   pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
                                bindAttrs=('next','previous','exons'))
+pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 This example assumes that 
 \begin{itemize}
@@ -717,6 +728,7 @@ pygr.Data.Bio.ASAP2.hg17.splicegraph = splicegraph
 pygr.Data.schema.Bio.ASAP2.hg17.splicegraph = \
     pygr.Data.ManyToManyRelation(exons,exons,splices,
                                  bindAttrs=('next','previous','exons'))
+pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 This variant of \class{SQLGraph} is optimized for typical usage patterns,
 by loading data in clusters (rather than each individual splice one by one).
@@ -898,7 +910,7 @@ def map_clusters(server,dbname='HUMAN_SPLICE_03',
                  rmOpts='',**kwargs):
     "CLIENT FUNCTION: map clusters one by one"
     # CONSTRUCT RESOURCE FOR US IF NEEDED
-    genome=pygr.Data.Bio.Seq.Genome.Hs.hg17()
+    genome=pygr.Data.Bio.Seq.Genome.HUMAN.hg17()
     # LOAD DB SCHEMA
     (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna, 
     protein, clusterExons,clusterSplices)=getSpliceGraphFromDB(spliceCalcs[dbname])
@@ -1020,6 +1032,7 @@ nlmsa.__doc__ = 'map human genome regions to contained exons'
 pygr.Data.Bio.Genomics.ASAP2.exonmap=nlmsa # NOW SAVE MAPPING AND SCHEMA
 pygr.Data.schema.Bio.Genomics.ASAP2.exonmap= \
       pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons'))
+pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 \begin{itemize}
 \item NLMSA provides an efficient, high-performance way to store and
@@ -1083,6 +1096,7 @@ nlmsa.__doc__ = 'map human genome regions to contained exons'
 pygr.Data.Bio.Genomics.ASAP2.exonmap=nlmsa # NOW SAVE MAPPING AND SCHEMA
 pygr.Data.schema.Bio.Genomics.ASAP2.exonmap= \
       pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons',))
+pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 
 \begin{itemize}
@@ -3424,6 +3438,7 @@ as the resource ID ``Bio.Seq.MSA.ucsc17'':
 \begin{verbatim}
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
 pygr.Data.Bio.Seq.MSA.ucsc17=nlmsa # NOW SAVE THE ALIGNMENT
+pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 The crucial point is that this namespace is {\em persistent} between
 Python interpreter sessions.  The actual data is not saved in the pygr.Data 
@@ -3473,26 +3488,66 @@ exons=pygr.Data.Bio.Genomics.ASAP2.hg17.exons() # ANNOTATION DATABASE
 str(exons[464]) # GET THE SEQUENCE OF THIS SPECIFIC EXON
 \end{verbatim}
 
-
-\item When one resource {\em depends} on another, the order in which you
-save them to pygr.Data matters.  Specifically, you should save them in
-order of their dependencies, i.e. if \var{B} depends on \var{A}, first save
-\var{A}, then \var{B}.  If you do it this way, \var{B} will be stored
-in pygr.Data with a reference to the pygr.Data resource ID you assigned
-to \var{A}, whereas if you saved \var{B} before \var{A}, it will be stored
-with a direct reference to object \var{A} instead of to its resource ID.
-This will still work, but will make pygr.Data less intelligent about how
-it retrieves resource \var{A}.  For example, if you opened \var{B} on
-another computer that didn't have \var{A} accessible in exactly the same
-way as on your original computer, this would simply fail -- even if
-pygr.Data had resource rules for obtaining the \var{A} resource ID
-remotely.
-
 \item It should be noted that at the moment there is only one name
 (\code{Bio}) at the top-level of the pygr.Data module namespace (since currently
 this is only being used for bioinformatics).  However it's 
 trivial to add new names as \class{ResourcePath} objects to the pygr.Data
 module.
+
+\end{itemize}
+
+\subsubsection{pygr.Data is transactional}
+
+pygr.Data follows a {\em transactional} model: new resources
+added to pygr.Data are not saved to the resource database until you
+call \code{pygr.Data.save()}.  This has several benefits:
+
+\begin{itemize}
+\item Because of the transactional model,
+within a single transaction, the {\em order} in which you
+add resources to pygr.Data does not matter.  This is a crucial data
+integrity requirement.  In a non-transactional model (where each
+resource is saved the instant it is added), adding resources in the
+wrong order will break data integrity.  Specifically, 
+if object \var{B} depends on object \var{A}, 
+but you saved \var{B} before \var{A}, then
+\var{B} will not be aware of \var{A}'s resource ID (i.e. it has no way of
+knowing that you plan on assigning \var{A} a resource ID some time
+in the future).  This would break a crucial data integrity guarantee,
+namely that if two objects \var{B} and \var{C} refer to the same
+object \var{A} at the time they are saved, it is guaranteed that
+when restored in the future they will still refer to the identical
+Python object.  To provide this guarantee in a way that is
+persistent across Python interpreter sessions, pygr.Data must 
+store object references in terms of their unique pygr.Data IDs.
+This is only possible if the object has been assigned a pygr.Data
+ID (by having added it to pygr.Data in the usual way) before
+you complete the transaction by calling \code{pygr.Data.save()}.
+
+\item This also enables pygr.Data to provide a limited form of
+{\em rollback}, i.e. the ability to cancel an entire set of
+resource additions at any time before they are committed.
+You can do this by calling \code{pygr.Data.rollback()}.
+
+\item You can save a given group of pygr.Data resources as a transaction
+to multiple pygr.Data resource databases, simply by calling
+\code{pygr.Data.save}(\var{layer}) multiple times with different
+pygr.Data \var{layer} names.
+
+\item How do you decide what set of data forms a single transaction?
+This follows a very simple rule: if an object \var{A} that you are adding
+to pygr.Data depends on (i.e. {\em refers
+to}) some other object \var{B} that you also
+intend to add to pygr.Data, then \var{B} must either {\em already} have a pygr.Data ID,
+or \var{B} must also be added to pygr.Data in the same transaction.
+
+\item If you add resources to pygr.Data, you {\em must} call \code{pygr.Data.save()}
+before your Python interpreter session exits.  Otherwise the transaction would
+be left incomplete and would not be saved to the pygr.Data resource database.
+Similarly, if for some reason you need to call \code{reload(pygr.Data)}, 
+but there are pending pygr.Data additions of data or schema, you must
+first call either \code{pygr.Data.save()} or \code{pygr.Data.rollback()}
+to indicate whether you wish to save or dump these pending additions.
 
 \end{itemize}
 
@@ -3584,57 +3639,42 @@ Such resource databases are accessed by pygr.Data using its
 \end{itemize}
 
 \subsubsection{Convenience functions}
-\begin{funcdesc}{addResourceDict}{saveDict,layer=None}
-  The best way to add an entire set of resources to the pygr.Data namespace,
-  by passing a dictionary whose keys are resource names, and whose values are
-  the objects you wish to save.  This method has the important advantage
-  that it automatically takes care of dependency ordering for you.
-  That is, any reference to an item listed in \var{saveDict} will be
-  saved using its resource name, regardless of whether it has already
-  been saved as that resource name or not, and regardless of the
-  order in which you specify the items in \var{saveDict}.
-
-  By contrast, if you save multiple items individually, you have to
-  follow their dependency order carefully.  For example:
-\begin{verbatim}
-foo.x=bar # foo DEPENDS ON bar
-pygr.Data.Bio.Test.Foo=foo # WRONG!  SHOULD HAVE SAVED bar FIRST!
-pygr.Data.Bio.Test.Bar=bar
-\end{verbatim}
-This order causes pygr.Data to save \code{foo} with a direct reference
-to \code{bar}, rather than by using its pygr resource ID.  This will still
-enable pygr.Data to load \code{bar} on exactly, the same platform as it
-was saved.  But it will not search the pygr.Data resource databases to find
-alternative ways to load \code{bar}.  Here's the correct order:
-\begin{verbatim}
-foo.x=bar # foo DEPENDS ON bar
-pygr.Data.Bio.Test.Bar=bar
-pygr.Data.Bio.Test.Foo=foo # THIS WAY, REFERENCE TO bar WILL BE JUST ITS RESOURCE ID
-\end{verbatim}
-Alternatively, you could just save both at once, using \method{addResourceDict},
-which solves the whole issue:
-\begin{verbatim}
-foo.x=bar # foo DEPENDS ON bar
-addResourceDict({'Bio.Test.Bar':bar,'Bio.Test.Foo':foo})
-\end{verbatim}
-  Another example:
-\begin{verbatim}
-d={}
-for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
-    genome.__doc__ = 'draft genome sequence '+id
-    d['Bio.Seq.Genome.'+id] = genome 
-addResourceDict(d)
-\end{verbatim}
+\begin{funcdesc}{save}{layer=None}
+  Saves all pending pygr.Data additions to the resource database.
+  If \var{layer} is not specified, each resource will be saved to the
+  layer it was added to, or to the default layer if none was specified
+  at the time of addition.  If \var{layer} is not None, it forces all
+  pending data to be saved specifically to that layer.  You can call
+  \code{pygr.Data.save()} multiple times with different \var{layer}
+  values to make the same set of data (transaction) be saved to each
+  of the specified resource databases.
 \end{funcdesc}
 
+\begin{funcdesc}{rollback}{}
+  Dumps all pending pygr.Data additions (since the last \code{save()}
+  or \code{rollback()}) without adding them to the resource database.
+\end{funcdesc}
+
+\begin{funcdesc}{list_pending}{}
+  Returns a pair of two lists ([\var{data}],[\var{schema}]), where
+  the first list shows newly added pygr.Data IDs that are currently pending,
+  and the second list pygr.Data IDs that with newly added schema information
+  pending.
+\end{funcdesc}
+
+\begin{funcdesc}{addResourceDict}{saveDict,layer=None}
+  Provides a way to add an entire set of resources to the pygr.Data namespace,
+  by passing a dictionary whose keys are resource names, and whose values are
+  the objects you wish to add.  
+\end{funcdesc}
 \begin{funcdesc}{addResource}{id,obj,layer=None}
   Add \var{obj} to pygr.Data as resource ID \var{id}, specifically within
-  abstract resource \var{layer} if provided.  Saves \var{obs} to 
+  abstract resource \var{layer} if provided.  Queues \var{obj} for addition to 
   the resource database, and marks it with its \member{_persistent_id}
   attribute, whose value is just \var{id}.  For a resource \var{id} 'A.Foo.Bar'
   this method is equivalent to the assignment statement
 \begin{verbatim}
-pygr.Data.A.Foo.Bar=obj
+pygr.Data.A.Foo.Bar = obj
 \end{verbatim}
   This method is provided mainly to enable writing code that automates
   saving of resources, e.g. via code like
@@ -3643,9 +3683,6 @@ for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
     genome.__doc__ = 'draft genome sequence '+id
     addResource('Bio.Seq.Genome.'+id,genome)
 \end{verbatim}
-  For adding multiple resources,
-  it is better to use the \method{addResourceDict} method, because it 
-  automatically works out any dependency ordering for you!
 \end{funcdesc}
 
 \begin{funcdesc}{deleteResource}{id,layer=None}
@@ -3655,15 +3692,17 @@ for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
 \end{funcdesc}
 
 \begin{funcdesc}{addSchema}{name,schemaObj,layer=None}
-  Save a schema object for the pygr.Data resource indicated by the
+  Add a schema object for the pygr.Data resource indicated by the
   string passed as \var{name}, to the specified \var{layer} if provided
   (or the default resource database otherwise).  For example:
 \begin{verbatim}
 addSchema('Bio.Genomics.ASAP2.hg17.geneExons',
           pygr.Data.OneToManyRelation(genes,exons,bindAttrs=('exons','gene')))
+pygr.Data.save() # SAVE ALL PENDING DATA AND SCHEMA TO RESOURCE DATABASE
 \end{verbatim}
 \end{funcdesc}
-
+Note that schema information, like pending data, is not saved to 
+the resource database until you call \code{pygr.Data.save()}.
 
 The pygr.Data module also provides a directory function for searching
 for resource names that begin with a given stem, either in all
@@ -3823,16 +3862,17 @@ thus in pygr, schema is a relation between pygr.Data resources, i.e.
 a relationship that holds true between the items of one pygr.Data resource
 and the items of another.  For examples, items in a ``genes'' resource
 might each have a mapping to a subset of items in an ``exons'' resource.
-This is achieved in pygr.Data by saving the mapping object itself as a pygr.Data
+This is achieved in pygr.Data by adding the mapping object itself as a pygr.Data
 resource, and then specifying its schema to pygr.Data (in this example,
 its schema would be a one-to-many relation between the ``genes''
-resource and the ``exons'' resource).  Saving the mapping object 
-as a pygr.Data resource, and saving its schema information, are
+resource and the ``exons'' resource).  Adding the mapping object 
+as a pygr.Data resource, and adding its schema information, are
 two separate steps.
 \begin{verbatim}
 pygr.Data.Bio.Genomics.ASAP2.hg17.geneExons=geneToExons # SAVE MAPPING
 pygr.Data.schema.Bio.Genomics.ASAP2.hg17.geneExons= \
   pygr.Data.OneToManyRelation(genes,exons,bindAttrs=('exons','gene'))
+pygr.Data.save() # SAVE ALL PENDING DATA AND SCHEMA TO RESOURCE DATABASE
 \end{verbatim}
 assuming that \code{genes} and \code{exons} are the pygr.Data resources
 that are being mapped.  This would allow a user to obtain the mapping
@@ -3881,6 +3921,7 @@ pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph=splicegraph # ADD A NEW RESOURCE
 pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
   pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
                                bindAttrs=('next','previous','exons'))
+pygr.Data.save() # SAVE ALL PENDING DATA AND SCHEMA TO RESOURCE DATABASE
 \end{verbatim}
 This type of mapping (``edge'' relations between pairs of ``nodes'')
 is referred to in mathematics as a {\em graph}, and has very general
@@ -4059,6 +4100,7 @@ for exon in exon_db:
 pygr.Data.Bio.Titus.Test1.GeneExons = gene_exons
 pygr.Data.schema.Bio.Titus.Test1.GeneExons = \
      pygr.Data.OneToManyRelation(ens_genes,exon_db,bindAttrs=('exons','gene'))
+pygr.Data.save() # SAVE ALL PENDING DATA AND SCHEMA TO RESOURCE DATABASE
 \end{verbatim}
 
 \subsubsection{ResourceFinder}
@@ -4099,12 +4141,26 @@ resources and schema.
   Same as the top-level module function of the same name.
 \end{funcdesc}
 
+\begin{funcdesc}{getResource.list_pending}{}
+  Same as the top-level module function of the same name.
+\end{funcdesc}
+
 \begin{funcdesc}{getResource.newServer}{name,serverClasses=None,clientHost=None,withIndex=False, host=None, port=5000, **kwargs}
   Same as the top-level module function of the same name.
 \end{funcdesc}
 
+\begin{funcdesc}{getResource.rollback}{}
+  Same as the top-level module function of the same name.
+\end{funcdesc}
+
+\begin{funcdesc}{getResource.save_pending}{layer=None}
+  Same as the top-level module function \code{pygr.Data.save()}.
+\end{funcdesc}
+
 The following methods are mainly for internal use, and are unlikely to be
-needed by users of pygr.Data.
+needed by users of pygr.Data.  In general, you should not use them unless
+you have a very good reason to be working with the interal pygr.Data 
+methods, and really know what you are doing!
 \begin{funcdesc}{update}{}
   Update \code{getResource}'s list of resource databases, by parsing the environment
   variable PYGRDATAPATH and attempting to connect to the resource databases
@@ -4163,12 +4219,19 @@ needed by users of pygr.Data.
   associated class, such as \class{OneTimeDescriptor} or \class{ItemDescriptor}.
 \end{funcdesc}
 
+\begin{funcdesc}{saveResource}{resID,obj,layer=None}
+  Raw interface to actually save a specific resource to the specified
+  (or default) resource database.
+  DO NOT use this internal interface unless you know what you are doing!
+\end{funcdesc}
+
 \begin{funcdesc}{saveSchema}{id,attr,bindingDict,layer=None}
   Save a schema attribute relation for attribute \var{attr} of pygr.Data
   resource \var{id}, to the specified resource database \var{layer} (or the default,
   first resource database in the list, if no layer specified).
   \var{bindingDict} must be a dictionary specifying the rules for
   binding the attribute to a pygr.Data resource target; see below for details.
+  DO NOT use this internal interface unless you know what you are doing!
 \end{funcdesc}
 
 \begin{funcdesc}{delSchema}{id,layer=None}
@@ -4407,6 +4470,15 @@ E.g.  \textasciitilde\code{m1[v] --> k} vs.
 \textasciitilde\code{mMany[v] --> [k1,k2,...]}
 
 \subsubsection{DirectRelation, ItemRelation, InverseRelation}
+Users are unlikely to have any reason to work directly with these
+internal interfaces.  Instead, use \class{ManyToManyRelation, OneToManyRelation, ManyToOneRelation, OneToOneRelation}
+as these cover the normal schema relationships.
+You should only use internal interfaces like 
+\class{DirectRelation, ItemRelation, InverseRelation} if you
+have a real need to do so, and really know what you are doing!
+This documentation is only provided for developers directly working
+on pygr internals.
+
 \class{DirectRelation} is a convenience class for constructing 
 a single schema attribute relation on a pygr.Data resource,
 linking it to another pygr.Data resource.
@@ -4862,7 +4934,9 @@ edgeID values in the external storage instead of the python objects themselves.
   any attempt to write a single edge will re-open in write mode, save the data,
   and immediately close it, then re-open it in read-only mode.  This minimizes
   the probability that multiple processes simultaneously accessing the graph
-  database will over-write each others' data.
+  database will over-write each others' data.  Note: if you leave this option False,
+  and write data to the graph, you {\em must} call the \method{close}() method
+  once you have finished writing data to the graph, as described below.
 
   \var{saveDict}, if provided, must be a graph-style interface that stores the graph
   purely in terms of node ID and edge ID values.  This could be an \class{IntShelve},
@@ -4896,6 +4970,15 @@ edgeID values in the external storage instead of the python objects themselves.
 \begin{funcdesc}{__delitem__}{node}
   Delete \var{node} from the graph, and its edges.  \var{node} must be a
   source node in the graph.  \method{__isub__} does exactly the same thing.
+\end{funcdesc}
+
+\begin{funcdesc}{close}{}
+  If you chose to use a Python \module{shelve} as the actual storage, you used
+  the default setting of \var{writeNow}\code{=False}, and you
+  wrote data to the graph, then you {\em must} call the \class{Graph} object's
+  \method{close}() method to finalize writing to the disk of any data that may
+  be pending, once you have finished writing data to the graph.  Failure to do
+  so may leave the shelve index file in an incomplete and corrupted state.
 \end{funcdesc}
 
 %\begin{funcdesc}{__invert__}{}
