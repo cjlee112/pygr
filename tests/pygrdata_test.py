@@ -38,6 +38,7 @@ class PygrSwissprotBase(object):
         pygr.Data.Bio.Annotation.map = nlmsa
         pygr.Data.schema.Bio.Annotation.map = \
              pygr.Data.ManyToManyRelation(sp,annoDB,bindAttrs=('exons',))
+        pygr.Data.save()
         self.tempdir.force_reload()
     def teardown(self):
         self.tempdir.__del__() # FORCE IT TO RELEASE PYGR DATA
@@ -77,6 +78,13 @@ def check_bind2(self):
     exon = annoDB[1]
     assert exons[0]==exon, 'test annotation comparison'
     assert exons[0].annot is exon,'annotation parent match'
+    onc = sp['HBB1_ONCMY']
+    try:
+        exons = onc.exons.keys()
+        raise ValueError('failed to catch query with no annotations')
+    except KeyError:
+        pass
+    
 
 class Seq_Test(PygrSwissprotBase):
     def match_test(self):
@@ -85,6 +93,7 @@ class Seq_Test(PygrSwissprotBase):
         check_dir(self)
     def bind_test(self):
         check_bind(self)
+        check_bind2(self)
     def schema_test(self):
         from pygr import seqdb
         sp2 = seqdb.BlastDB(self.filename)
@@ -96,6 +105,7 @@ class Seq_Test(PygrSwissprotBase):
         m.__doc__ = 'sp -> sp2'
         pygr.Data.Bio.Seq.testmap = m
         pygr.Data.schema.Bio.Seq.testmap = pygr.Data.OneToManyRelation(sp,sp2)
+        pygr.Data.save()
         pygrData = self.tempdir.force_reload()
         sp3 = seqdb.BlastDB(self.filename)
         sp3.__doc__ = 'sp number 3'
@@ -108,7 +118,8 @@ class Seq_Test(PygrSwissprotBase):
         l = pygrData.getResource.d.keys()
         l.sort()
         assert l == ['Bio.Seq.sp2','Bio.Seq.sp3','Bio.Seq.testmap2']
-        pygrData.getResource.newServer('testy',withIndex=True,host='localhost')
+        pygrData.save()
+        #pygrData.getResource.newServer('testy',withIndex=True,host='localhost')
         pygrData = self.tempdir.force_reload()
         g = pygrData.getResource.db[0].graph
         l = g.keys()
@@ -155,6 +166,7 @@ class XMLRPC_Test(PygrSwissprotBase):
         sp2.__doc__ = 'another sp'
         try:
             pygrData.Bio.Seq.sp2 = sp2
+            pygrData.save()
             raise KeyError('failed to catch bad attempt to write to XMLRPC server')
         except ValueError:
             pass
