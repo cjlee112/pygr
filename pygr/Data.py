@@ -89,10 +89,19 @@ def getInverseDB(self):
 class PygrDataNotPortableError(ValueError):
     'indicates that object has a local data dependency and cannnot be transferred to a remote client'
     pass
-
 class PygrDataNotFoundError(KeyError):
     'unable to find a loadable resource for the requested pygr.Data identifier from PYGRDATAPATH'
     pass
+class PygrDataMismatchError(ValueError):
+    '_persistent_id attr on object no longer matches its assigned pygr.Data ID?!?'
+    pass
+class PygrDataEmptyError(ValueError):
+    "user hasn't queued anything, so trying to save or rollback is an error"
+    pass
+class PygrDataReadOnlyError(ValueError):
+    'attempt to write data to a read-only resource database'
+    pass
+
 
 class PygrPickler(pickle.Pickler):
     def persistent_id(self,obj):
@@ -186,7 +195,7 @@ class ResourceDBServer(object):
 
 
 def raise_illegal_save(self,*l):
-    raise ValueError('''You cannot save data to a remote XMLRPC server.
+    raise PygrDataReadOnlyError('''You cannot save data to a remote XMLRPC server.
 Give a user-editable resource database as the first entry in your PYGRDATAPATH!''')
 
 
@@ -502,6 +511,7 @@ class ResourceFinder(object):
         self.separator=separator
         self.sourceIDs={}
         self.cursors=[]
+        self.clear_pending()
         if saveDict is not None:
             self.saveDict=saveDict # SAVE NEW LAYER NAMES HERE...
             self.update(PYGRDATAPATH) # LOAD RESOURCE DBs FROM PYGRDATAPATH
@@ -663,19 +673,85 @@ Continuing with import...'''%dbpath
         except AttributeError:
             raise ValueError('to save a resource object, you MUST give it a __doc__ string attribute describing it!')
     def addResource(self,resID,obj,layer=None):
+        'queue the object for saving to the specified database layer as <id>'
+        self.check_docstring(obj)
+        db = self.getLayer(layer) # VERIFY THE LAYER EXISTS
+        if isinstance(db,ResourceDBClient): # THIS IS NOT WRITABLE!
+            raise_illegal_save(db)
+        obj._persistent_id = resID # MARK OBJECT WITH ITS PERSISTENT ID
+        self.pendingData[resID] = (obj,layer) # ADD TO QUEUE
+        try:
+            self.rollbackData[resID] = self.d[resID]
+        except KeyError:
+            pass
+        self.d[resID] = obj # SAVE TO OUR CACHE
+    def addResourceDict(self,saveDict,layer=None):
+        'queue a set of objects for saving to the specified database layer'
+        for k,v in saveDict.items(): # NOW ACTUALLY SAVE THE OBJECTS
+            self.addResource(k,v,layer) # CALL THE PICKLER...
+    def queue_schema_obj(self,schemaPath,attr,layer,schemaObj):
+        'add a schema object to the queue for saving to the specified database layer'
+        resID = schemaPath.getPath(attr) # GET STRING ID
+        self.pendingSchema[resID] = (schemaPath,attr,layer,schemaObj)
+    def saveResource(self,resID,obj,layer=None):
         'save the object to the specified database layer as <id>'
         self.check_docstring(obj)
-        obj._persistent_id=resID # MARK OBJECT WITH ITS PERSISTENT ID
-        db=self.getLayer(layer)
-        db[resID]=obj # SAVE THE OBJECT TO THE DATABASE
-        self.d[resID]=obj # SAVE TO OUR CACHE
-    def addResourceDict(self,saveDict,layer=None):
+        if obj._persistent_id!=resID:
+            raise PygrDataMismatchError('''The _persistent_id attribute for %s has changed!
+If you changed it, shame on you!  Otherwise, this should not happen,
+so report the reproducible steps to this error message as a bug report.''' % resID)
+        db = self.getLayer(layer)
+        db[resID] = obj # FINALLY, SAVE THE OBJECT TO THE DATABASE
+        self.d[resID] = obj # SAVE TO OUR CACHE
+    def save_pending(self,layer=None):
+        'save any pending pygr.Data resources and schema'
+        if layer is not None:
+            self.getLayer(layer) # VERIFY THE LAYER EXISTS 
+        if len(self.pendingData)>0 or len(self.pendingSchema)>0:
+            d = self.pendingData
+            schemaDict = self.pendingSchema
+        elif len(self.lastData)>0 or len(self.lastSchema)>0:
+            d = self.lastData
+            schemaDict = self.lastSchema
+        else:
+            raise PygrDataEmptyError('there is no data queued for saving!')
+        # NOW SAVE THE DATA
+        for resID,(obj,layerGiven) in d.items():
+            if layer is not None: # OVERRIDES ORIGINAL LAYER GIVEN ON OBJECT
+                self.saveResource(resID,obj,layer)
+            else:
+                self.saveResource(resID,obj,layerGiven)
+        # NEXT SAVE THE SCHEMA
+        for schemaPath,attr,layerGiven,schemaObj in schemaDict.values():
+            if layer is not None: # OVERRIDES ORIGINAL LAYER GIVEN ON OBJECT
+                schemaObj.saveSchema(schemaPath,attr,layer=layer) # SAVE THIS SCHEMA INFO
+            else:
+                schemaObj.saveSchema(schemaPath,attr,layer=layerGiven) # USE ORIGINAL LAYER
+        self.clear_pending() # FINALLY, CLEAN UP...
+        self.lastData = d # KEEP IN CASE USER WANTS TO SAVE TO MULTIPLE LAYERS
+        self.lastSchema = schemaDict
+    def clear_pending(self):
+        self.pendingData = {} # CLEAR THE PENDING QUEUE
+        self.pendingSchema = {} # CLEAR THE PENDING QUEUE
+        self.lastData = {}
+        self.lastSchema = {}
+        self.rollbackData = {} # CLEAR THE ROLLBACK CACHE
+    def list_pending(self):
+        'return tuple of pending data dictionary, pending schema'
+        return list(self.pendingData),list(self.pendingSchema)
+    def rollback(self):
+        'dump any pending data without saving, and restore state of cache'
+        if len(self.pendingData)==0 and len(self.pendingSchema)==0:
+            raise PygrDataEmptyError('there is no data queued for saving!')
+        self.d.update(self.rollbackData) # RESTORE THE ROLLBACK QUEUE
+        self.clear_pending()
+    def saveResourceDict(self,saveDict,layer=None):
         'save an entire set of resources, so dependency order is not an issue'
         for k,v in saveDict.items(): # CREATE DICT OF OBJECT IDs FOR DEPENDENCIES
             self.check_docstring(v)
             self.sourceIDs[id(v)]=k
         for k,v in saveDict.items(): # NOW ACTUALLY SAVE THE OBJECTS
-            self.addResource(k,v,layer) # CALL THE PICKLER...
+            self.saveResource(k,v,layer) # CALL THE PICKLER...
         self.sourceIDs.clear() # CLEAR THE OBJECT ID DICTIONARY
     def getLayer(self,layer):
         self.update() # MAKE SURE WE HAVE LOADED CURRENT DATABASE LIST
@@ -865,6 +941,23 @@ Continuing with import...'''%dbpath
         except KeyError:
             d['user'] = None
         return d
+    def __del__(self):
+        self.lastData = {} # NO NEED TO RESAVE DATA THAT'S ALREADY SAVED
+        self.lastSchema = {}
+        try:
+            self.save_pending() # SEE WHETHER ANY DATA NEEDS SAVING
+            import sys
+            print >>sys.stderr,'''
+WARNING: saving pygr.Data pending data that you forgot to save...
+Remember in the future, you must issue the command pygr.Data.save() to save
+your pending pygr.Data resources to your resource database(s), or alternatively
+pygr.Data.rollback() to dump those pending data without saving them.
+It is a very bad idea to rely on this automatic attempt to save your
+forgotten data, because it is possible that the Python interpreter
+may never call this function at exit (for details see the atexit module
+docs in the Python Library Reference).'''
+        except PygrDataEmptyError:
+            pass
 
 
 
@@ -903,10 +996,10 @@ class SchemaPath(ResourcePath):
     'save schema information for a resource'
     def __setattr__(self,name,schema):
         try:
-            m=schema.saveSchema
+            schema.saveSchema # VERIFY THAT THIS LOOKS LIKE A SCHEMA OBJECT
         except AttributeError:
-            AttributeError('not a valid schema object!')
-        m(self,name,layer=self._layer) # SAVE THIS SCHEMA INFO
+            raise ValueError('not a valid schema object!')
+        getResource.queue_schema_obj(self,name,self._layer,schema) # QUEUE IT
     def __delattr__(self,attr):
         raise NotImplementedError('schema deletion is not yet implemented.')
 SchemaPath._pathClass=SchemaPath
@@ -1039,7 +1132,14 @@ class ForeignKeyMap(object):
             return self._inverse
 
 
-
+try:
+    save_on_exit
+except NameError:
+    def save_on_exit():
+        'try to save any pygr.Data that the user forgot...'
+        getResource.__del__()
+    import atexit
+    atexit.register(save_on_exit) # THIS SHOULD BE RUN ON INTERPRETER EXIT
 
 ###########################################################
 schema=SchemaPath() # ROOT OF OUR SCHEMA NAMESPACE
@@ -1061,13 +1161,42 @@ def check_test_env():
         return pygrDataPath
     except NameError:
         return None
-getResource=ResourceFinder(saveDict=locals(),PYGRDATAPATH=check_test_env())
-addResourceDict=getResource.addResourceDict
-addResource=getResource.addResource
-addSchema=getResource.addSchema
-deleteResource=getResource.deleteResource
-dir=getResource.dir
-newServer=getResource.newServer
+try:
+    getResource
+except NameError:
+    pass
+else: # HMM. THIS MUST BE A reload() OF THIS MODULE
+    if len(getResource.pendingData)>0 or len(getResource.pendingSchema)>0:
+        import sys
+        print >>sys.stderr,'''
+WARNING: You appear to have forced a reload() of pygr.Data without first
+having called pygr.Data.save() on the new data resources that you
+added to pygr.Data.  This would permanently strand the pygr.Data
+resources that you added but forgot to save.  Therefore we are automatically
+calling pygr.Data.save() for you.  To avoid this warning in the
+future, remember you must always call pygr.Data.save() to save the
+data that you added to pygr.Data!'''
+        try:
+            getResource.save_pending() # SAVE USER'S DATA FOR HIM...
+        except StandardError: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
+            import traceback,sys
+            traceback.print_exc(10,sys.stderr) # JUST PRINT TRACEBACK
+            print >>sys.stderr,'''
+An error occurred during the saving of your added resources.
+This should not happen.  Please file a bug report.
+This error WILL NOT prevent successful reload of this module.
+Continuing with reload...'''
+
+getResource = ResourceFinder(saveDict=locals(),PYGRDATAPATH=check_test_env())
+addResourceDict = getResource.addResourceDict
+addResource = getResource.addResource
+addSchema = getResource.addSchema
+deleteResource = getResource.deleteResource
+dir = getResource.dir
+newServer = getResource.newServer
+save = getResource.save_pending
+rollback = getResource.rollback
+list_pending = getResource.list_pending
 
 try:
     firstLoad
