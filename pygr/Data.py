@@ -265,15 +265,14 @@ table you want to create, and LAYERNAME is the layer name you want to assign it'
             from datetime import datetime
             creation_time = datetime.now()
             self.cursor.execute('drop table if exists %s' % self.tablename)
-            self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,docstring varchar(255),user varchar(255),creation_time datetime,pickle_size int,info_blob text,objdata text not null,unique(pygr_id,location))'%self.tablename)
-            self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+            self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,docstring varchar(255),user varchar(255),creation_time datetime,pickle_size int,security_code bigint,info_blob text,objdata text not null,unique(pygr_id,location))'%self.tablename)
+            self.cursor.execute('insert into %s (pygr_id,location,creation_time,objdata) values (%%s,%%s,%%s,%%s)'
                                 %self.tablename,
-                                ('PYGRLAYERNAME',createLayer,None,None,
-                                 creation_time,None,None,'a'))
-            self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+                                ('PYGRLAYERNAME',createLayer,creation_time,'a'))
+            self.cursor.execute('insert into %s (pygr_id,location,objdata) values (%%s,%%s,%%s)'
                                 %self.tablename,
                                 ('0version','%d.%d.%d' % self._pygr_data_version,
-                                 None,None,None,None,None,'a')) # SAVE VERSION STAMP
+                                 'a')) # SAVE VERSION STAMP
             self.name=createLayer
             finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
             self.cursor.execute('drop table if exists %s' % schemaTable)
@@ -304,9 +303,8 @@ where <LAYERNAME> is the layer name you want to assign it.
                               unpack_edge=SchemaEdge(self))
     def save_root_name(self,name):
         self.rootNames[name]=None
-        self.cursor.execute('insert into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
-                            %self.tablename,
-                            ('0root',name,None,None,None,None,None,'a'))
+        self.cursor.execute('insert into %s (pygr_id,location,objdata) values (%%s,%%s,%%s)'
+                            %self.tablename,('0root',name,'a'))
     def __getitem__(self,id):
         'get construction rule from mysql, and attempt to construct'
         self.cursor.execute('select location,objdata,docstring from %s where pygr_id=%%s'
@@ -323,10 +321,10 @@ where <LAYERNAME> is the layer name you want to assign it.
         'add an object to this resource database'
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
         d = getResource.get_info_dict(obj,s)
-        self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+        self.cursor.execute('replace into %s (pygr_id,location,docstring,user,creation_time,pickle_size,objdata) values (%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
                             %self.tablename,
                             (id,'mysql:'+self.tablename,obj.__doc__,d['user'],
-                             d['creation_time'],d['pickle_size'],None,s))
+                             d['creation_time'],d['pickle_size'],s))
         root=id.split('.')[0]
         if root not in self.rootNames:
             self.save_root_name(root)
@@ -339,19 +337,18 @@ where <LAYERNAME> is the layer name you want to assign it.
         'register the specified services to mysql database'
         n=0
         for id,(d,pdata) in serviceDict.items():
-            n+=self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
+            n+=self.cursor.execute('replace into %s (pygr_id,location,docstring,user,creation_time,pickle_size,objdata) values (%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
                                    % self.tablename,
                                    (id,locationKey,d['__doc__'],d['user'],
-                                    d['creation_time'],d['pickle_size'],None,pdata))
+                                    d['creation_time'],d['pickle_size'],pdata))
         return n
     def setschema(self,id,attr,kwargs):
         'save a schema binding for id.attr --> targetID'
         if not attr.startswith('-'): # REAL ATTRIBUTE
             targetID=kwargs['targetID'] # RAISES KeyError IF NOT PRESENT
         kwdata=self.finder.dumps(kwargs)
-        self.cursor.execute('replace into %s values (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s)'
-                            %self.tablename,
-                            ('SCHEMA.'+id,attr,None,None,None,None,None,kwdata))
+        self.cursor.execute('replace into %s (pygr_id,location,objdata) values (%%s,%%s,%%s)'
+                            %self.tablename,('SCHEMA.'+id,attr,kwdata))
     def delschema(self,id,attr):
         'delete schema binding for id.attr'
         self.cursor.execute('delete from %s where pygr_id=%%s and location=%%s'
@@ -1134,7 +1131,7 @@ class ForeignKeyMap(object):
 
 try:
     save_on_exit
-except NameError:
+except NameError: # ONLY REGISTER ONCE, EVEN IF MODULE RELOADED MANY TIMES
     def save_on_exit():
         'try to save any pygr.Data that the user forgot...'
         getResource.__del__()
