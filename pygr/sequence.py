@@ -340,13 +340,14 @@ class SeqPath(object):
 
     def classySlice(self,path,*l,**kwargs):
         'create a subslice using appropriate class based on container'
-        try: # ALLOW CONTAINER TO ENFORCE A SPECIFIC SUBCLASS ON ITS CONTENTS...
-            klass=path.annot.db.itemSliceClass # FROM ANNOTATION DB
-        except AttributeError: # NOT AN ANNOTATION
-            try: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
-                klass=path.pathForward.db.itemSliceClass
-            except AttributeError:
-                klass=SeqPath # DEFAULT: JUST USE GENERIC SLICE CLASS
+        if path is not None:
+            obj = path
+        else:
+            obj = self
+        try: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
+            klass = obj.pathForward.db.itemSliceClass
+        except AttributeError:
+            klass = SeqPath # DEFAULT: JUST USE GENERIC SLICE CLASS
         return klass(path,*l,**kwargs) # CONSTRUCT THE SLICE
     def __getitem__(self,k):
         if isinstance(k,types.IntType):
@@ -532,6 +533,9 @@ class SeqPath(object):
         if self.stop==0:
             raise IndexError('cannot create empty sequence interval')
         return self.classySlice(self.path,self.stop,None)
+    def is_full_length(self):
+        'test whether this constitutes the whole sequence (in either orientation)'
+        return self == self.path
 
     ############################################ STRING SEQUENCE METHODS
     _complement={'a':'t', 'c':'g', 'g':'c', 't':'a', 'u':'a', 'n':'n',
