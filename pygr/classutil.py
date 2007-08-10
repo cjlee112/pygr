@@ -40,7 +40,10 @@ def file_dirpath(filename):
 def default_tmp_path():
     'find out default location for temp files, e.g. /tmp'
     import os
-    return os.path.dirname(os.tempnam())
+    for tmp in ['/tmp','/usr/tmp']: # RETURN THE 1ST WRITABLE LOCATION
+        if os.access(tmp,os.W_OK):
+            return tmp
+    return os.path.dirname(os.tempnam()) # GRR. ASK PYTHON WHERE tmp IS...
 
 def report_exception():
     'print string message from exception to stderr'
@@ -157,3 +160,11 @@ def override_rich_cmp(localDict):
     localDict['__ne__'] = lambda self,other: mycmp(self,other)!=0
     localDict['__gt__'] = lambda self,other: mycmp(self,other)>0
     localDict['__ge__'] = lambda self,other: mycmp(self,other)>=0
+
+
+class DBAttributeDescr(object):
+    'obtain an attribute from associated db object'
+    def __init__(self,attr):
+        self.attr = attr
+    def __get__(self,obj,objtype):
+        return getattr(obj.db,self.attr)
