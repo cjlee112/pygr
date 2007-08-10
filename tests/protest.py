@@ -90,7 +90,7 @@ def run_all_tests(tests):
         print 'SKIPPED: %s.%s.%s()' % (modname,klassname,testname)
     for modname,klassname,testname,outfile in errors:
         print '-'*60
-        print 'TEST:%s.%s.%s()' % (modname,klassname,testname)
+        print 'FAILED:%s.%s.%s()' % (modname,klassname,testname)
         print '-'*60
         print 'OUTPUT:'
         ifile = file(outfile)
