@@ -1194,6 +1194,8 @@ newServer = getResource.newServer
 save = getResource.save_pending
 rollback = getResource.rollback
 list_pending = getResource.list_pending
+loads = getResource.loads
+dumps = getResource.dumps
 
 try:
     firstLoad
