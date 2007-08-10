@@ -43,6 +43,54 @@ class PygrSwissprotBase(object):
     def teardown(self):
         self.tempdir.__del__() # FORCE IT TO RELEASE PYGR DATA
 
+class DNAAnnotation_Test(object):
+    tempDirClass = TempPygrData
+    def setup(self,**kwargs):
+        tmp = self.tempDirClass(**kwargs)
+        self.tempdir = tmp
+        filename = tmp.copyFile('dnaseq')
+        from pygr import seqdb
+        db = seqdb.BlastDB(filename)
+        db.__doc__ = 'little dna'
+        import pygr.Data
+        pygr.Data.Bio.Test.dna = db
+        annoDB = seqdb.AnnotationDB({1:('seq1',5,10,'fred'),2:('seq1',-60,-50,'bob'),
+                                     3:('seq2',-20,-10,'mary')},
+                                    db,sliceAttrDict=dict(id=0,start=1,stop=2,name=3))
+        annoDB.__doc__ = 'trivial annotation'
+        pygr.Data.Bio.Test.annoDB = annoDB
+        from pygr import cnestedlist
+        nlmsa = cnestedlist.NLMSA('tryannot','w',use_virtual_lpo=True,bidirectional=False)
+        for annID in annoDB:
+            nlmsa.addAnnotation(annoDB[annID])
+        nlmsa.build()
+        nlmsa.__doc__ = 'trivial map'
+        pygr.Data.Bio.Test.map = nlmsa
+        pygr.Data.schema.Bio.Test.map = pygr.Data.ManyToManyRelation(db,annoDB,bindAttrs=('exons',))
+        pygr.Data.save()
+        self.tempdir.force_reload()
+    def annotation_test(self):
+        import pygr.Data
+        db = pygr.Data.Bio.Test.dna()
+        s1 = db['seq1']
+        l = s1.exons.keys()
+        annoDB = pygr.Data.Bio.Test.annoDB()
+        assert l == [annoDB[1],-(annoDB[2])]
+        assert l[0].sequence == s1[5:10]
+        assert l[1].sequence == s1[50:60]
+        assert l[0].name == 'fred','test annotation attribute access'
+        assert l[1].name == 'bob'
+        sneg = -(s1[:55])
+        l = sneg.exons.keys()
+        assert l == [annoDB[2][5:],-(annoDB[1])]
+        assert l[0].sequence == -(s1[50:55])
+        assert l[1].sequence == -(s1[5:10])
+        assert l[0].name == 'bob'
+        assert l[1].name == 'fred'
+    def teardown(self):
+        self.tempdir.__del__() # FORCE IT TO RELEASE PYGR DATA
+
+
 def check_match(self):
     import pygr.Data
     frag = pygr.Data.Bio.Seq.frag()
@@ -77,7 +125,8 @@ def check_bind2(self):
     annoDB = pygr.Data.Bio.Annotation.annoDB()
     exon = annoDB[1]
     assert exons[0]==exon, 'test annotation comparison'
-    assert exons[0].annot is exon,'annotation parent match'
+    assert exons[0].pathForward is exon,'annotation parent match'
+    assert exons[0].sequence == hbb[10:50],'annotation to sequence match'
     onc = sp['HBB1_ONCMY']
     try:
         exons = onc.exons.keys()
