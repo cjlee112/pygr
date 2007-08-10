@@ -102,12 +102,13 @@ def printConservation(id,label,site):
               %(id,label,repr(src),src,idDict[dest],dest,
                 100*edge.pIdentity(),100*edge.pAligned())
 for id,exon in exons.iteritems():
-    ss1=exon.before()[-2:] # GET THE 2 NT SPLICE SITES
-    ss2=exon.after()[:2]
+    ival = exon.sequence # GET THE SEQUENCE INTERVAL FOR THIS EXON
+    ss1 = ival.before()[-2:] # GET THE 2 NT SPLICE SITES
+    ss2 = ival.after()[:2]
     cacheHint=msa[ss1+ss2] #CACHE THE COVERING INTERVALS FROM ss1 TO ss2
     printConservation(id,'ss1',ss1)
     printConservation(id,'ss2',ss2)
-    printConservation(id,'exon',exon)
+    printConservation(id,'exon',ival)
 \end{verbatim}
 
 A few notes:
@@ -219,8 +220,13 @@ as a separate sequence database, represented in Pygr by the
 operations more or less transparent to the user.
 For further information, see the \class{BlastDB} documentation.  
 
+\item ASAP2.hg17.exons is an annotation database; each object it
+contains (\code{exon}) is an annotation object.  To get the actual
+sequence interval corresponding to this annotation, we simply request
+the annotation object's \member{sequence} attribute.
+
 \item
-Note: \code{exon} must itself be a slice of a sequence in our alignment, 
+Note: \code{exon.sequence} must itself be a slice of a sequence in our alignment, 
 or the alignment query \code{msa[site]} will raise an KeyError informing
 the user that the sequence \code{site} is not in the alignment.
 
@@ -534,7 +540,7 @@ do not set it yourself) is
 \begin{verbatim}~,.,http://biodb2.bioinformatics.ucla.edu:5000\end{verbatim}
 respectively your HOME directory, current directory, and the XMLRPC
 server provided at UCLA as a service to pygr users.  Thus you can
-simply import pygr.Data and start accessing data:
+simply import pygr.Data and start accessing data.  Try this:
 \begin{verbatim}
 >>> import pygr.Data
 >>> pygr.Data.dir('Bio')
@@ -771,7 +777,7 @@ msa=cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
 sp=seqdb.BlastDB('sp') # OPEN SWISSPROT DATABASE
 for id,s in sp.iteritems(): # FOR EVERY SEQUENCE IN SWISSPROT
     sp.blast(s,msa,expmax=1e-10) # GET STRONG HOMOLOGS, SAVE ALIGNMENT IN msa
-msa.build() # DONE CONSTRUCTING THE ALIGNMENT, SO BUILD THE ALIGNMENT DB INDEXES
+msa.build(saveSeqDict=True) # BUILD & SAVE ALIGNMENT + SEQUENCE INDEXES
 # msa READY TO QUERY NOW...
 \end{verbatim}
 Again you can see how pygr makes it quite simple to do a large analysis
@@ -851,6 +857,7 @@ for k,v in genomes.items(): # PREFIX DICTIONARY FOR UNION OF GENOMES
 genomeUnion=seqdb.PrefixUnionDict(genomes) # CREATE UNION OF THESE DBs
 # CREATE NLMSA DATABASE ucsc8 ON DISK, FROM MAF FILES IN maf/
 msa=cnestedlist.NLMSA('ucsc8','w',genomeUnion,os.listdir('maf'))
+msa.build(saveSeqDict=True) # BUILD & SAVE ALIGNMENT + SEQUENCE INDEXES
 \end{verbatim}
 
 The only real work here is due to the fact that UCSC's MAF files
@@ -979,10 +986,11 @@ multi-genome alignments, as a standard operation in comparative genomics.
 Pygr makes this easy:
 \begin{verbatim}
 for alignedRegion in msa[myRegion]: # FIND ALIGNMENT IN OTHER GENOMES
-  for exon in alignedRegion.exons: # SEE IF THIS CONTAINS ANY ANNOTATED EXONS
-    print 'exon\tID:%d\tSEQ:%s' % (exon.id,str(exon)) # PRINT ITS SEQUENCE
-    for exon2,splice in exon.next.items(): # LOOK AT ALTERNATIVE SPLICING OF THIS EXON
-      do something...
+  for ival in alignedRegion.exons: # SEE IF THIS CONTAINS ANY ANNOTATED EXONS
+    if ival.orientation>0: # ENSURE ANNOTATION IS ON SAME STRAND AS alignedRegion
+      print 'exon\tID:%d\tSEQ:%s' % (ival.id,str(ival.sequence)) # PRINT ITS SEQUENCE
+      for exon2,splice in ival.next.items(): # LOOK AT ALTERNATIVE SPLICING OF THIS EXON
+        do something...
 \end{verbatim}
 \begin{itemize}
 \item In the above code, we assumed that there exists a mapping of any genomic
@@ -990,23 +998,43 @@ sequence region (\code{alignedRegion}) to exon annotations.  This mapping
 is bound by pygr.Data.schema to the sequence object's \code{exons} attribute.
 In a moment we will see how to construct such a mapping.
 
-\item An annotation is {\em both} a sequence interval (just like any other
-sequence interval in pygr, e.g. you can get its sequence string via \code{str}),
-and also an annotation object.  What makes it an annotation object?  
+\item An annotation is an interval (i.e. it has length, and can be sliced,
+or negated to get the opposite strand) that has bound attributes giving
+biological information about the annotation.  It acts like a little coordinate
+system, i.e. \code{annotation[0]} is the first position in the annotation;
+\code{annotation[-10:]} is the last ten positions of the annotation etc.
+Any subslice of the annotation gives its coordinates and orientation
+relative to the original annotation.  In the example above, we used this
+to check whether the annotation slice \code{ival} (which is returned 
+in the same orientation as \code{alignedRegion}) is on the same strand
+(orientation = 1) as the original exon annotation,
+or the opposite strand (orientation = -1).
 
-\item Pygr marks
-it with one attribute (\code{annot}) that points to its parent annotation
+\item An annotation object or slice is associated with the corresponding
+sequence interval of the sequence to which it is bound.  To obtain that
+sequence interval, simply request the annotation's \member{sequence}
+attribute.  Use this if you want to get its sequence string via \code{str},
+for example.
+
+\item An annotation object or slice always has an
+\member{annotationType} attribute giving a string identifier for 
+its annotation type.
+
+\item For any annotation slice, its \code{pathForward} attribute
+points to its parent annotation
 object.  For example, in the case above, \code{alignedRegion} might not contain
-the whole exon, in which case \code{exon} would be just the part of the exon
-contained in \code{alignedRegion}, and \code{exon.annot} would be the complete
-exon.
+the whole exon, in which case \code{ival} would be just the part of the exon
+contained in \code{alignedRegion}, and \code{ival.pathForward} would be the complete
+exon.  Note that for nucleotide sequence annotations, orientation matters.
+In this example, we restricted our analysis to exons that are on the same
+strand as \code{alignedRegion}.
 
 \item In addition, pygr also marks it with 
 two attributes that identify it as belonging to its annotation database:
 \code{id} gives its unique identifier (primary key) in that database,
 and \code{db} points to the annotation database object itself.
 
-\item Because pygr can see that \code{exon} is part of the exons annotation database,
+\item Because pygr can see that \code{ival} is part of the exons annotation database,
 it can apply schema information automatically to it.  In this particular case,
 it applies the splicegraph schema to it (see example from pygr.Data.schema
 tutorial above), so we can find out what exons it splices to via its \code{next}
@@ -1076,6 +1104,8 @@ permit mixing pairwise and true MSA alignment formats in a single NLMSA.
 \end{itemize}
 
 \subsubsection{Constructing an Annotation Mapping using Megablast}
+DEPRECATED: This needs to be rewritten.
+
 What if someone provided you with a set of ``exon annotations'' in the form
 of short sequences representing the exons, rather than actual genomic
 coordinates?  Again, pygr makes this mapping extremely easy to save:
@@ -2189,7 +2219,7 @@ inconsistent results when the input data are not a true multiple-sequence alignm
 \end{funcdesc}
 
 
-\begin{funcdesc}{build}{buildInPlace=True}
+\begin{funcdesc}{build}{buildInPlace=True,saveSeqDict=False}
   to construct the final nested list databases,
   after all the desired alignment intervals have been saved (using the
   \method{iadd/getitem} above).  This method
@@ -2202,7 +2232,26 @@ inconsistent results when the input data are not a true multiple-sequence alignm
   (higher memory usage, but more tested).  The new in-place construction method
   (made the default in release 0.7) is described in the Alekseyenko \& Lee 2007
   paper published in {\em Bioinformatics}.
+
+  \var{saveSeqDict=True} forces it to write the NLMSA's seqDict (dictionary
+  of sequences that are included in the alignment) to disk.  This is unnecessary
+  if you intend to store the NLMSA in pygr.Data, as pygr.Data will automatically
+  save the NLMSA's seqDict as part of that process.  However, if you plan on
+  re-opening the NLMSA directly from disk, you should save the seqDict 
+  to disk by passing this option, or by directly calling the NLMSA's
+  save_seq_dict() method.
 \end{funcdesc}
+
+\begin{funcdesc}{save_seq_dict}{}
+  Forces saving of the NLMSA's seqDict to a disk file named 'FILESTEM.seqDictP'
+  (where FILESTEM is the base path to your NLMSA files).  This is unnecessary
+  if you intend to store the NLMSA in pygr.Data, as pygr.Data will automatically
+  save the NLMSA's seqDict as part of that process.  The seqDictP file format
+  is a pygr.Data-aware pickle; that is, references to any pygr.Data resources
+  will simply be saved by their pygr.Data IDs, and loaded in the usual
+  pygr.Data way.
+\end{funcdesc}
+
 
 
 Alignment Usage Methods:
@@ -2954,29 +3003,63 @@ the len() method is implemented using the seqLenDict, a precalculated index of t
 This class provides a general interface for sequence annotation databases.
 This interface follows several principles:
 \begin{itemize}
-\item An {\em annotation object} acts both like a sequence interval
-(representing the region of sequence that it annotates), and as an object
+\item An {\em annotation object} acts like a sliceable interval
+(representing the region of sequence that it annotates)
 with annotation attributes that provide further information or relations
-for that annotation.  For example, an object \code{e} representing an exon annotation
-would act both like the genomic sequence interval that constitutes that exon
-(i.e. you can use any of the usual \class{SeqPath} methods to get information
-about that sequence interval), but also might have attributes that link it
-to its {\em splice graph}.  E.g.  \code{str(e)} would return the actual
-nucleotide sequence of the exon; \code{for e2,splice in e.next.items()} would iterate
-through the list of exons it is connected to by a forward splice, etc.
+for that annotation.  An annotation object always has three identifying attributes:
+\member{db}, which gives the \class{AnnotationDB} object containing this
+annotation;
+\member{id}, which gives the unique identifier of this annotation within
+its \class{AnnotationDB};
+and \member{annotationType}, which gives a string identifier for the
+type of annotation, e.g. ``exon''.
+All slices derived from an annotation object retain its
+\code{db}, \code{id} and \code{annotationType} attributes.  
 
-\item An annotation object always has an \member{annot} attribute that
-points to the complete annotation.  Since an annotation object is a sequence interval,
-it can itself be sliced (e.g. \code{e[:10]} gets the slice representing
-the first ten bases of the exon); such annotation slices also have
-an \member{annot} attribute, which will simply point to the annotation
-object representing the complete exon (i.e. just \code{e} itself).
-To check whether an annotation \code{e} is the complete annotation
-(as opposed to just a slice of part of the annotated region), use the
-logical test \code{e.annot is e}.
+\item An annotation will generally have additional attributes that
+describe its specific biological information; for example,
+a gene annotation might have a \member{symbol} attribute giving
+its gene symbol.  These annotation-specific attributes are provided
+by a \var{sliceDB}; see below for details. 
+
+\item You can always obtain the actual sequence object corresponding
+to an annotation object or slice, by simply requesting its
+\member{sequence} attribute.
+
+\item An annotation object can itself be sliced 
+(e.g. \code{e[:10]} gets the slice representing
+the first ten bases of the exon); such annotation slices can themselves
+also be sliced.  More generally, an annotation is itself a coordinate
+system that can be sliced, negated (only for nucleotide sequence 
+annotations, to obtain the opposite strand), and have a length
+(obtainable as usual via the builtin \code{len}() function).
+
+\item Annotation objects provide a consistent interface
+to the annotation coordinate system, based on the \class{SeqPath}
+class.  Pretty much anything that you can do with \class{SeqPath}
+you can also do with an annotation or annotation slice.
+You can tell whether
+an annotation is on the same strand (or opposite strand)
+from the original annotation in the usual way, by checking
+its \member{orientation} attribute, which is +1 for same strand
+and -1 for opposite strand.  You can also obtain the entire
+original annotation in the usual way, by accessing the \member{pathForward}
+attribute of any annotation slice. 
+
+\item One difference is that you cannot obtain the string value
+(letters of the corresponding sequence) directly from an annotation
+object or slice.  Instead, you must first obtain the corresponding
+sequence slice, via its \member{sequence} attribute, to which
+you can then apply the \method{str}() builtin function.
+
+\item Because annotations obey the
+coordinate system and slicing behaviors of sequence objects,
+they can be aligned in an NLMSA sequence alignment just like any
+sequence.  This provides a powerful and convenient way for
+querying annotation databases.
 
 \item The mapping of an annotation object to the sequence region it
-represents is trivial, i.e. the object itself behaves as that sequence interval.
+represents is trivial, i.e. simply request its \member{sequence} attribute.
 The reverse mapping (for any region of sequence, find the annotation(s) 
 that map to that region) is best performed by creating an NLMSA alignment
 object and saving the mapping as follows:
@@ -2994,16 +3077,30 @@ for a in nlmsa[s]: # FIND ANNOTATIONS THAT MAP TO s
   # DO SOMETHING...
 \end{verbatim}
 
+\item Based on your pygr.Data schema, an annotation object may
+have other attributes that connect it to other data.
+For example, an object \code{e} representing an exon annotation
+might have attributes that link it
+to its {\em splice graph}.  \code{for e2,splice in e.next.items()} would iterate
+through the list of exons it is connected to by a forward splice, etc.
+
 \end{itemize}
-\begin{funcdesc}{__init__}{sliceDB,seqDB,itemClass=AnnotationSeq,itemSliceClass=AnnotationSlice,itemAttrDict=None,sliceAttrDict=dict()}
+\begin{funcdesc}{__init__}{sliceDB,seqDB,annotationType=None,itemClass=AnnotationSeq,itemSliceClass=AnnotationSlice,itemAttrDict=None,sliceAttrDict=dict()}
   Constructs an annotation database using several arguments:
 
   \var{sliceDB}, a database that takes an annotation ID as a key, and returns
   a slice information object with attributes that give the sequence ID and start/stop
-  coordinates of the sequence interval representing the annotation.
+  coordinates of the sequence interval representing the annotation,
+  and any other information about the annotation.  In general, any
+  attribute on the slice information object, will also be accessible
+  on the corresponding annotation object and slices derived from it.
 
   \var{seqDB}, a sequence database that takes a sequence ID as a key, and
   returns a sequence object.
+
+  \var{annotationType} should be a string identifier for the type of
+  annotation.  This will be propagated to all annotation objects / slices
+  derived from this annotation database.
 
   \var{itemClass}: the class to use for constructing an annotation object 
   to be returned from the AnnotationDB.__getitem__.  You can extend the
@@ -3053,6 +3150,9 @@ exon_db = AnnotationDB(exon_slices, db,
                        sliceAttrDict=dict(id=0, orientation=3, # GIVE ATTR INTERFACE TO 2PLE
                                           transcript_id=4, start=5, stop=6))
 \end{verbatim}
+  Additional tuples values beyond the required \member{id,start,stop}
+  attributes may be used to provide additional informative attributes
+  for the individual annotations.
 \end{funcdesc}
 
 \begin{funcdesc}{__getitem__}{id}
@@ -3063,25 +3163,6 @@ exon_db = AnnotationDB(exon_slices, db,
   from the slice information object, that give useful information about this
   annotation).
 \end{funcdesc}
-
-\subsubsection{AnnotationSeq}
-\begin{funcdesc}{originalIval}{}
-  Returns a sequence interval object representing this annotation region.
-  The only difference (versus the annotation object itself) is that the
-  sequence interval object will not have an \member{annot} attribute or
-  any other attributes that would mark it as an annotation.  This is mainly
-  important for NLMSA alignments, which treat annotation objects differently
-  (as an annotation) from sequence objects.
-\end{funcdesc}
-
-\begin{funcdesc}{wholeAnnotation}{}
-  Returns True if this is the complete annotation, False if just a fragment.
-\end{funcdesc}
-
-\begin{funcdesc}{properOrientation}{}
-  Returns True if on same strand as original annotation, False if on reverse strand
-\end{funcdesc}
-
 
 \subsubsection{VirtualSeq}
 This class provides an empty sequence object that
@@ -3178,6 +3259,11 @@ id=(~db)[seq] # GET PROPERLY PREFIXED-IDENTIFIER FOR THIS SEQUENCE
 \end{funcdesc}
 
 \begin{funcdesc}{writeHeaderFile}{filename}
+  THIS METHOD IS DEPRECATED, because it is restricted to
+  assuming that all sequence dictionaries it contains
+  are of a single class.  We recommend that you instead save
+  it to pygr.Data, or pickle it directly using pygr.Data.dumps().
+
   Save a header file for this union, to reopen later.
   It saves the separator character, and a list of prefixes
   and filepaths to the various sequence databases (which
@@ -3380,12 +3466,9 @@ gene=db[cluster_id] # USE IT TO GET A GENE SEQUENCE...
 \subsubsection{Functions}
 The seqdb module also provides several convenience functions:
 
-\begin{funcdesc}{read_fasta}{ifile, onlyReadOneLine=False}
+\begin{funcdesc}{read_fasta}{ifile}
   a generator function
   that yields tuples of \var{id,title,seq} from \var{ifile}.  
-  The \var{onlyReadOneLine} option is useful if you only want to 
-  determine the sequence type (e.g. DNA vs protein) and the
-  whole sequence might be extremely long (e.g. a genome!).
 \end{funcdesc}
 
 \begin{funcdesc}{write_fasta}{ofile, s, chunk=60, id=None}
@@ -3485,7 +3568,7 @@ resource, and it will automatically get the genomic sequence data
 for us.  Thus to get an exon's sequence all we have to do is:
 \begin{verbatim}
 exons=pygr.Data.Bio.Genomics.ASAP2.hg17.exons() # ANNOTATION DATABASE
-str(exons[464]) # GET THE SEQUENCE OF THIS SPECIFIC EXON
+str(exons[464].sequence) # GET THE SEQUENCE OF THIS SPECIFIC EXON
 \end{verbatim}
 
 \item It should be noted that at the moment there is only one name
@@ -3803,7 +3886,26 @@ rdb=pygr.Data.ResourceDBMySQL('pygrdata.index',createLayer='leelab')
   was not given, or the table does not exist.
 \end{funcdesc}
 
+\begin{funcdesc}{dumps}{obj}
+  Provides a pygr.Data-aware pickling service; that is, if
+  during pickling of \var{obj} any references are encountered
+  to objects that pygr.Data IDs, it will simply save the ID.
+  Returns a string pickle of \var{obj}.
+  Use pygr.Data.loads() to restore an object pickled using this function.
+\end{funcdesc}
 
+\begin{funcdesc}{loads}{data,cursor=None}
+  Unpickles the string pickle contained in \var{data} in a pygr.Data-aware
+  manner.  I.e. any references in the pickle of the form ``PYGR_DATA_ID:''
+  will be retrieved by pygr.Data in the usual way.
+
+  \var{data} should have
+  been generated by a previous call to pygr.Data.dumps().
+
+  \var{cursor} if not None, must be a Python DB API 2.0 compliant
+  cursor object, that will be used to load any objects that require
+  a database connection.
+\end{funcdesc}
 
 
 \subsubsection{pygr.Data Layers}
@@ -4141,7 +4243,15 @@ resources and schema.
   Same as the top-level module function of the same name.
 \end{funcdesc}
 
+\begin{funcdesc}{getResource.dumps}{obj}
+  Same as the top-level module function of the same name.
+\end{funcdesc}
+
 \begin{funcdesc}{getResource.list_pending}{}
+  Same as the top-level module function of the same name.
+\end{funcdesc}
+
+\begin{funcdesc}{getResource.loads}{data,cursor=None}
   Same as the top-level module function of the same name.
 \end{funcdesc}
 
