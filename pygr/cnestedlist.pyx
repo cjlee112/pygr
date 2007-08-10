@@ -1343,10 +1343,7 @@ cdef class NLMSASequence:
     except KeyError: # OK, WE REALLY DO NEED TO ADD IT...
       pass
     # CHECK FOR OVERFLOW... CREATE A NEW UNION IF NEEDED
-    try: # HANDLE ANNOTATIONS DIFFERENTLY FROM REGULAR SEQ SLICE
-      seq=seq.annot # GET THE ENTIRE ANNOTATION
-    except AttributeError:
-      seq=seq.pathForward # GET THE ENTIRE SEQUENCE
+    seq=seq.pathForward # GET THE ENTIRE SEQUENCE
     if self.length+len(seq)>self.nlmsaLetters.maxlen: # TOO BIG!
       if self.nlmsaLetters.use_virtual_lpo: # NEED TO CREATE CORRESPONDING LPO
         ns=self.nlmsaLetters.newSequence(None) # CREATE NEW LPO
@@ -1551,10 +1548,8 @@ cdef class NLMSA:
     return self  # iadd MUST ALWAYS RETURN self!
   def addAnnotation(self,a):
     'save alignment of sequence interval --> an annotation object'
-    from seqdb import StrictAnnotation
-    ival=a.originalIval() # GET PURE SEQUENCE INTERVAL
+    ival = a.sequence # GET PURE SEQUENCE INTERVAL
     self.__iadd__(ival) # ADD SEQ AS A NODE IN OUR ALIGNMENT
-    a = StrictAnnotation(a) # ENSURE THIS IS SAVED AS ANNOTATION, NOT ORIGINAL IVAL
     self[ival].__iadd__(a) # ADD ALIGNMENT BETWEEN ival AND ANNOTATION
 
   cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id):
