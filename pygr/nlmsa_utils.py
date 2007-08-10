@@ -107,21 +107,15 @@ class NLMSASeqDict(dict):
     self.IDdict[str(nlmsaID)]=id,nsID
 
   def getIDcoords(self,seq):
-    'return nlmsaID,start,stop for a given seq ival. Handles annotation!'
+    'return nlmsaID,start,stop for a given seq ival.'
     nlmsaID=self.getID(seq)
-    try: # RETURN COORDS RELATIVE TO PARENT ANNOTATION
-      if seq.annot.orientation==seq.orientation: # SAME ORIENTATION
-        return nlmsaID,seq.start-seq.annot.start,seq.stop-seq.annot.start
-      else: # OPPOSITE ORIENTATION
-        return nlmsaID,seq.start+seq.annot.start,seq.stop+seq.annot.start
-    except AttributeError:
-      return nlmsaID,seq.start,seq.stop # STANDARD COORDS
+    return nlmsaID,seq.start,seq.stop # STANDARD COORDS
   def getID(self,seq):
     'return nlmsa_id for a given seq'
     return self[seq][0]
   def __getitem__(self,seq):
     'return nlmsaID,NLMSASequence,offset for a given seq'
-    if not hasattr(seq,'annot'): # DON'T APPLY TO ANNOTATIONS
+    if not hasattr(seq,'annotationType'): # DON'T CACHE ANNOTATIONS
       try: # LOOK IN OUR SEQUENCE CACHE
         return dict.__getitem__(self,seq.pathForward)
       except AttributeError:
@@ -134,7 +128,7 @@ class NLMSASeqDict(dict):
     except KeyError:
       raise KeyError('seq not found in this alignment')
     v=nlmsaID,self.seqlist[nsID],offset
-    if not hasattr(seq,'annot'): # DON'T APPLY TO ANNOTATIONS
+    if not hasattr(seq,'annotationType'): # DON'T CACHE ANNOTATIONS
       dict.__setitem__(self,seq.pathForward,v) # CACHE THIS RESULT
     return v
 
