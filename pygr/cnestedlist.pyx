@@ -807,7 +807,7 @@ cdef class NLMSASlice:
     pIdentityMin0=pIdentityMin
     for targetID,l in seqIntervals.items(): # MERGE INTERVALS FOR EACH SEQ
       seq=nl.seqlist.getSeq(targetID) # GET THE SEQUENCE OBJECT
-      if not isinstance(pIdentityMin0,types.FloatType):
+      if pIdentityMin0 is not None and not isinstance(pIdentityMin0,types.FloatType):
         try:
           pIdentityMin=pIdentityMin0[seq] # LOOK UP DESIRED IDENTITY FOR THIS SEQ
         except KeyError:
