@@ -89,30 +89,43 @@ def write_fasta(ofile,s,chunk=60,id=None,reformatter=None):
             break
     return id # IN CASE CALLER WANTS TEMP ID WE MAY HAVE ASSIGNED
 
-def read_fasta(ifile,onlyReadOneLine=False):
+def read_fasta(ifile):
     "iterate over id,title,seq from stream ifile"
     id=None
-    title=''
-    seq=''
     isEmpty = True
     for line in ifile:
         if '>'==line[0]:
             if id is not None and len(seq)>0:
                 yield id,title,seq
                 isEmpty = False
-                seq = ''
             id=line[1:].split()[0]
             title=line[len(id)+2:]
+            seq = ''
         elif id is not None: # READ SEQUENCE
             for word in line.split(): # GET RID OF WHITESPACE
                 seq += word
-            if onlyReadOneLine and len(seq)>0:
-                yield id,title,seq
-                isEmpty = False
     if id is not None and len(seq)>0:
         yield id,title,seq
     elif isEmpty:
         raise IOError('no readable sequence in FASTA file!')
+
+def read_fasta_one_line(ifile):
+    "read a single sequence line, return id,title,seq"
+    id=None
+    seq=''
+    while True:
+        line = ifile.readline(1024) # READ AT MOST 1KB
+        if line=='': # EOF
+            break
+        elif '>'==line[0]:
+            id = line[1:].split()[0]
+            title = line[len(id)+2:]
+        elif id is not None: # READ SEQUENCE
+            for word in line.split(): # GET RID OF WHITESPACE
+                seq += word
+            if len(seq)>0:
+                return id,title,seq
+    raise IOError('no readable sequence in FASTA file!')
 
 def read_fasta_lengths(ifile):
     "Generate sequence ID,length from stream ifile"
@@ -135,35 +148,38 @@ def read_fasta_lengths(ifile):
         raise IOError('no readable sequence in FASTA file!')
 
 
-def store_seqlen_dict(d,ifile,idFilter=None):
+def store_seqlen_dict(d,ifile,filename,idFilter=None):
     "store sequence lengths in a dictionary"
     try: # TRY TO USE OUR FAST COMPILED PARSER
         import seqfmt
-        try: # NEED TO GET THE FILENAME...
-            filename=ifile.name
-        except AttributeError:
-            pass
-        else: # USE THE FAST PARSER
-            if idFilter is None: # LET C FUNC WRITE DIRECTLY TO d
-                return seqfmt.read_fasta_lengths(d,filename)
-            class dictwrapper(object):
-                def __init__(self,idFilter,d):
-                    self.d=d
-                    self.idFilter=idFilter
-                def __setitem__(self,k,v):
-                    id=self.idFilter(k)
-                    self.d[id]=v
-            dw=dictwrapper(idFilter,d) # FORCE C FUNC TO WRITE TO WRAPPER...
-            return seqfmt.read_fasta_lengths(dw,filename)
     except ImportError:
-        pass
+        import sys
+        raise ImportError('''
+Unable to import extension module pygr.seqfmt that should be part of this package.
+Either you are working with an incomplete install, or an installation of pygr
+compiled with an incompatible Python version.  Please check your PYTHONPATH
+setting and make sure it is compatible with this Python version (%d.%d).
+When in doubt, rebuild your pygr installation using the
+python setup.py build --force
+option to force a clean install''' % sys.version_info[:2])
+    if idFilter is None: # LET C FUNC WRITE DIRECTLY TO d
+        return seqfmt.read_fasta_lengths(d,filename)
+    class dictwrapper(object):
+        def __init__(self,idFilter,d):
+            self.d=d
+            self.idFilter=idFilter
+        def __setitem__(self,k,v):
+            id=self.idFilter(k)
+            self.d[id]=v
+    dw=dictwrapper(idFilter,d) # FORCE C FUNC TO WRITE TO WRAPPER...
+    return seqfmt.read_fasta_lengths(dw,filename)
     
-    if idFilter is not None: # HAVE TO CLEAN UP BLAST'S MESSY IDs
-        for id,seqLength in read_fasta_lengths(ifile):
-            d[idFilter(id)] = (seqLength,) # SAVE TO DICTIONARY
-    else: # JUST USE id AS-IS
-        for id,seqLength in read_fasta_lengths(ifile):
-            d[id] = (seqLength,) # SAVE TO DICTIONARY
+##     if idFilter is not None: # HAVE TO CLEAN UP BLAST'S MESSY IDs
+##         for id,seqLength in read_fasta_lengths(ifile):
+##             d[idFilter(id)] = (seqLength,) # SAVE TO DICTIONARY
+##     else: # JUST USE id AS-IS
+##         for id,seqLength in read_fasta_lengths(ifile):
+##             d[id] = (seqLength,) # SAVE TO DICTIONARY
         
 
 def fastacmd_seq(filepath,id,start=None,end=None):
@@ -497,7 +513,7 @@ class SeqDBbase(dict):
         raise IndexError('interval not found in cache')
 
 class SeqDBDescriptor(object):
-    'forwards attribute requests to self.annot'
+    'forwards attribute requests to self.pathForward'
     def __init__(self,attr):
         self.attr=attr
     def __get__(self,obj,objtype):
@@ -538,7 +554,7 @@ class BlastDBbase(SeqDBbase):
                 self.seqLenDict=shelve.open(filepath+'.seqlen') # OPEN IN DEFAULT "CREATE" MODE
                 ifile,idFilter=self.raw_fasta_stream(ifile,idFilter)
                 print 'Building sequence length index...'
-                store_seqlen_dict(self.seqLenDict,ifile,idFilter)
+                store_seqlen_dict(self.seqLenDict,ifile,filepath,idFilter)
                 self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
                 self.seqLenDict=shelve.open(filepath+'.seqlen','r') # REOPEN IT READ-ONLY
         
@@ -637,14 +653,12 @@ class BlastDBbase(SeqDBbase):
             self._seqtype=DNA_SEQTYPE
             return
         else:
-            ofile=file(self.filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
-            for id,title,seq in read_fasta(ofile,onlyReadOneLine=True):
-                self._seqtype=guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
-                ofile.close()
-                return  # JUST READ ONE SEQUENCE
-            ofile.close()
-            raise IOError('unable to obtain any sequence from FASTA file %s'
-                          % self.filepath)
+            ifile = file(self.filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
+            try:
+                id,title,seq = read_fasta_one_line(ifile)
+                self._seqtype = guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
+            finally:
+                ifile.close()
 
     def raw_fasta_stream(self,ifile=None,idFilter=None):
         'return a stream of fasta-formatted sequences, and ID filter function if needed'
@@ -819,9 +833,6 @@ class StoredPathMapping(PathMapping):
 
     # NEED TO ADD APPROPRIATE HOOKS FOR __iter__, items(), ETC.
 
-def originalIval(self):
-    'get this interval as pure sequence interval (not as an annotation)'
-    return absoluteSlice(self,self.start,self.stop)
 def getAnnotationAttr(self,attr):
     'forward attributes from slice object if available'
     try:
@@ -832,55 +843,61 @@ def getAnnotationAttr(self,attr):
         except KeyError:
             raise AttributeError
 
+def annotation_repr(self):
+    if self.annotationType is not None:
+        title = self.annotationType
+    else:
+        title = 'annot'
+    if self.orientation>0:
+        return '%s%s[%d:%d]' % (title,self.id,self.start,self.stop)
+    else:
+        return '-%s%s[%d:%d]' % (title,self.id,-self.stop,-self.start)
+
+class AnnotationSeqDescr(object):
+    'get the sequence interval corresponding to this annotation'
+    def __get__(self,obj,objtype):
+        return absoluteSlice(obj._anno_seq,obj._anno_start,obj._anno_start+obj.stop)
+class AnnotationSliceDescr(object):
+    'get the sequence interval corresponding to this annotation'
+    def __get__(self,obj,objtype):
+        return relativeSlice(obj.pathForward.sequence,obj.start,obj.stop)
+class AnnotationSeqtypeDescr(object):
+    'get seqtype of the sequence interval corresponding to this annotation'
+    def __get__(self,obj,objtype):
+        return obj._anno_seq.seqtype()
 
 class AnnotationSeq(SeqPath):
-    originalIval=originalIval
-    __getattr__=getAnnotationAttr
-    def wholeAnnotation(self):
-        'True if this is the complete annotation, False if just a fragment'
-        return True
-    def properOrientation(self):
-        'True if on same strand as original annotation, False if on reverse strand'
-        return True
+    'base class representing an annotation'
+    start=0
+    step=1
+    orientation=1
+    def __init__(self,id,db,parent,start,stop):
+        self.id = id
+        self.db = db
+        self.stop = stop-start
+        self._anno_seq = parent
+        self._anno_start = start
+        self.path = self
+    __getattr__ = getAnnotationAttr
+    sequence = AnnotationSeqDescr()
+    annotationType = classutil.DBAttributeDescr('annotationType')
+    _seqtype = AnnotationSeqtypeDescr()
+    __repr__ =  annotation_repr
+    def strslice(self,start,stop):
+        raise ValueError('''this is an annotation, and you cannot get a sequence string from it.
+Use its sequence attribute to get a sequence object representing this interval.''')
 
-class AnnotationDescriptor(object):
-    'forwards attribute requests to self.annot'
-    def __init__(self,attr):
-        self.attr=attr
-    def __get__(self,obj,objtype):
-        return getattr(obj.annot,self.attr) # RAISES AttributeError IF NONE
 
-class AnnotationSlice(SeqPath):
+class AnnotationSlice(SeqDBSlice):
     'represents subslice of an annotation'
-    def __init__(self,path,*args,**kwargs):
-        self.annot=path.annot # KEEP POINTING AT PARENT ANNOTATION
-        SeqPath.__init__(self,path,*args,**kwargs)
-    def wholeAnnotation(self):
-        'True if this is the complete annotation, False if just a fragment'
-        return self.annot in self
-    def properOrientation(self):
-        'True if on same strand as original annotation, False if on reverse strand'
-        return self.orientation==self.annot.orientation
-    id=AnnotationDescriptor('id') # ACCESS TO SCHEMA INFO VIA AnnotationSeq
-    db=AnnotationDescriptor('db')
-    originalIval=originalIval
     __getattr__=getAnnotationAttr
-
-class StrictAnnotation(object):
-    '''wrapper that behaves strictly as annotation, i.e. even originaIval()
-    just returns the same StrictAnnotation object.  In all other respects,
-    just acts as a wrapper around the annotation object'''
-    def __init__(self,annot):
-        'wrap an annotation object'
-        self._annot = annot
-    def __getattr__(self,attr):
-        return getattr(self._annot,attr)
-    def originalIval(self):
-        return self
+    sequence = AnnotationSliceDescr()
+    annotationType = classutil.DBAttributeDescr('annotationType')
+    __repr__ =  annotation_repr
 
 class AnnotationDB(dict):
     'container of annotations as specific slices of db sequences'
-    def __init__(self,sliceDB,seqDB,itemClass=AnnotationSeq,
+    def __init__(self,sliceDB,seqDB,annotationType=None,itemClass=AnnotationSeq,
                  itemSliceClass=AnnotationSlice,
                  itemAttrDict=None, # GET RID OF THIS BACKWARDS-COMPATIBILITY KLUGE!!
                  sliceAttrDict={}):
@@ -890,8 +907,9 @@ class AnnotationDB(dict):
         sliceAttrDict gives optional dict of item attributes that
         should be mapped to sliceDB item attributes.'''
         dict.__init__(self)
-        self.sliceDB=sliceDB
-        self.seqDB=seqDB
+        self.sliceDB = sliceDB
+        self.seqDB = seqDB
+        self.annotationType = annotationType
         self.itemClass=itemClass
         self.itemSliceClass=itemSliceClass
         self.sliceAttrDict=sliceAttrDict # USER-PROVIDED ALIASES
@@ -899,7 +917,8 @@ class AnnotationDB(dict):
         return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
-    _pickleAttrs = dict(sliceDB=0,seqDB=0,itemClass=0,itemSliceClass=0,sliceAttrDict=0)
+    _pickleAttrs = dict(sliceDB=0,seqDB=0,annotationType=0,
+                        itemClass=0,itemSliceClass=0,sliceAttrDict=0)
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
@@ -921,22 +940,19 @@ class AnnotationDB(dict):
             return sliceInfo[k]
     def sliceAnnotation(self,k,sliceInfo):
         'create annotation and cache it'
-        start=int(self.getSliceAttr(sliceInfo,'start'))
-        stop=int(self.getSliceAttr(sliceInfo,'stop'))
+        start = int(self.getSliceAttr(sliceInfo,'start'))
+        stop = int(self.getSliceAttr(sliceInfo,'stop'))
         try:
             if int(self.getSliceAttr(sliceInfo,'orientation'))<0 and start>=0:
-                start,stop= (-stop,-start) # NEGATIVE ORIENTATION COORDINATES
+                start,stop = (-stop,-start) # NEGATIVE ORIENTATION COORDINATES
         except AttributeError:
             pass
-        myslice=absoluteSlice(self.seqDB[self.getSliceAttr(sliceInfo,'id')],start,stop)
-        length=len(myslice) # RAISE IndexError IF INTERVAL IS EMPTY!
-        if self.itemClass is not None: # FORCE ITEM TO USE ANNOTATION CLASS
-            myslice.__class__=self.itemClass
-        myslice.annot=myslice # THIS FIELD INDICATES THIS IS AN ANNOTATION
-        myslice.id=k # SAVE SCHEMA INFORMATION: ID AND DB
-        myslice.db=self
-        self[k]=myslice # CACHE THIS IN OUR DICT
-        return myslice
+        if start>=stop:
+            raise IndexError('annotation %s has zero or negative length [%s:%s]!'
+                             %(k,start,stop))
+        a = self.itemClass(k,self,self.seqDB[self.getSliceAttr(sliceInfo,'id')],start,stop)
+        self[k] = a # CACHE THIS IN OUR DICT
+        return a
     def foreignKey(self,attr,k):
         'iterate over items matching specified foreign key'
         for t in self.sliceDB.foreignKey(attr,k):
@@ -1125,31 +1141,17 @@ class PrefixDictInverse(object):
     def __init__(self,db):
         self.db=db
     def __getitem__(self,seq):
-        try: # 1ST CHECK DIRECTLY FOR .db / .id ATTRS ON seq
-            return self.db.dicts[seq.db] \
-                   +self.db.separator+str(seq.id)
-        except KeyError:
-            try:
-                seq = seq.originalIval()
-            except AttributeError:
-                pass
-            else:
-                return self.db.dicts[seq.db] \
-                       +self.db.separator+str(seq.id)
-
-            raise KeyError('seq not in PrefixUnionDict')
-        except AttributeError:
-            pass
         try: # INSTEAD GET FROM seq.pathForward
             return self.db.dicts[seq.pathForward.db] \
-                   +self.db.separator+seq.pathForward.id
+                   +self.db.separator+str(seq.pathForward.id)
         except KeyError:
+            try:
+                if seq.pathForward._anno_seq in self:
+                    raise KeyError('this annotation is not in the PrefixUnion, but its sequence is.  You ccan get that using its sequence attribute.')
+            except AttributeError:
+                pass
             raise KeyError('seq not in PrefixUnionDict')
     def __contains__(self,seq):
-        try:
-            return seq.db in self.db.dicts
-        except AttributeError:
-            pass
         try:
             return seq.pathForward.db in self.db.dicts
         except AttributeError:
