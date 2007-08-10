@@ -1281,9 +1281,7 @@ Set trypath to give a list of directories to search.'''
             try:
                 print >>ifile,'%s\t%s\t' %(k,v.filepath)
             except AttributeError:
-                import sys
-                print >>sys.stderr,'WARNING: seq db %s has no filepath; not saved to %s' \
-                      %(k,filename)
+                raise AttributeError('seq db %s has no filepath; you can save this to pygr.Data but not to a text HeaderFile!' % k)
         ifile.close()
 
     def __invert__(self):
