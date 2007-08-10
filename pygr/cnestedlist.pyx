@@ -1401,13 +1401,21 @@ cdef class NLMSA:
       self.maxLPOcoord=self.maxlen
     if mode=='r': # OPEN FROM DISK FILES
       if self.seqDict is None:
-        import seqdb
-        try: # SEE IF THERE IS A UNION HEADER FILE FOR pathstem.seqDict
-          self.seqDict=seqdb.PrefixUnionDict(filename=pathstem+'.seqDict',
+        import seqdb,os
+        if os.access(pathstem+'.seqDictP',os.R_OK):
+          from pygr.Data import loads
+          ifile = file(pathstem+'.seqDictP')
+          try: # LOAD FROM pygr.Data-AWARE PICKLE FILE
+            self.seqDict = loads(ifile.read())
+          finally:
+            ifile.close()
+        elif os.access(pathstem+'.seqDict',os.R_OK): # OLD-STYLE UNION HEADER
+          self.seqDict = seqdb.PrefixUnionDict(filename=pathstem+'.seqDict',
                                              trypath=trypath)
-        except IOError:
-          raise ValueError('you must pass a seqDict, or valid header file %s'
-                           % (pathstem+'.seqDict'))
+        else:
+          raise ValueError('''Unable to find seqDict file
+%s.seqDictP or %s.seqDict
+and no seqDict provided as an argument''' % (pathstem,pathstem))
       self.read_indexes(self.seqDict)
     elif mode=='w': # WRITE TO DISK FILES
       self.do_build=1
@@ -1672,7 +1680,7 @@ cdef class NLMSA:
     self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
 
     
-  def buildFiles(self,saveSeqDict=True,**kwargs):
+  def buildFiles(self,saveSeqDict=False,**kwargs):
     'build nestedlist databases on-disk, and .seqDict index if desired'
     cdef NLMSASequence ns
     self.seqs.reopenReadOnly() # SAVE INDEXES AND OPEN READ-ONLY
@@ -1686,8 +1694,25 @@ cdef class NLMSA:
       else:
         ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,ns.name,0,ns.length))
     ifile.close()
-    if saveSeqDict and hasattr(self.seqDict,'writeHeaderFile'):
-      self.seqDict.writeHeaderFile(self.pathstem+'.seqDict')
+    import sys
+    sys.stderr.write('Index files saved.\n')
+    if saveSeqDict:
+      self.save_seq_dict()
+    else:
+      sys.stderr.write('''Note: the NLMSA.seqDict was not saved to a file.
+This is not necessary if you intend to save the NLMSA to pygr.Data.
+But if you wish to, call NLMSA.save_seq_dict() to save it to a file,
+or in the future pass the saveSeqDict=True option to NLMSA.build().
+''')
+  def save_seq_dict(self):
+    'save seqDict to a pygr.Data-aware pickle file'
+    from pygr.Data import dumps
+    ofile = file(self.pathstem+'.seqDictP','w')
+    try:
+      ofile.write(dumps(self.seqDict))
+    finally:
+      ofile.close()
+    #self.seqDict.writeHeaderFile(self.pathstem+'.seqDict')
 
   def build(self,**kwargs):
     'build nestedlist databases from saved mappings and initialize for use'
