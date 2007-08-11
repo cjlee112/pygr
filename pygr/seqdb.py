@@ -696,7 +696,7 @@ class BlastDBbase(SeqDBbase):
             return s
 
     def blast(self,seq,al=None,blastpath='blastall',
-              blastprog=None,expmax=0.001,maxseq=None):
+              blastprog=None,expmax=0.001,maxseq=None,**kwargs):
         "Run blast search for seq in database, return aligned intervals"
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
@@ -709,7 +709,7 @@ class BlastDBbase(SeqDBbase):
         return process_blast(cmd,seq,self,al)
 
     def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
-                  maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts=''):
+                  maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts='',**kwargs):
         "Run megablast search with repeat masking."
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
@@ -900,14 +900,20 @@ class AnnotationDB(dict):
     def __init__(self,sliceDB,seqDB,annotationType=None,itemClass=AnnotationSeq,
                  itemSliceClass=AnnotationSlice,
                  itemAttrDict=None, # GET RID OF THIS BACKWARDS-COMPATIBILITY KLUGE!!
-                 sliceAttrDict={}):
+                 sliceAttrDict={},**kwargs):
         '''sliceDB must map identifier to a sliceInfo object;
         sliceInfo must have name,start,stop,ori attributes;
         seqDB must map sequence ID to a sliceable sequence object;
         sliceAttrDict gives optional dict of item attributes that
         should be mapped to sliceDB item attributes.'''
         dict.__init__(self)
-        self.sliceDB = sliceDB
+        if sliceDB is not None:
+            self.sliceDB = sliceDB
+        else: # NEED TO CREATE / OPEN A DATABASE FOR THE USER
+            self.sliceDB = classutil.get_shelve_or_dict(**kwargs)
+            sliceAttrDict['id'] = 0 # USE TUPLE AS OUR INTERNAL STANDARD FORMAT
+            sliceAttrDict['start'] = 1
+            sliceAttrDict['stop'] = 2
         self.seqDB = seqDB
         self.annotationType = annotationType
         self.itemClass=itemClass
@@ -970,7 +976,60 @@ class AnnotationDB(dict):
             yield v
     def items(self): return [t for t in self.iteritems()]
     def values(self): return [t[1] for t in self.iteritems()]
-
+    def add_homology(self,seq,search='blast',id=None,idFormat='%s_%d',
+                     autoIncrement=False,maxAnnot=999999,
+                     maxLoss=None,sliceInfo=None,**kwargs):
+        'find homology in our seq db and add as annotations'
+        if autoIncrement:
+            id = len(self.sliceDB)
+        elif id is None:
+            id = seq.id
+        if isinstance(search,str): # GET SEARCH METHOD
+            search = getattr(self.seqDB,search)
+        if isinstance(seq,str): # CREATE A SEQ OBJECT
+            seq = Sequence(seq,str(id))
+        al = search(seq,**kwargs) # RUN THE HOMOLOGY SEARCH
+        if maxLoss is not None: # REQUIRE HIT BE AT LEAST A CERTAIN LENGTH
+            kwargs['minAlignSize'] = len(seq)-maxLoss
+        hits = al[seq].keys(**kwargs) # OBTAIN LIST OF HIT INTERVALS
+        if len(hits)>maxAnnot:
+            raise ValueError('too many hits for %s: %d' %(id,len(hits)))
+        out = []
+        i = 0
+        k = id
+        for ival in hits: # CREATE ANNOTATION FOR EACH HIT
+            if len(hits)>1: # NEED TO CREATE AN ID FOR EACH HIT
+                if autoIncrement:
+                    k = len(self.sliceDB)
+                else:
+                    k = idFormat %(id,i)
+                i += 1
+            if sliceInfo is not None: # SAVE SLICE AS TUPLE WITH INFO
+                self.sliceDB[k] = (ival.id,ival.start,ival.stop)+sliceInfo
+            else:
+                self.sliceDB[k] = (ival.id,ival.start,ival.stop)
+            self._wroteSliceDB = True
+            out.append(self[k]) # GET THE ANNOTATION
+        return out
+    def close(self):
+        'if sliceDB needs to be closed, do it and return True, otherwise False'
+        try:
+            if self._wroteSliceDB:
+                self.sliceDB.close()
+                self._wroteSliceDB = False # DISK FILE IS UP TO DATE
+                return True
+        except AttributeError:
+            pass
+        return False
+    def __del__(self):
+        if self.close():
+            import sys
+            print >>sys.stderr,'''
+WARNING: you forgot to call AnnotationDB.close() after writing
+new annotation data to it.  This could result in failure to properly
+store the data in the associated disk file.  To avoid this, we
+have automatically called AnnotationDB.sliceDB.close() to write the data
+for you, when the AnnotationDB was deleted.'''
 
 
 class SliceDB(dict):
