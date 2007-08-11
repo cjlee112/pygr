@@ -4563,7 +4563,7 @@ a standard Python dict, served to clients via an XMLRPC
 server (use \class{coordinator.XMLRPCServerBase} as the XMLRPC
 server to serve this object).  
 
-\begin{funcdesc}{__init__}{layerName,readOnly=False}
+\begin{funcdesc}{__init__}{layerName,readOnly=True}
   \var{layerName} is the layer name that this server will provide
   to pygr.Data clients.  \var{readOnly} if True, makes the server reject
   any requests to add new database rules received via XMLRPC, i.e.
