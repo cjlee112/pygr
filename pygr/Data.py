@@ -132,7 +132,7 @@ class ResourceDBServer(object):
     xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0,
                     'getName':0,'dir':0,'get_version':0}
     _pygr_data_version=(0,1,0)
-    def __init__(self,name,readOnly=False):
+    def __init__(self,name,readOnly=True):
         self.name=name
         self.d={}
         self.docs={}
