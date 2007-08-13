@@ -4223,6 +4223,26 @@ a full dict-like interface externally.  It takes several arguments:
 you {\em must} call the Collection's \method{close}() method to ensure
 that all the data will be saved to the Python shelve.  Otherwise, the 
 Python shelve file might be left in an incomplete state.
+NOTE: opening a collection with the \var{filename} option will cause
+it to use the PicklableShelve or IntShelve class for the Collection.
+
+\var{mode=None} is passed to the Python \method{shelve.open}() function
+to control whether \var{filename} is opened in read, write or create mode;
+see the Python \module{shelve} module documentation for details.  If \var{mode}
+is None, it will first try to open the shelve in mode 'r' (read-only),
+but if the file is missing, will open it in mode 'c' (create).
+
+\var{writeback=True} is passed to the Python \method{shelve.open}() function
+to control the saving of data to the shelve.  
+See the Python \module{shelve} module documentation for details.
+The default \var{writeback=True} setting can consume large amounts of
+memory if you are writing a lot of data to the shelve.  To avoid
+this problem, use \var{writeback=False}; note that this means updates
+to the shelve will only be saved when you explicitly set an item
+in the Collection (e.g. \code{collection[k] = v}; specifically, if
+\code{v} is a mutable object, subsequently changing the contents of
+\code{v} will not automatically update the \module{shelve}, whereas
+it would be with \var{writeback=True}).
    
 \var{dictClass}: if provided, is the class to use for storage of the dict data.
 
