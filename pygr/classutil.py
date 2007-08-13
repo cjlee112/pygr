@@ -22,9 +22,24 @@ def filename_unpickler(cls,path,kwargs):
 filename_unpickler.__safe_for_unpickling__ = 1
 
 class SourceFileName(str):
-    'store a filepath string, raise IOError on unpickling if filepath not readable'
+    '''store a filepath string, raise IOError on unpickling
+if filepath not readable, and complain if the user tries
+to pickle a relative path'''
     def __reduce__(self):
-        import os
+        import os,sys
+        if not os.path.isabs(str(self)):
+            print >>sys.stderr,'''
+WARNING: You are trying to pickle an object that has a local
+file dependency stored only as a relative file path:
+%s
+This is not a good idea, because anyone working in
+a different directory would be unable to unpickle this object,
+since it would be unable to find the file using the relative path.
+To avoid this problem, SourceFileName is saving the current
+working directory path so that it can translate the relative
+path to an absolute path.  In the future, please use absolute
+paths when constructing objects that you intend to save to pygr.Data
+or pickle!''' % str(self)
         return (filename_unpickler,(self.__class__,str(self),
                                     dict(curdir=os.getcwd())))
 
