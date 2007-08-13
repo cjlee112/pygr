@@ -1279,7 +1279,7 @@ cdef class NLMSASequence:
     os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
     self.db=IntervalFileDB(self.filestem) # NOW OPEN THE IntervalFileDB
 
-  def buildInMemory(self,**kwargs):
+  def buildInMemory(self,verbose=False,**kwargs):
     if self.buildList is not None:
       self.idb.save_tuples(self.buildList,**kwargs)
     self.buildList=None
@@ -1680,7 +1680,7 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
     self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
 
     
-  def buildFiles(self,saveSeqDict=False,**kwargs):
+  def buildFiles(self,saveSeqDict=False,verbose=True,**kwargs):
     'build nestedlist databases on-disk, and .seqDict index if desired'
     cdef NLMSASequence ns
     self.seqs.reopenReadOnly() # SAVE INDEXES AND OPEN READ-ONLY
@@ -1698,7 +1698,7 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
     sys.stderr.write('Index files saved.\n')
     if saveSeqDict:
       self.save_seq_dict()
-    else:
+    elif verbose:
       sys.stderr.write('''Note: the NLMSA.seqDict was not saved to a file.
 This is not necessary if you intend to save the NLMSA to pygr.Data.
 But if you wish to, call NLMSA.save_seq_dict() to save it to a file,
