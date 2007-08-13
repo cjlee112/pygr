@@ -2157,6 +2157,14 @@ inconsistent results when the input data are not a true multiple-sequence alignm
   (\var{use_virtual_lpo=True}) and multiple alignment format (\var{use_virtual_lpo=False})
   cannot be mixed in a single NLMSA.  It must be either one format or the other.
 
+  IMPORTANT NOTE: Neither \var{bidirectional} nor \var{use_virtual_lpo}
+  are stored in the disk index files for an NLMSA, so when opening an NLMSA
+  directly from such disk files, you need to give the correct settings for these
+  variables (i.e. the same settings as were used to construct the NLMSA
+  index files).  If you are obtaining an NLMSA from pygr.Data, this issue
+  does not arise, because pygr.Data saves the original values of these
+  variables automatically as part of pickling the NLMSA object.
+
   \var{mafFiles} can be used to specify a list of
   filenames storing a multiple sequence alignment in the UCSC MAF format.
 
@@ -2232,7 +2240,7 @@ inconsistent results when the input data are not a true multiple-sequence alignm
 \end{funcdesc}
 
 
-\begin{funcdesc}{build}{buildInPlace=True,saveSeqDict=False}
+\begin{funcdesc}{build}{buildInPlace=True,saveSeqDict=False,verbose=True}
   to construct the final nested list databases,
   after all the desired alignment intervals have been saved (using the
   \method{iadd/getitem} above).  This method
@@ -2253,6 +2261,10 @@ inconsistent results when the input data are not a true multiple-sequence alignm
   re-opening the NLMSA directly from disk, you should save the seqDict 
   to disk by passing this option, or by directly calling the NLMSA's
   save_seq_dict() method.
+
+  \var{verbose} controls whether the method will print explanatory 
+  messages to stderr about the saveSeqDict=False mode.
+  To suppress printing of these messages, use \var{verbose=False}.
 \end{funcdesc}
 
 \begin{funcdesc}{save_seq_dict}{}
@@ -5697,6 +5709,20 @@ nosetests -i megatest
 Note: depending on what modules you have installed, and what data resources
 you have available locally, some tests may be skipped; nose will indicate
 which tests were skipped.
+
+For testing pygr.Data, it is helpful to use a testing framework
+that enables each test to run in a separate process.  Since nose does
+not allow this, we use a small script compatible with nose, that
+runs the each test in a separate process (i.e. separate Python interpreter
+session):
+\begin{verbatim}
+cd pygr/tests
+python protest.py
+\end{verbatim}
+One can also run individual test files:
+\begin{verbatim}
+python protest.py pygrdata_test.py
+\end{verbatim}
 
 \subsection{Testing Approach}
 \label{test-utils}
