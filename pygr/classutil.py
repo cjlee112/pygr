@@ -12,9 +12,9 @@ def filename_unpickler(cls,path,kwargs):
     try:
         file(path).close() # WILL RAISE IOError IF path NOT ACCESSIBLE, READABLE
     except IOError:
-        try:
+        try: # CONVERT TO ABSOLUTE PATH BASED ON SAVED DIRECTORY PATH
             import os
-            path = os.path.join(kwargs['curdir'],path) # CONVERT TO ABSOLUTE PATH
+            path = os.path.normpath(os.path.join(kwargs['curdir'],path))
             file(path).close() # WILL RAISE IOError IF path NOT ACCESSIBLE, READABLE
         except KeyError:
             raise IOError('unable to open file %s' % path)
