@@ -607,6 +607,13 @@ database.
 \code{my} is the first entry that begins with your home directory
 (i.e. ~ (tilde), ``/home/yourname'' or whatever your home directory is).
 
+\item the pygr.Data layer \code{system} is the first entry that
+begins with an absolute path and is not within your home directory.
+
+\item the pygr.Data layer \code{subdir} is the first entry that
+begins with a relative path (ie. does not fit any of the preceding
+definitions).
+
 \item Every pygr.Data resource database server (XMLRPC or MySQL) has
 a ``layer name'' that will be automatically loaded to your pygr.Data module
 when you import it.  For example, to delete this particular resource rule
@@ -3623,6 +3630,19 @@ Python interpreter sessions.  The actual data is not saved in the pygr.Data
 module file, but in {\em resource databases} either on your disk, in
 a remote XMLRPC server, or in a MySQL database (for details see below).
 
+\item If an object saved to pygr.Data depends on a given file,
+you should use an absolute path to that file, instead of a relative path,
+when originally constructing that object, prior to adding it to
+pygr.Data.  Relative paths are obviously inadequate for future users of
+pygr.Data to find the file, since they are likely to be working in
+a different ``current directory''.  
+
+\item For similar obvious reasons, you should ensure that such a 
+``dependency file'' has security settings that make it readable 
+to the set of users that you want to be able to access this pygr.Data
+resource in the future.  Users who lack privileges to be able to 
+read that file will be unable to access this specific pygr.Data resource.
+
 \item To get a named resource from pygr.Data, you again just use this
 namespace, but with a ``constructor syntax'', i.e. add a call at the end of
 the resource name:
@@ -4041,6 +4061,9 @@ the first resource database whose path is given relative to
 your home directory is \code{my}; the first one whose path is given
 relative to current directory is \code{here};the first one whose path is given
 relative to the root directory / is \code{system};
+the first entry that begins with a relative path 
+(ie. a local file path that does not fit any of the preceding
+definitions) is \code{subdir};
 the first one whose path begins ``http://'' is \code{remote};
 the first one whose path begins ``mysql:'' is \code{MySQL}.
 
