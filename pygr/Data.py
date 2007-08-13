@@ -536,7 +536,7 @@ class ResourceFinder(object):
             PYGRDATAPATH = self.get_pygr_data_path()
         if self.dbstr!=PYGRDATAPATH: # LOAD NEW RESOURCE PYGRDATAPATH
             self.dbstr=PYGRDATAPATH
-            self.db=[]
+            self.db = []
             self.layer={}
             for dbpath in PYGRDATAPATH.split(self.separator):
                 try:
@@ -549,15 +549,20 @@ class ResourceFinder(object):
                         if 'MySQL' not in self.layer:
                             self.layer['MySQL']=rdb
                     else: # TREAT AS LOCAL FILEPATH
-                        dbpath=os.path.expanduser(dbpath)
-                        rdb=ResourceDBShelve(dbpath,self)
-                        if dbpath.startswith('/') and 'system' not in self.layer:
-                            self.layer['system']=rdb
-                        if dbpath.startswith(os.path.expanduser('~')) \
-                               and 'my' not in self.layer:
-                            self.layer['my']=rdb
-                        if dbpath.startswith('.') and 'here' not in self.layer:
-                            self.layer['here']=rdb
+                        dbpath = os.path.expanduser(dbpath)
+                        rdb = ResourceDBShelve(dbpath,self)
+                        if dbpath==os.path.expanduser('~') \
+                               or dbpath.startswith(os.path.expanduser('~')+os.sep):
+                            if 'my' not in self.layer:
+                                self.layer['my'] = rdb
+                        elif os.path.isabs(dbpath):
+                            if 'system' not in self.layer:
+                                self.layer['system'] = rdb
+                        elif dbpath.split(os.sep)[0]==os.curdir:
+                            if 'here' not in self.layer:
+                                self.layer['here'] = rdb
+                        elif 'subdir' not in self.layer:
+                            self.layer['subdir'] = rdb
                 except StandardError: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
                     if hasattr(self,'saveDict'): # IN THE MIDDLE OF MODULE IMPORT
                         import traceback,sys
