@@ -395,7 +395,7 @@ def save_interval_alignment(m,ival,srcSet,destSet=None,edgeClass=BlastHitInfo,
     return srcPath,destPath # HAND BACK IN CASE CALLER WANTS TO KNOW THE INTERVALS
 
 
-def read_interval_alignment(ofile,srcSet,destSet,al=None):
+def read_interval_alignment(ofile,srcSet,destSet,al=None,edgeClass=None):
     "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
     needToBuild=False
     if al is None:
