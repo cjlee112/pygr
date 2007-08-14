@@ -687,10 +687,6 @@ Continuing with import...'''%dbpath
         except KeyError:
             pass
         self.d[resID] = obj # SAVE TO OUR CACHE
-    def addResourceDict(self,saveDict,layer=None):
-        'queue a set of objects for saving to the specified database layer'
-        for k,v in saveDict.items(): # NOW ACTUALLY SAVE THE OBJECTS
-            self.addResource(k,v,layer) # CALL THE PICKLER...
     def queue_schema_obj(self,schemaPath,attr,layer,schemaObj):
         'add a schema object to the queue for saving to the specified database layer'
         resID = schemaPath.getPath(attr) # GET STRING ID
@@ -1190,7 +1186,6 @@ This error WILL NOT prevent successful reload of this module.
 Continuing with reload...'''
 
 getResource = ResourceFinder(saveDict=locals(),PYGRDATAPATH=check_test_env())
-addResourceDict = getResource.addResourceDict
 addResource = getResource.addResource
 addSchema = getResource.addSchema
 deleteResource = getResource.deleteResource
