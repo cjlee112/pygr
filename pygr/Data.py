@@ -509,6 +509,7 @@ class ResourceFinder(object):
         self.sourceIDs={}
         self.cursors=[]
         self.clear_pending()
+        self.debug = False
         if saveDict is not None:
             self.saveDict=saveDict # SAVE NEW LAYER NAMES HERE...
             self.update(PYGRDATAPATH) # LOAD RESOURCE DBs FROM PYGRDATAPATH
@@ -644,8 +645,11 @@ Continuing with import...'''%dbpath
         except StandardError:
             return None
         
-    def __call__(self,id,layer=None,*args,**kwargs):
+    def __call__(self,id,layer=None,debug=None,*args,**kwargs):
         'get the requested resource ID by searching all databases'
+        debug_state = self.debug # SAVE ORIGINAL STATE
+        if debug is not None:
+            self.debug = debug
         try:
             return self.d[id] # USE OUR CACHED OBJECT
         except KeyError:
@@ -658,13 +662,24 @@ Continuing with import...'''%dbpath
                 try:
                     obj=db[id] # TRY TO OBTAIN FROM THIS DATABASE
                     break # SUCCESS!  NOTHING MORE TO DO
-                except (KeyError,IOError):
-                    pass # NOT IN THIS DB, OR OBJECT DATAFILES NOT LOADABLE HERE...
+                except (KeyError,IOError): # NOT IN THIS DB, FILES NOT ACCESSIBLE...
+                    if self.debug: # PASS ON THE ACTUAL ERROR IMMEDIATELY
+                        self.debug = debug_state
+                        raise
+                except: # RESTORE STATE BEFORE RAISING THE EXCEPTION
+                    self.debug = debug_state
+                    raise
             if obj is None:
+                self.debug = debug_state
                 raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % id)
         obj._persistent_id=id  # MARK WITH ITS PERSISTENT ID
         self.d[id]=obj # SAVE TO OUR CACHE
-        self.applySchema(id,obj) # BIND SHADOW ATTRIBUTES IF ANY
+        try:
+            self.applySchema(id,obj) # BIND SHADOW ATTRIBUTES IF ANY
+        except: # RESTORE STATE BEFORE RAISING THE EXCEPTION
+            self.debug = debug_state
+            raise
+        self.debug = debug_state
         return obj
     def check_docstring(self,obj):
         'enforce requirement for docstring, by raising exception if not present'
