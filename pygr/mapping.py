@@ -302,9 +302,12 @@ class Collection(object):
     def __contains__(self,k): return k in self.d
     def __iter__(self): return iter(self.d)
     def __getattr__(self,attr):
-        if attr=='__setstate__': # PREVENT INFINITE RECURSE IN UNPICKLE
+        if attr=='__setstate__' or attr=='__dict__': # PREVENT INFINITE RECURSE IN UNPICKLE
             raise AttributeError
-        return getattr(self.d,attr)
+        try: # PROTECT AGAINST INFINITE RECURSE IF NOT FULLY __init__ED...
+            return getattr(self.__dict__['d'],attr)
+        except KeyError:
+            raise AttributeError('Collection has no subdictionary')
     close = close_if_possible
     def __del__(self):
         'must ensure that shelve object is closed to save pending data'
