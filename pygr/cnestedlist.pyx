@@ -1703,6 +1703,8 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
 This is not necessary if you intend to save the NLMSA to pygr.Data.
 But if you wish to, call NLMSA.save_seq_dict() to save it to a file,
 or in the future pass the saveSeqDict=True option to NLMSA.build().
+
+To turn off this message, use the verbose=False option
 ''')
   def save_seq_dict(self):
     'save seqDict to a pygr.Data-aware pickle file'
