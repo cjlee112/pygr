@@ -2913,17 +2913,43 @@ Useful methods:
   returns number of sequences in the BLAST database.
 \end{funcdesc}
 
-\begin{funcdesc}{blast}{seq,al=None,blastpath='blastall',blastprog=None,expmax=0.001,maxseq=None}
-  run a BLAST search on sequence object seq.  Maxseq will limit the number of returned hits to the best maxseq hits. 
+\begin{funcdesc}{blast}{seq, al=None, blastpath='blastall', blastprog=None, expmax=0.001,
+maxseq=None, opts='', verbose=True}
+  run a BLAST search on sequence object seq.
+  \var{maxseq} will limit the number of returned hits to the best \var{maxseq} hits. 
+  \var{al} if not None, must be an alignment object in which you want the results
+  to be saved.  Note: in this case, the \method{blast} function will not automatically
+  call the alignment's \method{build}() method; you will have to do that yourself.
+  \var{blastpath} gives the command to run BLAST.
+  \var{blastprog}, if not None, should be a string giving the name of the BLAST
+  program variant you wish to run, e.g. 'blastp' or 'blastn' etc.  If None,
+  this will be figured out automatically based on the sequence type of \var{seq}
+  and of the sequences in this database.
+  \var{expmax} should be a float value giving the largest ``expectation score''
+  you wish to allow homology to be reported for.
+  \var{opts} allows you to specify arbitrary command line arguments to the BLAST
+  program, for controlling its search parameters.
+  \var{verbose=False} allows you to switch off printing of explanatory messages to 
+  stderr.
 \end{funcdesc}
 
-\begin{funcdesc}{megablast}{seq,al=None,blastpath='megablast',expmax=1e-20,maxseq=None,minIdentity
-=None,maskOpts='-U T -F m',rmOpts=''}
+\begin{funcdesc}{megablast}{seq, al=None, blastpath='megablast', expmax=1e-20,
+maxseq=None, minIdentity=None, maskOpts='-U T -F m',
+rmPath='RepeatMasker', rmOpts='-xsmall', opts='', verbose=True}
   first performs repeat masking on the sequence by converting repeats to lowercase,
   then runs megablast with command line options to prevent seeding new alignments
-  within repeats, but allowing extension 
-  of alignments into repeats.  minIdentity should be a number (maximum value, 100)
+  within repeats, but allowing extension of alignments into repeats.
+  In addition to the blast options (described above),
+  \var{minIdentity} should be a number (maximum value, 100)
   indicating the minimum percent identity for hits to be returned.
+  \var{rmPath} gives the command to use to run RepeatMasker.
+  \var{rmOpts} allows you to give command line options to RepeatMasker.
+  The default setting causes RepeatMasker to mark repetitive regions in the
+  query in lowercase, which then works in concert with the \var{maskOpts} option, next.
+  \var{maskOpts} gives command line options for controlling the megablast program's
+  masking behavior.  The default value prevents megablast from using repetitive
+  sequence as a seed for starting a hit, but allows it to propagate a regular
+  (non-repetitive hit) through a repetitive region.
 \end{funcdesc}
 
 \begin{funcdesc}{__invert__}{}
