@@ -57,15 +57,15 @@ Pygr tries to provide a very "Pythonic" model for sequences.  This python interp
 
 \begin{verbatim}
 >>> from pygr.seqdb import *
->>> s=NamedSequence('attatatgccactat','bobo') #create a sequence named bobo
+>>> s = NamedSequence('attatatgccactat','bobo') #create a sequence named bobo
 >>> s # interpreter will print repr(s)
 bobo[0:15]
->>> t=s[-8:] #python slice gives last 8 nt of s
+>>> t = s[-8:] #python slice gives last 8 nt of s
 >>> t # interpreter will print repr(t)
 bobo[7:15]
 >>> str(t) #string conversion just yields the sequence as a string 
 'gccactat'
->>> rc= -s #get the reverse complement
+>>> rc = -s #get the reverse complement
 >>> str(rc[:5]) #its first five letters
 'atagt'
 \end{verbatim}
@@ -93,9 +93,9 @@ and \code{ss2}:
 
 \begin{verbatim}
 import pygr.Data # FINDS DATA WHEREVER IT'S REGISTERED
-msa=pygr.Data.Bio.Seq.MSA.ucsc17() # SANTA CRUZ 17-GENOME ALIGNMENT
-exons=pygr.Data.Leelab.ASAP2.hg17.exons() # ASAP2 HUMAN EXONS
-idDict= ~(msa.seqDict) # INVERSE: MAPS SEQ --> STRING IDENTIFIER
+msa = pygr.Data.Bio.Seq.MSA.ucsc17() # SANTA CRUZ 17-GENOME ALIGNMENT
+exons = pygr.Data.Leelab.ASAP2.hg17.exons() # ASAP2 HUMAN EXONS
+idDict = ~(msa.seqDict) # INVERSE: MAPS SEQ --> STRING IDENTIFIER
 def printConservation(id,label,site):
     for src,dest,edge in msa[site].edges(mergeMost=True):
         print '%d\t%s\t%s\t%s\t%s\t%s\t%2.1f\t%2.1f' \
@@ -105,7 +105,7 @@ for id,exon in exons.iteritems():
     ival = exon.sequence # GET THE SEQUENCE INTERVAL FOR THIS EXON
     ss1 = ival.before()[-2:] # GET THE 2 NT SPLICE SITES
     ss2 = ival.after()[:2]
-    cacheHint=msa[ss1+ss2] #CACHE THE COVERING INTERVALS FROM ss1 TO ss2
+    cacheHint = msa[ss1+ss2] #CACHE THE COVERING INTERVALS FROM ss1 TO ss2
     printConservation(id,'ss1',ss1)
     printConservation(id,'ss2',ss2)
     printConservation(id,'exon',ival)
@@ -157,7 +157,7 @@ separated by indels up to a certain size as being a {\em single} alignment
 region) or filtered (e.g. require a certain level of conservation over some
 minimum size of alignment region).  Here's an example:
 \begin{verbatim}
-results=msa[site].edges(maxgap=1,maxinsert=1,
+results = msa[site].edges(maxgap=1,maxinsert=1,
                         minAlignSize=14,pIdentityMin=0.9)
 \end{verbatim}
 This example groups together any number of alignment intervals separated by indels
@@ -171,7 +171,7 @@ or better that are at least 40 nt long, and then screen for a zone in which at
 least nine different genomes all share this level of alignment with the human 
 query:
 \begin{verbatim}
->>> ival=nlmsa.seqDict['hg17.chr1'][7000:8000] # 1 kb REGION OF HUMAN CHROMOSOME 1
+>>> ival = nlmsa.seqDict['hg17.chr1'][7000:8000] # 1 kb REGION OF HUMAN CHROMOSOME 1
 >>> for x,y,e in nlmsa[ival].edges(minAligned=9,minAlignSize=40,pIdentityMin=0.9):
 ...   print "%s\t%s\n%s\t%s\n" % (x,repr(x),y,(~(nlmsa.seqDict))[y])
 ...
@@ -308,11 +308,11 @@ Here's an example of working with sequences from a BLAST database:
 \begin{verbatim}
 NEED TO UPDATE THESE RESULTS
 >>> from pygr.seqdb import *
->>> db=BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
->>> s=db['CYGB_HUMAN'][90:150] # get a sequence by ID, and take a slice
+>>> db = BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
+>>> s = db['CYGB_HUMAN'][90:150] # get a sequence by ID, and take a slice
 >>> str(s)
 'TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA'
->>> m=db.blast(s) # get alignment to all BLAST hits in db
+>>> m = db.blast(s) # get alignment to all BLAST hits in db
 >>> for src,dest,edge in m.edges(): # print out the alignment edges
 ...     print src,repr(src),'\n',dest,repr(dest),e.pIdentity(),'\n'
 ... 
@@ -433,12 +433,12 @@ names too.  Let's do that:
 \begin{verbatim}
 from pygr import cnestedlist
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-nlmsa=cnestedlist.NLMSA('/loaner/ucsc17')
+nlmsa = cnestedlist.NLMSA('/loaner/ucsc17')
 for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
     genome.__doc__ = 'genome sequence '+id
     pygr.Data.getResource.addResource('Bio.Seq.Genome.'+id,genome)
 nlmsa.__doc__ = 'UCSC 17way multiz alignment, rooted on hg17'
-pygr.Data.Bio.Seq.MSA.ucsc17=nlmsa # NOW SAVE THE ALIGNMENT
+pygr.Data.Bio.Seq.MSA.ucsc17 = nlmsa # NOW SAVE THE ALIGNMENT
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 
@@ -446,7 +446,7 @@ This has several advantages.  First, we can now access other genome databases
 using pygr.Data too:
 \begin{verbatim}
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-mm7=pygr.Data.Bio.Seq.Genome.mm7() # GET THE MOUSE GENOME
+mm7 = pygr.Data.Bio.Seq.Genome.mm7() # GET THE MOUSE GENOME
 \end{verbatim}
 But more importantly, when we try to load the ucsc17 alignment on
 another machine, if the genome databases are not in the same directory
@@ -468,8 +468,8 @@ kinds of data.  For example ``a genome has genes, and genes have exons'', or
 store such schema information as easily as:
 \begin{verbatim}
 splicegraph.__doc__ = 'graph of exon:splice:exon relations in human genes'
-pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph=splicegraph # ADD A NEW RESOURCE
-pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
+pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph = splicegraph # ADD A NEW RESOURCE
+pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph = \
   pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
                                bindAttrs=('next','previous','exons'))
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
@@ -567,8 +567,8 @@ has access to the data:
 
 \begin{verbatim}
 import pygr.Data
-nlmsa=pygr.Data.Bio.Seq.MSA.ucsc17() # GET OUR NLMSA AND SEQ DBs
-server=pygr.Data.getResource.newServer('nlmsa_server') # SERVE ALL LOADED DATA
+nlmsa = pygr.Data.Bio.Seq.MSA.ucsc17() # GET OUR NLMSA AND SEQ DBs
+server = pygr.Data.getResource.newServer('nlmsa_server') # SERVE ALL LOADED DATA
 server.register() # TELL PYGRDATA INDEX SERVER WHAT RESOURCES WE'RE SERVING
 server.serve_forever() # START THE SERVICE...
 \end{verbatim}
@@ -578,7 +578,7 @@ and registers our resources to that index.  Now any machine that can access
 your servers can access the alignment as easily as:
 \begin{verbatim}
 import pygr.Data
-nlmsa=pygr.Data.Bio.Seq.MSA.ucsc17() # GET THE NLMSA AND SEQ DBs
+nlmsa = pygr.Data.Bio.Seq.MSA.ucsc17() # GET THE NLMSA AND SEQ DBs
 \end{verbatim}
 Alignment queries and sequence strings will be obtained via XMLRPC 
 queries over the network.  Note that if any of the sequence databases
@@ -759,11 +759,11 @@ Pygr multiple alignment objects can be treated as mappings of sequence intervals
 
 \begin{verbatim}
 >>> from pygr import cnestedlist
->>> m2=cnestedlist.NLMSA('myo',mode='memory') # an empty alignment, in-memory
->>> m2+=s # add sequence s to the alignment
->>> ival=s[100:160] # AN INTERVAL OF s
->>> m2[ival]+=db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interval of MYG_CHICK
->>> m2[ival]+=db['MYG_CANFA'][45:105] # add an additional edge
+>>> m2 = cnestedlist.NLMSA('myo',mode='memory') # an empty alignment, in-memory
+>>> m2 += s # add sequence s to the alignment
+>>> ival = s[100:160] # AN INTERVAL OF s
+>>> m2[ival] += db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interval of MYG_CHICK
+>>> m2[ival] += db['MYG_CANFA'][45:105] # add an additional edge
 >>> m2.build() # done constructing the alignment.  Initialize for query.
 >>> for s2 in m2[ival[:10]]: # get aligned seqs for the first 10 letters of ival...
 ...     print repr(s2)
@@ -780,8 +780,8 @@ on-disk.  In pygr, all we have to do is change the mode flag to 'w' (implying {\
 a file):
 \begin{verbatim}
 from pygr import cnestedlist,seqdb
-msa=cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
-sp=seqdb.BlastDB('sp') # OPEN SWISSPROT DATABASE
+msa = cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
+sp = seqdb.BlastDB('sp') # OPEN SWISSPROT DATABASE
 for id,s in sp.iteritems(): # FOR EVERY SEQUENCE IN SWISSPROT
     sp.blast(s,msa,expmax=1e-10) # GET STRONG HOMOLOGS, SAVE ALIGNMENT IN msa
 msa.build(saveSeqDict=True) # BUILD & SAVE ALIGNMENT + SEQUENCE INDEXES
@@ -857,13 +857,13 @@ set of MAF files stored in a directory called \code{maf/}:
 import os
 from pygr import cnestedlist,seqdb
 
-genomes={'hg17':'hg17','mm5':'mm5', 'rn3':'rn3', 'canFam1':'cf1', 
-         'danRer1':'dr1', 'fr1':'fr1','galGal2':'gg2', 'panTro1':'pt1'}
+genomes = {'hg17':'hg17','mm5':'mm5', 'rn3':'rn3', 'canFam1':'cf1', 
+           'danRer1':'dr1', 'fr1':'fr1','galGal2':'gg2', 'panTro1':'pt1'}
 for k,v in genomes.items(): # PREFIX DICTIONARY FOR UNION OF GENOMES
-    genomes[k]=seqdb.BlastDB(v) # USE v AS FILENAME FOR FASTA FILE
+    genomes[k] = seqdb.BlastDB(v) # USE v AS FILENAME FOR FASTA FILE
 genomeUnion=seqdb.PrefixUnionDict(genomes) # CREATE UNION OF THESE DBs
 # CREATE NLMSA DATABASE ucsc8 ON DISK, FROM MAF FILES IN maf/
-msa=cnestedlist.NLMSA('ucsc8','w',genomeUnion,os.listdir('maf'))
+msa = cnestedlist.NLMSA('ucsc8','w',genomeUnion,os.listdir('maf'))
 msa.build(saveSeqDict=True) # BUILD & SAVE ALIGNMENT + SEQUENCE INDEXES
 \end{verbatim}
 
@@ -924,14 +924,14 @@ def map_clusters(server,dbname='HUMAN_SPLICE_03',
                  rmOpts='',**kwargs):
     "CLIENT FUNCTION: map clusters one by one"
     # CONSTRUCT RESOURCE FOR US IF NEEDED
-    genome=pygr.Data.Bio.Seq.Genome.HUMAN.hg17()
+    genome = pygr.Data.Bio.Seq.Genome.HUMAN.hg17()
     # LOAD DB SCHEMA
     (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna, 
-    protein, clusterExons,clusterSplices)=getSpliceGraphFromDB(spliceCalcs[dbname])
+    protein, clusterExons,clusterSplices) = getSpliceGraphFromDB(spliceCalcs[dbname])
     # NOW MAP CLUSTER SEQUENCES ONE BY ONE TO OUR NEW genome
     for cluster_id in server:
-        g=genomic_seq[cluster_id] # GET THE OLD GENOMIC SEQUENCE FOR THIS CLUSTER
-        m=genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # MASK, BLAST, READ INTO m
+        g = genomic_seq[cluster_id] # GET THE OLD GENOMIC SEQUENCE FOR THIS CLUSTER
+        m = genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # MASK, BLAST, READ INTO m
         # SAVE ALIGNMENT m TO DATABASE TABLE result_table USING cursor
         createTableFromRepr(m.repr_dict(),result_table,clusters.cursor,
                             {'src_id':'varchar(12)','dest_id':'varchar(12)'})
@@ -941,8 +941,8 @@ def map_clusters(server,dbname='HUMAN_SPLICE_03',
 def serve_clusters(dbname='HUMAN_SPLICE_03',
                    source_table='HUMAN_SPLICE_03.genomic_cluster_JUN03',**kwargs):
     "SERVER FUNCTION: serve up cluster_id one by one to as many clients as you want"
-    cursor=getUserCursor(dbname)
-    t=SQLTable(source_table,cursor)
+    cursor = getUserCursor(dbname)
+    t = SQLTable(source_table,cursor)
     for id in t:
         yield id # HAND OUT ONE CLUSTER ID TO A CLIENT
 
@@ -1055,17 +1055,17 @@ start, and stop coordinates.  We can easily construct an annotation database
 from this:
 \begin{verbatim}
 from pygr import seqdb,cnestedlist
-annoDB=seqdb.AnnotationDB(sliceDB,genome) # CREATE THE ANNOTATION DB
-nlmsa=cnestedlist.NLMSA('exonAnnot','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
-                        use_virtual_lpo=True,bidirectional=False)
+annoDB = seqdb.AnnotationDB(sliceDB,genome) # CREATE THE ANNOTATION DB
+nlmsa = cnestedlist.NLMSA('exonAnnot','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
+                          use_virtual_lpo=True,bidirectional=False)
 for a in annoDB.itervalues(): # SAVE ALL ANNOTATION INTERVALS
   nlmsa.addAnnotation(a) # ADD ALIGNMENT BETWEEN ival AND ann INTERVALS
 nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
 annoDB.__doc__ = 'exon annotation on the human genome'
-pygr.Data.Bio.Genomics.ASAP2.exons=annoDB # ADD AS A PYGR.DATA RESOURCE
+pygr.Data.Bio.Genomics.ASAP2.exons = annoDB # ADD AS A PYGR.DATA RESOURCE
 nlmsa.__doc__ = 'map human genome regions to contained exons'
-pygr.Data.Bio.Genomics.ASAP2.exonmap=nlmsa # NOW SAVE MAPPING AND SCHEMA
-pygr.Data.schema.Bio.Genomics.ASAP2.exonmap= \
+pygr.Data.Bio.Genomics.ASAP2.exonmap = nlmsa # NOW SAVE MAPPING AND SCHEMA
+pygr.Data.schema.Bio.Genomics.ASAP2.exonmap = \
       pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons'))
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
@@ -1198,19 +1198,19 @@ Such a six-way JOIN is painfully slow in a relational database; in general such 
 In Pygr, writing the query is just a matter of writing down the graph (edges from 1 to 2, 1 to 3, and 2 to 3, but no special "edge information"):
 
 \begin{verbatim}
-queryGraph={1:{2:None,3:None},2:{3:None},3:{}}
+queryGraph = {1:{2:None,3:None},2:{3:None},3:{}}
 \end{verbatim}
 
 We can now execute the query using the GraphQuery class:
 
 \begin{verbatim}
-results=[dict(m) for m in GraphQuery(spliceGraph,queryGraph)]
+results = [dict(m) for m in GraphQuery(spliceGraph,queryGraph)]
 \end{verbatim}
 
 This is more or less equivalent to writing a bunch of for-loops for iterating over the possible closures:
 
 \begin{verbatim}
-results=[]
+results = []
 for e1 in spliceGraph: # FIND ALL EXONS
     for e2 in spliceGraph[e1]: # NEXT EXON
         for e3 in spliceGraph[e2]: # NEXT EXON
@@ -1221,7 +1221,7 @@ for e1 in spliceGraph: # FIND ALL EXONS
 It is often convenient to bind an object attribute to a graph, so that you can use either the graph syntax or a traditional object attribute and mean exactly the same thing.  In the splice graph example, we bind the exon.next attribute to the spliceGraph, so the above for-loops can also be written:
 
 \begin{verbatim}
-results=[]
+results = []
 for e1 in spliceGraph: # FIND ALL EXONS
     for e2 in e1.next: # NEXT EXON
         for e3 in e2.next: # NEXT EXON
@@ -1232,11 +1232,11 @@ for e1 in spliceGraph: # FIND ALL EXONS
 Another interesting query in the alternative splicing field is the so-called U12-adapter exon query (see slide 21 of the ISMB slides):
 
 \begin{verbatim}
-queryGraph={0:{1:dict(dataGraph=alt5Graph),
-               2:dict(filter=lambda edge,**kwargs:edge.type=='U11/U12')},
-            1:{3:None},
-            2:{3:None},
-            3:{}}
+queryGraph = {0:{1:dict(dataGraph=alt5Graph),
+                 2:dict(filter=lambda edge,**kwargs:edge.type=='U11/U12')},
+              1:{3:None},
+              2:{3:None},
+              3:{}}
 \end{verbatim}
 
 Here we use edge information in the query graph to add a few constraints:
@@ -1268,21 +1268,21 @@ How was the spliceGraph created in the first place?  Let's say we have an initia
 
 \begin{verbatim}
 for exon1,exon2,splice in spliceConnections: 
-    spliceGraph+=exon1 # add exon1 as a node in the graph
-    spliceGraph+=exon2 # if already a node in the graph, does nothing...
-    exon1.next[exon2]=splice # add an edge, with splice as the edgeinfo
+    spliceGraph += exon1 # add exon1 as a node in the graph
+    spliceGraph += exon2 # if already a node in the graph, does nothing...
+    exon1.next[exon2] = splice # add an edge, with splice as the edgeinfo
 \end{verbatim}
 
 The last operation makes use of the binding of exon.next to spliceGraph, and is equivalent to
 
 \begin{verbatim}
-spliceGraph[exon1][exon2]=splice
+spliceGraph[exon1][exon2] = splice
 \end{verbatim}
 
 If we didn't want to save the edge information, we could use the simpler syntax
 
 \begin{verbatim}
-spliceGraph[exon1]+=exon2 # equivalent to exon1.next+=exon2
+spliceGraph[exon1] += exon2 # equivalent to exon1.next+=exon2
 \end{verbatim}
 
 This "short" form is equivalent to saving None as the edge information.
@@ -1311,9 +1311,9 @@ To find out how the known SwissProt annotations map on to our mRNA sequences req
 >>> from load_alignments import * # load the alignments
 >>> from pygr.graphquery import *      # import the graph query code
 # draw a graph using a dict.  Note: edge 2->3 must come from swiss_features
->>> queryGraph={1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} 
+>>> queryGraph = {1:{2:None},2:{3:dict(dataGraph=swiss_features)},3:{}} 
 # run the query and save the mappings
->>> l=[dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] 
+>>> l = [dict(d) for d in GraphQuery(mRNA_swiss,queryGraph)] 
 >>> len(l) # how many annotations mapped onto our mRNA sequences?
 4703
 \end{verbatim}
@@ -1327,13 +1327,13 @@ Here's an example of working with sequences from a relational database:
 
 \begin{verbatim}
 >>> import MySQLdb # standard module for accessing MySQL, now get a cursor...
->>> rdb=MySQLdb.connect(db='HUMAN_SPLICE_03',read_default_file=os.environ['HOME'
+>>> rdb = MySQLdb.connect(db='HUMAN_SPLICE_03',read_default_file=os.environ['HOME'
 ]+'/.my.cnf')
->>> t=SQLTable('genomic_cluster_JUN03',rdb.cursor()) #interface to a table of
+>>> t = SQLTable('genomic_cluster_JUN03',rdb.cursor()) #interface to a table of
  sequences
 >>> from pygr.seqdb import *   # pygr module for working with sequences from databases
 >>> t.objclass(DNASQLSequence) #use this class as "row objects"
->>> s2=t['Hs.1162'] # get a specific sequence object by ID
+>>> s2 = t['Hs.1162'] # get a specific sequence object by ID
 >>> str(s2[1000:1050]) # this will only get 50 nt of the genomic sequence from 
 MySQL
 'acctgggtgatgaaataaatttttacgccaaatcccgatgacacacaatt'
@@ -1484,7 +1484,7 @@ SeqPath objects, through the usual interfaces:
 for l in s: # GET EACH LETTER OF THE SEQUENCE
     c=str(l)
 
-edge=s[l1][l2] # GET EDGE INFORMATION FOR l1 --> l2
+edge = s[l1][l2] # GET EDGE INFORMATION FOR l1 --> l2
 
 for l1,l2,edge in s.edges(): # GET ALL l1 --> l2 EDGES
     do_something(l1,l2,e)
@@ -1493,7 +1493,7 @@ for l1,l2,edge in s.edges(): # GET ALL l1 --> l2 EDGES
 for d in GraphQuery(s,{0:{1:dict(filter=lambda fromNode,toNode:
                                  str(fromNode)=='A' and str(toNode)=='G')},
                        1:{}})
-    l1,l2,edge=d[0],d[1],d[0,1]
+    l1,l2,edge = d[0],d[1],d[0,1]
 \end{verbatim}  
 
 For more information about edges, see the LetterEdge class.
@@ -1543,7 +1543,7 @@ operations respectively.
 
 \begin{verbatim}
 from pygr import sequence
-seq=sequence.Sequence('GPTPCDLMETQ','FOOG_HUMAN')
+seq = sequence.Sequence('GPTPCDLMETQ','FOOG_HUMAN')
 \end{verbatim}
 \end{funcdesc}
 
@@ -1719,10 +1719,10 @@ This class provides a mapping transform between the coordinate
 systems of a pair of intervals.
 
 \begin{verbatim}
-xform=IntervalTransform(srcPath,destPath)
-d2=xform(s2) # MAPS s2 FROM srcPath coords to destPath coord system
-d3=xform[s2] # CLIPS s2 TO NOT EXTEND OUTSIDE srcPath, THEN XFORMS
-s3=xform.reverse(d3) # MAP BACK TO srcPath COORD SYSTEM
+xform = IntervalTransform(srcPath,destPath)
+d2 = xform(s2) # MAPS s2 FROM srcPath coords to destPath coord system
+d3 = xform[s2] # CLIPS s2 TO NOT EXTEND OUTSIDE srcPath, THEN XFORMS
+s3 = xform.reverse(d3) # MAP BACK TO srcPath COORD SYSTEM
 \end{verbatim}
 
 \subsubsection{Seq2SeqEdge}
@@ -1798,8 +1798,8 @@ for that sequence in the dictionary.  If there is no overlap, it
 raises \code{KeyError}.
 
 \begin{verbatim}
-d=SeqFilterDict(seqIntervalList)
-overlap=d[ival] # RETURNS INTERSECTION OF ival AND STORED IVAL, OR KeyError
+d = SeqFilterDict(seqIntervalList)
+overlap = d[ival] # RETURNS INTERSECTION OF ival AND STORED IVAL, OR KeyError
 \end{verbatim}
 
 You can pass a list of intervals to store to the class constructor (as 
@@ -1921,7 +1921,7 @@ has a {\em letters} attribute, that represents the subgraph of nodes
 associated specifically with s1, and the edges that interconnect them.
 
 \begin{verbatim}
-myslice=msa[s1]: # GET SLICE ALIGNED TO s1 IN msa
+myslice = msa[s1]: # GET SLICE ALIGNED TO s1 IN msa
     for node in myslice.letters:  # GET ALL ALIGNMENT ``COLUMNS'' FOR s1
         for l1,l2,e in node.edges(): # GET INDIVIDUAL LETTERS ALIGNED TO l1 OF s1
 	    whatever(l1,l2,e)
@@ -2383,8 +2383,8 @@ assuming that \code{myPrefixUnion} stores a dictionary of all the
 sequence databases used by that NLMSA alignment, would just be:
 \begin{verbatim}
 from pygr import xnestedlist
-nlmsa=xnestedlist.NLMSAClient(url='http://leelab.mbi.ucla.edu:5000',
-                              name='ucsc17',seqDict=myPrefixUnion)
+nlmsa = xnestedlist.NLMSAClient(url='http://leelab.mbi.ucla.edu:5000',
+                                name='ucsc17',seqDict=myPrefixUnion)
 \end{verbatim}
 
 
@@ -2500,8 +2500,8 @@ dictionary interface in several ways:
   must raise \code{KeyError}.  The \class{sequence.SeqFilterDict} class
   provides exactly this masking capability, i.e.
 \begin{verbatim}
-d=sequence.SeqFilterDict(someIntervals)
-overlap=d[ival] # RETURNS INTERSECTION BETWEEN ival AND someIntervals, OR KeyError
+d = sequence.SeqFilterDict(someIntervals)
+overlap = d[ival] # RETURNS INTERSECTION BETWEEN ival AND someIntervals, OR KeyError
 \end{verbatim}
   \var{minAlignSize} if not None, sets a minimum size for filtering the resulting
   alignment regions.  Regions smaller than the specified size will be culled
@@ -2834,10 +2834,10 @@ Interface to an existing BLAST database or FASTA sequence file; in the latter ca
 
 \begin{verbatim}
 from pygr.seqdb import *
-db=BlastDB('sp') # OPEN SWISSPROT BLAST DB
-s=NamedSequence(str(db['CYGB_HUMAN'][40:-40]),'boo')
-m=db.blast(s) # DO BLAST SEARCH
-myg=db['MYG_CHICK']
+db = BlastDB('sp') # OPEN SWISSPROT BLAST DB
+s = NamedSequence(str(db['CYGB_HUMAN'][40:-40]),'boo')
+m = db.blast(s) # DO BLAST SEARCH
+myg = db['MYG_CHICK']
 for i in m[s][myg]:
     print repr(i.srcPath),repr(i.destPath),i.blast_score,i.percent_id
 \end{verbatim}
@@ -2930,7 +2930,7 @@ Useful methods:
   The invert operator (\textasciitilde, the ``tilde'' character) 
   enables reverse-mapping of sequence objects to their string ID.
 \begin{verbatim}
-id=(~db)[seq] # GET IDENTIFIER FOR THIS SEQUENCE FROM ITS DATABASE
+id = (~db)[seq] # GET IDENTIFIER FOR THIS SEQUENCE FROM ITS DATABASE
 \end{verbatim}
 \end{funcdesc}
 
@@ -2980,9 +2980,9 @@ the data to clients connecting over XMLRPC.  For example, to make an XMLRPC
 server for a blast database, accessible on port 5020:
 \begin{verbatim}
 import coordinator
-server=coordinator.XMLRPCServerBase(name,port=5020)
-db=BlastDBXMLRPC('sp') # OPEN BlastDB AS USUAL, BUT WITH SUBCLASS
-server['sp']=db # ADD OUR DATABASE TO THE XMLRPC SERVER
+server = coordinator.XMLRPCServerBase(name,port=5020)
+db = BlastDBXMLRPC('sp') # OPEN BlastDB AS USUAL, BUT WITH SUBCLASS
+server['sp'] = db # ADD OUR DATABASE TO THE XMLRPC SERVER
 server.serve_forever() # START SERVING XMLRPC REQUESTS, UNTIL KILLED.
 \end{verbatim}
 
@@ -2995,8 +2995,8 @@ XMLRPC (from the the \class{BlastDBXMLRPC} acting as the server).
   in that server's dictionary (in the example above, it would be 'sp').
   Thus to access the server above (assuming it is running on leelab port 5020):
 \begin{verbatim}
-db=XMLRPCSequenceDB('http://leelab:5020','sp')
-hbb=db['HBB_HUMAN'] # GET A SEQUENCE OBJECT FROM THE DATABASE...
+db = XMLRPCSequenceDB('http://leelab:5020','sp')
+hbb = db['HBB_HUMAN'] # GET A SEQUENCE OBJECT FROM THE DATABASE...
 \end{verbatim}
 \end{funcdesc}
 Currently, this class provides sequence access.  You can work with sequences
@@ -3096,8 +3096,8 @@ The reverse mapping (for any region of sequence, find the annotation(s)
 that map to that region) is best performed by creating an NLMSA alignment
 object and saving the mapping as follows:
 \begin{verbatim}
-nlmsa=cnestedlist.NLMSA('myAnnotDB','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
-                        use_virtual_lpo=True,bidirectional=False)
+nlmsa = cnestedlist.NLMSA('myAnnotDB','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
+                          use_virtual_lpo=True,bidirectional=False)
 for a in annoDB.itervalues(): # GET EACH ANNOTATION OBJ IN DATABASE
   nlmsa.addAnnotation(a) # SAVE ALIGNMENT OF ITS SEQ INTERVAL TO THIS ANNOTATION
 nlmsa.build() # CREATE FINAL INDEXES FOR THE ALIGNMENT DATABASE
@@ -3161,7 +3161,7 @@ through the list of exons it is connected to by a forward splice, etc.
   sequence ID, start and stop coordinates in each object returned from \var{sliceDB}.
   For example,
 \begin{verbatim}
-sliceAttrDict=dict(id='chromosome',start='gen_start',stop='gen_stop')
+sliceAttrDict = dict(id='chromosome',start='gen_start',stop='gen_stop')
 \end{verbatim}
   would make it use \code{s.chromosome,s.gen_start,s.gen_stop} as the ID and interval
   coordinates for each slice information object \code{s}.  Note: the start,stop
@@ -3273,9 +3273,9 @@ Automatically elongates if slice extends beyond current stop.
 This class avoids setting the {\em stop} attribute, taking advantage
 of SeqPath's mechanism for allowing a sequence to grow in length.
 \begin{verbatim}
-s=VirtualSeq('FOOG_HUMAN')
+s = VirtualSeq('FOOG_HUMAN')
 len(s) # ONLY 1 LETTER LONG BY DEFAULT
-s1=s[100:215] # GET A SLICE OF THIS SEQUENCE
+s1 = s[100:215] # GET A SLICE OF THIS SEQUENCE
 len(s) # NOW IT'S 215
 \end{verbatim}
 
@@ -3283,9 +3283,9 @@ The associated VirtualSeqDB class provides a ``sequence database''
 that returns a VirtualSeq object for every identifier requested of
 it.  It acts like a Python dictionary:
 \begin{verbatim}
-db=VirtualSeqDB()
-s=db['FOOG_HUMAN'] # ASK FOR A SEQUENCE BY ITS IDENTIFIER
-s1=s[100:215] # GET A SLICE OF THIS SEQUENCE
+db = VirtualSeqDB()
+s = db['FOOG_HUMAN'] # ASK FOR A SEQUENCE BY ITS IDENTIFIER
+s1 = s[100:215] # GET A SLICE OF THIS SEQUENCE
 \end{verbatim}
 For a given identifier it always returns the same VirtualSeq
 object (i.e. the object returned from the first request for that identifier).
@@ -3305,19 +3305,19 @@ the dictionary associated with the corresponding prefix.  This
 is useful for providing a unified ``database interface'' to a
 set of multiple databases.
 \begin{verbatim}
-hg17=BlastDB('/usr/tmp/ucsc_msa/hg17')
-mm5=BlastDB('/usr/tmp/ucsc_msa/mm5')
+hg17 = BlastDB('/usr/tmp/ucsc_msa/hg17')
+mm5 = BlastDB('/usr/tmp/ucsc_msa/mm5')
 ... # LOAD A BUNCH OF OTHER GENOMES TOO...
-genomes={'hg17':hg17,'mm5':mm5, 'rn3':rn3, 'canFam1':cf1, 'danRer1':dr1,
+genomes = {'hg17':hg17,'mm5':mm5, 'rn3':rn3, 'canFam1':cf1, 'danRer1':dr1,
 'fr1':fr1, 'galGal2':gg2, 'panTro1':pt1} # PREFIX DICTIONARY FOR THE UNION 
 					 # OF ALL OUR GENOMES
-genomeUnion=PrefixUnionDict(genomes)
-ptChr7=genomeUnion['panTro1.chr7'] # GET CHIMP CHROMOSOME 7
+genomeUnion = PrefixUnionDict(genomes)
+ptChr7 = genomeUnion['panTro1.chr7'] # GET CHIMP CHROMOSOME 7
 
 if 'panTro1.chr5' in genomeUnion: # CHECK IF THIS ID IN OUR UNION
     pass # DO SOMETHING...
 
-s= -(ptChr7[1000:2000]) # GET A BIT OF THIS SEQUENCE
+s = -(ptChr7[1000:2000]) # GET A BIT OF THIS SEQUENCE
 if s in genomeUnion: # THIS IS HOW TO CHECK IF s DERIVED FROM OUR UNION
     pass # DO SOMETHING... 
 \end{verbatim}
@@ -3348,7 +3348,7 @@ a given sequence object is derived from the \class{PrefixUnionDict}
   This is the recommended way to get the ``fully qualified sequence ID'', i.e. with
   the appropriate prefix prepended. 
 \begin{verbatim}
-id=(~db)[seq] # GET PROPERLY PREFIXED-IDENTIFIER FOR THIS SEQUENCE
+id = (~db)[seq] # GET PROPERLY PREFIXED-IDENTIFIER FOR THIS SEQUENCE
 \end{verbatim}
   For a given sequence object \var{seq} derived from the union
   (or a slice of a sequence from the union), return a string identifier
@@ -3402,12 +3402,12 @@ id=(~db)[seq] # GET PROPERLY PREFIXED-IDENTIFIER FOR THIS SEQUENCE
 Implements membership testing on distinct prefix groups.  Specifically,
 you can bind a given prefix to a value
 \begin{verbatim}
-d['prefix1']=value
+d['prefix1'] = value
 \end{verbatim}
 then test whether a given object \var{k} is a member of any of the
 prefix groups in the dictionary:
 \begin{verbatim}
-v=d[k] # raises KeyError if k not a member of 'prefix1' or other prefix group in d
+v = d[k] # raises KeyError if k not a member of 'prefix1' or other prefix group in d
 \end{verbatim}
 
 \begin{funcdesc}{__init__}{puDict,default=None,attrMethod=lambda x:x.pathForward.db}
@@ -3479,9 +3479,9 @@ Implements a subclass inheriting from SQLRow and NamedSequenceBase, to use a rel
 \begin{verbatim}
 class YiProteinSequence(ProteinSQLSequence): # CREATE A NEW SQL SEQUENCE CLASS
     def __len__(self): return self.protein_length  # USE LENGTH STORED IN DATABASE
-protein=jun03[protein_seq_t] # protein IS OUR SQLTable OBJECT REPRESENTING PROTEIN SEQUENCE TABLE
+protein = jun03[protein_seq_t] # protein IS OUR SQLTable OBJECT REPRESENTING PROTEIN SEQUENCE TABLE
 protein.objclass(YiProteinSequence) # FORCE PROTEIN SEQ TABLE TO USE THIS TO INSTANTIATE ROW OBJECTS
-pseq=protein['Hs.1162'] # GET PROTEIN SEQUENCE OBJECT FOR A SPECIFIC CLUSTER
+pseq = protein['Hs.1162'] # GET PROTEIN SEQUENCE OBJECT FOR A SPECIFIC CLUSTER
 \end{verbatim}
 
 Let's go through this line by line:
@@ -3504,10 +3504,10 @@ such as \class{StoredPathMapping}.
 A second major area in Pygr is representation and query of multiple sequence alignment databases in a way that is scalable to whole genomes.  We have previously showed (in our work on Partial Order Alignment) that graphs provide both a compact and algorithmically powerful way to store alignments.  Combining this with "interval alignment" makes it scalable and gives a simple interface.  In Pygr, alignments are just another kind of graph, whose nodes are sequence intervals, and edges are alignment relations.  This provides a general-purpose facility for working with sets of sequence intervals, sequence annotation databases, and multiple sequence alignments, all queryable via Pygr graph queries.  We have implemented different container subclasses to work with these data in memory or to work transparently with data stored in relational databases.  The consistency and simplicity of the Pygr framework makes it a good interface both to run external tools like BLAST, and to store or query the results in persistent storage like a MySQL database.
 
 \begin{verbatim}
-hg17=BlastDB('/data/ucsc/hg17') # GET CONTAINER FOR HUMAN GENOME DATABASE
-bcl2m=hg17['chr22'][16544303:16588541] # GET INTERVAL WITH BCL2L13 GENE
-al=hg17.megablast(mouse_bcl2,maxseq=1) # GET REPEAT-MASKED MEGABLAST ALIGNMENT, ONLY TOP HIT
-al[bcl2m[1000:1100] ]+=mrna[210:310] #ADD ALIGNMENT OF A 100nt SEGMENT TO mrna SEGMENT
+hg17 = BlastDB('/data/ucsc/hg17') # GET CONTAINER FOR HUMAN GENOME DATABASE
+bcl2m = hg17['chr22'][16544303:16588541] # GET INTERVAL WITH BCL2L13 GENE
+al = hg17.megablast(mouse_bcl2,maxseq=1) # GET REPEAT-MASKED MEGABLAST ALIGNMENT, ONLY TOP HIT
+al[bcl2m[1000:1100] ] += mrna[210:310] #ADD ALIGNMENT OF A 100nt SEGMENT TO mrna SEGMENT
 al.storeSQL('test.table',db_cursor) # STORE COMPLETE ALIGNMENT IN RELATIONAL DATABASE
 for e in MAFStoredPathMapping(bcl2m,'ucsc_maf8',u).edges(): #GET ITS MULTIGENOMEALIGNMENTS
    print str(e.srcPath),str(e.destPath) # PRINT THE ACTUAL ALIGNED SEQUENCE INTERVALS
@@ -3559,8 +3559,8 @@ SliceDB inherits from the builtin Python \class{dict} class,
 so all standard methods can be used.
 
 \begin{verbatim}
-db=SliceDB(sliceDB,seqDB) # CREATE OUR DATABASE
-gene=db[cluster_id] # USE IT TO GET A GENE SEQUENCE...
+db = SliceDB(sliceDB,seqDB) # CREATE OUR DATABASE
+gene = db[cluster_id] # USE IT TO GET A GENE SEQUENCE...
 \end{verbatim}
 
 
@@ -3619,10 +3619,10 @@ example, see the classes \class{seqdb.AnnotationDB,seqdb.SeqDBbase,seqdb.XMLRPCS
 \item pygr.Data provides a {\em namespace} for commonly used data resources.
 Once you import pygr.Data, you can save resources into it just as you would into
 any python namespace.  For example to save an alignment object \code{nlmsa}
-as the resource ID ``Bio.Seq.MSA.ucsc17'':
+as the resource ID ``Bio.Seq.MSA.ucsc17.foo'':
 \begin{verbatim}
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-pygr.Data.Bio.Seq.MSA.ucsc17=nlmsa # NOW SAVE THE ALIGNMENT
+pygr.Data.Bio.Seq.MSA.ucsc17.foo = nlmsa # NOW SAVE THE ALIGNMENT
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 The crucial point is that this namespace is {\em persistent} between
@@ -3648,7 +3648,7 @@ namespace, but with a ``constructor syntax'', i.e. add a call at the end of
 the resource name:
 \begin{verbatim}
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-nlmsa=pygr.Data.Bio.Seq.MSA.ucsc17() # SYNTAX EMPHASIZES CONSTRUCTION OF INSTANCE
+nlmsa = pygr.Data.Bio.Seq.MSA.ucsc17.foo() # SYNTAX EMPHASIZES CONSTRUCTION OF INSTANCE
 \end{verbatim}
 The actual resource object is not obtained until you call the constructor.
 
@@ -3656,7 +3656,7 @@ The actual resource object is not obtained until you call the constructor.
 These represent relationships between one resource and another resource
 (or their contents).  For example
 \begin{verbatim}
-pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
+pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph = \
   pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
                                bindAttrs=('next','previous','exons'))
 \end{verbatim}
@@ -3682,7 +3682,7 @@ refer to.  Using pygr.Data, we can simply load the exon annotation
 resource, and it will automatically get the genomic sequence data
 for us.  Thus to get an exon's sequence all we have to do is:
 \begin{verbatim}
-exons=pygr.Data.Bio.Genomics.ASAP2.hg17.exons() # ANNOTATION DATABASE
+exons = pygr.Data.Bio.Genomics.ASAP2.hg17.exons() # ANNOTATION DATABASE
 str(exons[464].sequence) # GET THE SEQUENCE OF THIS SPECIFIC EXON
 \end{verbatim}
 
@@ -3860,11 +3860,6 @@ Such resource databases are accessed by pygr.Data using its
   pending.
 \end{funcdesc}
 
-\begin{funcdesc}{addResourceDict}{saveDict,layer=None}
-  Provides a way to add an entire set of resources to the pygr.Data namespace,
-  by passing a dictionary whose keys are resource names, and whose values are
-  the objects you wish to add.  
-\end{funcdesc}
 \begin{funcdesc}{addResource}{id,obj,layer=None}
   Add \var{obj} to pygr.Data as resource ID \var{id}, specifically within
   abstract resource \var{layer} if provided.  Queues \var{obj} for addition to 
@@ -3991,7 +3986,7 @@ databases, or in a specific layer:
   Example: create a new resource database, give it the layer name ``leelab'',
   and register it in our list of resource databases.
 \begin{verbatim}
-rdb=pygr.Data.ResourceDBMySQL('pygrdata.index',createLayer='leelab')
+rdb = pygr.Data.ResourceDBMySQL('pygrdata.index',createLayer='leelab')
 \end{verbatim}
   Note that you must provide the \var{createLayer} argument, in order to 
   create a new resource database table.  \class{ResourceDBMySQL} will not
@@ -4036,13 +4031,13 @@ Lee lab, we keep a MySQL resource database whose layer name is ``leelab''.
 \item You can specify precisely which layer you want to access by prefixing
 your pygr.Data resource name with the desired layer name, e.g.
 \begin{verbatim}
-nlmsa=pygr.Data.leelab.Bio.Seq.MSA.ucsc17()
+nlmsa = pygr.Data.leelab.Bio.Seq.MSA.ucsc17()
 \end{verbatim}
 
 \item Similarly, you can specify which layer you want to store a resource
 or schema, in the same way:
 \begin{verbatim}
-pygr.Data.leelab.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
+pygr.Data.leelab.schema.Bio.Genomics.ASAP2.hg17.splicegraph = \
   pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
                                bindAttrs=('next','previous','exons'))
 \end{verbatim}
@@ -4089,8 +4084,8 @@ resource and the ``exons'' resource).  Adding the mapping object
 as a pygr.Data resource, and adding its schema information, are
 two separate steps.
 \begin{verbatim}
-pygr.Data.Bio.Genomics.ASAP2.hg17.geneExons=geneToExons # SAVE MAPPING
-pygr.Data.schema.Bio.Genomics.ASAP2.hg17.geneExons= \
+pygr.Data.Bio.Genomics.ASAP2.hg17.geneExons = geneToExons # SAVE MAPPING
+pygr.Data.schema.Bio.Genomics.ASAP2.hg17.geneExons = \
   pygr.Data.OneToManyRelation(genes,exons,bindAttrs=('exons','gene'))
 pygr.Data.save() # SAVE ALL PENDING DATA AND SCHEMA TO RESOURCE DATABASE
 \end{verbatim}
@@ -4099,8 +4094,8 @@ that are being mapped.  This would allow a user to obtain the mapping
 from pygr.Data and use it just as you'd expect, e.g. assuming that
 \code{gene} is an item from \code{genes}:
 \begin{verbatim}
-geneToExons=pygr.Data.Bio.Genomics.ASAP2.hg17.geneExons()
-myexons=geneToExons[gene] # GET THE SET OF EXONS FOR THIS GENE
+geneToExons = pygr.Data.Bio.Genomics.ASAP2.hg17.geneExons()
+myexons = geneToExons[gene] # GET THE SET OF EXONS FOR THIS GENE
 \end{verbatim}
 In practice, pygr.Data accomplishes this by automatically setting
 \code{geneToExon}'s \code{sourceDB} and \code{targetDB} attributes
@@ -4137,8 +4132,8 @@ of the schema, e.g. for a \code{splicegraph} representing the set of
 all splices (edges) between pairs of exons (nodes), we can
 store the schema as follows:
 \begin{verbatim}
-pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph=splicegraph # ADD A NEW RESOURCE
-pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph= \
+pygr.Data.Bio.Genomics.ASAP2.hg17.splicegraph = splicegraph # ADD A NEW RESOURCE
+pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph = \
   pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
                                bindAttrs=('next','previous','exons'))
 pygr.Data.save() # SAVE ALL PENDING DATA AND SCHEMA TO RESOURCE DATABASE
@@ -4387,10 +4382,6 @@ resources and schema.
   Same as the top-level module function of the same name.
 \end{funcdesc}
 
-\begin{funcdesc}{getResource.addResourceDict}{saveDict,layer=None}
-  Same as the top-level module function of the same name.
-\end{funcdesc}
-
 \begin{funcdesc}{getResource.addSchema}{name,schemaObj,layer=None}
   Same as the top-level module function of the same name.
 \end{funcdesc}
@@ -4537,7 +4528,7 @@ database table.
   Example: create a new resource database, give it the layer name ``leelab'',
   and register it in our list of resource databases.
 \begin{verbatim}
-rdb=pygr.Data.ResourceDBMySQL('pygrdata.index',createLayer='leelab')
+rdb = pygr.Data.ResourceDBMySQL('pygrdata.index',createLayer='leelab')
 \end{verbatim}
   Note that you must provide the \var{createLayer} argument, in order to 
   create a new resource database table.  \class{ResourceDBMySQL} will not
@@ -4637,7 +4628,7 @@ that provides the normal interface for users to access pygr.Data resources.
   For example, \code{Bio} is added at the top-level of the pygr.Data module
   by the following code:
 \begin{verbatim}
-Bio=ResourcePath('Bio')
+Bio = ResourcePath('Bio')
 \end{verbatim}
 \end{funcdesc}
 
@@ -4665,14 +4656,14 @@ Bio=ResourcePath('Bio')
 Class for top-level object representing a schema namespace.  e.g. in the pygr.Data
 module,
 \begin{verbatim}
-schema=SchemaPath() # CREATE ROOT OF THE schema NAMESPACE
+schema = SchemaPath() # CREATE ROOT OF THE schema NAMESPACE
 \end{verbatim}
 
 \subsubsection{ResourceLayer}
 Class for top-level object representing a pygr.Data layer.  e.g. in the pygr.Data
 module,
 \begin{verbatim}
-here=ResourceLayer('here') # CREATE TOP-LEVEL INTERFACE TO here LAYER
+here = ResourceLayer('here') # CREATE TOP-LEVEL INTERFACE TO here LAYER
 \end{verbatim}
 
 \subsubsection{ForeignKeyMap}
@@ -4700,10 +4691,10 @@ container.
 For example, given a container of clusters, and a container of exons (that each
 have a \member{cluster_id} attribute), we create a mapping between them as follows:
 \begin{verbatim}
-m=ForeignKeyMap('cluster_id',clusters,exons)
+m = ForeignKeyMap('cluster_id',clusters,exons)
 for exon0 in m[cluster0]: # GET EXONS IN THIS CLUSTER
     do something...
-cluster1=(~m)[exon1]  # GET CLUSTER OBJECT FOR THIS EXON
+cluster1 = (~m)[exon1]  # GET CLUSTER OBJECT FOR THIS EXON
 \end{verbatim}
 
 
@@ -4983,9 +4974,9 @@ the column names for source, target and edge IDs are simply
 To use different column names, simply provide an \var{attrAlias}
 dictionary to the constructor, e.g.
 \begin{verbatim}
-g=SQLGraph('YOURDB.YOURTABLE',attrAlias=dict(source_id='left_exon_form_id',
-                                             target_id='right_exon_form_id',
-                                             edge_id='splice_id'))
+g = SQLGraph('YOURDB.YOURTABLE',attrAlias=dict(source_id='left_exon_form_id',
+                                               target_id='right_exon_form_id',
+                                               edge_id='splice_id'))
 \end{verbatim}
 For good performance, the columns storing the source_id, target_id,
 and edge_id should each be indexed.
@@ -5127,7 +5118,7 @@ Examples of the Pygr syntax:
 \begin{verbatim}
 graph += node1 # ADD node1 TO graph
 graph[node1] += node2 # ADD AN EDGE FROM node1 TO node2
-graph[node1][node2]=edge_info # ADD AN EDGE WITH ASSOCIATED edge_info
+graph[node1][node2] = edge_info # ADD AN EDGE WITH ASSOCIATED edge_info
 # ADD SCHEMA BINDING WITH graph[node] BOUND AS node.attr
 setschema(node,attr,graph) 
 # SEARCH graph FOR SUBGRAPH {1->2; 1->3; 2->3}, 
@@ -5476,7 +5467,7 @@ share the same \class{XMLRPCClient} connection.  It is simply used as follows:
 server, and \code{name} is the name of the server object you wish to access.
 For example:
 \begin{verbatim}
-myclient=coordinator.get_connection('http://leelab.mbi.ucla.edu:5000','ucsc17')
+myclient = coordinator.get_connection('http://leelab.mbi.ucla.edu:5000','ucsc17')
 \end{verbatim}
 
 \subsubsection{coordinator Module Functionality Overview}
@@ -5510,14 +5501,14 @@ def map_clusters(server,genome_rsrc='hg17',dbname='HUMAN_SPLICE_03',
                  rmOpts='',**kwargs):
     "map clusters one by one"
     # CONSTRUCT RESOURCE FOR US IF NEEDED
-    genome=BlastDB(ifile=server.open_resource(genome_rsrc,'r'))
+    genome = BlastDB(ifile=server.open_resource(genome_rsrc,'r'))
     # LOAD DB SCHEMA
     (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna, \
-     protein,clusterExons,clusterSplices)=getSpliceGraphFromDB(spliceCalcs[dbname])
+     protein,clusterExons,clusterSplices) = getSpliceGraphFromDB(spliceCalcs[dbname])
 
     for cluster_id in server:
-        g=genomic_seq[cluster_id]
-        m=genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # MASK, BLAST, READ INTO m
+        g = genomic_seq[cluster_id]
+        m = genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # MASK, BLAST, READ INTO m
         # SAVE ALIGNMENT m TO DATABASE TABLE test.mytable USING cursor
         createTableFromRepr(m.repr_dict(),result_table,clusters.cursor,
                             {'src_id':'varchar(12)','dest_id':'varchar(12)'})
@@ -5526,8 +5517,8 @@ def map_clusters(server,genome_rsrc='hg17',dbname='HUMAN_SPLICE_03',
 def serve_clusters(dbname='HUMAN_SPLICE_03',
                    source_table='HUMAN_SPLICE_03.genomic_cluster_JUN03',**kwargs):
     "serve up cluster_id one by one"
-    cursor=getUserCursor(dbname)
-    t=SQLTable(source_table,cursor)
+    cursor = getUserCursor(dbname)
+    t = SQLTable(source_table,cursor)
     for id in t:
         yield id
 
@@ -5663,7 +5654,7 @@ The coordinator module also provides a convenience interface for interrogating a
 
 \begin{verbatim}
 from pygr import coordinator
-m=coordinator.RCMonitor()
+m = coordinator.RCMonitor()
 \end{verbatim}
 
 Since you did not specify any arguments, it will default to searching for the ResourceController on the current host, port 5000.  You can specify a host and or port as additional arguments.  It also loads an index of coordinators currently registered with this ResourceController, accessible on its coordinators attribute:
@@ -5703,7 +5694,7 @@ Both RCMonitor and CoordinatorMonitor objects have a get_status() method that up
 Here are some typical monitor usages:
 
 \begin{verbatim}
-c=m.coordinators['mapclusters3'] # GET MY COORDINATOR
+c = m.coordinators['mapclusters3'] # GET MY COORDINATOR
 c.client_report.sort() # MAKE IT SORT CLIENTS BY HOSTNAME
 c.client_report # PRINT THE SORTED LIST, SHOWING HOST, PID, #TASKS DONE
 c.pending_report # PRINT LIST OF TASK IDS CURRENTLY RUNNING
