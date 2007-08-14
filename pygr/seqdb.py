@@ -695,27 +695,50 @@ class BlastDBbase(SeqDBbase):
             dict.__setitem__(self,id,s) # CACHE IT
             return s
 
+    def warn_about_self_masking(self,seq,methodname='blast'):
+        try:
+            if seq.db is self:
+                import sys
+                print >>sys.stderr,'''
+WARNING: your query sequence is part of this database.  Pygr alignments
+normally do not report self-matches, i.e. the alignment of a sequence to
+itself, so only homologies to OTHER sequences in the database will be
+reported (or an empty query result if no such homologies are found).
+To report ALL homologies, including the self-match, simply create a new
+sequence object and use that as your query, e.g.
+query = sequence.Sequence(str(seq),"myquery")
+results = db.%s(query)
+
+To turn off this message, use the verbose=False option''' % methodname
+        except AttributeError:
+            pass
+
     def blast(self,seq,al=None,blastpath='blastall',
-              blastprog=None,expmax=0.001,maxseq=None,**kwargs):
+              blastprog=None,expmax=0.001,maxseq=None,verbose=True,opts='',**kwargs):
         "Run blast search for seq in database, return aligned intervals"
+        if verbose:
+            self.warn_about_self_masking(seq)
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
         if blastprog is None:
             blastprog=blast_program(seq.seqtype(),self._seqtype)
-        cmd='%s -d "%s" -p %s -e %e'  %(blastpath,self.get_blast_index_path(),
-                                      blastprog,float(expmax))
+        cmd = '%s -d "%s" -p %s -e %e %s'  \
+              %(blastpath,self.get_blast_index_path(),blastprog,float(expmax),opts)
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd+=' -b %d -v %d' % (maxseq,maxseq)
         return process_blast(cmd,seq,self,al)
 
     def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
-                  maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts='',**kwargs):
+                  maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts='',
+                  verbose=True,opts='',**kwargs):
         "Run megablast search with repeat masking."
+        if verbose:
+            self.warn_about_self_masking(seq,'megablast')
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
         masked_seq=repeat_mask(seq,opts=rmOpts)  # MASK REPEATS TO lowercase
-        cmd='%s %s -d "%s" -D 2 -e %e -i stdin' \
-             % (blastpath,maskOpts,self.get_blast_index_path(),float(expmax))
+        cmd='%s %s -d "%s" -D 2 -e %e -i stdin %s' \
+             % (blastpath,maskOpts,self.get_blast_index_path(),float(expmax),opts)
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd+=' -b %d -v %d' % (maxseq,maxseq)
         if minIdentity is not None:
