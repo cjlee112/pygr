@@ -1140,18 +1140,19 @@ except NameError: # ONLY REGISTER ONCE, EVEN IF MODULE RELOADED MANY TIMES
     atexit.register(save_on_exit) # THIS SHOULD BE RUN ON INTERPRETER EXIT
 
 ###########################################################
-schema=SchemaPath() # ROOT OF OUR SCHEMA NAMESPACE
+schema = SchemaPath() # ROOT OF OUR SCHEMA NAMESPACE
 
 # PROVIDE TOP-LEVEL NAMES IN OUR RESOURCE HIERARCHY
-Bio=ResourcePath('Bio')
+Bio = ResourcePath('Bio')
 
 
 # TOP-LEVEL NAMES FOR STANDARDIZED LAYERS
-here=ResourceLayer('here')
-my=ResourceLayer('my')
-system=ResourceLayer('system')
-remote=ResourceLayer('remote')
-MySQL=ResourceLayer('MySQL')
+here = ResourceLayer('here')
+my = ResourceLayer('my')
+system = ResourceLayer('system')
+subdir = ResourceLayer('subdir')
+remote = ResourceLayer('remote')
+MySQL = ResourceLayer('MySQL')
 
 ################# CREATE AN INTERFACE TO THE RESOURCE DATABASE
 def check_test_env():
