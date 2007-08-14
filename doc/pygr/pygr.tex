@@ -4393,7 +4393,7 @@ top-level of the module as \code{pygr.Data.getResource}.  It
 provides methods for adding, deleting and controlling pygr.Data
 resources and schema.
 
-\begin{funcdesc}{getResource}{id,layer=None,*args,**kwargs}
+\begin{funcdesc}{getResource}{id,layer=None,debug=None,*args,**kwargs}
   Look up pygr.Data resource \var{id}, using the specified abstract
   resource \var{layer} if provided.  Searches the resouce database(s)
   for \var{id}, constructs it from the saved resource rule (e.g. from
@@ -4402,6 +4402,10 @@ resources and schema.
   ID will return the same object.  Applies the stored pygr.Data schema
   rules to it using \method{applySchema}().  Marks the object with
   its \member{_persistent_id} attribute, whose value is just \var{id}.
+  Passing the option \var{debug=True} will cause it to raise any 
+  exception that occurs during resource loading immediately, rather
+  than continuing to search its resource database list.  This is
+  helpful for debugging purposes.
 \end{funcdesc}
 
 \begin{funcdesc}{getResource.addResource}{id,obj,layer=None}
