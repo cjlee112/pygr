@@ -430,7 +430,7 @@ def process_blast(cmd,seq,seqDB,al=None,seqString=None):
     return al
 
 
-def repeat_mask(seq,progname='RepeatMasker -xsmall',opts=''):
+def repeat_mask(seq,progname='RepeatMasker',opts=''):
     'Run RepeatMasker on a sequence, return lowercase-masked string'
     temppath=os.tempnam()
     ofile=file(temppath,'w')
@@ -722,28 +722,29 @@ To turn off this message, use the verbose=False option''' % methodname
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
         if blastprog is None:
-            blastprog=blast_program(seq.seqtype(),self._seqtype)
+            blastprog = blast_program(seq.seqtype(),self._seqtype)
         cmd = '%s -d "%s" -p %s -e %e %s'  \
               %(blastpath,self.get_blast_index_path(),blastprog,float(expmax),opts)
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
-            cmd+=' -b %d -v %d' % (maxseq,maxseq)
+            cmd += ' -b %d -v %d' % (maxseq,maxseq)
         return process_blast(cmd,seq,self,al)
 
     def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
-                  maxseq=None,minIdentity=None,maskOpts='-U T -F m',rmOpts='',
+                  maxseq=None,minIdentity=None,maskOpts='-U T -F m',
+                  rmPath='RepeatMasker',rmOpts='-xsmall',
                   verbose=True,opts='',**kwargs):
         "Run megablast search with repeat masking."
         if verbose:
             self.warn_about_self_masking(seq,'megablast')
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
-        masked_seq=repeat_mask(seq,opts=rmOpts)  # MASK REPEATS TO lowercase
-        cmd='%s %s -d "%s" -D 2 -e %e -i stdin %s' \
+        masked_seq = repeat_mask(seq,rmPath,rmOpts)  # MASK REPEATS TO lowercase
+        cmd = '%s %s -d "%s" -D 2 -e %e -i stdin %s' \
              % (blastpath,maskOpts,self.get_blast_index_path(),float(expmax),opts)
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
-            cmd+=' -b %d -v %d' % (maxseq,maxseq)
+            cmd += ' -b %d -v %d' % (maxseq,maxseq)
         if minIdentity is not None:
-            cmd+=' -p %f' % float(minIdentity)
+            cmd += ' -p %f' % float(minIdentity)
         return process_blast(cmd,seq,self,al,seqString=masked_seq)
 
 
