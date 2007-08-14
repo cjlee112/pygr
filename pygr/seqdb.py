@@ -553,7 +553,8 @@ class BlastDBbase(SeqDBbase):
             except anydbm.error: # READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
                 self.seqLenDict=shelve.open(filepath+'.seqlen') # OPEN IN DEFAULT "CREATE" MODE
                 ifile,idFilter=self.raw_fasta_stream(ifile,idFilter)
-                print 'Building sequence length index...'
+                import sys
+                print >>sys.stderr,'Building sequence length index...'
                 store_seqlen_dict(self.seqLenDict,ifile,filepath,idFilter)
                 self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
                 self.seqLenDict=shelve.open(filepath+'.seqlen','r') # REOPEN IT READ-ONLY
