@@ -592,6 +592,7 @@ cdef class NLMSASlice:
 
   ########################################### ITERATOR METHODS
   def edges(self,mergeAll=False,**kwargs):
+    'get list of tuples (srcIval,destIval,edge) aligned in this slice'
     seqIntervals=self.groupByIntervals(mergeAll=mergeAll,**kwargs)
     ivals=self.groupBySequences(seqIntervals,**kwargs)
     l=[]
@@ -607,6 +608,7 @@ cdef class NLMSASlice:
   def iteritems(self,**kwargs):
     return iter(self.items(**kwargs))
   def keys(self,mergeAll=False,**kwargs):
+    'get list of intervals aligned to this slice according to groupBy options'
     seqIntervals=self.groupByIntervals(mergeAll=mergeAll,**kwargs)
     ivals=self.groupBySequences(seqIntervals,**kwargs)
     l=[]
@@ -617,6 +619,9 @@ cdef class NLMSASlice:
     return iter(self.keys())
   def __getitem__(self,k):
     return sequence.Seq2SeqEdge(self,k)
+  def __setitem__(self,k,v):
+    raise ValueError('''this NLMSA is read-only!  Currently, you cannot add new
+alignment intervals to an NLMSA after calling its build() method.''')
   def __len__(self):
     return self.nrealseq # NUMBER OF NON-LPO SEQUENCE/ORIS ALIGNED HERE
 
