@@ -472,6 +472,8 @@ class SeqPath(object):
             start=max(self.start,other.start)
             stop=min(self.stop,other.stop)
             if start<stop:
+                if stop==0: # HANDLE BOUNDARY CASE SPECIALLY BECAUSE OF PYTHON CONVENTION
+                    stop = None
                 return self.classySlice(self.path,start,stop)
             else:
                 return None
@@ -514,6 +516,8 @@ class SeqPath(object):
             stop=self.stop
         else:
             stop=other.stop
+        if stop==0: # HAVE TO HANDLE BOUNDARY CASE SPECIALLY BECAUSE OF PYTHON CONVENTION
+            stop = None
         return self.classySlice(self.path,start,stop,self.step)
 
     def __iadd__(self,other):
