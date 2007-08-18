@@ -1,10 +1,8 @@
 
 import sys, os, string
 
-#mafDir = os.path.realpath('maf_data3')
-mafDir = os.path.realpath('/download/MAF_UCSC/hg18_multiz28way')
-#seqDir = os.path.realpath('seq_data2')
-seqDir = os.path.realpath('/result/pygr_data')
+mafDir = os.path.realpath('maf_data3')
+seqDir = os.path.realpath('seq_data3')
 
 ## mafDir CONTAINS FOLLOWING DM2 MULTIZ15WAY MAF ALIGNMENTS
 ## seqDir CONTAINS FOLLOWING 15 GENOME ASSEMBLIES AND THEIR SEQDB FILES
@@ -46,8 +44,6 @@ docStringDict = {
     }
 
 # GENOME ASSEMBLY LIST FOR DM2 MULTIZ15WAY
-#msaSpeciesList = ['anoGam1', 'apiMel2', 'dm2', 'dp4', 'droAna3', 'droEre2', 'droGri2', 'droMoj3', \
-#                  'droPer1', 'droSec1', 'droSim1', 'droVir3', 'droWil1', 'droYak2', 'triCas2']
 msaSpeciesList = ['anoCar1', 'bosTau3', 'canFam2', 'cavPor2', 'danRer4', 'dasNov1', 'echTel1', \
                   'equCab1', 'eriEur1', 'felCat3', 'fr2', 'galGal3', 'gasAcu1', 'hg18', 'loxAfr1', \
                   'mm8', 'monDom4', 'ornAna1', 'oryCun1', 'oryLat1', 'otoGar1', 'panTro2', 'rheMac2', \

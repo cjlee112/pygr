@@ -95,7 +95,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                                   gene_id = 3, start = 4, stop = 5))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'refGene_exonAnnot_dm2'), 'w', \
             use_virtual_lpo = True, bidirectional = False)
-        for lines in open('refGene_exonAnnot_dm2.txt', 'r').xreadlines():
+        #for lines in open('refGene_exonAnnot_dm2.txt', 'r').xreadlines():
+        for lines in open('refGene_exonAnnot_chrYh_dm2.txt', 'r').xreadlines():
             row = [x for x in lines.split('\t')] # CONVERT TO LIST SO MUTABLE
             row[1] = int(row[1]) # CONVERT FROM STRING TO INTEGER
             exon_slices[row[1]] = row
@@ -119,7 +120,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                                   gene_id = 3, start = 4, stop = 5))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'refGene_spliceAnnot_dm2'), 'w', \
             use_virtual_lpo = True, bidirectional = False)
-        for lines in open('refGene_spliceAnnot_dm2.txt', 'r').xreadlines():
+        #for lines in open('refGene_spliceAnnot_dm2.txt', 'r').xreadlines():
+        for lines in open('refGene_spliceAnnot_chrYh_dm2.txt', 'r').xreadlines():
             row = [x for x in lines.split('\t')] # CONVERT TO LIST SO MUTABLE
             row[1] = int(row[1]) # CONVERT FROM STRING TO INTEGER
             splice_slices[row[1]] = row
@@ -143,7 +145,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                                   gene_id = 3, start = 4, stop = 5))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'phastConsElements15way_dm2'), 'w', \
             use_virtual_lpo = True, bidirectional = False)
-        for lines in open('phastConsElements15way_dm2.txt', 'r').xreadlines():
+        #for lines in open('phastConsElements15way_dm2.txt', 'r').xreadlines():
+        for lines in open('phastConsElements15way_chrYh_dm2.txt', 'r').xreadlines():
             row = [x for x in lines.split('\t')] # CONVERT TO LIST SO MUTABLE
             row[1] = int(row[1]) # CONVERT FROM STRING TO INTEGER
             ucsc_slices[row[1]] = row
@@ -160,6 +163,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         ucsc_schema.__doc__ = 'Schema for UCSC Most Conserved Elements for dm2'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.dm2.mostconserved', ucsc_schema)
         pygr.Data.save()
+        reload(pygr.Data)
 
         # QUERY TO EXON AND SPLICES ANNOTATION DATABASE
         dm2 = pygr.Data.getResource('TEST.Seq.Genome.dm2')
@@ -173,8 +177,10 @@ class Build_Test(PygrBuildNLMSAMegabase):
         # OPEN DM2_MULTIZ15WAY NLMSA
         msa = cnestedlist.NLMSA(os.path.join(msaDir, 'dm2_multiz15way'), 'r', trypath = [seqDir])
 
-        exonAnnotFileName = 'Annotation_ConservedElement_Exons_dm2.txt'
-        intronAnnotFileName = 'Annotation_ConservedElement_Introns_dm2.txt'
+        #exonAnnotFileName = 'Annotation_ConservedElement_Exons_dm2.txt'
+        #intronAnnotFileName = 'Annotation_ConservedElement_Introns_dm2.txt'
+        exonAnnotFileName = 'Annotation_ConservedElement_Exons_chrYh_dm2.txt' # FOR TESTING
+        intronAnnotFileName = 'Annotation_ConservedElement_Introns_chrYh_dm2.txt' # FOR TESTING
         newexonAnnotFileName = os.path.join(self.path, 'new_Exons_dm2.txt')
         newintronAnnotFileName = os.path.join(self.path, 'new_Introns_dm2.txt')
         tmpexonAnnotFileName = self.copyFile(exonAnnotFileName)
@@ -182,8 +188,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
 
         chrList = dm2.seqLenDict.keys()
         chrList.sort()
+        chrList = ['chrYh'] # FOR TESTING
 
-        outfile = open(tmpexonAnnotFileName, 'w')
+        outfile = open(newexonAnnotFileName, 'w')
         for chrid in chrList:
             slice = dm2[chrid]
             try:
@@ -191,18 +198,18 @@ class Build_Test(PygrBuildNLMSAMegabase):
             except KeyError:
                 continue
             else:
-                exlist1 = ex1.keys()
+                exlist1 = [(ix.exon_id, ix) for ix in ex1.keys()]
                 exlist1.sort()
-                for exon in exlist1:
+                for ixx, exon in exlist1:
                     saveList = []
                     tmp = exon.sequence
                     tmpexon = exons[exon.exon_id]
                     tmpslice = tmpexon.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'EXON', chrid, tmpexon.exon_id, tmpexon.gene_id, tmpslice.start, tmpslice.stop
                     out1 = conservedmsa[tmp]
-                    elementlist = out1.keys()
+                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
                     elementlist.sort()
-                    for element in elementlist:
+                    for iyy, element in elementlist:
                         if element.stop - element.start < 100: continue
                         score = int(string.split(element.gene_id, '=')[1])
                         if score < 100: continue
@@ -232,7 +239,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         md5new.update(open(newexonAnnotFileName, 'r').read())
         assert md5old.digest() == md5new.digest() # MD5 COMPARISON INSTEAD OF COMPARING EACH CONTENTS
 
-        outfile = open(tmpintronAnnotFileName, 'w')
+        outfile = open(newintronAnnotFileName, 'w')
         for chrid in chrList:
             slice = dm2[chrid]
             try:
@@ -240,18 +247,18 @@ class Build_Test(PygrBuildNLMSAMegabase):
             except:
                 continue
             else:
-                splist1 = sp1.keys()
+                splist1 = [(ix.splice_id, ix) for ix in sp1.keys()]
                 splist1.sort()
-                for splice in splist1:
+                for ixx, splice in splist1:
                     saveList = []
                     tmp = splice.sequence
                     tmpsplice = splices[splice.splice_id]
                     tmpslice = tmpsplice.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'INTRON', chrid, tmpsplice.splice_id, tmpsplice.gene_id, tmpslice.start, tmpslice.stop
                     out1 = conservedmsa[tmp]
-                    elementlist = out1.keys()
+                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
                     elementlist.sort()
-                    for element in elementlist:
+                    for iyy, element in elementlist:
                         if element.stop - element.start < 100: continue
                         score = int(string.split(element.gene_id, '=')[1])
                         if score < 100: continue
@@ -287,7 +294,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
         from pygr import seqdb, cnestedlist, sqlgraph
         dm2 = pygr.Data.getResource('TEST.Seq.Genome.dm2')
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS: MYSQL VERSION
-        exon_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_exonAnnot_dm2', \
+        #exon_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_exonAnnot_dm2',
+        exon_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_exonAnnot_chrYh_dm2',
             clusterKey = 'chromosome', maxCache = 0)
         exon_db = seqdb.AnnotationDB(exon_slices, dm2, sliceAttrDict = dict(id = 'chromosome', \
             gene_id = 'name', exon_id = 'exon_id'))
@@ -307,7 +315,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
         exon_schema.__doc__ = 'SQL Exon Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.SQL.dm2.exons', exon_schema)
         # BUILD ANNOTATION DATABASE FOR REFSEQ SPLICES: MYSQL VERSION
-        splice_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_spliceAnnot_dm2', \
+        #splice_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_spliceAnnot_dm2',
+        splice_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_spliceAnnot_chrYh_dm2',
             clusterKey = 'chromosome', maxCache = 0)
         splice_db = seqdb.AnnotationDB(splice_slices, dm2, sliceAttrDict = dict(id = 'chromosome', \
             gene_id = 'name', splice_id = 'splice_id'))
@@ -327,7 +336,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
         splice_schema.__doc__ = 'SQL Splice Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.SQL.dm2.splices', splice_schema)
         # BUILD ANNOTATION DATABASE FOR MOST CONSERVED ELEMENTS FROM UCSC: MYSQL VERSION
-        ucsc_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_phastConsElements15way_dm2', \
+        #ucsc_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_phastConsElements15way_dm2',
+        ucsc_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_phastConsElements15way_chrYh_dm2',
             clusterKey = 'chromosome', maxCache = 0)
         ucsc_db = seqdb.AnnotationDB(ucsc_slices, dm2, sliceAttrDict = dict(id = 'chromosome', \
             gene_id = 'name', ucsc_id = 'ucsc_id'))
@@ -347,6 +357,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         ucsc_schema.__doc__ = 'SQL Schema for UCSC Most Conserved Elements for dm2'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.SQL.dm2.mostconserved', ucsc_schema)
         pygr.Data.save()
+        reload(pygr.Data)
 
         # QUERY TO EXON AND SPLICES ANNOTATION DATABASE
         dm2 = pygr.Data.getResource('TEST.Seq.Genome.dm2')
@@ -360,8 +371,10 @@ class Build_Test(PygrBuildNLMSAMegabase):
         # OPEN DM2_MULTIZ15WAY NLMSA
         msa = cnestedlist.NLMSA(os.path.join(msaDir, 'dm2_multiz15way'), 'r', trypath = [seqDir])
 
-        exonAnnotFileName = 'Annotation_ConservedElement_Exons_dm2.txt'
-        intronAnnotFileName = 'Annotation_ConservedElement_Introns_dm2.txt'
+        #exonAnnotFileName = 'Annotation_ConservedElement_Exons_dm2.txt'
+        #intronAnnotFileName = 'Annotation_ConservedElement_Introns_dm2.txt'
+        exonAnnotFileName = 'Annotation_ConservedElement_Exons_chrYh_dm2.txt' # FOR TESTING
+        intronAnnotFileName = 'Annotation_ConservedElement_Introns_chrYh_dm2.txt' # FOR TESTING
         newexonAnnotFileName = os.path.join(self.path, 'new_Exons_dm2.txt')
         newintronAnnotFileName = os.path.join(self.path, 'new_Introns_dm2.txt')
         tmpexonAnnotFileName = self.copyFile(exonAnnotFileName)
@@ -369,8 +382,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
 
         chrList = dm2.seqLenDict.keys()
         chrList.sort()
+        chrList = ['chrYh'] # FOR TESTING
 
-        outfile = open(tmpexonAnnotFileName, 'w')
+        outfile = open(newexonAnnotFileName, 'w')
         for chrid in chrList:
             slice = dm2[chrid]
             try:
@@ -378,18 +392,18 @@ class Build_Test(PygrBuildNLMSAMegabase):
             except KeyError:
                 continue
             else:
-                exlist1 = ex1.keys()
+                exlist1 = [(ix.exon_id, ix) for ix in ex1.keys()]
                 exlist1.sort()
-                for exon in exlist1:
+                for ixx, exon in exlist1:
                     saveList = []
                     tmp = exon.sequence
                     tmpexon = exons[exon.exon_id]
                     tmpslice = tmpexon.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'EXON', chrid, tmpexon.exon_id, tmpexon.gene_id, tmpslice.start, tmpslice.stop
                     out1 = conservedmsa[tmp]
-                    elementlist = out1.keys()
+                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
                     elementlist.sort()
-                    for element in elementlist:
+                    for iyy, element in elementlist:
                         if element.stop - element.start < 100: continue
                         score = int(string.split(element.gene_id, '=')[1])
                         if score < 100: continue
@@ -419,7 +433,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         md5new.update(open(newexonAnnotFileName, 'r').read())
         assert md5old.digest() == md5new.digest() # MD5 COMPARISON INSTEAD OF COMPARING EACH CONTENTS
 
-        outfile = open(tmpintronAnnotFileName, 'w')
+        outfile = open(newintronAnnotFileName, 'w')
         for chrid in chrList:
             slice = dm2[chrid]
             try:
@@ -427,18 +441,18 @@ class Build_Test(PygrBuildNLMSAMegabase):
             except:
                 continue
             else:
-                splist1 = sp1.keys()
+                splist1 = [(ix.splice_id, ix) for ix in sp1.keys()]
                 splist1.sort()
-                for splice in splist1:
+                for ixx, splice in splist1:
                     saveList = []
                     tmp = splice.sequence
                     tmpsplice = splices[splice.splice_id]
                     tmpslice = tmpsplice.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'INTRON', chrid, tmpsplice.splice_id, tmpsplice.gene_id, tmpslice.start, tmpslice.stop
                     out1 = conservedmsa[tmp]
-                    elementlist = out1.keys()
+                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
                     elementlist.sort()
-                    for element in elementlist:
+                    for iyy, element in elementlist:
                         if element.stop - element.start < 100: continue
                         score = int(string.split(element.gene_id, '=')[1])
                         if score < 100: continue
@@ -467,5 +481,4 @@ class Build_Test(PygrBuildNLMSAMegabase):
         md5new = md5.new()
         md5new.update(open(newintronAnnotFileName, 'r').read())
         assert md5old.digest() == md5new.digest() # MD5 COMPARISON INSTEAD OF COMPARING EACH CONTENTS
-
 
