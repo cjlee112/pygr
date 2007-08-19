@@ -1,8 +1,8 @@
 
 import sys, os, string
 
-seqDir = os.path.realpath('seq_data3') # SEQDB.BLASTDB
-msaDir = os.path.realpath('maf_test3') # PRE BUILT NLMSA
+seqDir = '/result/pygr_megatest/seq_data3' # SEQDB.BLASTDB
+msaDir = '/result/pygr_megatest/maf_test3' # PRE BUILT NLMSA
 
 ## msaDir CONTAINS PRE-BUILT NLMSA
 ## seqDir CONTAINS GENOME ASSEMBLIES AND THEIR SEQDB FILES
@@ -282,32 +282,37 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     tmpexon = exons[exon.exon_id]
                     tmpslice = tmpexon.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'EXON', chrid, tmpexon.exon_id, tmpexon.gene_id, tmpslice.start, tmpslice.stop
-                    out1 = conservedmsa[tmp]
-                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
-                    elementlist.sort()
-                    for iyy, element in elementlist:
-                        if element.stop - element.start < 100: continue
-                        score = int(string.split(element.gene_id, '=')[1])
-                        if score < 100: continue
-                        tmp2 = element.sequence
-                        tmpelement = mostconserved[element.ucsc_id]
-                        tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
-                        wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
-                        slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
-                        if slicestart < 0 or sliceend < 0: sys.exit('wrong query')
-                        tmp1 = msa.seqDict['hg18.' + chrid][slicestart:sliceend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start < 100: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            if palign < 0.8 or pident < 0.8: continue
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        out1 = conservedmsa[tmp]
+                    except KeyError:
+                        pass
+                    else:
+                        elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
+                        elementlist.sort()
+                        for iyy, element in elementlist:
+                            if element.stop - element.start < 100: continue
+                            score = int(string.split(element.gene_id, '=')[1])
+                            if score < 100: continue
+                            tmp2 = element.sequence
+                            tmpelement = mostconserved[element.ucsc_id]
+                            tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
+                            wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
+                            slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
+                            if slicestart < 0 or sliceend < 0: sys.exit('wrong query')
+                            tmp1 = msa.seqDict['hg18.' + chrid][slicestart:sliceend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start < 100: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                if palign < 0.8 or pident < 0.8: continue
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()
@@ -333,73 +338,88 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     tmpsplice = splices[splice.splice_id]
                     tmpslice = tmpsplice.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'INTRON', chrid, tmpsplice.splice_id, tmpsplice.gene_id, tmpslice.start, tmpslice.stop
-                    out1 = conservedmsa[tmp]
-                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
-                    elementlist.sort()
-                    for iyy, element in elementlist:
-                        if element.stop - element.start < 100: continue
-                        score = int(string.split(element.gene_id, '=')[1])
-                        if score < 100: continue
-                        tmp2 = element.sequence
-                        tmpelement = mostconserved[element.ucsc_id]
-                        tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
-                        wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
-                        slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
-                        if slicestart < 0 or sliceend < 0: sys.exit('wrong query')
-                        tmp1 = msa.seqDict['hg18.' + chrid][slicestart:sliceend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start < 100: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            if palign < 0.8 or pident < 0.8: continue
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                    try:
+                        out1 = conservedmsa[tmp]
+                    except KeyError:
+                        pass
+                    else:
+                        elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
+                        elementlist.sort()
+                        for iyy, element in elementlist:
+                            if element.stop - element.start < 100: continue
+                            score = int(string.split(element.gene_id, '=')[1])
+                            if score < 100: continue
+                            tmp2 = element.sequence
+                            tmpelement = mostconserved[element.ucsc_id]
+                            tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
+                            wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
+                            slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
+                            if slicestart < 0 or sliceend < 0: sys.exit('wrong query')
+                            tmp1 = msa.seqDict['hg18.' + chrid][slicestart:sliceend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start < 100: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                if palign < 0.8 or pident < 0.8: continue
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
                     # SNP IN SPLICE SITES
+                    saveList = []
                     gt = tmpslice[:2]
                     ag = tmpslice[-2:]
-                    gtout = snpmsa[gt]
-                    agout = snpmsa[ag]
-                    gtlist = gtout.keys()
-                    aglist = agout.keys()
-                    for snp in gtlist:
-                        tmpsnp = snp.sequence
-                        annsnp = snp126[snp.snp_id]
-                        wlist2 = ('SNP5', chrid, tmpsplice.gene_id, gt.start, gt.stop, str(gt))  \
-                            + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
-                            str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
-                            annsnp.observed, annsnp.molType, \
-                            annsnp.myClass, annsnp.myValid)
-                        tmp1 = msa.seqDict['hg18.' + chrid][abs(gt.start):abs(gt.stop)]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start != 2 or dest.stop - dest.start != 2: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    for snp in aglist:
-                        tmpsnp = snp.sequence
-                        annsnp = snp126[snp.snp_id]
-                        wlist2 = ('SNP3', chrid, tmpsplice.gene_id, ag.start, ag.stop, str(ag))  \
-                            + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
-                            str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
-                            annsnp.observed, annsnp.molType, \
-                            annsnp.myClass, annsnp.myValid)
-                        tmp1 = msa.seqDict['hg18.' + chrid][abs(ag.start):abs(ag.stop)]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start != 2 or dest.stop - dest.start != 2: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        gtout = snpmsa[gt]
+                        agout = snpmsa[ag]
+                    except KeyError:
+                        pass
+                    else:
+                        gtlist = gtout.keys()
+                        aglist = agout.keys()
+                        for snp in gtlist:
+                            tmpsnp = snp.sequence
+                            annsnp = snp126[snp.snp_id]
+                            wlist2 = ('SNP5', chrid, tmpsplice.gene_id, gt.start, gt.stop, str(gt))  \
+                                + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
+                                str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
+                                annsnp.observed, annsnp.molType, \
+                                annsnp.myClass, annsnp.myValid)
+                            tmp1 = msa.seqDict['hg18.' + chrid][abs(gt.start):abs(gt.stop)]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start != 2 or dest.stop - dest.start != 2: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        for snp in aglist:
+                            tmpsnp = snp.sequence
+                            annsnp = snp126[snp.snp_id]
+                            wlist2 = ('SNP3', chrid, tmpsplice.gene_id, ag.start, ag.stop, str(ag))  \
+                                + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
+                                str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
+                                annsnp.observed, annsnp.molType, \
+                                annsnp.myClass, annsnp.myValid)
+                            tmp1 = msa.seqDict['hg18.' + chrid][abs(ag.start):abs(ag.stop)]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start != 2 or dest.stop - dest.start != 2: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()
@@ -432,34 +452,39 @@ class Build_Test(PygrBuildNLMSAMegabase):
                         stopstart, stopend = tmpslice.start, tmpslice.stop
                         stop = hg18[chrid][stopend-3:stopend]
                     if str(stop).upper() not in ('TAA', 'TAG', 'TGA'): continue
-                    snp1 = snpmsa[stop]
-                    snplist = [(ix.snp_id, ix) for ix in snp1.keys()]
-                    snplist.sort()
-                    for iyy, snp in snplist:
-                        tmpsnp = snp.sequence
-                        annsnp = snp126[snp.snp_id]
-                        wlist2 = wlist1 + (str(stop), stop.start, stop.stop) \
-                            + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
-                            str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
-                            annsnp.observed, annsnp.molType, \
-                            annsnp.myClass, annsnp.myValid)
-                        if tmpslice.start < 0:
-                            tmp1 = -msa.seqDict['hg18.' + chrid][stopstart:stopstart+3]
-                        else:
-                            tmp1 = msa.seqDict['hg18.' + chrid][stopend-3:stopend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start != 3 or dest.stop - dest.start != 3: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            if str(dest).upper() not in ('TAA', 'TAG', 'TGA'): nonstr = 'NONSENSE'
-                            else: nonstr = 'STOP'
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident, nonstr)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        snp1 = snpmsa[stop]
+                    except KeyError:
+                        pass
+                    else:
+                        snplist = [(ix.snp_id, ix) for ix in snp1.keys()]
+                        snplist.sort()
+                        for iyy, snp in snplist:
+                            tmpsnp = snp.sequence
+                            annsnp = snp126[snp.snp_id]
+                            wlist2 = wlist1 + (str(stop), stop.start, stop.stop) \
+                                + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
+                                str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
+                                annsnp.observed, annsnp.molType, \
+                                annsnp.myClass, annsnp.myValid)
+                            if tmpslice.start < 0:
+                                tmp1 = -msa.seqDict['hg18.' + chrid][stopstart:stopstart+3]
+                            else:
+                                tmp1 = msa.seqDict['hg18.' + chrid][stopend-3:stopend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start != 3 or dest.stop - dest.start != 3: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                if str(dest).upper() not in ('TAA', 'TAG', 'TGA'): nonstr = 'NONSENSE'
+                                else: nonstr = 'STOP'
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident, nonstr)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()
@@ -634,32 +659,37 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     tmpexon = exons[exon.exon_id]
                     tmpslice = tmpexon.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'EXON', chrid, tmpexon.exon_id, tmpexon.gene_id, tmpslice.start, tmpslice.stop
-                    out1 = conservedmsa[tmp]
-                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
-                    elementlist.sort()
-                    for iyy, element in elementlist:
-                        if element.stop - element.start < 100: continue
-                        score = int(string.split(element.gene_id, '=')[1])
-                        if score < 100: continue
-                        tmp2 = element.sequence
-                        tmpelement = mostconserved[element.ucsc_id]
-                        tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
-                        wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
-                        slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
-                        if slicestart < 0 or sliceend < 0: sys.exit('wrong query')
-                        tmp1 = msa.seqDict['hg18.' + chrid][slicestart:sliceend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start < 100: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            if palign < 0.8 or pident < 0.8: continue
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        out1 = conservedmsa[tmp]
+                    except KeyError:
+                        pass
+                    else:
+                        elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
+                        elementlist.sort()
+                        for iyy, element in elementlist:
+                            if element.stop - element.start < 100: continue
+                            score = int(string.split(element.gene_id, '=')[1])
+                            if score < 100: continue
+                            tmp2 = element.sequence
+                            tmpelement = mostconserved[element.ucsc_id]
+                            tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
+                            wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
+                            slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
+                            if slicestart < 0 or sliceend < 0: sys.exit('wrong query')
+                            tmp1 = msa.seqDict['hg18.' + chrid][slicestart:sliceend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start < 100: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                if palign < 0.8 or pident < 0.8: continue
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()
@@ -685,73 +715,88 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     tmpsplice = splices[splice.splice_id]
                     tmpslice = tmpsplice.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'INTRON', chrid, tmpsplice.splice_id, tmpsplice.gene_id, tmpslice.start, tmpslice.stop
-                    out1 = conservedmsa[tmp]
-                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
-                    elementlist.sort()
-                    for iyy, element in elementlist:
-                        if element.stop - element.start < 100: continue
-                        score = int(string.split(element.gene_id, '=')[1])
-                        if score < 100: continue
-                        tmp2 = element.sequence
-                        tmpelement = mostconserved[element.ucsc_id]
-                        tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
-                        wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
-                        slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
-                        if slicestart < 0 or sliceend < 0: sys.exit('wrong query')
-                        tmp1 = msa.seqDict['hg18.' + chrid][slicestart:sliceend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start < 100: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            if palign < 0.8 or pident < 0.8: continue
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                    try:
+                        out1 = conservedmsa[tmp]
+                    except KeyError:
+                        pass
+                    else:
+                        elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
+                        elementlist.sort()
+                        for iyy, element in elementlist:
+                            if element.stop - element.start < 100: continue
+                            score = int(string.split(element.gene_id, '=')[1])
+                            if score < 100: continue
+                            tmp2 = element.sequence
+                            tmpelement = mostconserved[element.ucsc_id]
+                            tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
+                            wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
+                            slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
+                            if slicestart < 0 or sliceend < 0: sys.exit('wrong query')
+                            tmp1 = msa.seqDict['hg18.' + chrid][slicestart:sliceend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start < 100: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                if palign < 0.8 or pident < 0.8: continue
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
                     # SNP IN SPLICE SITES
+                    saveList = []
                     gt = tmpslice[:2]
                     ag = tmpslice[-2:]
-                    gtout = snpmsa[gt]
-                    agout = snpmsa[ag]
-                    gtlist = gtout.keys()
-                    aglist = agout.keys()
-                    for snp in gtlist:
-                        tmpsnp = snp.sequence
-                        annsnp = snp126[snp.snp_id]
-                        wlist2 = ('SNP5', chrid, tmpsplice.gene_id, gt.start, gt.stop, str(gt))  \
-                            + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
-                            str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
-                            annsnp.observed, annsnp.molType, \
-                            annsnp.myClass, annsnp.myValid)
-                        tmp1 = msa.seqDict['hg18.' + chrid][abs(gt.start):abs(gt.stop)]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start != 2 or dest.stop - dest.start != 2: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    for snp in aglist:
-                        tmpsnp = snp.sequence
-                        annsnp = snp126[snp.snp_id]
-                        wlist2 = ('SNP3', chrid, tmpsplice.gene_id, ag.start, ag.stop, str(ag))  \
-                            + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
-                            str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
-                            annsnp.observed, annsnp.molType, \
-                            annsnp.myClass, annsnp.myValid)
-                        tmp1 = msa.seqDict['hg18.' + chrid][abs(ag.start):abs(ag.stop)]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start != 2 or dest.stop - dest.start != 2: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        gtout = snpmsa[gt]
+                        agout = snpmsa[ag]
+                    except KeyError:
+                        pass
+                    else:
+                        gtlist = gtout.keys()
+                        aglist = agout.keys()
+                        for snp in gtlist:
+                            tmpsnp = snp.sequence
+                            annsnp = snp126[snp.snp_id]
+                            wlist2 = ('SNP5', chrid, tmpsplice.gene_id, gt.start, gt.stop, str(gt))  \
+                                + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
+                                str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
+                                annsnp.observed, annsnp.molType, \
+                                annsnp.myClass, annsnp.myValid)
+                            tmp1 = msa.seqDict['hg18.' + chrid][abs(gt.start):abs(gt.stop)]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start != 2 or dest.stop - dest.start != 2: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        for snp in aglist:
+                            tmpsnp = snp.sequence
+                            annsnp = snp126[snp.snp_id]
+                            wlist2 = ('SNP3', chrid, tmpsplice.gene_id, ag.start, ag.stop, str(ag))  \
+                                + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
+                                str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
+                                annsnp.observed, annsnp.molType, \
+                                annsnp.myClass, annsnp.myValid)
+                            tmp1 = msa.seqDict['hg18.' + chrid][abs(ag.start):abs(ag.stop)]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start != 2 or dest.stop - dest.start != 2: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()
@@ -784,34 +829,39 @@ class Build_Test(PygrBuildNLMSAMegabase):
                         stopstart, stopend = tmpslice.start, tmpslice.stop
                         stop = hg18[chrid][stopend-3:stopend]
                     if str(stop).upper() not in ('TAA', 'TAG', 'TGA'): continue
-                    snp1 = snpmsa[stop]
-                    snplist = [(ix.snp_id, ix) for ix in snp1.keys()]
-                    snplist.sort()
-                    for iyy, snp in snplist:
-                        tmpsnp = snp.sequence
-                        annsnp = snp126[snp.snp_id]
-                        wlist2 = wlist1 + (str(stop), stop.start, stop.stop) \
-                            + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
-                            str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
-                            annsnp.observed, annsnp.molType, \
-                            annsnp.myClass, annsnp.myValid)
-                        if tmpslice.start < 0:
-                            tmp1 = -msa.seqDict['hg18.' + chrid][stopstart:stopstart+3]
-                        else:
-                            tmp1 = msa.seqDict['hg18.' + chrid][stopend-3:stopend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start != 3 or dest.stop - dest.start != 3: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            if str(dest).upper() not in ('TAA', 'TAG', 'TGA'): nonstr = 'NONSENSE'
-                            else: nonstr = 'STOP'
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident, nonstr)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        snp1 = snpmsa[stop]
+                    except KeyError:
+                        pass
+                    else:
+                        snplist = [(ix.snp_id, ix) for ix in snp1.keys()]
+                        snplist.sort()
+                        for iyy, snp in snplist:
+                            tmpsnp = snp.sequence
+                            annsnp = snp126[snp.snp_id]
+                            wlist2 = wlist1 + (str(stop), stop.start, stop.stop) \
+                                + (annsnp.snp_id, tmpsnp.start, tmpsnp.stop, \
+                                str(tmpsnp), annsnp.gene_id, annsnp.ref_NCBI, annsnp.ref_UCSC, \
+                                annsnp.observed, annsnp.molType, \
+                                annsnp.myClass, annsnp.myValid)
+                            if tmpslice.start < 0:
+                                tmp1 = -msa.seqDict['hg18.' + chrid][stopstart:stopstart+3]
+                            else:
+                                tmp1 = msa.seqDict['hg18.' + chrid][stopend-3:stopend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start != 3 or dest.stop - dest.start != 3: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                if str(dest).upper() not in ('TAA', 'TAG', 'TGA'): nonstr = 'NONSENSE'
+                                else: nonstr = 'STOP'
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident, nonstr)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()

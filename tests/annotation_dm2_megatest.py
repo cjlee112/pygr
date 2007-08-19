@@ -1,8 +1,8 @@
 
 import sys, os, string
 
-seqDir = os.path.realpath('seq_data') # SEQDB.BLASTDB
-msaDir = os.path.realpath('maf_test') # PRE BUILT NLMSA
+seqDir = '/result/pygr_megatest/seq_data' # SEQDB.BLASTDB
+msaDir = '/result/pygr_megatest/maf_test' # PRE BUILT NLMSA
 
 ## msaDir CONTAINS PRE-BUILT NLMSA
 ## seqDir CONTAINS GENOME ASSEMBLIES AND THEIR SEQDB FILES
@@ -206,31 +206,36 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     tmpexon = exons[exon.exon_id]
                     tmpslice = tmpexon.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'EXON', chrid, tmpexon.exon_id, tmpexon.gene_id, tmpslice.start, tmpslice.stop
-                    out1 = conservedmsa[tmp]
-                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
-                    elementlist.sort()
-                    for iyy, element in elementlist:
-                        if element.stop - element.start < 100: continue
-                        score = int(string.split(element.gene_id, '=')[1])
-                        if score < 100: continue
-                        tmp2 = element.sequence
-                        tmpelement = mostconserved[element.ucsc_id]
-                        tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
-                        wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
-                        slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
-                        tmp1 = msa.seqDict['dm2.' + chrid][slicestart:sliceend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start < 100: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            if palign < 0.8 or pident < 0.8: continue
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        out1 = conservedmsa[tmp]
+                    except KeyError:
+                        pass
+                    else:
+                        elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
+                        elementlist.sort()
+                        for iyy, element in elementlist:
+                            if element.stop - element.start < 100: continue
+                            score = int(string.split(element.gene_id, '=')[1])
+                            if score < 100: continue
+                            tmp2 = element.sequence
+                            tmpelement = mostconserved[element.ucsc_id]
+                            tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
+                            wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
+                            slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
+                            tmp1 = msa.seqDict['dm2.' + chrid][slicestart:sliceend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start < 100: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                if palign < 0.8 or pident < 0.8: continue
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()
@@ -255,31 +260,36 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     tmpsplice = splices[splice.splice_id]
                     tmpslice = tmpsplice.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'INTRON', chrid, tmpsplice.splice_id, tmpsplice.gene_id, tmpslice.start, tmpslice.stop
-                    out1 = conservedmsa[tmp]
-                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
-                    elementlist.sort()
-                    for iyy, element in elementlist:
-                        if element.stop - element.start < 100: continue
-                        score = int(string.split(element.gene_id, '=')[1])
-                        if score < 100: continue
-                        tmp2 = element.sequence
-                        tmpelement = mostconserved[element.ucsc_id]
-                        tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
-                        wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
-                        slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
-                        tmp1 = msa.seqDict['dm2.' + chrid][slicestart:sliceend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start < 100: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            if palign < 0.8 or pident < 0.8: continue
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        out1 = conservedmsa[tmp]
+                    except KeyError:
+                        pass
+                    else:
+                        elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
+                        elementlist.sort()
+                        for iyy, element in elementlist:
+                            if element.stop - element.start < 100: continue
+                            score = int(string.split(element.gene_id, '=')[1])
+                            if score < 100: continue
+                            tmp2 = element.sequence
+                            tmpelement = mostconserved[element.ucsc_id]
+                            tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
+                            wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
+                            slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
+                            tmp1 = msa.seqDict['dm2.' + chrid][slicestart:sliceend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start < 100: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                if palign < 0.8 or pident < 0.8: continue
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()
@@ -400,31 +410,36 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     tmpexon = exons[exon.exon_id]
                     tmpslice = tmpexon.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'EXON', chrid, tmpexon.exon_id, tmpexon.gene_id, tmpslice.start, tmpslice.stop
-                    out1 = conservedmsa[tmp]
-                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
-                    elementlist.sort()
-                    for iyy, element in elementlist:
-                        if element.stop - element.start < 100: continue
-                        score = int(string.split(element.gene_id, '=')[1])
-                        if score < 100: continue
-                        tmp2 = element.sequence
-                        tmpelement = mostconserved[element.ucsc_id]
-                        tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
-                        wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
-                        slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
-                        tmp1 = msa.seqDict['dm2.' + chrid][slicestart:sliceend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start < 100: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            if palign < 0.8 or pident < 0.8: continue
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        out1 = conservedmsa[tmp]
+                    except KeyError:
+                        pass
+                    else:
+                        elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
+                        elementlist.sort()
+                        for iyy, element in elementlist:
+                            if element.stop - element.start < 100: continue
+                            score = int(string.split(element.gene_id, '=')[1])
+                            if score < 100: continue
+                            tmp2 = element.sequence
+                            tmpelement = mostconserved[element.ucsc_id]
+                            tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
+                            wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
+                            slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
+                            tmp1 = msa.seqDict['dm2.' + chrid][slicestart:sliceend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start < 100: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                if palign < 0.8 or pident < 0.8: continue
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()
@@ -449,31 +464,36 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     tmpsplice = splices[splice.splice_id]
                     tmpslice = tmpsplice.sequence # FOR REAL EXON COORDINATE
                     wlist1 = 'INTRON', chrid, tmpsplice.splice_id, tmpsplice.gene_id, tmpslice.start, tmpslice.stop
-                    out1 = conservedmsa[tmp]
-                    elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
-                    elementlist.sort()
-                    for iyy, element in elementlist:
-                        if element.stop - element.start < 100: continue
-                        score = int(string.split(element.gene_id, '=')[1])
-                        if score < 100: continue
-                        tmp2 = element.sequence
-                        tmpelement = mostconserved[element.ucsc_id]
-                        tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
-                        wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
-                        slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
-                        tmp1 = msa.seqDict['dm2.' + chrid][slicestart:sliceend]
-                        edges = msa[tmp1].edges()
-                        for src, dest, e in edges:
-                            if src.stop - src.start < 100: continue
-                            palign, pident = e.pAligned(), e.pIdentity()
-                            if palign < 0.8 or pident < 0.8: continue
-                            palign, pident = '%.2f' % palign, '%.2f' % pident
-                            wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, (~msa.seqDict)[dest], \
-                                str(dest), dest.start, dest.stop, palign, pident)
-                            saveList.append('\t'.join(map(str, wlist3)) + '\n')
-                    saveList.sort()
-                    for saveline in saveList:
-                        outfile.write(saveline)
+                    try:
+                        out1 = conservedmsa[tmp]
+                    except KeyError:
+                        pass
+                    else:
+                        elementlist = [(ix.ucsc_id, ix) for ix in out1.keys()]
+                        elementlist.sort()
+                        for iyy, element in elementlist:
+                            if element.stop - element.start < 100: continue
+                            score = int(string.split(element.gene_id, '=')[1])
+                            if score < 100: continue
+                            tmp2 = element.sequence
+                            tmpelement = mostconserved[element.ucsc_id]
+                            tmpslice2 = tmpelement.sequence # FOR REAL ELEMENT COORDINATE
+                            wlist2 = wlist1 + (tmpelement.ucsc_id, tmpelement.gene_id, tmpslice2.start, tmpslice2.stop)
+                            slicestart, sliceend = max(tmp.start, tmp2.start), min(tmp.stop, tmp2.stop)
+                            tmp1 = msa.seqDict['dm2.' + chrid][slicestart:sliceend]
+                            edges = msa[tmp1].edges()
+                            for src, dest, e in edges:
+                                if src.stop - src.start < 100: continue
+                                palign, pident = e.pAligned(), e.pIdentity()
+                                if palign < 0.8 or pident < 0.8: continue
+                                palign, pident = '%.2f' % palign, '%.2f' % pident
+                                wlist3 = wlist2 + ((~msa.seqDict)[src], str(src), src.start, src.stop, \
+                                    (~msa.seqDict)[dest], \
+                                    str(dest), dest.start, dest.stop, palign, pident)
+                                saveList.append('\t'.join(map(str, wlist3)) + '\n')
+                        saveList.sort()
+                        for saveline in saveList:
+                            outfile.write(saveline)
         outfile.close()
         import md5
         md5old = md5.new()

@@ -1,8 +1,8 @@
 
 import sys, os, string
 
-mafDir = os.path.realpath('maf_data3')
-seqDir = os.path.realpath('seq_data3')
+mafDir = '/result/pygr_megatest/maf_data3'
+seqDir = '/result/pygr_megatest/seq_data3'
 
 ## mafDir CONTAINS FOLLOWING DM2 MULTIZ15WAY MAF ALIGNMENTS
 ## seqDir CONTAINS FOLLOWING 15 GENOME ASSEMBLIES AND THEIR SEQDB FILES
@@ -105,16 +105,16 @@ class Build_Test(PygrBuildNLMSAMegabase):
             genomedict[orgstr] = pygr.Data.getResource('TEST.Seq.Genome.' + orgstr)
         uniondict = seqdb.PrefixUnionDict(genomedict)
         import glob
-        maflist = glob.glob(os.path.join(mafDir, '*.maf')) # CHR4H TESTING
+        maflist = glob.glob(os.path.join(mafDir, 'chrY.maf')) # CHRY TESTING
         maflist.sort()
-        msaname = os.path.join(os.path.basename(self.path), 'hg18_multiz28way')
+        msaname = os.path.join(self.path, 'hg18_multiz28way')
         msa1 = cnestedlist.NLMSA(msaname, 'w', uniondict, maflist, maxlen = 536870912, maxint = 22369620) # 500MB VERSION
         msa1.__doc__ = 'TEST NLMSA for hg18 multiz28way'
         pygr.Data.getResource.addResource('TEST.MSA.UCSC.hg18_multiz28way', msa1)
         pygr.Data.save()
         msa = pygr.Data.getResource('TEST.MSA.UCSC.hg18_multiz28way')
-        outfileName = 'splicesite_hg18.txt' # CHR4H TESTING
-        outputName = 'splicesite_hg18_multiz28way.txt' # CHR4H TESTING
+        outfileName = 'splicesite_hg18_chrY.txt' # CHRY TESTING
+        outputName = 'splicesite_hg18_chrY_multiz28way.txt' # CHRY TESTING
         newOutputName = 'splicesite_new.txt'
         tmpInputName = self.copyFile(outfileName)
         tmpOutputName = self.copyFile(outputName)
