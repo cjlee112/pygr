@@ -94,7 +94,7 @@ class Blast_Suite(unittest.TestCase):
 			edges = msa[k].edges(minAlignSize=12)
 			for t in edges:
 				assert len(t[0]) >= 12
-			result.append([(t[0], t[1], t[2].pIdentity(trapOverflow=False)) for t in edges])
+			result.append([(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges])
 
 		result.sort()
 
@@ -102,7 +102,7 @@ class Blast_Suite(unittest.TestCase):
 			for j in range(len(result[i])):
 				src, dest, identity = result[i][j]
 				old_src, old_dest, old_identity = old_result[i][j]
-				assert (str(src), str(dest)) == (str(old_src), str(old_dest))
+				assert (src, dest) == (old_src, old_dest)
 				assert identity - old_identity < .0001
 			
 
@@ -121,14 +121,13 @@ def all_v_all_blast_save():
 		edges = msa[k].edges(minAlignSize=12)
 		for t in edges:
 			assert len(t[0]) >= 12
-		result.append([(t[0], t[1], t[2].pIdentity(trapOverflow=False)) for t in edges])
+		result.append([(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges])
 
 	result.sort()
 	working['sp_allvall'] = result
 
  	return msa
 		
-				
 
-	
-	
+if __name__ == '__main__':
+	all_v_all_blast_save()
