@@ -596,8 +596,8 @@ cdef class NLMSASlice:
     seqIntervals=self.groupByIntervals(mergeAll=mergeAll,**kwargs)
     ivals=self.groupBySequences(seqIntervals,**kwargs)
     l=[]
-    for ival1,ival2 in ivals:
-      l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
+    for ival1,ival2,mergeIntervals in ivals:
+      l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1,mergeIntervals)))
     return l
   def items(self,**kwargs):
     'get list of tuples (ival2,edge) aligned to this slice'
@@ -612,7 +612,7 @@ cdef class NLMSASlice:
     seqIntervals=self.groupByIntervals(mergeAll=mergeAll,**kwargs)
     ivals=self.groupBySequences(seqIntervals,**kwargs)
     l=[]
-    for ival1,ival2 in ivals:
+    for ival1,ival2,mergeIntervals in ivals:
       l.append(ival2)
     return l
   def __iter__(self): # PYREX DOESNT ALLOW ARGS TO __iter__ !
@@ -692,17 +692,19 @@ alignment intervals to an NLMSA after calling its build() method.''')
     for i from 0 <= i <self.nseqBounds:
       if nl.seqlist.is_lpo(self.seqBounds[i].target_id):
         continue  # DON'T RETURN EDGES TO LPO
-      ival1=sequence.absoluteSlice(self.seq,self.seqBounds[i].start,
-                                   self.seqBounds[i].end)
+      #ival1=sequence.absoluteSlice(self.seq,self.seqBounds[i].start,
+      #                             self.seqBounds[i].end)
       ival2=nl.seqInterval(self.seqBounds[i].target_id,
                            self.seqBounds[i].target_start,
                            self.seqBounds[i].target_end)
-      l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
+      #l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
+      edge = self[ival2] # LET edge FIGURE OUT sourcePath FOR US
+      l.append((edge.sourcePath,ival2,edge))
     return l
 
   ############################################## GROUP-BY METHODS
   def groupByIntervals(self,int maxgap=0,int maxinsert=0,
-                       int mininsert= 0,filterSeqs=None,
+                       int mininsert= 0,filterSeqs=None,filterList=None,
                        mergeMost=False,maxsize=500000000,
                        mergeAll=True,ivalMethod=None,**kwargs):
     '''merge alignment intervals using "horizontal" group-by rules:
@@ -715,21 +717,31 @@ alignment intervals to an NLMSA after calling its build() method.''')
       - mergeAll: merge everything without any limits
       - filterSeqs (=None): dict of sequences to apply these rules to;
         other sequences alignment will be ignored if
-        filterSeqs not None
+        filterSeqs not None.  Slower than the filterList option.
+      - filterList (=None): list of sequence intervals to mask the
+        result set by.  Note: a single sequence should not be
+        represented by more than one interval in filterList, as only
+        one interval for each sequence will be used as the clipping region.
+        Significantly faster than filterSeqs.
       - ivalMethod: a function to process the list of intervals
         for each sequence (it can merge or split them in any way
         it wants)
       - pAlignedMin: a fractional minimum alignment threshold e.g. (0.9)
       - pIdentityMin: a fractional minimum identity threshold e.g. (0.9)
       '''
-    cdef int i,j,n,gap,insert,targetStart,targetEnd,targetID,start,end
+    cdef int i,j,n,gap,insert,targetStart,targetEnd,start,end,maskStart,maskEnd
     cdef NLMSA nl
+    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     if mergeMost: # BE REASONABLE: DON'T MERGE A WHOLE CHROMOSOME
       maxgap=10000
       maxinsert=10000
       mininsert=-10 # ALLOW SOME OVERLAP IN INTERVAL ALIGNMENTS
       maxsize=50000
-    nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
+    if filterList is not None:
+      targetDict = {}
+      for seq in filterList: # CREATE AN INDEX OF SEQUENCE IDs TO KEEP
+        t = nl.seqs.getIDcoords(seq)
+        targetDict[t[0]] = t[1:] # SAVE START,STOP
     seqIntervals={}
     for i from 0 <= i < self.n: # LIST INTERVALS FOR EACH TARGET
       if nl.seqlist.is_lpo(self.im[i].target_id):
@@ -738,22 +750,35 @@ alignment intervals to an NLMSA after calling its build() method.''')
       end=self.im[i].end
       targetStart=self.im[i].target_start
       targetEnd=self.im[i].target_end
-      if filterSeqs is not None: # CLIP TARGET SEQ INTERVAL
+      if filterList is not None:
+        try: # CHECK IF SEQUENCE IS IN MASKING DICTIONARY
+          maskStart,maskEnd = targetDict[self.im[i].target_id]
+        except KeyError:
+          continue # FILTER THIS SEQUENCE OUT OF THE RESULT SET
+        if start>=maskEnd or end<=maskStart: # NO OVERLAP
+          continue
+        if start<maskStart: # CLIP START TO MASKED REGION
+          targetStart = targetStart+maskStart-start
+          start = maskStart
+        if end>maskEnd:# CLIP END TO MASKED REGION
+          targetEnd = targetEnd+maskEnd-end
+          end = MaskEnd
+      elif filterSeqs is not None: # CLIP TARGET SEQ INTERVAL
         target=nl.seqInterval(self.im[i].target_id,targetStart,targetEnd)
         try:
           target=filterSeqs[target] # PERFORM CLIPPING
-          start=start+target.start-targetStart # CLIP SOURCE SEQUENCE
-          end=end+target.stop-targetEnd
-          targetStart=target.start  # GET COORDS OF CLIPPED TARGET
-          targetEnd=target.stop
         except KeyError: # NO OVERLAP IN filterSeqs, SO SKIP
           continue
+        start=start+target.start-targetStart # CLIP SOURCE SEQUENCE
+        end=end+target.stop-targetEnd
+        targetStart=target.start  # GET COORDS OF CLIPPED TARGET
+        targetEnd=target.stop
       try: # ADD INTERVAL TO EXISTING LIST
         seqIntervals[self.im[i].target_id] \
-             .append([start,end,targetStart,targetEnd])
+             .append([start,end,targetStart,targetEnd,None])
       except KeyError: # CREATE A NEW LIST FOR THIS TARGET
         seqIntervals[self.im[i].target_id]= \
-           [[start,end,targetStart,targetEnd]]
+           [[start,end,targetStart,targetEnd,None]]
 
     for i,l in seqIntervals.iteritems(): # MERGE INTERVALS FOR EACH SEQ
       if ivalMethod is not None: # USER-SUPPLIED GROUPING FUNCTION
@@ -773,6 +798,11 @@ alignment intervals to an NLMSA after calling its build() method.''')
           if n<j: # COPY START COORDS TO NEW SLOT
             l[n][0]=l[j][0]
             l[n][2]=l[j][2]
+        else: # INTERVALS MERGED: SAVE ORIGINAL 1:1 INTERVAL LIST
+          try:
+            l[n][4].append(tuple(l[j][:4]))
+          except AttributeError:
+            l[n][4] = [tuple(l[n][:4]),tuple(l[j][:4])]
         if n<j: # COPY END COORDS TO CURRENT SLOT
           l[n][1]=l[j][1]
           l[n][3]=l[j][3]
@@ -789,12 +819,17 @@ alignment intervals to an NLMSA after calling its build() method.''')
       return None
     if maxAlignSize is not None and m[1]-m[0]>maxAlignSize:
       return None
-    seqEdge=sequence.Seq2SeqEdge(self,sequence.relativeSlice(seq,m[2],m[3]),
-                                 sequence.absoluteSlice(self.seq,m[0],m[1]))
     if pIdentityMin is not None:
-      return seqEdge.conservedSegment(pIdentityMin=pIdentityMin,
-                                      minAlignSize=minAlignSize,**kwargs)
-    return m
+      seqEdge=sequence.Seq2SeqEdge(self,sequence.relativeSlice(seq,m[2],m[3]),
+                                   sequence.absoluteSlice(self.seq,m[0],m[1]),m[4])
+      t = seqEdge.conservedSegment(pIdentityMin=pIdentityMin, # GET CLIPPED INTERVAL
+                                   minAlignSize=minAlignSize,**kwargs)
+      if t is None:
+        return None
+      mergeIntervals = self.clip_interval_list(t[0],t[1],m[4]) # CLIP mergeIntervals
+      return list(t)+[mergeIntervals] # RECOMBINE
+    else:
+      return m
 ##     if pAlignedMin is not None and seqEdge.pAligned()<pAlignedMin:
 ##       return False # INTERVAL FAILED ALIGNMENT THRESHOLD, SO REMOVE IT
 ##     if pIdentityMin is not None and seqEdge.pIdentity()<pIdentityMin:
@@ -900,14 +935,15 @@ alignment intervals to an NLMSA after calling its build() method.''')
         if isStart: # INTERVAL START
           seqStart[seq]=bound[5] # JUST RECORD START OF INTERVAL
         else: # INTERVAL STOP
-          start,end,targetStart,targetEnd=bound[5]
+          start,end,targetStart,targetEnd,mergeIntervals=bound[5]
           if maskStart is not None and not sourceOnly: # SAVE TARGET IVAL
             if maskStart>start: # TRUNCATE TARGET IVAL START
               targetStart=targetStart+maskStart-start
               start=maskStart
+              mergeIntervals = self.clip_interval_list(maskStart,None,mergeIntervals)
             result.append((sequence.absoluteSlice(self.seq,start,end),
                            sequence.relativeSlice(seq,targetStart,
-                                                  targetEnd)))
+                                                  targetEnd),mergeIntervals))
           del seqStart[seq] # POP THIS SEQ FROM START DICT
 
         f=len(seqStart) # #ALIGNED SEQS IN THIS REGION
@@ -917,15 +953,20 @@ alignment intervals to an NLMSA after calling its build() method.''')
               result.append(sequence.absoluteSlice(self.seq,maskStart,end))
             else: # REPORT TARGET IVALS WITHIN (maskStart,end) REGION
               for seq in seqStart: # CANNOT USE items() BECAUSE THIS IS A QUEUE!
-                (start,i,targetStart,targetEnd)=seqStart[seq]
+                (start,i,targetStart,targetEnd,mergeIntervals)=seqStart[seq]
+                pleaseClip = False
                 if maskStart>start: # TRUNCATE TARGET IVAL START
                   targetStart=targetStart+maskStart-start
                   start=maskStart
+                  pleaseClip = True
                 if end<i: # TRUNCATE TARGET IVAL END
                   targetEnd=targetEnd+end-i
+                  pleaseClip = True
+                if pleaseClip:
+                  mergeIntervals = self.clip_interval_list(maskStart,end,mergeIntervals)
                 result.append((sequence.absoluteSlice(self.seq,start,end),
                                sequence.relativeSlice(seq,targetStart,
-                                                      targetEnd)))
+                                                      targetEnd),mergeIntervals))
             maskStart=None # REGION NOW BELOW THRESHOLD
         elif maskStart is None:
           maskStart=ipos # START OF REGION ABOVE THRESHOLD
@@ -934,7 +975,25 @@ alignment intervals to an NLMSA after calling its build() method.''')
           result.append(sequence.absoluteSlice(self.seq,maskStart,ipos))
           maskStart=ipos
     return result
-
+  def clip_interval_list(self,start,end,l):
+    'truncate list of 1:1 intervals using start,end'
+    if l is None:
+      return None
+    result = []
+    for srcStart,srcEnd,destStart,destEnd in l:
+      if (start is not None and start>=srcEnd) or (end is not None and end<=srcStart):
+        continue
+      if start is not None and start>srcStart:
+        destStart = destStart+start-srcStart
+        srcStart = start
+      if end is not None and end<srcEnd:
+        destEnd = destEnd+end-srcEnd
+        srcEnd = end
+      result.append((srcStart,srcEnd,destStart,destEnd))
+    if len(result)<2:
+      return None
+    else:
+      return result
 
   ############################################## LPO REGION METHODS
   def split(self,minAligned=0,**kwargs):
