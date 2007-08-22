@@ -800,13 +800,27 @@ alignment intervals to an NLMSA after calling its build() method.''')
             l[n][2]=l[j][2]
         else: # INTERVALS MERGED: SAVE ORIGINAL 1:1 INTERVAL LIST
           try:
-            l[n][4].append(tuple(l[j][:4]))
-          except AttributeError:
-            l[n][4] = [tuple(l[n][:4]),tuple(l[j][:4])]
+            lastIval = l[n][4][-1] # GET LAST 1:1 INTERVAL
+          except TypeError: # EMPTY LIST: CREATE ONE
+            if l[n][1]==l[j][0] and l[n][3]==l[j][2]: # NO GAP, SO MERGE
+              l[n][4] = [(l[n][0],l[j][1],l[n][2],l[j][3])]
+            else: # TWO SEPARATE 1:1 INTERVALS
+              l[n][4] = [tuple(l[n][:4]),tuple(l[j][:4])]
+          else: # SEE IF WE CAN FUSE TO LAST 1:1 INTERVAL
+            if lastIval[1]==l[j][0] and lastIval[3]==l[j][2]:
+              l[n][4][-1] = (lastIval[0],l[j][1],lastIval[2],l[j][3])
+            else: # GAP, SO JUST APPEND THIS 1:1 INTERVAL
+              l[n][4].append(tuple(l[j][:4]))
         if n<j: # COPY END COORDS TO CURRENT SLOT
           l[n][1]=l[j][1]
           l[n][3]=l[j][3]
       del l[n+1:] # DELETE REMAINING UNMERGED INTERVALS
+      for m in l: # CULL SINGLETON 1:1 INTERVAL LISTS (DUE TO FUSION)
+        try:
+          if len(m[4])==1: # TWO INTERVALS MUST HAVE BEEN FUSED
+            m[4] = None # NO NEED TO KEEP SINGLETON!
+        except TypeError:
+          pass
     # SEQUENCE MASKING BY CONSERVATION OR %ALIGNED CONSTRAINT
     if 'pAlignedMin' in kwargs or 'pIdentityMin' in kwargs or \
            'minAlignSize' in kwargs or 'maxAlignSize' in kwargs:
