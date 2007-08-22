@@ -661,33 +661,34 @@ class Seq2SeqEdge(object):
     of scalar transformations.  Can handle indels within the
     mapping.'''
     #edges=S2SEEdgesDescriptor()
-    def __init__(self,msaSlice,targetPath,sourcePath=None):
+    def __init__(self,msaSlice,targetPath,sourcePath=None,matchIntervals=False):
         self.msaSlice=msaSlice
         self.targetPath=targetPath
         if sourcePath is not None:
             self.sourcePath=sourcePath
-        else:
-            ivals=self.items(mergeAll=True,sourceOnly=True)
+            self.matchIntervals = matchIntervals
+        else: # NEED TO REVERSE-MAP targetPath TO FIND sourcePath
+            si = msaSlice.groupByIntervals(filterList=[targetPath], # MASK TO targetPath
+                                           mergeAll=True)
+            l = msaSlice.groupBySequences(si)
             try:
-                self.sourcePath=ivals[0]
+                self.sourcePath = l[0][0]
             except IndexError:
                 raise KeyError('target interval not in msaSlice!')
-
+            self.matchIntervals = l[0][2]
     def items(self,mergeAll=False,**kwargs):
         'get list of (srcPath,destPath) 1:1 matches'
-        sf=SeqFilterDict([self.targetPath])
-        si=self.msaSlice.groupByIntervals(filterSeqs=sf, # MASK TO targetPath
-                                          mergeAll=mergeAll,**kwargs)
-        l=self.msaSlice.groupBySequences(si,**kwargs)
-        i=0
-        while i<len(l): # CHECK FOR HITS OUTSIDE self.sourcePath
-            if l[i][0] not in self.sourcePath: # SCREEN OUT INAPPROPRIATE HITS
-                del l[i]
-            else: # ADVANCE TO NEXT HIT
-                i+=1
+        if self.matchIntervals is None: # THIS IS ALREADY A 1:1 INTERVAL!
+            return [(self.sourcePath,self.targetPath)]
+        elif self.matchIntervals is False:
+            raise ValueError('no matchIntervals information!')
+        l = [] # USE STORED LIST OF 1:1 INTERVALS
+        for srcStart,srcEnd,destStart,destEnd in self.matchIntervals:
+            l.append((absoluteSlice(self.sourcePath,srcStart,srcEnd),
+                      absoluteSlice(self.targetPath,destStart,destEnd)))
         return l
     def __iter__(self,sourceOnly=True,**kwargs):
-        return iter(self.items(sourceOnly=sourceOnly,**kwargs))
+        return iter([t[0] for t in self.items(sourceOnly=sourceOnly,**kwargs)])
 
     def length(self,mode=max):
         'get length of source vs. target interval according to mode'
