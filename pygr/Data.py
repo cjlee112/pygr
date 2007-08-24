@@ -140,24 +140,28 @@ class ResourceDBServer(object):
             self.xmlrpc_methods={'getResource':0,'getName':0,'dir':0,
                                  'get_version':0} # ONLY ALLOW THESE METHODS!
     def getName(self):
+        'return layer name for this server'
         return self.name
     def getResource(self,id):
+        'return dict of location:pickleData for requested ID'
         try:
             d = self.d[id] # RETURN DICT OF PICKLED OBJECTS
         except KeyError:
             return '' # EMPTY STRING INDICATES FAILURE
-        try:
-            d['__doc__'] = self.docs[id]['__doc__']
-        except KeyError:
-            pass
-        if id.startswith('SCHEMA.'):
+        if id.startswith('SCHEMA.'): # THIS IS A REQUEST FOR SCHEMA INFO
             for location in d: # -schemaEdge DATA NOT SENDABLE BY XMLRPC
                 try:
                     del d[location]['-schemaEdge']
                 except KeyError:
                     pass
+        else: # THIS IS A REGULAR RESOURCE REQUEST
+            try: # PASS ITS DOCSTRING AS A SPECIAL ENTRY
+                d['__doc__'] = self.docs[id]['__doc__']
+            except KeyError:
+                pass
         return d
     def registerServer(self,locationKey,serviceDict):
+        'add services in serviceDict to this server under the specified location'
         n=0
         for id,(infoDict,pdata) in serviceDict.items():
             try:
@@ -169,6 +173,7 @@ class ResourceDBServer(object):
             n+=1
         return n  # COUNT OF SUCCESSFULLY REGISTERED SERVICES
     def delResource(self,id,locationKey):
+        'delete the specified resource under the specified location'
         try:
             del self.d[id][locationKey]
             if len(self.d[id])==0:
@@ -177,6 +182,7 @@ class ResourceDBServer(object):
             pass
         return ''  # DUMMY RETURN VALUE FOR XMLRPC
     def dir(self,prefix,asDict=False):
+        'return list or dict of resources beginning with the specified prefix'
         l=[]
         for name in self.d:
             if name.startswith(prefix):
@@ -505,6 +511,7 @@ class ResourceFinder(object):
         self.layer={}
         self.dbstr=''
         self.d={}
+        self.schemaCache = {}
         self.separator=separator
         self.sourceIDs={}
         self.cursors=[]
@@ -865,8 +872,13 @@ so report the reproducible steps to this error message as a bug report.''' % res
         raise KeyError('no schema info available for '+id)
     def schemaAttr(self,id,attr):
         'actually retrieve the desired schema attribute'
+        try: # GET SCHEMA FROM CACHE
+            schema = self.schemaCache[id]
+        except KeyError: # HMM, IT SHOULD BE CACHED!
+            schema = self.findSchema(id) # OBTAIN FROM RESOURCE DB
+            self.schemaCache[id] = schema # KEEP IT IN OUR CACHE
         try:
-            schema=self.findSchema(id)[attr]
+            schema = schema[attr] # GET SCHEMA FOR THIS SPECIFIC ATTRIBUTE
         except KeyError:
             raise AttributeError('no pygr.Data schema info for %s.%s'%(id,attr))
         targetID=schema['targetID'] # GET THE RESOURCE ID
@@ -877,27 +889,31 @@ so report the reproducible steps to this error message as a bug report.''' % res
             schema=self.findSchema(id)
         except KeyError:
             return # NO SCHEMA FOR THIS OBJ, SO NOTHING TO DO
+        self.schemaCache[id] = schema # KEEP THIS IN CACHE FOR SPEED
         for attr,rules in schema.items():
             if not attr.startswith('-'): # ONLY SHADOW REAL ATTRIBUTES
                 self.shadowAttr(obj,attr,**rules)
     def shadowAttr(self,obj,attr,itemRule=False,**kwargs):
-        'create a descriptor for the attr on the appropriate obj class'
+        'create a descriptor for the attr on the appropriate obj shadow class'
         try: # SEE IF OBJECT TELLS US TO SKIP THIS ATTRIBUTE
             return obj._ignoreShadowAttr[attr] # IF PRESENT, NOTHING TO DO
         except (AttributeError,KeyError):
             pass # PROCEED AS NORMAL
+        from classutil import get_shadow_class
         if itemRule: # SHOULD BIND TO ITEMS FROM obj DATABASE
-            targetClass=obj.itemClass # CLASS USED FOR CONSTRUCTING ITEMS
+            targetClass = get_shadow_class(obj,'itemClass') # CLASS USED FOR CONSTRUCTING ITEMS
             descr=ItemDescriptor(attr,**kwargs)
         else: # SHOULD BIND DIRECTLY TO obj VIA ITS CLASS
-            targetClass=obj.__class__
+            targetClass = get_shadow_class(obj)
             descr=OneTimeDescriptor(attr,**kwargs)
-        setattr(targetClass,attr,descr) # BIND TO THE TARGET CLASS
+        setattr(targetClass,attr,descr) # BIND descr TO targetClass.attr
         if itemRule:
             try: # BIND TO itemSliceClass TOO, IF IT EXISTS...
-                setattr(obj.itemSliceClass,attr,descr)
+                targetClass = get_shadow_class(obj,'itemSliceClass')
             except AttributeError:
-                pass
+                pass # NO itemSliceClass, SO SKIP
+            else: # BIND TO itemSliceClass
+                setattr(targetClass,attr,descr)
         if attr=='inverseDB': # ADD SHADOW __invert__ TO ACCESS THIS
             addSpecialMethod(obj,'__invert__',getInverseDB)
     def addSchema(self,name,schemaObj,layer=None):
@@ -919,6 +935,7 @@ so report the reproducible steps to this error message as a bug report.''' % res
         'delete schema bindings TO and FROM this resource ID'
         db=self.getLayer(layer)
         d=db.getschema(id) # GET THE EXISTING SCHEMA
+        self.schemaCache.clear() # THIS IS MORE AGGRESSIVE THAN NEEDED... COULD BE REFINED
         for attr,obj in d.items():
             if attr.startswith('-'): # A SCHEMA OBJECT
                 obj.delschema(db) # DELETE ITS SCHEMA RELATIONS
