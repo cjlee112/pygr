@@ -1,8 +1,14 @@
 
 
 def ClassicUnpickler(cls, state):
+    'standard python unpickling behavior'
     self = cls.__new__(cls)
-    self.__setstate__(state)
+    try:
+        setstate = self.__setstate__
+    except AttributeError: # JUST SAVE TO __dict__ AS USUAL
+        self.__dict__.update(state)
+    else:
+        setstate(state)
     return self
 ClassicUnpickler.__safe_for_unpickling__ = 1
 
@@ -124,6 +130,32 @@ item_unpickler.__safe_for_unpickling__ = 1
 def item_reducer(self): ############################# SUPPORT FOR PICKLING
     'pickle an item of a database just as a reference'
     return (item_unpickler, (self.db,self.id))
+
+def shadow_reducer(self):
+    'pickle shadow class instance using its true class'
+    shadowClass = self.__class__
+    trueClass = shadowClass._shadowParent # super() TOTALLY FAILED ME HERE!
+    self.__class__ = trueClass # FORCE IT TO PICKLE USING trueClass
+    if hasattr(trueClass,'__reduce__'): # USE trueClass.__reduce__
+        result = trueClass.__reduce__(self)
+    elif hasattr(trueClass,'__getstate__'): # USE trueClass.__getstate__
+        result = (ClassicUnpickler,(trueClass,self.__getstate()))
+    else: # PICKLE __dict__ AS USUAL PYTHON PRACTICE
+        result = (ClassicUnpickler,(trueClass,self.__dict__))
+    self.__class__ = shadowClass # RESTORE SHADOW CLASS
+    return result
+
+def get_shadow_class(obj,classattr='__class__'):
+    'create a shadow class specifically for obj to bind its shadow attributes'
+    targetClass = getattr(obj,classattr)
+    if hasattr(targetClass,'_shadowParent'): # ALREADY HAS A SHADOW CLASS
+        return targetClass
+    name = targetClass.__name__ + '_' + obj._persistent_id.split('.')[-1]
+    exec 'class %s(targetClass):\n    __reduce__ = shadow_reducer' % name
+    shadowClass = locals()[name] # SUBCLASS OF targetClass
+    shadowClass._shadowParent = targetClass # NEED TO KNOW ORIGINAL CLASS
+    setattr(obj,classattr,shadowClass) # SHADOW CLASS REPLACES ORIGINAL
+    return shadowClass
 
 def methodFactory(methodList,methodStr,localDict):
     for methodName in methodList:
