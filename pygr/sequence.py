@@ -728,7 +728,9 @@ class Seq2SeqEdge(object):
                     besthit=(segment[j][0],segment[i][0]+segment[i][2],
                              segment[j][1],segment[i][1]+segment[i][2],ni+nm)
                 nm+=segment[j][3]
-        if besthit[4]>=minAlignSize:
+        if besthit is None:
+            return None
+        elif besthit[4]>=minAlignSize:
             return besthit[:4]
         else:
             return None
