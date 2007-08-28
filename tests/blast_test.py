@@ -80,6 +80,7 @@ class Blast_Suite(unittest.TestCase):
 		from pygr import sequence
 		stored = PygrDataTextFile('results/seqdb1.pickle','r')
 		old_result = stored['sp_allvall']
+		min_ID = 0.5
 		
 		msa=cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
 		sp=seqdb.BlastDB('sp_hbb1') # OPEN SWISSPROT DATABASE
@@ -88,23 +89,27 @@ class Blast_Suite(unittest.TestCase):
 		msa.build(saveSeqDict=True) # DONE CONSTRUCTING THE ALIGNMENT, SO BUILD THE ALIGNMENT DB INDEXES
 
 		db = msa.seqDict.dicts.keys()[0]
-		result = []
+		result = {}
 		for k in db.values():
-			#edges = msa[k].edges(minAlignSize=12,pIdentityMin=0.5)
-			edges = msa[k].edges(minAlignSize=12)
+			edges = msa[k].edges(minAlignSize=12,pIdentityMin=min_ID)
 			for t in edges:
 				assert len(t[0]) >= 12
-			result.append([(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges])
+			result[repr(k)] = [(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges]
+			result[repr(k)].sort()
 
-		result.sort()
+		assert sorted(result.keys()) == sorted(old_result.keys())
 
-		for i in range(len(result)):
-			for j in range(len(result[i])):
-				src, dest, identity = result[i][j]
-				old_src, old_dest, old_identity = old_result[i][j]
+		for k in result:
+			l = result[k]
+			l2 = old_result[k]
+			assert len(l) == len(l2)
+			for i in range(len(l)):
+				src, dest, identity = l[i]
+				old_src, old_dest, old_identity = l2[i]
 				assert (src, dest) == (old_src, old_dest)
 				assert identity - old_identity < .0001
-			
+				assert identity >= min_ID
+
 
 def all_v_all_blast_save():
  	from pygr import cnestedlist,seqdb
@@ -116,18 +121,18 @@ def all_v_all_blast_save():
  	msa.build(saveSeqDict=True) # DONE CONSTRUCTING THE ALIGNMENT, SO BUILD THE ALIGNMENT DB INDEXES
 
 	db = msa.seqDict.dicts.keys()[0]
-	result = []
+	result = {}
 	for k in db.values():
-		edges = msa[k].edges(minAlignSize=12)
+		edges = msa[k].edges(minAlignSize=12, pIdentityMin=0.5)
 		for t in edges:
 			assert len(t[0]) >= 12
-		result.append([(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges])
+		result[repr(k)] = [(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges]
+		result[repr(k)].sort()
 
-	result.sort()
 	working['sp_allvall'] = result
 
  	return msa
 		
 
 if __name__ == '__main__':
-	all_v_all_blast_save()
+	a=all_v_all_blast_save()
