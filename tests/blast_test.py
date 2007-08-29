@@ -78,7 +78,7 @@ class Blast_Suite(unittest.TestCase):
 	def all_v_all_blast_test(self):
 		from pygr import cnestedlist,seqdb
 		from pygr import sequence
-		stored = PygrDataTextFile('results/seqdb1.pickle','r')
+		stored = PygrDataTextFile('results/seqdb2.pickle','r')
 		old_result = stored['sp_allvall']
 		min_ID = 0.5
 		
@@ -114,7 +114,7 @@ class Blast_Suite(unittest.TestCase):
 
 def all_v_all_blast_save():
  	from pygr import cnestedlist,seqdb
-	working = PygrDataTextFile('results/seqdb1.pickle','w')
+	working = PygrDataTextFile('results/seqdb2.pickle','w')
  	msa=cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
  	sp=seqdb.BlastDB('sp_hbb1') # OPEN SWISSPROT DATABASE
  	for id,s in sp.iteritems(): # FOR EVERY SEQUENCE IN SWISSPROT
