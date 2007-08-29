@@ -94,7 +94,8 @@ class Blast_Suite(unittest.TestCase):
 			edges = msa[k].edges(minAlignSize=12,pIdentityMin=min_ID)
 			for t in edges:
 				assert len(t[0]) >= 12
-			result[repr(k)] = [(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges]
+			tmpdict = dict(map(lambda x:(x, None), [(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges]))
+			result[repr(k)] = tmpdict.keys()
 			result[repr(k)].sort()
 
 		assert sorted(result.keys()) == sorted(old_result.keys())
@@ -126,10 +127,12 @@ def all_v_all_blast_save():
 		edges = msa[k].edges(minAlignSize=12, pIdentityMin=0.5)
 		for t in edges:
 			assert len(t[0]) >= 12
-		result[repr(k)] = [(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges]
+		tmpdict = dict(map(lambda x:(x, None), [(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges]))
+		result[repr(k)] = tmpdict.keys()
 		result[repr(k)].sort()
 
 	working['sp_allvall'] = result
+	working.save()
 
  	return msa
 		
