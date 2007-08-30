@@ -519,8 +519,6 @@ cdef class NLMSASlice:
             continue
           im2=it2.im_buf # ARRAY FROM THIS ITERATOR
           for j from 0 <= j < it2.nhit: # MAP EACH INTERVAL BACK TO ns
-            if im2[j].target_id==id: # DISCARD SELF-MATCH
-              continue
             if it.im_buf[i].target_start>im2[j].start: # GET INTERSECTION INTERVAL
               start_max=it.im_buf[i].target_start
             else:
@@ -533,7 +531,8 @@ cdef class NLMSASlice:
             istop=it.im_buf[i].start+end_min-it.im_buf[i].target_start
             start2=im2[j].target_start+start_max-im2[j].start # COORDS IN TARGET
             stop2=im2[j].target_start+end_min-im2[j].start
-            it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
+            if im2[j].target_id!=id or istart!=start2: # DISCARD SELF-MATCH
+              it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
             assert ns_lpo.id!=im2[j].target_id
 
     if it.nhit<=0:
@@ -1638,15 +1637,23 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
     self.__iadd__(ival) # ADD SEQ AS A NODE IN OUR ALIGNMENT
     self[ival].__iadd__(a) # ADD ALIGNMENT BETWEEN ival AND ANNOTATION
 
-  cdef void seqname_alloc(self,SeqNameID_T *seqnames,int lpo_id):
-    seqnames[0].p=<char *>malloc(32)
-    strcpy(seqnames[0].p,"NLMSA_LPO_Internal")
-    seqnames[0].id=lpo_id
+  cdef void free_seqidmap(self,int nseq0,SeqIDMap *seqidmap):
+    cdef int i
+    for i from 0 <= i <nseq0: # DUMP STRING STORAGE FOR SEQUENCE IDENTIFIERS
+      free(seqidmap[i].id)
+    free(seqidmap) # WE CAN NOW FREE THE SEQUENCE LOOKUP ARRAY
+
+  cdef void save_nbuild(self,int nbuild[]):
+    cdef NLMSASequence ns
+    for ns in self.seqlist: # SAVE INTERVAL COUNTS BACK TO EACH SEQUENCE
+      if not ns.is_lpo: # SAVE INTERVAL COUNTS BACK TO REGULAR SEQUENCES
+        ns.nbuild=nbuild[ns.id]
+##       print 'nbuild[%d]' % i,ns.nbuild
+  
 
   def readMAFfiles(self,mafFiles,maxint):
     'read alignment from a set of MAF files'
     cdef int i,j,nseq0,nseq1,n,nseq,block_len
-    cdef SeqNameID_T seqnames[4096]
     cdef SeqIDMap *seqidmap
     cdef char tmp[32768],*p,a_header[4]
     cdef FILE *ifile
@@ -1658,7 +1665,6 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
 
     ns_lpo=self.seqlist[self.lpo_id] # OUR INITIAL LPO
     self.use_virtual_lpo=0 # WE ARE USING A REAL LPO!
-    self.seqname_alloc(seqnames,ns_lpo.id)
     nseq=1
     nseq0=1
     nseq1=1
@@ -1681,8 +1687,12 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
       print 'Processing MAF file:',filename
       ifile=fopen(filename,'r')
       if ifile==NULL:
+        self.free_seqidmap(nseq0,seqidmap)
+        self.save_nbuild(nbuild)
         raise IOError('unable to open file %s' % filename)
       if fgets(tmp,32767,ifile)==NULL or strncmp(tmp,"##maf",4):
+        self.free_seqidmap(nseq0,seqidmap)
+        self.save_nbuild(nbuild)
         raise IOError('%s: not a MAF file? Bad format.' % filename)
       p=fgets(tmp,32767,ifile) # READ THE FIRST LINE OF THE MAF FILE
       while p: # GOT ANOTHER LINE TO PROCESS
@@ -1690,6 +1700,8 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
           n=readMAFrecord(im,0,seqidmap,nseq0,ns_lpo.length, # READ ONE MAF BLOCK
                           &block_len,ifile,4096,linecode_count,&has_continuation)
           if n<0: # UNRECOVERABLE ERROR OCCURRED...
+            self.free_seqidmap(nseq0,seqidmap)
+            self.save_nbuild(nbuild)
             raise ValueError('MAF block too long!  Increase max size')
           elif n==0:
             continue
@@ -1748,13 +1760,8 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
       if seqidmap[i].nlmsa_id>0: # ALIGNED, SO RECORD IT
         self.seqs.saveSeq(seqidmap[i].id,seqidmap[i].ns_id,seqidmap[i].offset,
                           seqidmap[i].nlmsa_id)
-    for i from 0 <= i <nseq0: # DUMP STRING STORAGE FOR SEQUENCE IDENTIFIERS
-      free(seqidmap[i].id)
-    free(seqidmap) # WE CAN NOW FREE THE SEQUENCE LOOKUP ARRAY
-    for ns in self.seqlist: # SAVE INTERVAL COUNTS BACK TO EACH SEQUENCE
-      if not ns.is_lpo: # SAVE INTERVAL COUNTS BACK TO REGULAR SEQUENCES
-        ns.nbuild=nbuild[ns.id]
-##       print 'nbuild[%d]' % i,ns.nbuild
+    self.free_seqidmap(nseq0,seqidmap)
+    self.save_nbuild(nbuild)
     self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
 
     
