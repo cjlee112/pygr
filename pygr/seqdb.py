@@ -702,8 +702,9 @@ class BlastDBbase(SeqDBbase):
                 import sys
                 print >>sys.stderr,'''
 WARNING: your query sequence is part of this database.  Pygr alignments
-normally do not report self-matches, i.e. the alignment of a sequence to
-itself, so only homologies to OTHER sequences in the database will be
+normally do not report self-matches, i.e. the alignment of a sequence interval
+to itself, so only homologies to OTHER sequences in the database
+(or other intervals of the query sequence, if they are homologous) will be
 reported (or an empty query result if no such homologies are found).
 To report ALL homologies, including the self-match, simply create a new
 sequence object and use that as your query, e.g.
@@ -960,6 +961,11 @@ class AnnotationDB(dict):
         except KeyError:
             pass
         return self.sliceAnnotation(k,self.sliceDB[k])
+    def __setitem__(self,k,v):
+        raise KeyError('''you cannot save annotations directly using annoDB[k] = v
+Instead, use annoDB.new_annotation(k,sliceInfo) where sliceInfo provides
+a sequence ID, start, stop (and any additional info desired), and will be
+saved directly to the sliceDB.''')
     def getSliceAttr(self,sliceInfo,attr):
         try:
             k = self.sliceAttrDict[attr] # USE ALIAS IF PROVIDED
@@ -982,7 +988,16 @@ class AnnotationDB(dict):
             raise IndexError('annotation %s has zero or negative length [%s:%s]!'
                              %(k,start,stop))
         a = self.itemClass(k,self,self.seqDB[self.getSliceAttr(sliceInfo,'id')],start,stop)
-        self[k] = a # CACHE THIS IN OUR DICT
+        dict.__setitem__(self,k,a) # CACHE THIS IN OUR DICT
+        return a
+    def new_annotation(self,k,sliceInfo):
+        'save sliceInfo to the annotation database and return annotation object'
+        a = self.sliceAnnotation(k,sliceInfo) # 1st CHECK IT GIVES A VALID ANNOTATION
+        try:
+            self.sliceDB[k] = sliceInfo # NOW SAVE IT TO THE SLICE DATABASE
+        except:
+            dict.__del__(self,k) # DELETE FROM CACHE
+            raise
         return a
     def foreignKey(self,attr,k):
         'iterate over items matching specified foreign key'
