@@ -251,7 +251,7 @@ class BuildMSASlice(object):
                         ns[target]=(self.id,src.start,src.stop) # SAVE LPO --> SRC
             else: # BOTH SRC AND TARGET ARE NORMAL SEQS.  use_virtual_lpo!!
                 self.ns.nlmsaLetters.__iadd__(targetIval)
-                self.ns.nlmsaLetters.initVirtualLPO()
+                self.ns.nlmsaLetters.init_pairwise_mode(verbose=True)
                 ns_lpo=self.ns.nlmsaLetters.seqlist[self.ns.id -1] # OUR VIRTUAL LPO
                 ns_lpo[self.offsetSlice(self.seq)]=self.ns.nlmsaLetters.seqs \
                      .getIDcoords(targetIval) # SAVE SRC --> TARGET
