@@ -926,20 +926,19 @@ class AnnotationDB(dict):
     def __init__(self,sliceDB,seqDB,annotationType=None,itemClass=AnnotationSeq,
                  itemSliceClass=AnnotationSlice,
                  itemAttrDict=None, # GET RID OF THIS BACKWARDS-COMPATIBILITY KLUGE!!
-                 sliceAttrDict={},**kwargs):
+                 sliceAttrDict=None,**kwargs):
         '''sliceDB must map identifier to a sliceInfo object;
         sliceInfo must have name,start,stop,ori attributes;
         seqDB must map sequence ID to a sliceable sequence object;
         sliceAttrDict gives optional dict of item attributes that
         should be mapped to sliceDB item attributes.'''
         dict.__init__(self)
+        if sliceAttrDict is None:
+            sliceAttrDict = {}
         if sliceDB is not None:
             self.sliceDB = sliceDB
         else: # NEED TO CREATE / OPEN A DATABASE FOR THE USER
             self.sliceDB = classutil.get_shelve_or_dict(**kwargs)
-            sliceAttrDict['id'] = 0 # USE TUPLE AS OUR INTERNAL STANDARD FORMAT
-            sliceAttrDict['start'] = 1
-            sliceAttrDict['stop'] = 2
         self.seqDB = seqDB
         self.annotationType = annotationType
         self.itemClass=itemClass
@@ -996,8 +995,9 @@ saved directly to the sliceDB.''')
         try:
             self.sliceDB[k] = sliceInfo # NOW SAVE IT TO THE SLICE DATABASE
         except:
-            dict.__del__(self,k) # DELETE FROM CACHE
+            dict.__delitem__(self,k) # DELETE FROM CACHE
             raise
+        self._wroteSliceDB = True
         return a
     def foreignKey(self,attr,k):
         'iterate over items matching specified foreign key'
@@ -1020,6 +1020,13 @@ saved directly to the sliceDB.''')
                      autoIncrement=False,maxAnnot=999999,
                      maxLoss=None,sliceInfo=None,**kwargs):
         'find homology in our seq db and add as annotations'
+        try: # ENSURE THAT sliceAttrDict COMPATIBLE WITH OUR TUPLE FORMAT
+            if self.sliceAttrDict['id'] != 0:
+                raise KeyError
+        except KeyError:
+            sliceAttrDict['id'] = 0 # USE TUPLE AS OUR INTERNAL STANDARD FORMAT
+            sliceAttrDict['start'] = 1
+            sliceAttrDict['stop'] = 2
         if autoIncrement:
             id = len(self.sliceDB)
         elif id is None:
@@ -1045,11 +1052,10 @@ saved directly to the sliceDB.''')
                     k = idFormat %(id,i)
                 i += 1
             if sliceInfo is not None: # SAVE SLICE AS TUPLE WITH INFO
-                self.sliceDB[k] = (ival.id,ival.start,ival.stop)+sliceInfo
+                a = self.new_annotation(k, (ival.id,ival.start,ival.stop)+sliceInfo)
             else:
-                self.sliceDB[k] = (ival.id,ival.start,ival.stop)
-            self._wroteSliceDB = True
-            out.append(self[k]) # GET THE ANNOTATION
+                a = self.new_annotation(k, (ival.id,ival.start,ival.stop))
+            out.append(a) # RETURN THE ANNOTATION
         return out
     def close(self):
         'if sliceDB needs to be closed, do it and return True, otherwise False'
@@ -1467,7 +1473,19 @@ class SeqPrefixUnionDict(PrefixUnionDict):
         try: # USE LAST FIELD OF ITS persistent_id
             id=db._persistent_id.split('.')[-1]
         except AttributeError:
-            id='noname%d'%len(self.dicts) # CREATE AN ARBITRARY UNIQUE ID
+            try: # TRY TO GET THE NAME FROM filepath ATTRIBUTE
+                id = os.path.basename(db.filepath).split('.')[0]
+                if id in self.prefixDict:
+                    raise ValueError('''
+It appears that two different sequence databases are being
+assigned the same prefix ("%s", based on the filepath)!
+For this reason, the attempted automatic construction of
+a PrefixUnionDict for you cannot be completed!
+You should instead construct a PrefixUnionDict that assigns
+a unique prefix to each sequence database, and supply it
+directly as the seqDict argument to the NLMSA constructor.''' % id)
+            except AttributeError:
+                id = 'noname%d'%len(self.dicts) # CREATE AN ARBITRARY UNIQUE ID
         self.prefixDict[id]=db
         self.dicts[db]=id
         return self # IADD MUST RETURN SELF!
