@@ -171,6 +171,9 @@ cdef class NLMSA:
 
   cdef void free_seqidmap(self,int nseq0,SeqIDMap *seqidmap)
   cdef void save_nbuild(self,int nbuild[])
+  cdef NLMSASequence add_seqidmap_to_union(self,int j,SeqIDMap seqidmap[],
+                                           NLMSASequence ns,FILE *build_ifile[],
+                                           int nbuild[])
 
 cdef class NLMSASequence:
   cdef readonly int id,length,nbuild,is_lpo,is_union
