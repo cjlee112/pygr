@@ -1,4 +1,5 @@
 import cnestedlist
+from nlmsa_utils import EmptySliceError,EmptySlice
 import sequence
 
 class NLMSAServer(cnestedlist.NLMSA):
@@ -11,6 +12,8 @@ class NLMSAServer(cnestedlist.NLMSA):
         ival=sequence.absoluteSlice(seq,start,stop) # GET THE INTERVAL
 	try:
 	    myslice=self[ival] # DO THE QUERY
+        except EmptySliceError:
+            return 'EMPTY'
         except KeyError:
             return ''  # FAILURE CODE
         ivals=myslice.rawIvals() # GET RAW INTERVAL DATA
@@ -47,13 +50,18 @@ class NLMSAClient(cnestedlist.NLMSA):
         result=self.server.getSlice(self.seqs.getSeqID(seq),seq.start,seq.stop)
         if result=='':
             raise KeyError('this interval is not aligned!')
+        elif result == 'EMPTY':
+            raise EmptySliceError
         id,l,d=result
         for nlmsaID,(seqID,nsID) in d: # SAVE SEQ INFO TO INDEX
             self.seqs.saveSeq(seqID,nsID,0,nlmsaID)
         return id,l # HAND BACK THE RAW INTEGER INTERVAL DATA
     def __getitem__(self,k):
         'directly call slice without any ID lookup -- will be done server-side'
-        return cnestedlist.NLMSASlice(self.seqlist[0],k.start,k.stop,-1,-1,k)
+        try:
+            return cnestedlist.NLMSASlice(self.seqlist[0],k.start,k.stop,-1,-1,k)
+        except EmptySliceError:
+            return EmptySlice(k)
     def __getstate__(self):
         return dict(url=self.url,name=self.name,seqDict=self.seqDict)
 
