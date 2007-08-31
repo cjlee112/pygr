@@ -401,7 +401,7 @@ def read_interval_alignment(ofile,srcSet,destSet,al=None,edgeClass=None):
     if al is None:
         try:
             import cnestedlist
-            al=cnestedlist.NLMSA('blasthits','memory',use_virtual_lpo=True)
+            al=cnestedlist.NLMSA('blasthits','memory',pairwiseMode=True)
             edgeClass=None
             needToBuild=True
         except ImportError:

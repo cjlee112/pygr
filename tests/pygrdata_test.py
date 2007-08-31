@@ -29,7 +29,7 @@ class PygrSwissprotBase(object):
         exon = annoDB[1]
         from pygr import cnestedlist
         filename = tmp.subfile('exonAnnot')
-        nlmsa = cnestedlist.NLMSA(filename,'w',use_virtual_lpo=True,bidirectional=False)
+        nlmsa = cnestedlist.NLMSA(filename,'w',pairwiseMode=True,bidirectional=False)
         nlmsa.addAnnotation(exon)
         nlmsa.build()
         annoDB.__doc__ = 'a little annotation db'
@@ -60,7 +60,7 @@ class DNAAnnotation_Test(object):
         annoDB.__doc__ = 'trivial annotation'
         pygr.Data.Bio.Test.annoDB = annoDB
         from pygr import cnestedlist
-        nlmsa = cnestedlist.NLMSA('tryannot','w',use_virtual_lpo=True,bidirectional=False)
+        nlmsa = cnestedlist.NLMSA('tryannot','w',pairwiseMode=True,bidirectional=False)
         for annID in annoDB:
             nlmsa.addAnnotation(annoDB[annID])
         nlmsa.build()
