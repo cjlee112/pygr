@@ -1587,6 +1587,9 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
     'create a new nestedlist index for sequence seq'
     cdef NLMSASequence ns
     id=self.seqlist.nextID() # USE ITS INDEX AS UNIQUE ID FOR THIS SEQUENCE
+    if self.pairwiseMode==1 and is_union and id>1: # NEED A VIRTUAL_LPO FOR THIS UNION
+      self.newSequence() # CREATE AN LPO
+      id=self.seqlist.nextID() # NOW GET ID FOR THE UNION
     filestem=self.pathstem+str(id)
     if self.in_memory_mode:
       mode='memory'
@@ -1698,9 +1701,6 @@ See the NLMSA documentation for more details.\n''')
 
     ns_lpo=self.seqlist[self.lpo_id] # OUR INITIAL LPO
     self.pairwiseMode=0 # WE ARE USING A REAL LPO!
-    nseq=1
-    nseq0=1
-    nseq1=1
     memset(<void *>linecode_count,0,sizeof(linecode_count))
     has_continuation=0
 
@@ -1789,6 +1789,114 @@ See the NLMSA documentation for more details.\n''')
       if linecode_count[i]>0:
         print "warning: non-alignment text lines ignored: prefix %s, count %d" \
               % (chr(i),linecode_count[i])
+    for i from 0 <= i <nseq0: # INDEX SEQUENCES THAT WERE ALIGNED
+      if seqidmap[i].nlmsa_id>0: # ALIGNED, SO RECORD IT
+        self.seqs.saveSeq(seqidmap[i].id,seqidmap[i].ns_id,seqidmap[i].offset,
+                          seqidmap[i].nlmsa_id)
+    self.free_seqidmap(nseq0,seqidmap)
+    self.save_nbuild(nbuild)
+    self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
+
+  cdef NLMSASequence add_seqidmap_to_union(self,int j,SeqIDMap seqidmap[],
+                                           NLMSASequence ns,FILE *build_ifile[],
+                                           int nbuild[]):
+    if ns is None or self.maxlen-ns.length<=seqidmap[j].length:
+      ns=self.newSequence(None,is_union=1) # CREATE NEW UNION TO HOLD IT
+      build_ifile[ns.id]=ns.build_ifile # KEEP PTR SO WE CAN WRITE DIRECTLY!
+      nbuild[ns.id]=0
+    seqidmap[j].ns_id=ns.id # SET IDs TO ADD THIS SEQ TO THE UNION
+    seqidmap[j].nlmsa_id=self.inlmsa
+    seqidmap[j].offset=ns.length
+    self.inlmsa=self.inlmsa+1 # ADVANCE SEQUENCE ID COUNTER
+    ns.length=ns.length+seqidmap[j].length # EXPAND UNION SIZE
+    return ns
+
+  def readAxtNet(self,axtFiles,prefix_fun):
+    'read alignment from a set of axtnet files'
+    cdef int i,j,nseq0,n,isrc
+    cdef SeqIDMap *seqidmap
+    cdef char tmp[32768],*p,comment[4],src_prefix[64],dest_prefix[64]
+    cdef FILE *ifile
+    cdef IntervalMap im[4096],im_tmp
+    cdef NLMSASequence ns_src,ns # SOURCE UNION VS DEST UNION
+    cdef FILE *build_ifile[4096]
+    cdef int nbuild[4096],has_continuation
+
+    self.pairwiseMode = 1 # WE ARE USING pairwiseMode
+    has_continuation=0
+
+    nseq0=len(self.seqDict) # GET TOTAL #SEQUENCES IN ALL DATABASES
+    seqidmap=<SeqIDMap *>calloc(nseq0,sizeof(SeqIDMap)) # ALLOCATE ARRAY
+    i=0
+    for pythonStr,j in self.seqDict.iteritemlen():
+      seqidmap[i].id=strdup(pythonStr)
+      seqidmap[i].length=j
+      i=i+1
+    qsort(seqidmap,nseq0,sizeof(SeqIDMap),seqidmap_qsort_cmp) # SORT BY id
+    ns_src = ns = None
+
+    im_tmp.sublist= -1 # DEFAULT
+    strcpy(comment,"#") # MAKE C STRING 
+    for filename in axtFiles:
+      print 'Processing axtnet file:',filename
+      t = prefix_fun(filename) # CALL PYTHON FUNCTION TO OBTAIN PREFIXES
+      strcpy(src_prefix,t[0]) # KEEP THEM IN STATIC C STRINGS FOR SPEED
+      strcpy(dest_prefix,t[1])
+      ifile=fopen(filename,'r')
+      if ifile==NULL:
+        self.free_seqidmap(nseq0,seqidmap)
+        self.save_nbuild(nbuild)
+        raise IOError('unable to open file %s' % filename)
+      if fgets(tmp,32767,ifile)==NULL or strncmp(tmp,"##maf",4):
+        self.free_seqidmap(nseq0,seqidmap)
+        self.save_nbuild(nbuild)
+        raise IOError('%s: not a MAF file? Bad format.' % filename)
+      p=fgets(tmp,32767,ifile) # READ THE FIRST LINE OF THE MAF FILE
+      while p: # GOT ANOTHER LINE TO PROCESS
+        if has_continuation and strncmp(tmp,comment,1): # READ ALIGNMENT LINE
+          #n=read_axtnet(im,0,seqidmap,nseq0, # READ ONE AXTNET BLOCK
+          #              ifile,&has_continuation,&isrc,src_prefix,dest_prefix)
+          if n<0: # UNRECOVERABLE ERROR OCCURRED...
+            self.free_seqidmap(nseq0,seqidmap)
+            self.save_nbuild(nbuild)
+            raise ValueError('MAF block too long!  Increase max size')
+          elif n==0:
+            continue
+
+          if seqidmap[isrc].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
+            ns_src = self.add_seqidmap_to_union(isrc,seqidmap,ns_src,build_ifile,nbuild)
+
+          for i from 0 <= i < n: # SAVE EACH INTERVAL IN SRC -> DEST MAP
+            j=im[i].target_id
+            if seqidmap[j].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
+              ns = self.add_seqidmap_to_union(j,seqidmap,ns,build_ifile,nbuild)
+            im[i].target_id = seqidmap[j].nlmsa_id # USE THE CORRECT ID
+            if im[i].target_start<0: # OFFSET REVERSE ORI
+              im_tmp.start = -seqidmap[j].offset+im[i].target_start
+              im_tmp.end = -seqidmap[j].offset+im[i].target_end
+            else: # OFFSET FORWARD ORI
+              im_tmp.start = seqidmap[j].offset+im[i].target_start
+              im_tmp.end = seqidmap[j].offset+im[i].target_end
+            im_tmp.target_id = seqidmap[isrc].nlmsa_id
+            im_tmp.target_start = im[i].start
+            im_tmp.target_end = im[i].end
+            #print 'Saving interval to union',seqidmap[j].id,seqidmap[j].ns_id
+            j=seqidmap[j].ns_id # USE NLMSA ID OF THE UNION
+            ns_src.saveInterval(&im_tmp,1,0,build_ifile[j]) # SAVE DEST -> SRC
+            nbuild[j]=nbuild[j]+1
+            if im[i].start<0: # OFFSET FORWARD ORI
+              im[i].start = -seqidmap[isrc].offset+im[i].start
+              im[i].end = -seqidmap[isrc].offset+im[i].end
+            else: # OFFSET FORWARD ORI
+              im[i].start = seqidmap[isrc].offset+im[i].start
+              im[i].end = seqidmap[isrc].offset+im[i].end
+
+          ns_src.saveInterval(im,n,1,ns_src.build_ifile) # SAVE SRC -> DEST
+          ns_src.nbuild=ns_src.nbuild+n # INCREMENT COUNT OF SAVED INTERVALS
+        if not has_continuation:
+          p=fgets(tmp,32767,ifile) # TRY TO READ ANOTHER LINE...
+      fclose(ifile) # CLOSE THIS AXTNET FILE
+
     for i from 0 <= i <nseq0: # INDEX SEQUENCES THAT WERE ALIGNED
       if seqidmap[i].nlmsa_id>0: # ALIGNED, SO RECORD IT
         self.seqs.saveSeq(seqidmap[i].id,seqidmap[i].ns_id,seqidmap[i].offset,
