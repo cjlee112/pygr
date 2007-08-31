@@ -94,7 +94,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                sliceAttrDict = dict(id = 0, exon_id = 1, orientation = 2,
                                                   gene_id = 3, start = 4, stop = 5))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'refGene_exonAnnot_dm2'), 'w', \
-            use_virtual_lpo = True, bidirectional = False)
+            pairwiseMode = True, bidirectional = False)
         #for lines in open('refGene_exonAnnot_dm2.txt', 'r').xreadlines():
         for lines in open('refGene_exonAnnot_chrYh_dm2.txt', 'r').xreadlines():
             row = [x for x in lines.split('\t')] # CONVERT TO LIST SO MUTABLE
@@ -119,7 +119,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                sliceAttrDict = dict(id = 0, splice_id = 1, orientation = 2,
                                                   gene_id = 3, start = 4, stop = 5))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'refGene_spliceAnnot_dm2'), 'w', \
-            use_virtual_lpo = True, bidirectional = False)
+            pairwiseMode = True, bidirectional = False)
         #for lines in open('refGene_spliceAnnot_dm2.txt', 'r').xreadlines():
         for lines in open('refGene_spliceAnnot_chrYh_dm2.txt', 'r').xreadlines():
             row = [x for x in lines.split('\t')] # CONVERT TO LIST SO MUTABLE
@@ -144,7 +144,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                sliceAttrDict = dict(id = 0, ucsc_id = 1, orientation = 2,
                                                   gene_id = 3, start = 4, stop = 5))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'phastConsElements15way_dm2'), 'w', \
-            use_virtual_lpo = True, bidirectional = False)
+            pairwiseMode = True, bidirectional = False)
         #for lines in open('phastConsElements15way_dm2.txt', 'r').xreadlines():
         for lines in open('phastConsElements15way_chrYh_dm2.txt', 'r').xreadlines():
             row = [x for x in lines.split('\t')] # CONVERT TO LIST SO MUTABLE
@@ -310,7 +310,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         exon_db = seqdb.AnnotationDB(exon_slices, dm2, sliceAttrDict = dict(id = 'chromosome', \
             gene_id = 'name', exon_id = 'exon_id'))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'refGene_exonAnnot_SQL_dm2'), 'w', \
-            use_virtual_lpo = True, bidirectional = False)
+            pairwiseMode = True, bidirectional = False)
         for id in exon_db:
             msa.addAnnotation(exon_db[id])
             exon_db.clear()
@@ -331,7 +331,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         splice_db = seqdb.AnnotationDB(splice_slices, dm2, sliceAttrDict = dict(id = 'chromosome', \
             gene_id = 'name', splice_id = 'splice_id'))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'refGene_spliceAnnot_SQL_dm2'), 'w', \
-            use_virtual_lpo = True, bidirectional = False)
+            pairwiseMode = True, bidirectional = False)
         for id in splice_db:
             msa.addAnnotation(splice_db[id])
             splice_db.clear()
@@ -352,7 +352,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         ucsc_db = seqdb.AnnotationDB(ucsc_slices, dm2, sliceAttrDict = dict(id = 'chromosome', \
             gene_id = 'name', ucsc_id = 'ucsc_id'))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'phastConsElements15way_SQL_dm2'), 'w', \
-            use_virtual_lpo = True, bidirectional = False)
+            pairwiseMode = True, bidirectional = False)
         for id in ucsc_db:
             msa.addAnnotation(ucsc_db[id])
             ucsc_db.clear()
