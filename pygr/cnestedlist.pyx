@@ -480,7 +480,7 @@ cdef class NLMSASlice:
       it2=None
       if start<0: # NEED TO TRANSLATE OFFSETS TO MINUS ORIENTATION
         offset= -offset
-      if ns.nlmsaLetters.use_virtual_lpo==1: # TRANSLATE SEQ DIRECTLY TO LPO
+      if ns.nlmsaLetters.pairwiseMode==1: # TRANSLATE SEQ DIRECTLY TO LPO
         it=IntervalFileDBIterator(start,stop,rawIvals=((start,stop,ns.id-1,
                                                         start+offset,stop+offset),))
         n=1 # JUST THE SINGLE IDENTITY MAPPING FROM SEQ TO LPO
@@ -1422,7 +1422,7 @@ cdef class NLMSASequence:
     # CHECK FOR OVERFLOW... CREATE A NEW UNION IF NEEDED
     seq=seq.pathForward # GET THE ENTIRE SEQUENCE
     if self.length+len(seq)>self.nlmsaLetters.maxlen: # TOO BIG!
-      if self.nlmsaLetters.use_virtual_lpo: # NEED TO CREATE CORRESPONDING LPO
+      if self.nlmsaLetters.pairwiseMode: # NEED TO CREATE CORRESPONDING LPO
         ns=self.nlmsaLetters.newSequence(None) # CREATE NEW LPO
       ns=self.nlmsaLetters.newSequence(None,is_union=1) # NEW UNION
       ns.__iadd__(seq) # ADD seq TO BRAND-NEW UNION
@@ -1441,8 +1441,8 @@ cdef class NLMSA:
   'toplevel interface to NLMSA storage of an LPO alignment'
   def __init__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,
                maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666,
-               trypath=None,bidirectional=True,use_virtual_lpo= -1,
-               maxLPOcoord=None,**kwargs):
+               trypath=None,bidirectional=True,pairwiseMode= -1,
+               use_virtual_lpo=None,maxLPOcoord=None,**kwargs):
     try:
       import resource # WE MAY NEED TO OPEN A LOT OF FILES...
       resource.setrlimit(resource.RLIMIT_NOFILE,(maxOpenFiles,-1))
@@ -1463,17 +1463,19 @@ cdef class NLMSA:
       self.is_bidirectional=1
     else:
       self.is_bidirectional=0
-    if use_virtual_lpo is True:
-      self.use_virtual_lpo=1
-    elif use_virtual_lpo is False:
-      self.use_virtual_lpo=0
+    if use_virtual_lpo is not None: # DEPRECATED: MUST HAVE COME FROM PICKLE...
+      pairwiseMode = use_virtual_lpo # USE SETTING FROM PICKLE...
+    if pairwiseMode is True:
+      self.pairwiseMode=1
+    elif pairwiseMode is False:
+      self.pairwiseMode=0
     else:
-      self.use_virtual_lpo=use_virtual_lpo
+      self.pairwiseMode=pairwiseMode
     if maxLPOcoord is not None: # SIZE OF THE ENTIRE LPO COORD SYSTEM
       self.maxLPOcoord=maxLPOcoord
-      if self.use_virtual_lpo==1:
-        raise ValueError('maxLPOcoord and use_virtual_lpo options incompatible!')
-      self.use_virtual_lpo=0
+      if self.pairwiseMode==1:
+        raise ValueError('maxLPOcoord and pairwiseMode options incompatible!')
+      self.pairwiseMode=0
     else: # DEFAULT: RESTRICT USER TO A SINGLE LPO
       self.maxLPOcoord=self.maxlen
     if mode=='r': # OPEN FROM DISK FILES
@@ -1494,6 +1496,7 @@ cdef class NLMSA:
 %s.seqDictP or %s.seqDict
 and no seqDict provided as an argument''' % (pathstem,pathstem))
       self.read_indexes(self.seqDict)
+      self.read_attrs()
     elif mode=='w': # WRITE TO DISK FILES
       self.do_build=1
       self.lpo_id=0
@@ -1524,35 +1527,54 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
   def __getstate__(self):
     if self.in_memory_mode:
       raise ValueError("can't pickle NLMSA.in_memory_mode")
-    return dict(pathstem=self.pathstem,seqDict=self.seqDict,
-                bidirectional=self.is_bidirectional,
-                use_virtual_lpo=self.use_virtual_lpo)
+    return dict(pathstem=self.pathstem,seqDict=self.seqDict)
   def __setstate__(self,state):
     self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
 
   def read_indexes(self,seqDict):
     'open all nestedlist indexes in this LPO database for immediate use'
     cdef NLMSASequence ns
-    ifile=file(self.pathstem+'NLMSAindex')
-    for line in ifile:
-      id,name,is_union,length=line.strip().split('\t')
-      id=int(id)
-      is_union=int(is_union)
-      if id!=len(self.seqlist):
-        raise IOError('corrupted NLMSAIndex???')
-      filestem=self.pathstem+str(id)
-      seq=None # DEFAULT: NO ACTUAL SEQUENCE ASSOCIATED WITH LPO OR UNION
-      if name=='NLMSA_LPO_Internal': # AN LPO REFERENCE
-        self.lpo_id=id
-      elif not is_union: # REGULAR SEQUENCE
-        try:
-          seq=seqDict[name]
-        except KeyError:
-          raise KeyError('unable to find sequence %s in seqDict!' % name)
-      # CREATE THE SEQ INTERFACE, BUT DELAY OPENING THE IntervalDBFile
-      ns=NLMSASequence(self,filestem,seq,'onDemand',is_union) # UNTIL NEEDED
-      ns.length=int(length) # SAVE STORED LENGTH
-      self.addToSeqlist(ns,seq)
+    try:
+      ifile=file(self.pathstem+'.NLMSAindex')
+    except IOError:
+      ifile=file(self.pathstem+'NLMSAindex') # FOR BACKWARDS COMPATIBILITY
+    try:
+      for line in ifile:
+        id,name,is_union,length=line.strip().split('\t')
+        id=int(id)
+        is_union=int(is_union)
+        if id!=len(self.seqlist):
+          raise IOError('corrupted NLMSAIndex???')
+        filestem=self.pathstem+str(id)
+        seq=None # DEFAULT: NO ACTUAL SEQUENCE ASSOCIATED WITH LPO OR UNION
+        if name=='NLMSA_LPO_Internal': # AN LPO REFERENCE
+          self.lpo_id=id
+        elif not is_union: # REGULAR SEQUENCE
+          try:
+            seq=seqDict[name]
+          except KeyError:
+            raise KeyError('unable to find sequence %s in seqDict!' % name)
+        # CREATE THE SEQ INTERFACE, BUT DELAY OPENING THE IntervalDBFile
+        ns=NLMSASequence(self,filestem,seq,'onDemand',is_union) # UNTIL NEEDED
+        ns.length=int(length) # SAVE STORED LENGTH
+        self.addToSeqlist(ns,seq)
+    finally:
+      ifile.close()
+  def read_attrs(self):
+    'read pickled attribute dictionary from file and apply to self'
+    import pickle
+    ifile = file(self.pathstem+'.attrDict')
+    try:
+      d = pickle.load(ifile)
+      for k,v in d.items():
+        if k=='is_bidirectional':
+          self.is_bidirectional = v
+        elif k=='pairwiseMode':
+          self.pairwiseMode = v
+        else:
+          setattr(self,k,v)
+    finally:
+      ifile.close()
   def addToSeqlist(self,NLMSASequence ns,seq=None):
     'add an NLMSASequence to our seqlist, and set its id'
     ns.id=self.seqlist.nextID()
@@ -1588,11 +1610,19 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
       ns=self.newSequence() # CREATE AN LPO
       ns.offset=offset # FORCE OUR DESIRED OFFSET... EVEN THOUGH ALL LPOs EMPTY
       offset=offset+self.maxlen
-  def initVirtualLPO(self):
+  def init_pairwise_mode(self,verbose=False):
     'turn on use of virtual LPO mapping (i.e. no actual LPO is present!)'
-    if self.use_virtual_lpo==0:
+    if self.pairwiseMode==0:
       raise ValueError('this alignment is already using an LPO!')
-    self.use_virtual_lpo=1 # TURN ON THE VIRTUAL LPO FEATURE
+    elif self.pairwiseMode!=1 and verbose: # NOT ALREADY SET TO PAIRWISE MODE
+      import sys
+      sys.stderr.write('''
+Because you are aligning a pair of sequence intervals,
+the pairwiseMode=True option is automatically being applied.
+To avoid this message in the future, pass the pairwiseMode=True
+option to the NLMSA constructor.
+See the NLMSA documentation for more details.\n''')
+    self.pairwiseMode=1 # TURN ON THE VIRTUAL LPO FEATURE
     
 
   def __setitem__(self,k,v): # THIS METHOD EXISTS ONLY FOR nlmsa[s1]+=s2
@@ -1664,7 +1694,7 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
     cdef long long linecode_count[256]
 
     ns_lpo=self.seqlist[self.lpo_id] # OUR INITIAL LPO
-    self.use_virtual_lpo=0 # WE ARE USING A REAL LPO!
+    self.pairwiseMode=0 # WE ARE USING A REAL LPO!
     nseq=1
     nseq0=1
     nseq1=1
@@ -1769,7 +1799,7 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
     'build nestedlist databases on-disk, and .seqDict index if desired'
     cdef NLMSASequence ns
     self.seqs.reopenReadOnly() # SAVE INDEXES AND OPEN READ-ONLY
-    ifile=file(self.pathstem+'NLMSAindex','w')
+    ifile=file(self.pathstem+'.NLMSAindex','w')
     for ns in self.seqlist: # BUILD EACH IntervalFileDB ONE BY ONE
       ns.buildFiles(**kwargs)
       if ns.is_lpo:
@@ -1779,7 +1809,13 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
       else:
         ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,ns.name,0,ns.length))
     ifile.close()
-    import sys
+    import sys,pickle
+    ifile = file(self.pathstem+'.attrDict','w')
+    try:
+      pickle.dump(dict(is_bidirectional=self.is_bidirectional,
+                       pairwiseMode=self.pairwiseMode),ifile)
+    finally:
+      ifile.close()
     sys.stderr.write('Index files saved.\n')
     if saveSeqDict:
       self.save_seq_dict()
@@ -1826,7 +1862,7 @@ To turn off this message, use the verbose=False option
 
 def dump_textfile(pathstem,outfilename=None):
   'dump NLMSA binary files to a text file'
-  cdef int n,nlmsaID,nsID,offset
+  cdef int n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode
   cdef FILE *outfile
   cdef char err_msg[2048],tmp[2048]
   err_msg[0]=0 # ENSURE STRING IS EMPTY
@@ -1834,73 +1870,108 @@ def dump_textfile(pathstem,outfilename=None):
   basestem=os.path.basename(pathstem) # GET RID OF PATH INFO
   if outfilename is None:
     outfilename=pathstem+'.txt' # DEFAULT TEXTFILE NAME
-  outfile=fopen(outfilename,"w")
-  if outfile==NULL:
-    raise IOError('unable to open file %s' %outfilename)
-  import shelve # NEED TO COPY THE WHOLE seqIDdict
+  import shelve,pickle # NEED TO COPY THE WHOLE seqIDdict
   seqIDdict=shelve.open(pathstem+'.seqIDdict','r')
   n=len(seqIDdict)
   strcpy(tmp,basestem) # COPY TO C STRING SO WE CAN fprintf
-  if fprintf(outfile,"PATHSTEM\t%s\t%d\n",tmp,n)<0:
-    raise IOError('error writing to file %s' %outfilename)
-  for id,t in seqIDdict.iteritems(): # SAVE seqIDdict
-    strcpy(tmp,id) # CONVERT TO C DATA TYPES FOR fprintf
-    nlmsaID=t[0]
-    nsID=t[1]
-    offset=t[2]
-    if fprintf(outfile,"SEQID\t%s\t%d\t%d\t%d\n",tmp,
-               nlmsaID,nsID,offset)<0:
+  ifile = file(basestem+'.attrDict')
+  try:
+    d = pickle.load(ifile)
+  finally:
+    ifile.close()
+  is_bidirectional = d.get('is_bidirectional',-1)
+  pairwiseMode = d.get('pairwiseMode',-1)
+  outfile=fopen(outfilename,"w")
+  if outfile==NULL:
+    raise IOError('unable to open file %s' %outfilename)
+  try:
+    if fprintf(outfile,"PATHSTEM\t%s\t%d\t%d\t%d\n",tmp,n,
+               is_bidirectional,pairwiseMode)<0:
       raise IOError('error writing to file %s' %outfilename)
-
-  ifile=file(pathstem+'NLMSAindex') # NOW SAVE THE NLMSA DATA
-  for line in ifile:
-    id,name,is_union,length=line.strip().split('\t')
-    strcpy(tmp,line) # COPY TO C STRING SO WE CAN fprintf
-    if fprintf(outfile,"NLMSASequence\t%s",tmp)<0:
-      raise IOError('error writing file %s'%outfilename)
-    mypath=pathstem+id
-    mybase=basestem+id
-    if save_text_file(mypath,mybase,err_msg,outfile)!=0:
-      raise IOError(err_msg)
-  fclose(outfile)
-  ifile.close()
+    for id,t in seqIDdict.iteritems(): # SAVE seqIDdict
+      strcpy(tmp,id) # CONVERT TO C DATA TYPES FOR fprintf
+      nlmsaID=t[0]
+      nsID=t[1]
+      offset=t[2]
+      if fprintf(outfile,"SEQID\t%s\t%d\t%d\t%d\n",tmp,
+                 nlmsaID,nsID,offset)<0:
+        raise IOError('error writing to file %s' %outfilename)
+    try:
+      ifile = file(pathstem+'.NLMSAindex') # NOW SAVE THE NLMSA DATA
+    except IOError:
+      ifile = file(pathstem+'NLMSAindex') # NOW SAVE THE NLMSA DATA
+  except:
+    fclose(outfile)
+    raise
+  try:
+    for line in ifile:
+      id,name,is_union,length=line.strip().split('\t')
+      strcpy(tmp,line) # COPY TO C STRING SO WE CAN fprintf
+      if fprintf(outfile,"NLMSASequence\t%s",tmp)<0:
+        raise IOError('error writing file %s'%outfilename)
+      mypath=pathstem+id
+      mybase=basestem+id
+      if save_text_file(mypath,mybase,err_msg,outfile)!=0:
+        raise IOError(err_msg)
+  finally:
+    fclose(outfile)
+    ifile.close()
 
 
 def textfile_to_binaries(filename):
   'convert pathstem.txt textfile to NLMSA binary files'
-  cdef int i,n,nlmsaID,nsID,offset
+  cdef int i,n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode
   cdef FILE *infile
   cdef char err_msg[2048],line[32768],tmp[2048],basestem[2048]
   err_msg[0]=0 # ENSURE STRING IS EMPTY
   infile=fopen(filename,"r")
   if infile==NULL:
     raise IOError('unable to open file %s' %filename)
-  if fgets(line,32767,infile)==NULL:
-    raise IOError('error or EOF reading %s'%filename)
-  if 2!=sscanf(line,"PATHSTEM\t%s\t%d",basestem,&n):
-    raise IOError('bad format in %s'%filename)
-
-  import shelve # CREATE THE seqIDdict
-  seqIDdict=shelve.open(basestem+'.seqIDdict','c')
-  IDdict=shelve.open(basestem+'.idDict','c')
-  for i from 0 <= i <n:
+  try:
     if fgets(line,32767,infile)==NULL:
       raise IOError('error or EOF reading %s'%filename)
-    if 4!=sscanf(line,"SEQID\t%s\t%d %d %d",tmp,
-                 &nlmsaID,&nsID,&offset):
+    is_bidirectional = -1 # INVALID INITIAL SETTING
+    pairwiseMode = -1 
+    if 2>sscanf(line,"PATHSTEM\t%s\t%d\t%d\t%d",basestem,&n,
+                &is_bidirectional,&pairwiseMode):
       raise IOError('bad format in %s'%filename)
-    seqIDdict[tmp]=(nlmsaID,nsID,offset) # SAVE THIS ENTRY
-    IDdict[str(nlmsaID)]=(tmp,nsID)
-  seqIDdict.close() # DONE WRITING THE seqIDdict
-  IDdict.close() # DONE WRITING THE seqIDdict
-    
-  ifile=file(basestem+'NLMSAindex',"w")
-  while fgets(line,32767,infile)!=NULL:
-    s=line # CONVERT STRING TO PYTHON OBJECT
-    if not s.startswith('NLMSASequence'):
-      raise IOError('bad format in file %s'%filename)
-    ifile.write(s[14:]) # JUST PRINT THE DATA FIELDS
-    if text_file_to_binaries(infile,err_msg)<0:
-      raise IOError(err_msg)
-  fclose(infile)
-  ifile.close()
+
+    import shelve,pickle # CREATE THE seqIDdict
+    seqIDdict=shelve.open(basestem+'.seqIDdict','c')
+    IDdict=shelve.open(basestem+'.idDict','c')
+    d = {}
+    if is_bidirectional != -1:
+      d['is_bidirectional'] = is_bidirectional
+    if pairwiseMode != -1:
+      d['pairwiseMode'] = pairwiseMode
+    ifile = file(basestem+'.attrDict',"w")
+    try:
+      pickle.dump(d,ifile)
+    finally:
+      ifile.close()
+    for i from 0 <= i <n:
+      if fgets(line,32767,infile)==NULL:
+        raise IOError('error or EOF reading %s'%filename)
+      if 4!=sscanf(line,"SEQID\t%s\t%d %d %d",tmp,
+                   &nlmsaID,&nsID,&offset):
+        raise IOError('bad format in %s'%filename)
+      seqIDdict[tmp]=(nlmsaID,nsID,offset) # SAVE THIS ENTRY
+      IDdict[str(nlmsaID)]=(tmp,nsID)
+    seqIDdict.close() # DONE WRITING THE seqIDdict
+    IDdict.close() # DONE WRITING THE seqIDdict
+
+    ifile = file(basestem+'.NLMSAindex',"w")
+  except:
+    fclose(infile)
+    raise
+  try:
+    while fgets(line,32767,infile)!=NULL:
+      s=line # CONVERT STRING TO PYTHON OBJECT
+      if not s.startswith('NLMSASequence'):
+        raise IOError('bad format in file %s'%filename)
+      ifile.write(s[14:]) # JUST PRINT THE DATA FIELDS
+      if text_file_to_binaries(infile,err_msg)<0:
+        raise IOError(err_msg)
+  finally:
+    fclose(infile)
+    ifile.close()
