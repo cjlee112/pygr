@@ -1315,7 +1315,7 @@ Set trypath to give a list of directories to search.'''
         d=self.prefixDict[prefix]
         try: # TRY TO USE int KEY FIRST
             return d[int(id)]
-        except (ValueError,KeyError): # USE DEFAULT str KEY
+        except (ValueError,KeyError,TypeError): # USE DEFAULT str KEY
             return d[id]
 
     def __contains__(self,k):
