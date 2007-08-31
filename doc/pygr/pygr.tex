@@ -1057,7 +1057,7 @@ from this:
 from pygr import seqdb,cnestedlist
 annoDB = seqdb.AnnotationDB(sliceDB,genome) # CREATE THE ANNOTATION DB
 nlmsa = cnestedlist.NLMSA('exonAnnot','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
-                          use_virtual_lpo=True,bidirectional=False)
+                          pairwiseMode=True,bidirectional=False)
 for a in annoDB.itervalues(): # SAVE ALL ANNOTATION INTERVALS
   nlmsa.addAnnotation(a) # ADD ALIGNMENT BETWEEN ival AND ann INTERVALS
 nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
@@ -1101,7 +1101,7 @@ it is completely trivial.  (i.e. an annotation from \code{annoDB} is itself
 the interval of \code{genome} that it maps to).  This was set by
 the \code{bidirectional=False} option to the \code{NLMSA}.
 
-\item The \code{use_virtual_lpo} option indicates that this is a pairwise
+\item The \code{pairwiseMode} option indicates that this is a pairwise
 (sequence to sequence) alignment, not a true multiple sequence alignment
 (which requires its own coordinate system, called an LPO; see the reference
 docs on NLMSA for more information).  This option could have been omitted;
@@ -1119,7 +1119,7 @@ from pygr import seqdb,cnestedlist
 annoDB = seqdb.AnnotationDB(None,genome,'exon', # CREATE THE ANNOTATION DB
                             filename='exonAnnot',mode='c') # STORE ON DISK
 nlmsa = cnestedlist.NLMSA('exonMap','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
-                          use_virtual_lpo=True,bidirectional=False)
+                          pairwiseMode=True,bidirectional=False)
 for id,s in exonSeqs.items(): # SAVE ALL ANNOTATION INTERVALS
   for ann in annoDB.add_homology(s,'megablast',id=id,maxseq=1,minIdentity=98,maxLoss=2):
     nlmsa.addAnnotation(ann)
@@ -2103,7 +2103,7 @@ and attributes.
 
 Construction Methods:
 
-\begin{funcdesc}{NLMSA}{pathstem='', mode='r', seqDict=None, mafFiles=None, maxOpenFiles=1024, maxlen=None, nPad=1000000, maxint=41666666,trypath=None,bidirectional=True,use_virtual_lpo= -1,maxLPOcoord=None}
+\begin{funcdesc}{NLMSA}{pathstem='', mode='r', seqDict=None, mafFiles=None, maxOpenFiles=1024, maxlen=None, nPad=1000000, maxint=41666666,trypath=None,bidirectional=True,pairwiseMode= -1,maxLPOcoord=None}
   Constructor for the class.  \var{pathstem} specifies a path and filename prefix for
   the NLMSA files (since multiple files are used to store one NLMSA, it will automatically add a
   number of suffixes automatically to open the necessary set of files for the NLMSA).
@@ -2150,27 +2150,19 @@ inconsistent results when the input data are not a true multiple-sequence alignm
 (e.g. BLAST alignment data is strictly pairwise, not a true multiple-sequence alignment).
 \end{itemize}
 
-  \var{use_virtual_lpo=True} indicates a PAIRWISE sequence alignment, in which
+  \var{pairwiseMode=True} indicates a PAIRWISE sequence alignment, in which
   the stored alignment relationships each consist of a pair of sequence intervals
   that are aligned.  Note: this pairwise format can store the alignment of {\em any}
   number of sequences, but the key point is that the individual alignment relations
-  are pairwise, sequence-to-sequence.  The opposite model (\var{use_virtual_lpo=False})
+  are pairwise, sequence-to-sequence.  The opposite model (\var{pairwiseMode=False})
   indicates a true MULTIPLE sequence alignment, in which the stored alignment
   relationships each consist of an integer coordinate interval (the alignment's internal
   coordinate system, for technical reasons called the ``LPO'') and a sequence
   interval that is aligned to it.  Under normal circumstances, you will not need
-  to specify a value for the \var{use_virtual_lpo} option; the NLMSA will infer
+  to specify a value for the \var{pairwiseMode} option; the NLMSA will infer
   the correct setting automatically based on the input data.  Note: the pairwise format
-  (\var{use_virtual_lpo=True}) and multiple alignment format (\var{use_virtual_lpo=False})
+  (\var{pairwiseMode=True}) and multiple alignment format (\var{pairwiseMode=False})
   cannot be mixed in a single NLMSA.  It must be either one format or the other.
-
-  IMPORTANT NOTE: Neither \var{bidirectional} nor \var{use_virtual_lpo}
-  are stored in the disk index files for an NLMSA, so when opening an NLMSA
-  directly from such disk files, you need to give the correct settings for these
-  variables (i.e. the same settings as were used to construct the NLMSA
-  index files).  If you are obtaining an NLMSA from pygr.Data, this issue
-  does not arise, because pygr.Data saves the original values of these
-  variables automatically as part of pickling the NLMSA object.
 
   \var{mafFiles} can be used to specify a list of
   filenames storing a multiple sequence alignment in the UCSC MAF format.
@@ -2226,7 +2218,7 @@ inconsistent results when the input data are not a true multiple-sequence alignm
 \begin{funcdesc}{addAnnotation}{annotation}
   adds an alignment relationship to \var{annotation} from its underlying
   sequence interval.  Note: to use this, the NLMSA must have been created with the
-  {\em use_virtual_lpo=True} option.
+  {\em pairwiseMode=True} option.
 \end{funcdesc}
 
 \begin{funcdesc}{__getitem__}{seqInterval}
@@ -3123,7 +3115,7 @@ that map to that region) is best performed by creating an NLMSA alignment
 object and saving the mapping as follows:
 \begin{verbatim}
 nlmsa = cnestedlist.NLMSA('myAnnotDB','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
-                          use_virtual_lpo=True,bidirectional=False)
+                          pairwiseMode=True,bidirectional=False)
 for a in annoDB.itervalues(): # GET EACH ANNOTATION OBJ IN DATABASE
   nlmsa.addAnnotation(a) # SAVE ALIGNMENT OF ITS SEQ INTERVAL TO THIS ANNOTATION
 nlmsa.build() # CREATE FINAL INDEXES FOR THE ALIGNMENT DATABASE
@@ -3234,10 +3226,26 @@ exon_db = AnnotationDB(exon_slices, db,
   annotation).
 \end{funcdesc}
 
+Note: to save new annotations to the AnnotationDB, use either of the following two
+methods, instead of \method{__setitem__}, which is not permitted (because
+there would be no way of guaranteeing that the annotation object provided
+by the user could be stored persistently).
+\begin{funcdesc}{new_annotation}{k,sliceInfo}
+  Use this method to save new annotations to an \class{AnnotationDB},
+  instead of using \code{annoDB[k] = v}, which is not permitted.
+  Creates a new annotation with ID \var{k}, based on \var{sliceInfo},
+  which must provide a sequence ID, start, stop, either by attribute
+  names or integer indices (as specified by the sliceAttrDict), 
+  and any addition attributes that we want to associate with this annotation.
+  \var{sliceInfo} is saved in the \class{AnnotationDB}'s sliceDB.
+  Returns an annotation object associated with \var{sliceInfo}.
+\end{funcdesc}
+
 \begin{funcdesc}{add_homology}{seq,search='blast',id=None,idFormat='\%s_\%d',autoIncrement=False,maxAnnot=999999,maxLoss=None,sliceInfo=None,**kwargs}
   Search for homology to \var{seq} in the sequence database self.seqDB
   using the named method specified by the \var{search} argument,
-  and filtered using the NLMSASlice.keys() function.  
+  and filtered using the NLMSASlice.keys() function, and store
+  them as new annotations in the annotation database.  
 
   \var{seq} can be a string or sequence object or slice.
 
