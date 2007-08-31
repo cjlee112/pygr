@@ -1563,7 +1563,10 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
   def read_attrs(self):
     'read pickled attribute dictionary from file and apply to self'
     import pickle
-    ifile = file(self.pathstem+'.attrDict')
+    try:
+      ifile = file(self.pathstem+'.attrDict')
+    except IOError: # BACKWARDS COMPATIBILITY: OLD NLMSA HAS NOT ATTRDICT
+      return
     try:
       d = pickle.load(ifile)
       for k,v in d.items():
