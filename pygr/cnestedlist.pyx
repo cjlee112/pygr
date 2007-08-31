@@ -1985,11 +1985,12 @@ def dump_textfile(pathstem,outfilename=None):
   seqIDdict=shelve.open(pathstem+'.seqIDdict','r')
   n=len(seqIDdict)
   strcpy(tmp,basestem) # COPY TO C STRING SO WE CAN fprintf
-  ifile = file(basestem+'.attrDict')
   try:
+    ifile = file(basestem+'.attrDict')
     d = pickle.load(ifile)
-  finally:
     ifile.close()
+  except IOError:
+    d = {}
   is_bidirectional = d.get('is_bidirectional',-1)
   pairwiseMode = d.get('pairwiseMode',-1)
   outfile=fopen(outfilename,"w")
