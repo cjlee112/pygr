@@ -25,6 +25,7 @@ cdef extern from "stdio.h":
   char *fgets(char *str,int size,FILE *ifile)
 
 cdef extern from "string.h":
+  int strcmp(char *s1, char *s2)
   int strncmp(char *s1,char *s2,size_t len)
   char *strcpy(char *dest,char *src)
   char *strdup(char *)
