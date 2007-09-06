@@ -1480,21 +1480,7 @@ cdef class NLMSA:
       self.maxLPOcoord=self.maxlen
     if mode=='r': # OPEN FROM DISK FILES
       if self.seqDict is None:
-        import seqdb,os
-        if os.access(pathstem+'.seqDictP',os.R_OK):
-          from pygr.Data import loads
-          ifile = file(pathstem+'.seqDictP')
-          try: # LOAD FROM pygr.Data-AWARE PICKLE FILE
-            self.seqDict = loads(ifile.read())
-          finally:
-            ifile.close()
-        elif os.access(pathstem+'.seqDict',os.R_OK): # OLD-STYLE UNION HEADER
-          self.seqDict = seqdb.PrefixUnionDict(filename=pathstem+'.seqDict',
-                                             trypath=trypath)
-        else:
-          raise ValueError('''Unable to find seqDict file
-%s.seqDictP or %s.seqDict
-and no seqDict provided as an argument''' % (pathstem,pathstem))
+        self.seqDict = nlmsa_utils.read_seq_dict(pathstem)
       self.read_indexes(self.seqDict)
       self.read_attrs()
     elif mode=='w': # WRITE TO DISK FILES
@@ -1939,15 +1925,10 @@ or in the future pass the saveSeqDict=True option to NLMSA.build().
 
 To turn off this message, use the verbose=False option
 ''')
+
   def save_seq_dict(self):
     'save seqDict to a pygr.Data-aware pickle file'
-    from pygr.Data import dumps
-    ofile = file(self.pathstem+'.seqDictP','w')
-    try:
-      ofile.write(dumps(self.seqDict))
-    finally:
-      ofile.close()
-    #self.seqDict.writeHeaderFile(self.pathstem+'.seqDict')
+    nlmsa_utils.save_seq_dict(self.pathstem,self.seqDict)
 
   def build(self,**kwargs):
     'build nestedlist databases from saved mappings and initialize for use'
@@ -1974,20 +1955,29 @@ To turn off this message, use the verbose=False option
 
 def dump_textfile(pathstem,outfilename=None):
   'dump NLMSA binary files to a text file'
-  cdef int n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode
+  cdef int n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode,nprefix
   cdef FILE *outfile
-  cdef char err_msg[2048],tmp[2048]
+  cdef char err_msg[2048],tmp[2048],seqDictID[256]
   err_msg[0]=0 # ENSURE STRING IS EMPTY
-  import os.path
-  basestem=os.path.basename(pathstem) # GET RID OF PATH INFO
   if outfilename is None:
     outfilename=pathstem+'.txt' # DEFAULT TEXTFILE NAME
-  import shelve,pickle # NEED TO COPY THE WHOLE seqIDdict
+  import shelve,pickle,sys # NEED TO COPY THE WHOLE seqIDdict
   seqIDdict=shelve.open(pathstem+'.seqIDdict','r')
   n=len(seqIDdict)
-  strcpy(tmp,basestem) # COPY TO C STRING SO WE CAN fprintf
+  seqDict = nlmsa_utils.read_seq_dict(pathstem) 
+  try: # OBTAIN PREFIX INFO FOR SEQDICT
+    prefixDict = seqDict.prefixDict
+    nprefix = len(prefixDict)
+    strcpy(seqDictID,"None")
+  except AttributeError: # NO PREFIXUNION.  TRY TO GET ID OF seqDict
+    nprefix = 0
+    prefixDict = {}
+    try:
+      strcpy(seqDictID,seqDict._persistent_id)
+    except AttributeError:
+      strcpy(seqDictID,"unknown")
   try:
-    ifile = file(basestem+'.attrDict')
+    ifile = file(pathstem+'.attrDict')
     d = pickle.load(ifile)
     ifile.close()
   except IOError:
@@ -1995,12 +1985,32 @@ def dump_textfile(pathstem,outfilename=None):
   is_bidirectional = d.get('is_bidirectional',-1)
   pairwiseMode = d.get('pairwiseMode',-1)
   outfile=fopen(outfilename,"w")
+  import os.path
+  basestem=os.path.basename(pathstem) # GET RID OF PATH INFO
+  strcpy(tmp,basestem) # COPY TO C STRING SO WE CAN fprintf
   if outfile==NULL:
     raise IOError('unable to open file %s' %outfilename)
   try:
-    if fprintf(outfile,"PATHSTEM\t%s\t%d\t%d\t%d\n",tmp,n,
-               is_bidirectional,pairwiseMode)<0:
+    if fprintf(outfile,"PATHSTEM\t%s\t%d\t%d\t%d\t%d\t%s\n",tmp,n,
+               is_bidirectional,pairwiseMode,nprefix,seqDictID)<0:
       raise IOError('error writing to file %s' %outfilename)
+    pleaseWarn = True
+    for id,d in prefixDict.items(): # SAVE seqDict PREFIX ENTRIES
+      strcpy(tmp,id) # CONVERT TO C DATA TYPES FOR fprintf
+      try:
+        strcpy(seqDictID,d._persistent_id) # TRY TO GET PYGR.DATA ID
+      except AttributeError:
+        strcpy(seqDictID,"None")
+        if pleaseWarn:
+          pleaseWarn = False
+          sys.stderr.write('''Warning: Because one or more of the sequence
+databases in the seqDict have no pygr.Data ID, there is no
+host-independent way to save it to a textfile for transfer
+to another machine.  Therefore, when loading this textfile
+on the destination machine, you will have to provide a dictionary
+for these sequence database(s) on the destination machine.''')
+      if fprintf(outfile,"PREFIXUNION\t%s\t%s\n",tmp,seqDictID)<0:
+        raise IOError('error writing to file %s' %outfilename)
     for id,t in seqIDdict.iteritems(): # SAVE seqIDdict
       strcpy(tmp,id) # CONVERT TO C DATA TYPES FOR fprintf
       nlmsaID=t[0]
@@ -2031,11 +2041,15 @@ def dump_textfile(pathstem,outfilename=None):
     ifile.close()
 
 
-def textfile_to_binaries(filename):
+def textfile_to_binaries(filename,seqDict=None,prefixDict=None):
   'convert pathstem.txt textfile to NLMSA binary files'
-  cdef int i,n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode
+  cdef int i,n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode,nprefix
   cdef FILE *infile
-  cdef char err_msg[2048],line[32768],tmp[2048],basestem[2048]
+  cdef char err_msg[2048],line[32768],tmp[2048],basestem[2048],seqDictID[2048]
+  if seqDict is not None:
+    ignorePrefix = True
+  else:
+    ignorePrefix = False
   err_msg[0]=0 # ENSURE STRING IS EMPTY
   infile=fopen(filename,"r")
   if infile==NULL:
@@ -2044,11 +2058,18 @@ def textfile_to_binaries(filename):
     if fgets(line,32767,infile)==NULL:
       raise IOError('error or EOF reading %s'%filename)
     is_bidirectional = -1 # INVALID INITIAL SETTING
-    pairwiseMode = -1 
-    if 2>sscanf(line,"PATHSTEM\t%s\t%d\t%d\t%d",basestem,&n,
-                &is_bidirectional,&pairwiseMode):
+    pairwiseMode = -1
+    nprefix = 0
+    strcpy(tmp,"None")
+    if 2>sscanf(line,"PATHSTEM\t%s\t%d\t%d\t%d\t%d\t%s",basestem,&n,
+                &is_bidirectional,&pairwiseMode,&nprefix,tmp):
       raise IOError('bad format in %s'%filename)
-
+    if 0==strcmp(tmp,"unknown"):
+      if seqDict is None:
+        raise ValueError('You must provide a seqDict for this NLMSA!')
+    elif 0!=strcmp(tmp,"None"): # TRY OBTAINING AS PGYR.DATA ID
+      import pygr.Data
+      seqDict = pygr.Data.getResource(tmp)
     import shelve,pickle # CREATE THE seqIDdict
     seqIDdict=shelve.open(basestem+'.seqIDdict','c')
     IDdict=shelve.open(basestem+'.idDict','c')
@@ -2062,7 +2083,30 @@ def textfile_to_binaries(filename):
       pickle.dump(d,ifile)
     finally:
       ifile.close()
-    for i from 0 <= i <n:
+    if prefixDict is None or ignorePrefix:
+      prefixDict = {}
+    missing = []
+    for i from 0 <= i < nprefix: # READ seqDICT PREFIX ENTRIES
+      if fgets(line,32767,infile)==NULL:
+        raise IOError('error or EOF reading %s'%filename)
+      if 2!=sscanf(line,"PREFIXUNION\t%s\t%s",tmp,seqDictID):
+        raise IOError('bad format in %s'%filename)
+      if ignorePrefix: # JUST IGNORE THE PREFIX INFO WE READ
+        continue
+      if 0==strcmp(seqDictID,"None"):
+        if tmp not in prefixDict:
+          missing.append(tmp) # MISSING A SEQDICT DICTIONARY ENTRY!
+      else: # LOAD IT FROM PYGR.DATA
+        import pygr.Data
+        prefixDict[tmp] = pygr.Data.getResource(seqDictID)
+    if len(missing)>0:
+      raise KeyError('''You must supply sequence database(s) for the
+following prefixes, by passing them in the prefixDict optional
+dictionary argument: %s''' % missing)
+    if len(prefixDict)>0: # CREATE A PREFIX UNION
+      seqDict = seqdb.PrefixUnionDict(prefixDict)
+    nlmsa_utils.save_seq_dict(basestem,seqDict) # SAVE SEQDICT
+    for i from 0 <= i <n: # seqIDDict READING
       if fgets(line,32767,infile)==NULL:
         raise IOError('error or EOF reading %s'%filename)
       if 4!=sscanf(line,"SEQID\t%s\t%d %d %d",tmp,
