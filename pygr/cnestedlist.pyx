@@ -1480,7 +1480,7 @@ cdef class NLMSA:
       self.maxLPOcoord=self.maxlen
     if mode=='r': # OPEN FROM DISK FILES
       if self.seqDict is None:
-        self.seqDict = nlmsa_utils.read_seq_dict(pathstem)
+        self.seqDict = nlmsa_utils.read_seq_dict(pathstem,trypath)
       self.read_indexes(self.seqDict)
       self.read_attrs()
     elif mode=='w': # WRITE TO DISK FILES
