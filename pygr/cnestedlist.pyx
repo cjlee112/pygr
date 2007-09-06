@@ -1933,7 +1933,8 @@ See the NLMSA documentation for more details.\n''')
     elif verbose:
       sys.stderr.write('''Note: the NLMSA.seqDict was not saved to a file.
 This is not necessary if you intend to save the NLMSA to pygr.Data.
-But if you wish to, call NLMSA.save_seq_dict() to save it to a file,
+But if you wish to open this NLMSA independently of pygr.Data,
+you should call NLMSA.save_seq_dict() to save the seqDict info to a file,
 or in the future pass the saveSeqDict=True option to NLMSA.build().
 
 To turn off this message, use the verbose=False option
