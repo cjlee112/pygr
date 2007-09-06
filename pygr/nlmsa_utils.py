@@ -267,7 +267,7 @@ class BuildMSASlice(object):
 
 
 
-def read_seq_dict(pathstem):
+def read_seq_dict(pathstem,trypath=None):
   'read seqDict for NLMSA'
   import seqdb,os
   if os.access(pathstem+'.seqDictP',os.R_OK):
