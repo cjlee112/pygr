@@ -264,3 +264,34 @@ class BuildMSASlice(object):
         if v is not None:
             raise ValueError('NLMSA cannot save edge-info. Only nlmsa[s1][s2]=None allowed')
         self+=k
+
+
+
+def read_seq_dict(pathstem):
+  'read seqDict for NLMSA'
+  import seqdb,os
+  if os.access(pathstem+'.seqDictP',os.R_OK):
+    from pygr.Data import loads
+    ifile = file(pathstem+'.seqDictP')
+    try: # LOAD FROM pygr.Data-AWARE PICKLE FILE
+      seqDict = loads(ifile.read())
+    finally:
+      ifile.close()
+  elif os.access(pathstem+'.seqDict',os.R_OK): # OLD-STYLE UNION HEADER
+    seqDict = seqdb.PrefixUnionDict(filename=pathstem+'.seqDict',
+                                         trypath=trypath)
+  else:
+    raise ValueError('''Unable to find seqDict file
+%s.seqDictP or %s.seqDict
+and no seqDict provided as an argument''' % (pathstem,pathstem))
+  return seqDict
+
+
+def save_seq_dict(pathstem,seqDict):
+  'save seqDict to a pygr.Data-aware pickle file'
+  from pygr.Data import dumps
+  ofile = file(pathstem+'.seqDictP','w')
+  try:
+    ofile.write(dumps(seqDict))
+  finally:
+    ofile.close()
