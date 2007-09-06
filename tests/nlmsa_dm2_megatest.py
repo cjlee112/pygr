@@ -94,6 +94,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         maflist.sort()
         msaname = os.path.join(self.path, 'dm2_multiz15way')
         msa1 = cnestedlist.NLMSA(msaname, 'w', uniondict, maflist, maxlen = 536870912, maxint = 22369620) # 500MB VERSION
+        msa1.save_seq_dict()
         msa1.__doc__ = 'TEST NLMSA for dm2 multiz15way'
         pygr.Data.getResource.addResource('TEST.MSA.UCSC.dm2_multiz15way', msa1)
         pygr.Data.save()
@@ -157,7 +158,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         cnestedlist.textfile_to_binaries('dm2_multiz15way.txt')
         os.chdir(runPath)
 
-        msa1 = cnestedlist.NLMSA(msaname, 'r', uniondict)
+        msa1 = cnestedlist.NLMSA(msaname, 'r')
         msa1.__doc__ = 'TEST NLMSA for dm2 multiz15way'
         pygr.Data.getResource.addResource('TEST.MSA.UCSC.dm2_multiz15way', msa1)
         pygr.Data.save()
