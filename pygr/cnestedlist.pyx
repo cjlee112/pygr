@@ -2104,6 +2104,7 @@ def textfile_to_binaries(filename,seqDict=None,prefixDict=None):
 following prefixes, by passing them in the prefixDict optional
 dictionary argument: %s''' % missing)
     if len(prefixDict)>0: # CREATE A PREFIX UNION
+      import seqdb
       seqDict = seqdb.PrefixUnionDict(prefixDict)
     nlmsa_utils.save_seq_dict(basestem,seqDict) # SAVE SEQDICT
     for i from 0 <= i <n: # seqIDDict READING
