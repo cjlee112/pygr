@@ -83,6 +83,9 @@ int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
 	iseq= -1; /* DO NOT PROCESS THIS LINE AS SEQUENCE ALIGNMENT LINE! */
       }
     }
+    else if ((isalpha)(tmp[0]) || tmp[0] == '-') 
+      if (1 != sscanf(tmp, "%s", seq))
+        fprintf(stderr," *** WARNING: Incorrectly formated alignment line ignored:\n%s\n",tmp);
 
     if (tmp[l-1]=='\n' || tmp[l-1]=='\r') /* CHECK FOR START OF NEW LINE FOLLOWING...*/
       newline=1;
