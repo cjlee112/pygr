@@ -110,6 +110,9 @@ cdef extern from "apps/maf2nclist.h":
   int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
                     int lpoStart,int *p_block_len,FILE *ifile,int maxseq,
                     long long linecode_count[],int *p_has_continuation)
+  int read_axtnet(IntervalMap im[], int n, SeqIDMap seqidmap[], int nseq,
+                  FILE *ifile, int maxseq, int *p_has_continuation, int *read_start, int *read_end, char *src_prefix,
+                  char *dest_prefix)
   int seqnameID_qsort_cmp(void *void_a,void *void_b)
   int seqidmap_qsort_cmp(void *void_a,void *void_b)
   void free_seqnames(SeqNameID_T seqnames[],int n)

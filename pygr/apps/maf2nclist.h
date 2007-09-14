@@ -20,6 +20,11 @@ extern int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
 			 long long linecode_count[],int *p_has_continuation)
      ;
 
+extern int read_axtnet(IntervalMap im[], int n, SeqIDMap seqidmap[], int nseq,
+                FILE *ifile, int maxseq, int *p_has_continuation, int *read_start, int *read_end, char *src_prefix,
+                char *dest_prefix)
+     ;
+
 extern int seqnameID_qsort_cmp(const void *void_a,const void *void_b)
      ;
 

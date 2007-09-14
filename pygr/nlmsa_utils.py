@@ -295,3 +295,5 @@ def save_seq_dict(pathstem,seqDict):
     ofile.write(dumps(seqDict))
   finally:
     ofile.close()
+
+
