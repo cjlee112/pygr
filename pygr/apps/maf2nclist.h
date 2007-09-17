@@ -21,7 +21,7 @@ extern int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
      ;
 
 extern int read_axtnet(IntervalMap im[], int n, SeqIDMap seqidmap[], int nseq,
-                FILE *ifile, int maxseq, int *p_has_continuation, int *read_start, int *read_end, char *src_prefix,
+                FILE *ifile, int maxseq, int *p_has_continuation, int *isrc, char *src_prefix,
                 char *dest_prefix)
      ;
 

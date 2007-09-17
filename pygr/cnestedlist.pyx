@@ -1743,7 +1743,6 @@ See the NLMSA documentation for more details.\n''')
 
           for i from 0 <= i < n: # SAVE EACH INTERVAL IN UNION -> LPO MAP
             j=im[i].target_id
-            #print j, seqidmap[j].id, seqidmap[j].ns_id, seqidmap[j].offset, seqidmap[j].nlmsa_id
             if seqidmap[j].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
               if ns is None or self.maxlen-ns.length<=seqidmap[j].length:
                 ns=self.newSequence(None,is_union=1) # CREATE NEW UNION TO HOLD IT
@@ -1765,7 +1764,6 @@ See the NLMSA documentation for more details.\n''')
             im_tmp.target_id=ns_lpo.id
             im_tmp.target_start=im[i].start
             im_tmp.target_end=im[i].end
-            #print 'Saving interval to union',seqidmap[j].id,seqidmap[j].ns_id
             j=seqidmap[j].ns_id # USE NLMSA ID OF THE UNION
             ns_lpo.saveInterval(&im_tmp,1,0,build_ifile[j]) # SAVE SEQ -> LPO
             nbuild[j]=nbuild[j]+1
@@ -1804,7 +1802,7 @@ See the NLMSA documentation for more details.\n''')
 
   def readAxtNet(self,axtFiles):
     'read alignment from a set of axtnet files'
-    cdef int i,j,nseq0,n,isrc,isave,isrc_start,isrc_end
+    cdef int i,j,nseq0,n,isrc
     cdef SeqIDMap *seqidmap
     cdef char tmp[32768],*p,comment[4],src_prefix[64],dest_prefix[64]
     cdef FILE *ifile
@@ -1812,7 +1810,6 @@ See the NLMSA documentation for more details.\n''')
     cdef NLMSASequence ns_src,ns # SOURCE UNION VS DEST UNION
     cdef FILE *build_ifile[4096]
     cdef int nbuild[4096],has_continuation
-    cdef int *read_start, *read_end # STORE isrc FOR SINGLE FILE READING
 
     self.pairwiseMode = 1 # WE ARE USING pairwiseMode
 
@@ -1825,9 +1822,6 @@ See the NLMSA documentation for more details.\n''')
       i=i+1
     qsort(seqidmap,nseq0,sizeof(SeqIDMap),seqidmap_qsort_cmp) # SORT BY id
     ns_src = ns = None
-
-    read_start = <int *>malloc(nseq0*sizeof(int))
-    read_end = <int *>malloc(nseq0*sizeof(int))
 
     im_tmp.sublist= -1 # DEFAULT
     strcpy(comment,"#") # MAKE C STRING 
@@ -1851,7 +1845,7 @@ See the NLMSA documentation for more details.\n''')
         raise IOError('unable to open file %s' % filename)
       has_continuation = 1
       while has_continuation:
-        n = read_axtnet(im,0,seqidmap,nseq0,ifile,4096,&has_continuation,read_start,read_end,src_prefix,dest_prefix)
+        n = read_axtnet(im,0,seqidmap,nseq0,ifile,4096,&has_continuation,&isrc,src_prefix,dest_prefix)
         if n<0: # UNRECOVERABLE ERROR OCCURRED...
           self.free_seqidmap(nseq0,seqidmap)
           self.save_nbuild(nbuild)
@@ -1860,41 +1854,42 @@ See the NLMSA documentation for more details.\n''')
           continue
         elif has_continuation == 0:
           break
-        for isave from 0 <= isave < nseq0:
-          if not read_end[isave]: continue
-          isrc = isave
-          isrc_start = read_start[isave]
-          isrc_end = read_end[isave]
-          #print isrc, seqidmap[isrc].id, seqidmap[isrc].ns_id, seqidmap[isrc].offset, seqidmap[isrc].nlmsa_id
-          if seqidmap[isrc].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
-            ns_src = self.add_seqidmap_to_union(isrc,seqidmap,ns_src,build_ifile,nbuild)
-          for i from isrc_start <= i < isrc_end: # SAVE EACH INTERVAL IN SRC -> DEST MAP
-            j=im[i].target_id
-            #print j, seqidmap[j].id, seqidmap[j].ns_id, seqidmap[j].offset, seqidmap[j].nlmsa_id
-            if seqidmap[j].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
-              ns_src = self.add_seqidmap_to_union(j,seqidmap,ns_src,build_ifile,nbuild)
-            im[i].target_id = seqidmap[j].nlmsa_id # USE THE CORRECT ID
-            if im[i].target_start<0: # OFFSET REVERSE ORI
-              im_tmp.start = -seqidmap[j].offset+im[i].target_start
-              im_tmp.end = -seqidmap[j].offset+im[i].target_end
-            else: # OFFSET FORWARD ORI
-              im_tmp.start = seqidmap[j].offset+im[i].target_start
-              im_tmp.end = seqidmap[j].offset+im[i].target_end
-            im_tmp.target_id = seqidmap[isrc].nlmsa_id
-            im_tmp.target_start = im[i].start
-            im_tmp.target_end = im[i].end
-            #print 'Saving interval to union',seqidmap[j].id,seqidmap[j].ns_id
-            j=seqidmap[j].ns_id # USE NLMSA ID OF THE UNION
-            ns_src.saveInterval(&im_tmp,1,0,build_ifile[j]) # SAVE DEST -> SRC
-            nbuild[j]=nbuild[j]+1
-            if im[i].start<0: # OFFSET FORWARD ORI
-              im[i].start = -seqidmap[isrc].offset+im[i].start
-              im[i].end = -seqidmap[isrc].offset+im[i].end
-            else: # OFFSET FORWARD ORI
-              im[i].start = seqidmap[isrc].offset+im[i].start
-              im[i].end = seqidmap[isrc].offset+im[i].end
-          ns_src.saveInterval(im,n,1,ns_src.build_ifile) # SAVE SRC -> DEST
-          ns_src.nbuild=ns_src.nbuild+n # INCREMENT COUNT OF SAVED INTERVALS
+
+        if seqidmap[isrc].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
+          ns_src = self.add_seqidmap_to_union(isrc,seqidmap,ns_src,build_ifile,nbuild)
+
+        for i from 0 <= i < n: # SAVE EACH INTERVAL IN SRC -> DEST MAP
+          j=im[i].target_id
+          print 'A',im[i].start,im[i].end,im[i].target_id,im[i].target_start, im[i].target_end, im_tmp.sublist
+          print 'B',seqidmap[isrc].nlmsa_id,i,j,seqidmap[j].id,seqidmap[j].ns_id,seqidmap[j].offset,seqidmap[j].nlmsa_id
+          if seqidmap[j].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
+            ns_src = self.add_seqidmap_to_union(j,seqidmap,ns_src,build_ifile,nbuild)
+          im[i].target_id = seqidmap[j].nlmsa_id # USE THE CORRECT ID
+          if im[i].target_start<0: # OFFSET REVERSE ORI
+            im_tmp.start = -seqidmap[j].offset+im[i].target_start
+            im_tmp.end = -seqidmap[j].offset+im[i].target_end
+          else: # OFFSET FORWARD ORI
+            im_tmp.start = seqidmap[j].offset+im[i].target_start
+            im_tmp.end = seqidmap[j].offset+im[i].target_end
+          im_tmp.target_id = seqidmap[isrc].nlmsa_id
+          im_tmp.target_start = im[i].start
+          im_tmp.target_end = im[i].end
+          print 'C', im_tmp.target_id, im_tmp.target_start, im_tmp.target_end, seqidmap[j].ns_id, j
+          j=seqidmap[j].ns_id # USE NLMSA ID OF THE UNION
+          ns_src.saveInterval(&im_tmp,1,0,build_ifile[j]) # SAVE DEST -> SRC
+          nbuild[j]=nbuild[j]+1
+          if im[i].start < 0: # OFFSET FORWARD ORI
+            im[i].start = -seqidmap[isrc].offset + im[i].start
+            im[i].end = -seqidmap[isrc].offset + im[i].end
+          else: # OFFSET FORWARD ORI
+            im[i].start = seqidmap[isrc].offset + im[i].start
+            im[i].end = seqidmap[isrc].offset + im[i].end
+          print 'D', im_tmp.start, im_tmp.end, im_tmp.target_id, im_tmp.target_start, im_tmp.target_end, im_tmp.sublist
+
+        # SAVE THE RECORD. read_axtnet FUNCTION READS SRC/DEST AT THE SAME TIME
+        ns_src.saveInterval(im,n,1,ns_src.build_ifile) # SAVE SRC -> DEST
+        ns_src.nbuild=ns_src.nbuild+n # INCREMENT COUNT OF SAVED INTERVALS
+
       fclose(ifile) # CLOSE THIS AXTNET FILE
 
     for i from 0 <= i <nseq0: # INDEX SEQUENCES THAT WERE ALIGNED

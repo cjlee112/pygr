@@ -32,24 +32,6 @@ int findseqID(char seqName[],SeqIDMap seqidmap[],int r)
   return -1;
 }
 
-int findSeqLength(char seqName[],SeqIDMap seqidmap[],int r)
-{
-  int i,l=0,mid;
-  while (l<r) { /* TRY FINDING IT USING BINARY SEARCH */
-    mid=(l+r)/2;
-    i=strcmp(seqidmap[mid].id,seqName);
-    if (i==0) /* FOUND IT */
-      return seqidmap[mid].length;
-    else if (i<0) /* seqidmap[mid] < seqName */
-      l=mid+1;
-    else /* seqName < seqidmap[mid] */
-      r=mid;
-  }
-  return -1;
-}
-
-
-
 int save_interval(IntervalMap *im,int start,int stop,int iseq,int istart,int istop)
 {
   im->start=start;
@@ -142,16 +124,14 @@ int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
 }
 
 int read_axtnet(IntervalMap im[], int n, SeqIDMap seqidmap[], int nseq,
-                FILE *ifile, int maxseq, int *p_has_continuation, int *read_start, int *read_end, char *src_prefix,
+                FILE *ifile, int maxseq, int *p_has_continuation, int *isrc, char *src_prefix,
                 char *dest_prefix)
 {
-  int i,start,srcStart,srcEnd,destStart,destEnd,junk,junk2,isrc=-1,idest=-1,max_len=0,newline=1,l;
+  int i,start,srcStart,srcEnd,destStart,destEnd,junk,junk2,idest=-1,max_len=0,newline=1,l;
   int src_extend = 0, dest_extend = 0, isrc_read = -1, idest_read = -1;
   int srcLength, destLength, nsrc_seq = 0, ndest_seq = 0;
   unsigned char tmp[32768];
   char *p, src_seq[32768], dest_seq[32768], srcName[64], destName[64], oriFlag[8], srcChr[64], destChr[64];
-  for (i=0;i<nseq;i++) read_start[i] = INT_MAX;
-  for (i=0;i<nseq;i++) read_end[i] = 0;
   if (p_has_continuation) /* DEFAULT: NO CONTINUATION */
     *p_has_continuation = 0;
   while ((p=fgets(tmp,32767,ifile))) {
@@ -168,11 +148,11 @@ int read_axtnet(IntervalMap im[], int n, SeqIDMap seqidmap[], int nseq,
           strcat(destName, ".");
           strcat(srcName, srcChr);
           strcat(destName, destChr);
-          isrc=findseqID(srcName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
+          *isrc=findseqID(srcName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
           idest=findseqID(destName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
-          destLength = findSeqLength(destName,seqidmap,nseq);
+          destLength = seqidmap[idest].length;
 /*printf("# %d\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",junk,srcName,destName,srcStart,destStart,isrc,idest,destLength);*/
-          if (isrc<0 || idest<0)
+          if (*isrc<0 || idest<0)
             fprintf(stderr," *** WARNING: Unknown sequence %s, %s ignored...\n",srcName,destName);
           if (0==strcmp("-",oriFlag)) {
             destStart= -(destLength-destStart+1); /* CALCULATE NEGATIVE INDEX INDICATING REVERSE STRAND*/
@@ -220,7 +200,7 @@ int read_axtnet(IntervalMap im[], int n, SeqIDMap seqidmap[], int nseq,
         /*else printf("JUNK %s\n", tmp);*/
       }
 
-    if (isrc<0 || idest<0) continue; /* IGNORE UNKNOWN SEQUENCES */
+    if (*isrc<0 || idest<0) continue; /* IGNORE UNKNOWN SEQUENCES */
     if (nsrc_seq == 0 && ndest_seq == 0) continue;
     if (isrc_read >= 0 && nsrc_seq > 0) {
       if ((isalpha)(src_seq[0]) || src_seq[0] == '-') {
@@ -232,14 +212,10 @@ int read_axtnet(IntervalMap im[], int n, SeqIDMap seqidmap[], int nseq,
         if (n>=maxseq)
           return -1; /* ERROR: RAN OUT OF SPACE!!! */
         save_interval(im+n,src_extend+start,src_extend+i,
-                    isrc,srcStart,srcStart+i-start);
+                    *isrc,srcStart,srcStart+i-start);
         /*printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 
           n,i-start,src_extend+start,src_extend+i,isrc,srcStart,srcStart+i-start,src_extend);*/
-        if (read_start[isrc] > n)
-          if (n) read_start[isrc] = n - 1; /* +1 INCREASED DUE TO DEST SEQUENCE */
-          else read_start[isrc] = n;
         n++;
-        read_end[isrc] = n; /* SAVE MAX OFFSET */
         srcStart += i-start;
         }
       if (newline) {
@@ -269,11 +245,7 @@ int read_axtnet(IntervalMap im[], int n, SeqIDMap seqidmap[], int nseq,
                       idest,destStart,destStart+i-start);
         /*printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
           n,i-start,dest_extend+start,dest_extend+i,idest,destStart,destStart+i-start,dest_extend);*/
-        if (read_start[idest] > n)
-          if (n) read_start[idest] = n; /* +1 INCREASED DUE TO DEST SEQUENCE */
-          else read_start[idest] = n;
         n++;
-        read_end[idest] = n; /* SAVE MAX OFFSET */
         destStart += i-start;
         }
       if (newline) {
