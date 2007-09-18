@@ -1507,13 +1507,18 @@ cacheProxyDict=DummyProxyDict()
 
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
-    xmlrpc_methods={"getSeqLen":0,"strslice":0}
+    xmlrpc_methods={"getSeqLen":0,"strslice":0,"getSeqLenDict":0}
     def getSeqLen(self,id):
         'get sequence length, or -1 if not found'
         try:
             return len(self[id]) 
         except KeyError:
             return -1  # SEQUENCE OBJECT DOES NOT EXIST
+    def getSeqLenDict(self):
+        'return seqLenDict over XMLRPC'
+        d = {}
+        d.update(self.seqLenDict)
+        return d
     def strslice(self,id,start,stop):
         'return string sequence for specified interval in the specified sequence'
         if start<0: # HANDLE NEGATIVE ORIENTATION
@@ -1542,10 +1547,17 @@ class XMLRPCSequence(SequenceBase):
     def __len__(self):
         return self.length
 
+class XMLRPCSeqLenDict(object):
+    'descriptor that returns dictionary of remote server seqLenDict'
+    def __get__(self,obj,objtype):
+        return obj.server.getSeqLenDict()
+
+
 class XMLRPCSequenceDB(SeqDBbase):
     'XMLRPC client: access sequence database over XMLRPC'
     itemClass=XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
+    seqLenDict = XMLRPCSeqLenDict() # INTERFACE TO SEQLENDICT
     def __init__(self,url=None,name=None):
         dict.__init__(self)
         import coordinator
@@ -1565,3 +1577,5 @@ class XMLRPCSequenceDB(SeqDBbase):
             self[id]=s
             return s
         raise KeyError('%s not in this database' % id)
+
+        
