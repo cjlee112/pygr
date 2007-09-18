@@ -1838,7 +1838,7 @@ See the NLMSA documentation for more details.\n''')
         elif filename[-4:] == '.axt':
           t = string.split(filename[:-4], '.')[-2:]
       except:
-        raise IOError('%s is not correct axtNet file name' % filename)
+        raise IOError('%s is not correct axtNet file name. Correct name is (chrid.)source.target.net.axt.' % filename)
       #t = prefix_fun(filename) # CALL PYTHON FUNCTION TO OBTAIN PREFIXES
       strcpy(src_prefix,t[0]) # KEEP THEM IN STATIC C STRINGS FOR SPEED
       strcpy(dest_prefix,t[1])
