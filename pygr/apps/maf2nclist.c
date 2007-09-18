@@ -123,151 +123,85 @@ int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
   return n;
 }
 
-int read_axtnet(IntervalMap im[], int n, SeqIDMap seqidmap[], int nseq,
-                FILE *ifile, int maxseq, int *p_has_continuation, int *isrc, char *src_prefix,
+int read_axtnet(IntervalMap im[], SeqIDMap seqidmap[], int nseq,
+                FILE *ifile, int maxseq, int *isrc, char *src_prefix,
                 char *dest_prefix)
 {
-  int i,start,srcStart,srcEnd,destStart,destEnd,junk,junk2,idest=-1,max_len=0,newline=1,l;
-  int src_extend = 0, dest_extend = 0, isrc_read = -1, idest_read = -1;
-  int srcLength, destLength, nsrc_seq = 0, ndest_seq = 0;
+  int i,srcStart,srcEnd,destStart,destEnd,junk,junk2,idest=-1;
+  int n=0,ivalSrc= -1,ivalDest= -1,lineMax,lineAlloc=0;
+  int srcLength, destLength;
   unsigned char tmp[32768];
-  char *p, src_seq[32768], dest_seq[32768], srcName[64], destName[64], oriFlag[8], srcChr[64], destChr[64];
-  if (p_has_continuation) /* DEFAULT: NO CONTINUATION */
-    *p_has_continuation = 0;
+  char *p, *src_seq=NULL, *dest_seq=NULL, srcName[64], destName[64], oriFlag[8], srcChr[64], destChr[64];
   while ((p=fgets(tmp,32767,ifile))) {
-    l=strlen(tmp);
-    if (tmp[l-1]=='\n' || tmp[l-1]=='\r') newline = 1;/* CHECK FOR START OF NEW LINE FOLLOWING...*/
-    else newline = 0;
-    if (newline ) {
-      if (isdigit(tmp[0])) { /* READ SUMMARY LINE */
-        if (9==sscanf(tmp,"%d %63s %d %d %63s %d %d %2s %d",&junk,srcChr,&srcStart,&srcEnd,
-                      destChr,&destStart,&destEnd,oriFlag,&junk2)) {
-          strcpy(srcName, src_prefix);
-          strcpy(destName, dest_prefix);
-          strcat(srcName, ".");
-          strcat(destName, ".");
-          strcat(srcName, srcChr);
-          strcat(destName, destChr);
-          *isrc=findseqID(srcName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
-          idest=findseqID(destName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
-          destLength = seqidmap[idest].length;
-/*printf("# %d\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",junk,srcName,destName,srcStart,destStart,isrc,idest,destLength);*/
-          if (*isrc<0 || idest<0)
-            fprintf(stderr," *** WARNING: Unknown sequence %s, %s ignored...\n",srcName,destName);
-          if (0==strcmp("-",oriFlag)) {
-            destStart= -(destLength-destStart+1); /* CALCULATE NEGATIVE INDEX INDICATING REVERSE STRAND*/
-            srcStart= srcStart -1;
-            }
-          if (0==strcmp("+",oriFlag)) {
-            destStart= destStart -1;
-            srcStart= srcStart -1;
-            }
-          src_extend = 0; /* START OF A NEW LPO LINE */
-          dest_extend = 0;
-          isrc_read = 0; /* READ SUMMARY LINE */
-          idest_read = 0; /* READ SUMMARY LINE */
-          strcpy(src_seq, "");
-          strcpy(dest_seq, "");
-        }
-        else /* WRONG FORMAT??!? COMPLAIN TO THE USER */
-          fprintf(stderr," *** WARNING: Incorrectly formated alignment line ignored:\n%s\n",tmp);
-      }
-      else if ((isalpha)(tmp[0]) || tmp[0] == '-') { /* START OF A NEW ALIGNMENT BLOCK */
-        if (isrc_read == 0)
-          if (1 != sscanf(tmp, "%s", src_seq)) /* READ SRC SEQ LINE */
-            fprintf(stderr," *** WARNING: Incorrectly formated alignment line ignored:\n%s\n",tmp);
-          else {isrc_read = 1; nsrc_seq = strlen(src_seq);} /* FINISHED READING */
-        if (isrc_read == -1 && idest_read == 0)
-          if (1 != sscanf(tmp, "%s", dest_seq)) /* READ DEST SEQ LINE */
-            fprintf(stderr," *** WARNING: Incorrectly formated alignment line ignored:\n%s\n",tmp);
-          else {idest_read = 1; ndest_seq = strlen(dest_seq);} /* FINISHED READING */
-        }
-      /*else {printf("EMPTY LINES\t%s\n", tmp);continue;}*/ /* SKIP EMPTY LINE */
-    }
+    if (isdigit(tmp[0])) { /* READ SUMMARY LINE */
+      if (9==sscanf(tmp,"%d %63s %d %d %63s %d %d %2s %d",&junk,srcChr,&srcStart,&srcEnd,
+		    destChr,&destStart,&destEnd,oriFlag,&junk2)) {
+	strcpy(srcName, src_prefix);
+	strcpy(destName, dest_prefix);
+	strcat(srcName, ".");
+	strcat(destName, ".");
+	strcat(srcName, srcChr);
+	strcat(destName, destChr);
+	*isrc=findseqID(srcName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
+	idest=findseqID(destName,seqidmap,nseq); /* LOOK UP INDEX FOR SEQ */
+	destLength = seqidmap[idest].length;
+	lineMax = srcEnd - srcStart + destEnd - destStart +8;
+	if (!src_seq || lineAlloc<lineMax) { /* EXPAND STORAGE BUFFER AS NEEDED */
+	  if (src_seq) {
+	    free(src_seq);
+	    free(dest_seq);
+	  }
+	  CALLOC(src_seq,lineMax,char);
+	  CALLOC(dest_seq,lineMax,char);
+	  lineAlloc = lineMax;
+	}
+	/*printf("# %d\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",junk,srcName,destName,srcStart,destStart,isrc,idest,destLength);*/
+	if (*isrc<0 || idest<0) {
+	  fprintf(stderr," *** WARNING: Unknown sequence %s, %s ignored...\n",srcName,destName);
+	  continue;
+	}
+	if (0==strcmp("-",oriFlag)) { /* HANDLE ORIENTATION */
+	  destStart= -(destLength-destStart+1); /* CALCULATE NEGATIVE INDEX INDICATING REVERSE STRAND*/
+	  srcStart= srcStart -1;
+	}
+	if (0==strcmp("+",oriFlag)) {
+	  destStart= destStart -1;
+	  srcStart= srcStart -1;
+	}
 
-    else /* IF NOT NEW LINE */
-      {
-      if ((isalpha)(tmp[0]) || tmp[0] == '-') {
-        if (isrc_read == 0)
-          if (1 != sscanf(tmp, "%s", src_seq)) /* READ SRC SEQ LINE, SHOULD BE EXTENDED */
-            fprintf(stderr," *** WARNING: Incorrectly formated alignment line ignored:\n%s\n",tmp);
-          else nsrc_seq = strlen(src_seq);
-        if (isrc_read == -1 && idest_read == 0)
-          if (1 != sscanf(tmp, "%s", dest_seq)) /* READ DEST SEQ LINE, SHOULD BE EXTENDED */
-            fprintf(stderr," *** WARNING: Incorrectly formated alignment line ignored:\n%s\n",tmp);
-          else ndest_seq = strlen(dest_seq); 
-        }
-        /*else printf("JUNK %s\n", tmp);*/
-      }
-
-    if (*isrc<0 || idest<0) continue; /* IGNORE UNKNOWN SEQUENCES */
-    if (nsrc_seq == 0 && ndest_seq == 0) continue;
-    if (isrc_read >= 0 && nsrc_seq > 0) {
-      if ((isalpha)(src_seq[0]) || src_seq[0] == '-') {
-      i=0;
-      while (src_seq[i]) {
-        while ('-'==src_seq[i]) i++; /* SKIP GAP REGIONS */
-        if (src_seq[i]==0) break; /* END OF SEQUENCE */
-        for (start=i;src_seq[i] && src_seq[i]!='-';i++); /* GET A SEQUENCE INTERVAL */
-        if (n>=maxseq)
-          return -1; /* ERROR: RAN OUT OF SPACE!!! */
-        save_interval(im+n,src_extend+start,src_extend+i,
-                    *isrc,srcStart,srcStart+i-start);
-        /*printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 
-          n,i-start,src_extend+start,src_extend+i,isrc,srcStart,srcStart+i-start,src_extend);*/
-        n++;
-        srcStart += i-start;
-        }
-      if (newline) {
-        isrc_read = -1; /* SOURCE SAVED */
-        src_extend = 0;
-/*printf("## I %d\t%d\t%s\t%d\t%s\t%d\t%d\n", isrc_read,idest_read,"src_seq",nsrc_seq,"#",src_extend,newline);*/
-/*printf("##NEW %d\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",junk,srcName,destName,srcStart,destStart,isrc,idest,destLength);*/
-        }
-      else if (!newline) { /* LINE EXCEEDS BUFFER SIZE; LPO MUST EXTEND TO NEXT LINE */
-        src_extend+=i; /* EXTEND */
-/*printf("## I %d\t%d\t%s\t%d\t%s\t%d\t%d\n", isrc_read,idest_read,"src_seq",nsrc_seq,"#",src_extend,newline);*/
-/*printf("##EXT %d\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",junk,srcName,destName,srcStart,destStart,isrc,idest,destLength);*/
-        }
+	if (fgets(src_seq,lineMax-1,ifile)==NULL || fgets(dest_seq,lineMax-1,ifile)==NULL)
+	  break; /* NO DATA READ, SO NOTHING TO PROCESS */
+	for (i=0;src_seq[i] && dest_seq[i];i++) {
+	  if (src_seq[i]=='-' || dest_seq[i]=='-') { /* GAP */
+	    if (ivalSrc>=0) { /* TERMINATE THE CURRENT INTERVAL */
+	      save_interval(im+n,ivalSrc,srcStart,idest,ivalDest,destStart);
+	      n++;
+	    }
+	    ivalSrc = -1; /* NOW IN A GAP */
+	  }
+	  else if (ivalSrc<0) { /* START A NEW INTERVAL */
+	    ivalSrc = srcStart;
+	    ivalDest = destStart;
+	  }
+	  if (src_seq[i]!='-') 
+	    srcStart++;
+	  if (dest_seq[i]!='-') 
+	    destStart++;
+	}
+	if (ivalSrc>=0) { /* TERMINATE THE LAST INTERVAL IF ANY */
+	  save_interval(im+n,ivalSrc,srcStart,idest,ivalDest,destStart);
+	  n++;
+	}
+	break; /* DONE READING ONE BLOCK OF DATA */
       }
     }
-    if (ndest_seq == 0) continue;
-    if (isrc_read == -1 && idest_read >= 0 && ndest_seq > 0) {
-      if ((isalpha)(dest_seq[0]) || dest_seq[0] == '-') {
-      i=0;
-      while (dest_seq[i]) {
-        while ('-'==dest_seq[i]) i++; /* SKIP GAP REGIONS */
-        if (dest_seq[i]==0) break; /* END OF SEQUENCE */
-        for (start=i;dest_seq[i] && dest_seq[i]!='-';i++); /* GET A SEQUENCE INTERVAL */
-        if (n>=maxseq)
-          return -1; /* ERROR: RAN OUT OF SPACE!!! */
-        save_interval(im+n,dest_extend+start,dest_extend+i,
-                      idest,destStart,destStart+i-start);
-        /*printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
-          n,i-start,dest_extend+start,dest_extend+i,idest,destStart,destStart+i-start,dest_extend);*/
-        n++;
-        destStart += i-start;
-        }
-      if (newline) {
-        idest_read = -1; /* TARGET SAVED */
-        dest_extend = 0;
-/*printf("## J %d\t%d\t%s\t%d\t%s\t%d\t%d\n", isrc_read,idest_read,"dest_seq",ndest_seq,"#",dest_extend,newline);*/
-/*printf("###NEW %d\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",junk,srcName,destName,srcStart,destStart,isrc,idest,destLength);*/
-/*printf("readAxtNetrecord: %d hits\n",n);*/
-        *p_has_continuation = 1;  return n; /* ONE BLOCK READING FINISHED */
-        }
-      else if (!newline) { /* LINE EXCEEDS BUFFER SIZE; LPO MUST EXTEND TO NEXT LINE */
-        dest_extend+=i;
-/*printf("## J %d\t%d\t%s\t%d\t%s\t%d\t%d\n", isrc_read,idest_read,"dest_seq",ndest_seq,"#",dest_extend,newline);*/
-/*printf("###EXT %d\t%s\t%s\t%d\t%d\t%d\t%d\t%d\n",junk,srcName,destName,srcStart,destStart,isrc,idest,destLength);*/
-        }
-      }
-    }
-
   }
-/*printf("End of file reached.\n",n); */
-  *p_has_continuation = 0;
+
+  free(src_seq); /* FREE BUFFERS AND RETURN COUNT OF INTERVALS READ */
+  free(dest_seq);
   return n;
+ handle_malloc_failure:
+  return -1; /* ERROR CODE */
 }
 
 
