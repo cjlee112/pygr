@@ -189,7 +189,8 @@ int read_axtnet(IntervalMap im[], SeqIDMap seqidmap[], int nseq,
 	    destStart++;
 	}
 	if (ivalSrc>=0) { /* TERMINATE THE LAST INTERVAL IF ANY */
-	  save_interval(im+n,ivalSrc,srcStart,idest,ivalDest,destStart);
+	  /*save_interval(im+n,ivalSrc,srcStart,idest,ivalDest,destStart);*/
+          save_interval(im+n,ivalSrc,srcEnd,idest,ivalDest,destEnd);
 	  n++;
 	}
 	break; /* DONE READING ONE BLOCK OF DATA */
