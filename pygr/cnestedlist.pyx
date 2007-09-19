@@ -1442,6 +1442,7 @@ cdef class NLMSA:
   def __init__(self,pathstem='',mode='r',seqDict=None,mafFiles=None,axtFiles=None,
                maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666,
                trypath=None,bidirectional=True,pairwiseMode= -1,
+               bidirectionalRule=nlmsa_utils.prune_self_mappings,
                use_virtual_lpo=None,maxLPOcoord=None,**kwargs):
     try:
       import resource # WE MAY NEED TO OPEN A LOT OF FILES...
@@ -1491,7 +1492,7 @@ cdef class NLMSA:
         self.readMAFfiles(mafFiles,maxint)
       elif axtFiles is not None:
         self.newSequence() # CREATE INITIAL LPO
-        self.readAxtNet(axtFiles)
+        self.readAxtNet(axtFiles,bidirectionalRule)
       else: # USER WILL ADD INTERVAL MAPPINGS HIMSELF...
         if self.seqDict is None:
           import seqdb
@@ -1790,23 +1791,23 @@ See the NLMSA documentation for more details.\n''')
                                            int nbuild[]):
     cdef NLMSASequence ns_lpo
     if ns is None or self.maxlen-ns.length<=seqidmap[j].length:
-      ns=self.newSequence(None,is_union=1) # CREATE NEW UNION TO HOLD IT
-      build_ifile[ns.id]=ns.build_ifile # KEEP PTR SO WE CAN WRITE DIRECTLY!
-      nbuild[ns.id]=0
+      ns = self.newSequence(None,is_union=1) # CREATE NEW UNION TO HOLD IT
+      build_ifile[ns.id] = ns.build_ifile # KEEP PTR SO WE CAN WRITE DIRECTLY!
+      nbuild[ns.id] = 0
       if self.pairwiseMode==1: # ALSO BIND INFO FOR VIRTUAL LPO FOR THIS UNION
         ns_lpo = self.seqs.seqlist[ns.id - 1]
         build_ifile[ns_lpo.id] = ns_lpo.build_ifile
         nbuild[ns_lpo.id] = 0
-    seqidmap[j].ns_id=ns.id # SET IDs TO ADD THIS SEQ TO THE UNION
-    seqidmap[j].nlmsa_id=self.inlmsa
-    seqidmap[j].offset=ns.length
-    self.inlmsa=self.inlmsa+1 # ADVANCE SEQUENCE ID COUNTER
-    ns.length=ns.length+seqidmap[j].length # EXPAND UNION SIZE
+    seqidmap[j].ns_id = ns.id # SET IDs TO ADD THIS SEQ TO THE UNION
+    seqidmap[j].nlmsa_id = self.inlmsa
+    seqidmap[j].offset = ns.length
+    self.inlmsa = self.inlmsa+1 # ADVANCE SEQUENCE ID COUNTER
+    ns.length = ns.length+seqidmap[j].length # EXPAND UNION SIZE
     return ns
 
-  def readAxtNet(self,axtFiles):
+  def readAxtNet(self,axtFiles,bidirectionalRule):
     'read alignment from a set of axtnet files'
-    cdef int i,j,nseq0,n,isrc
+    cdef int i,j,nseq0,n,isrc,is_bidirectional
     cdef SeqIDMap *seqidmap
     cdef char tmp[32768],*p,comment[4],src_prefix[64],dest_prefix[64]
     cdef FILE *ifile
@@ -1840,6 +1841,10 @@ See the NLMSA documentation for more details.\n''')
       except:
         raise IOError('%s is not correct axtNet file name. Correct name is (chrid.)source.target.net.axt.' % filename)
       #t = prefix_fun(filename) # CALL PYTHON FUNCTION TO OBTAIN PREFIXES
+      if bidirectionalRule is None: # DETERMINE IF UNI- VS. BI-DIRECTIONAL
+        is_bidirectional = self.is_bidirectional # JUST USE GLOBAL SETTING
+      else: # GET SETTING FROM USER-SUPPLIED FUNCTION
+        is_bidirectional = bidirectionalRule(t[0],t[1],self.is_bidirectional)
       strcpy(src_prefix,t[0]) # KEEP THEM IN STATIC C STRINGS FOR SPEED
       strcpy(dest_prefix,t[1])
       ifile=fopen(filename,'r')
@@ -1866,7 +1871,7 @@ See the NLMSA documentation for more details.\n''')
           if seqidmap[j].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
             ns_src = self.add_seqidmap_to_union(j,seqidmap,ns_src,build_ifile,nbuild)
           im[i].target_id = seqidmap[j].nlmsa_id # USE THE CORRECT ID
-          if self.is_bidirectional: # SAVE DEST -> SRC ALIGNMENT MAPPING
+          if is_bidirectional: # SAVE DEST -> SRC ALIGNMENT MAPPING
             if im[i].target_start<0: # OFFSET REVERSE ORI
               im_tmp.start = -seqidmap[j].offset+im[i].target_start
               im_tmp.end = -seqidmap[j].offset+im[i].target_end
