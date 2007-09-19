@@ -1866,19 +1866,20 @@ See the NLMSA documentation for more details.\n''')
           if seqidmap[j].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
             ns_src = self.add_seqidmap_to_union(j,seqidmap,ns_src,build_ifile,nbuild)
           im[i].target_id = seqidmap[j].nlmsa_id # USE THE CORRECT ID
-          if im[i].target_start<0: # OFFSET REVERSE ORI
-            im_tmp.start = -seqidmap[j].offset+im[i].target_start
-            im_tmp.end = -seqidmap[j].offset+im[i].target_end
-          else: # OFFSET FORWARD ORI
-            im_tmp.start = seqidmap[j].offset+im[i].target_start
-            im_tmp.end = seqidmap[j].offset+im[i].target_end
-          im_tmp.target_id = seqidmap[isrc].nlmsa_id
-          im_tmp.target_start = im[i].start
-          im_tmp.target_end = im[i].end
-          #print 'C', im_tmp.target_id, im_tmp.target_start, im_tmp.target_end, seqidmap[j].ns_id, j
-          j=seqidmap[j].ns_id-1 # SAVE ALL ALIGNMENTS TO THE VIRTUAL LPO
-          ns_src.saveInterval(&im_tmp,1,0,build_ifile[j]) # SAVE DEST -> SRC
-          nbuild[j]=nbuild[j]+1
+          if self.is_bidirectional: # SAVE DEST -> SRC ALIGNMENT MAPPING
+            if im[i].target_start<0: # OFFSET REVERSE ORI
+              im_tmp.start = -seqidmap[j].offset+im[i].target_start
+              im_tmp.end = -seqidmap[j].offset+im[i].target_end
+            else: # OFFSET FORWARD ORI
+              im_tmp.start = seqidmap[j].offset+im[i].target_start
+              im_tmp.end = seqidmap[j].offset+im[i].target_end
+            im_tmp.target_id = seqidmap[isrc].nlmsa_id
+            im_tmp.target_start = im[i].start
+            im_tmp.target_end = im[i].end
+            #print 'C', im_tmp.target_id, im_tmp.target_start, im_tmp.target_end, seqidmap[j].ns_id, j
+            j=seqidmap[j].ns_id-1 # SAVE ALL ALIGNMENTS TO THE VIRTUAL LPO
+            ns_src.saveInterval(&im_tmp,1,0,build_ifile[j]) # SAVE DEST -> SRC
+            nbuild[j]=nbuild[j]+1
           if im[i].start < 0: # OFFSET FORWARD ORI
             im[i].start = -seqidmap[isrc].offset + im[i].start
             im[i].end = -seqidmap[isrc].offset + im[i].end
