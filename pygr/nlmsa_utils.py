@@ -297,3 +297,12 @@ def save_seq_dict(pathstem,seqDict):
     ofile.close()
 
 
+def prune_self_mappings(src_prefix,dest_prefix,is_bidirectional):
+  '''return is_bidirectional flag according to whether source and
+  target are the same genome.  This handles axtNet reading, in which
+  mappings between genomes are given in only one direction, whereas
+  mappings between the same genome are given in both directions.'''
+  if src_prefix == dest_prefix:
+    return 0
+  else:
+    return 1
