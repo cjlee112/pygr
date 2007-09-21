@@ -1831,13 +1831,14 @@ See the NLMSA documentation for more details.\n''')
     im_tmp.sublist= -1 # DEFAULT
     strcpy(comment,"#") # MAKE C STRING 
     import string
+    import os.path
     for filename in axtFiles:
       print 'Processing axtnet file:',filename
       try:
         if filename[-8:] == '.net.axt':
-          t = string.split(filename[:-8], '.')[-2:]
+          t = string.split(os.path.basename(filename)[:-8], '.')[-2:]
         elif filename[-4:] == '.axt':
-          t = string.split(filename[:-4], '.')[-2:]
+          t = string.split(os.path.basename(filename)[:-4], '.')[-2:]
       except:
         raise IOError('%s is not correct axtNet file name. Correct name is (chrid.)source.target.net.axt.' % filename)
       #t = prefix_fun(filename) # CALL PYTHON FUNCTION TO OBTAIN PREFIXES
