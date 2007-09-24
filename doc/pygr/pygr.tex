@@ -2103,7 +2103,7 @@ and attributes.
 
 Construction Methods:
 
-\begin{funcdesc}{NLMSA}{pathstem='', mode='r', seqDict=None, mafFiles=None, maxOpenFiles=1024, maxlen=None, nPad=1000000, maxint=41666666,trypath=None,bidirectional=True,pairwiseMode= -1,maxLPOcoord=None}
+\begin{funcdesc}{NLMSA}{pathstem='', mode='r', seqDict=None, mafFiles=None, axtFiles=None, maxOpenFiles=1024, maxlen=None, nPad=1000000, maxint=41666666, trypath=None, bidirectional=True, pairwiseMode= -1, bidirectionalRule=nlmsa_utils.prune_self_mappings, maxLPOcoord=None}
   Constructor for the class.  \var{pathstem} specifies a path and filename prefix for
   the NLMSA files (since multiple files are used to store one NLMSA, it will automatically add a
   number of suffixes automatically to open the necessary set of files for the NLMSA).
@@ -2115,14 +2115,17 @@ Construction Methods:
 
   \var{seqDict} specifies a dictionary which maps sequence names to actual sequence
   objects representing those sequences.  If \var{seqDict} is None, the constructor
-  will look for a file \var{pathstem}\code{.seqDict} that is a \class{prefixUnionDict}
+  will call \method{nlmsa_utils.read_seq_dict}() to try to obtain it from files
+  associated with the NLMSA.  It first looks for a file \var{pathstem}\code{.seqDictP} 
+  that is simply a pickle of the \var{seqDict} data.  If this is not found, it
+  next looks for a file \var{pathstem}\code{.seqDict} that is a \class{prefixUnionDict}
   header file for opening all the sequence database files for you automatically.
   This header file will itself specify a list of sequence database files; the
   \var{trypath} option, if provided, specifies a list of directories in which to look for these
   sequence database files.
 
   The \var{bidirectional} option indicates whether you wish the NLMSA to
-  save each alignment relationship A:B in {\em both} possible directions
+  save each input alignment relationship A:B in {\em both} possible directions
   (i.e. nlmsa[A] will yield B, and nlmsa[B] will yield A).  In general, the
   \var{bidirectional=True} mode is most appropriate for true multiple sequence
   alignments, i.e. where it is guaranteed that for a given pair of sequences A,B
@@ -2135,7 +2138,17 @@ if \code{nlmsa} is a mapping of the human genome sequence onto the mouse genomic
 sequence, then \code{nlmsa[s]} should only yield a result if \code{s} is a human
 genome sequence interval; a mouse genome sequence interval should raise a \code{KeyError}.
 
-\item When the input alignment data may contain multiple, inconsistent alignments of
+\item When the input alignment data themselves give each A:B relationship in
+both directions (i.e. the input data include both an A:B mapping and also a
+B:A mapping).  Since the input data contain both directions of each mapping,
+there is no need for the constructor code to save each input alignment
+bidirectionally.  In this case \var{bidirectional=True} mode would cause duplicate
+mappings to be saved (i.e. the A:B mapping would be saved twice, and the B:A mapping
+would also be saved twice) and thus alignment queries would yield duplicated results.
+In such a case, \var{bidirectional=False} prevents this problem.
+
+\item A common example of this issue is when the
+input alignment data may contain multiple, inconsistent alignments of
 a given pair of sequences.  For example, a BLAST all-vs-all will return TWO alignments
 of A,B: one when A is blasted against the database (finding B), and another when 
 B is blasted against the database (finding A).  These two alignments could be different!
@@ -2165,7 +2178,52 @@ inconsistent results when the input data are not a true multiple-sequence alignm
   cannot be mixed in a single NLMSA.  It must be either one format or the other.
 
   \var{mafFiles} can be used to specify a list of
-  filenames storing a multiple sequence alignment in the UCSC MAF format.
+  filenames containing a multiple sequence alignment in the UCSC MAF format,
+  for saving as a new NLMSA (i.e. \var{mode='w'}).
+  Note that this automatically sets \var{pairwiseMode}=False.  After the MAF
+  data are read, it will automatically call the build() method to construct
+  the alignment index files.
+
+  \var{axtFiles} can be used to specify a list of
+  filenames containing a set of pairwise alignments in UCSC axtNet format,
+  for saving as a new NLMSA (i.e. \var{mode='w'}).
+  Note that this automatically sets \var{pairwiseMode}=True.  After the axtNet
+  data are read, it will automatically call the build() method to construct
+  the alignment index files.
+
+  \var{bidirectionalRule} allows the user to provide a function that has
+  complete control over the desired \var{bidirectional} setting to use for
+  each possible pair of sequence databases.  Currently, this is only used
+  for \var{axtFiles} reading; the default method (\method{nlmsa_utils.prune_self_mappings})
+  filters out duplicate mappings for a sequence database onto itself
+  (since these are provided in both forward and reverse directions in the axtNet
+  file), but stores mappings for one sequence database to another 
+  bidirectionally (since the axtNet files give such mappings in only one direction
+  normally).  To implement your own bidirectionalRule function, see
+  \method{nlmsa_utils.prune_self_mappings}() as an example.
+
+  \var{maxlen} specifies the maximum coordinate
+  value for a union or LPO coordinate system.  Its default value is 2GB, to prevent \class{int} overflow.
+  Using a smaller value can be useful, to 1) limit the size of the LPO in memory
+  during initial construction, and 2) to limit the size of LPO database files on disk
+  (if for example, your file system does not support files above some maximum size).
+  During initial construction of the NLMSA (from MAF files or user-specified interval
+  alignments), the algorithm performs a one-pass sort of the LPO intervals.  Thus,
+  this set of intervals is briefly held in RAM for this sort.  If you have insufficient
+  RAM, the construction step may raise a MemoryError.  If so, you can avoid this problem
+  by using a smaller \var{maxlen} value.
+
+  The \var{maxint} option provides another way of limiting the size of LPO
+  databases.  It specifies the maximum number of intervals to store per LPO database.
+  Since each interval takes 24 bytes, the default setting limits each LPO to
+  a total size of 1 GB.  Note that the current NLMSA construction algorithm
+  requires loading each database index into memory as one-time operation
+  during construction.  If your NLMSA build fails due to running out of memory,
+  simply reduce this value.
+
+  The \var{nPad} option sets the maximum number of LPO coordinate systems
+  (specifically, the offset for the start of real sequence IDs in the NLMSA
+  sequence index).  You are unlikely to need to change this default value.
 
   \var{maxOpenFiles} limits the open file descriptors the NLMSA will use.
   {\em This option is no longer of much importance.  In versions prior to pygr 0.5,
@@ -2181,28 +2239,6 @@ inconsistent results when the input data are not a true multiple-sequence alignm
   database files, which may slow down query performance (due to having to open and close
   databases repeatedly to process queries).
 
-  \var{maxlen} specifies the maximum coordinate
-  value for an LPO database.  Its default value is 2GB, to prevent \class{int} overflow.
-  Using a smaller value can be useful, to 1) limit the size of the LPO in memory
-  during initial construction, and 2) to limit the size of LPO database files on disk
-  (if for example, your file system does not support files above some maximum size).
-  During initial construction of the NLMSA (from MAF files or user-specified interval
-  alignments), the algorithm performs a one-pass sort of the LPO intervals.  Thus,
-  this set of intervals is briefly held in RAM for this sort.  If you have insufficient
-  RAM, the construction step may raise a MemoryError.  If so, you can avoid this problem
-  by using a smaller \var{maxlen} value.
-
-  The \var{maxint} option provides another way of limiting the size of LPO
-  databases.  It specifies the maximum number of intervals to store per database.
-  Since each interval takes 24 bytes, the default setting limits each LPO to
-  a total size of 1 GB.  Note that the current NLMSA construction algorithm
-  requires loading each database index into memory as one-time operation
-  during construction.  If your NLMSA build fails due to running out of memory,
-  simply reduce this value.
-
-  The \var{nPad} option sets the maximum number of LPO coordinate systems
-  (specifically, the offset for the start of real sequence IDs in the NLMSA
-  sequence index).  You are unlikely to need to change this default value.
 \end{funcdesc}
 
 
@@ -2343,15 +2379,55 @@ perform a ``build'' step).
   \var{outfilename} gives the path for the output text file into which the
   NLMSA database will be dumped.  If None, it will default to \var{pathstem} with a
   \code{.txt} suffix added.
+
+  Note: \method{dump_textfile} attempts to save information about the seqDict 
+  (or, alternatively, the PrefixUnionDict dictionary of multiple sequence
+  databases), using their pygr.Data IDs if possible.
+  Specifically, for a PrefixUnionDict (i.e. multiple sequence databases in
+  one NLMSA), it saves a dictionary of the prefixes
+  for each sequence database in the NLMSA, with its pygr.Data ID if it has one.
+  Assigning a pygr.Data ID to each sequence database has the great advantage that
+  the reconstruction method \method{textfile_to_binaries}() can simply request
+  pygr.Data for these IDs on the destination machine, automatically.  By contrast,
+  if a sequence database has no pygr.Data ID, the user will have to supply that
+  sequence database manually on the destination machine.  In this case, 
+  \method{dump_textfile} will print a warning message to stderr explaining
+  what the user must do.  This provides yet another reason why it's a good idea
+  to assign a pygr.Data ID to any sequence database that is a well-defined,
+  commonly used public resource.
 \end{funcdesc}
 
 
-\begin{funcdesc}{textfile_to_binaries}{filename}
+\begin{funcdesc}{textfile_to_binaries}{filename,seqDict=None,prefixDict=None}
   Creates an NLMSA binary database from input text file \var{filename}.
   The NLMSA binary database will be created in the current directory,
   and will be given the same name as it originally had prior to being dumped to text.
   Since no build is required, this function does not require significant amounts
   of RAM memory.
+
+  Handling of sequence databases: \method{textfile_to_binaries} will attempt to 
+  obtain any needed sequence databases using their pygr.Data ID if assigned.
+  If you obtain a \class{PygrDataNotFoundError}, this simply means that one
+  of the pygr.Data IDs was not found in any of your pygr.Data resource
+  databases.  In this case, you must either add it to one of your resource
+  databases, or add a resource database that does contain it to your PYGRDATAPATH,
+  then re-run \method{textfile_to_binaries}.
+
+  On the other hand, if any of the needed sequence databases were NOT assigned
+  a pygr.Data ID, then you will have to provide that sequence database(s)
+  manually to the \method{textfile_to_binaries}() function, either via
+  its \var{seqDict} argument (if the NLMSA contains only one sequence database),
+  or via its \var{prefixDict} argument (if the NLMSA contains multiple sequence
+  databases).  If you do not
+  do so, an appropriate error will be raised, explaining what you need to do.
+  The \var{prefixDict} argument must be a dictionary whose keys match 
+  individual sequence database prefixes in the original NLMSA PrefixUnionDict,
+  and whose associated values are the appropriate sequence database to use
+  for each specified prefix.  You only need to provide those sequence databases
+  that \method{textfile_to_binaries}() is unable to obtain from pygr.Data.
+  When in doubt, just run \method{textfile_to_binaries}() without the \var{prefixDict}
+  argument, and it will raise an error message listing the prefixes that you
+  need to provide.
 \end{funcdesc}
 
 
