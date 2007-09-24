@@ -2369,7 +2369,7 @@ perform a ``build'' step).
 
 \end{itemize}
 
-\begin{funcdesc}{dump_textfile}{pathstem,outfilename=None}
+\begin{funcdesc}{dump_textfile}{pathstem,outfilename=None,verbose=True}
   Dumps a text representation of an existing NLMSA binary database.
   \var{pathstem} must be the path to the NLMSA.  For
   example if you have an NLMSA database index file \code{/loaner/hg17_NLMSA/hg17_msa.idDict}
@@ -2379,6 +2379,9 @@ perform a ``build'' step).
   \var{outfilename} gives the path for the output text file into which the
   NLMSA database will be dumped.  If None, it will default to \var{pathstem} with a
   \code{.txt} suffix added.
+
+  Setting \var{verbose=False} will prevent printing of warning messages
+  to stderr (for details about possible warnings, see below).
 
   Note: \method{dump_textfile} attempts to save information about the seqDict 
   (or, alternatively, the PrefixUnionDict dictionary of multiple sequence
