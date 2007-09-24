@@ -1973,7 +1973,7 @@ To turn off this message, use the verbose=False option
 
 
 
-def dump_textfile(pathstem,outfilename=None):
+def dump_textfile(pathstem,outfilename=None,verbose=True):
   'dump NLMSA binary files to a text file'
   cdef int n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode,nprefix
   cdef FILE *outfile
@@ -1996,6 +1996,12 @@ def dump_textfile(pathstem,outfilename=None):
       strcpy(seqDictID,seqDict._persistent_id)
     except AttributeError:
       strcpy(seqDictID,"unknown")
+      if verbose:
+        sys.stderr.write('''Warning: Because your seqDict has no pygr.Data ID, there is no
+host-independent way to save it to a textfile for transfer
+to another machine.  Therefore, when loading this textfile
+on the destination machine, you will have to provide the
+seqDict argument to textfile_to_binaries() on the destination machine.''')
   try:
     ifile = file(pathstem+'.attrDict')
     d = pickle.load(ifile)
@@ -2021,14 +2027,15 @@ def dump_textfile(pathstem,outfilename=None):
         strcpy(seqDictID,d._persistent_id) # TRY TO GET PYGR.DATA ID
       except AttributeError:
         strcpy(seqDictID,"None")
-        if pleaseWarn:
+        if pleaseWarn and verbose:
           pleaseWarn = False
           sys.stderr.write('''Warning: Because one or more of the sequence
 databases in the seqDict have no pygr.Data ID, there is no
 host-independent way to save it to a textfile for transfer
 to another machine.  Therefore, when loading this textfile
 on the destination machine, you will have to provide a dictionary
-for these sequence database(s) on the destination machine.''')
+for these sequence database(s) as the prefixDict argument 
+to textfile_to_binaries() on the destination machine.''')
       if fprintf(outfile,"PREFIXUNION\t%s\t%s\n",tmp,seqDictID)<0:
         raise IOError('error writing to file %s' %outfilename)
     for id,t in seqIDdict.iteritems(): # SAVE seqIDdict
