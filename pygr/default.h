@@ -7,7 +7,11 @@
 #define PYGR_OFF_T off_t
 #define PYGR_FSEEK(IFILE,OFFSET,WHENCE) fseeko(IFILE,OFFSET,WHENCE)
 
+#ifdef BUILD_C_LIBRARY
+#include <sys/types.h>
+#else
 #include "Python.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -20,6 +24,13 @@
 #else
 #define STRINGIFY(NAME) "NAME"
 #endif
+
+#define FREE(P) if (P) {free(P);(P)=NULL;}
+
+
+#ifndef BUILD_C_LIBRARY
+/* USE THESE DEFINITIONS FOR BUILDING A PYTHON EXTENSION MODULE  *****************************/
+
 
 /* IF YOU USE CALLOC, YOUR FUNCTION MUST DEFINE A HANDLER WITH LABEL
    handle_malloc_failure:
@@ -47,8 +58,6 @@
     MALLOC_FAILURE_ACTION;\
   }
 
-#define FREE(P) if (P) {free(P);(P)=NULL;}
-
 /* IF realloc FAILS, memptr REMAINS VALID, BUT MALLOC_FAILURE_ACTION IS INVOKED. */
 #define REALLOC(memptr,N,ATYPE) \
   if ((N)<=0) {\
@@ -72,6 +81,39 @@
   }
 
 
+#else
+/* USE THESE DEFINITIONS FOR BUILDING A C LIBRARY *****************************/
+#define MALLOC_FAILURE_ACTION abort()
+#define CALLOC(memptr,N,ATYPE) \
+  if ((N)<=0) {\
+    fprintf(stderr,"%s, line %d: *** invalid memory request: %s[%d].\n",\
+              __FILE__,__LINE__,STRINGIFY(memptr),(N));   \
+    MALLOC_FAILURE_ACTION;\
+  }\
+  else if (NULL == ((memptr)=(ATYPE *)calloc((size_t)(N),sizeof(ATYPE))))  { \
+    fprintf(stderr,"%s, line %d: memory request failed: %s[%d].\n",\
+              __FILE__,__LINE__,STRINGIFY(memptr),(N));   \
+    MALLOC_FAILURE_ACTION;\
+  }
+
+/* IF realloc FAILS, memptr REMAINS VALID, BUT MALLOC_FAILURE_ACTION IS INVOKED. */
+#define REALLOC(memptr,N,ATYPE) \
+  if ((N)<=0) {\
+    fprintf(stderr,"%s, line %d: *** invalid memory request: %s[%d].\n",\
+              __FILE__,__LINE__,STRINGIFY(memptr),(N));   \
+    MALLOC_FAILURE_ACTION;\
+  }\
+  else {\
+    void *tmp_realloc_ptrZZ; \
+    if (NULL == (tmp_realloc_ptrZZ=realloc((memptr),(size_t)(N)*sizeof(ATYPE))))  { \
+      fprintf(stderr,"%s, line %d: memory request failed: %s[%d].\n",\
+                __FILE__,__LINE__,STRINGIFY(memptr),(N));   \
+      MALLOC_FAILURE_ACTION;\
+    } \
+    else \
+      (memptr)=(ATYPE *)tmp_realloc_ptrZZ; \
+  }
+#endif
 
 
 
