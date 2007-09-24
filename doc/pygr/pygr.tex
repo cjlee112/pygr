@@ -56,8 +56,8 @@ Sequences and alignments also can be modeled as graph structures in Pygr, provid
 Pygr tries to provide a very "Pythonic" model for sequences.  This python interpreter session illustrates some simple features:
 
 \begin{verbatim}
->>> from pygr.seqdb import *
->>> s = NamedSequence('attatatgccactat','bobo') #create a sequence named bobo
+>>> from pygr.sequence import *
+>>> s = Sequence('attatatgccactat','bobo') #create a sequence named bobo
 >>> s # interpreter will print repr(s)
 bobo[0:15]
 >>> t = s[-8:] #python slice gives last 8 nt of s
@@ -2825,9 +2825,10 @@ an appropriate exception (e.g. unable to run \code{blastall}).
 Interface to an existing BLAST database or FASTA sequence file; in the latter case, it will automatically construct BLAST database files for you using the NCBI tool formatdb. Here's a simple example of opening a BLAST database and searching it for matches to a specific piece of sequence:
 
 \begin{verbatim}
+from pygr.sequence import *
 from pygr.seqdb import *
 db = BlastDB('sp') # OPEN SWISSPROT BLAST DB
-s = NamedSequence(str(db['CYGB_HUMAN'][40:-40]),'boo')
+s = Sequence(str(db['CYGB_HUMAN'][40:-40]),'boo')
 m = db.blast(s) # DO BLAST SEARCH
 myg = db['MYG_CHICK']
 for i in m[s][myg]:
@@ -2845,7 +2846,7 @@ construction of a BlastDB object: This looks for either a FASTA file with the pa
 db['CYGB_HUMAN'] obtains a sequence object representing the SwissProt sequence whose ID is CYGB_HUMAN.  The slice operation [40:-40] behaves just like normal Python slicing: it obtains a sequence object representing the subinterval omitting the first 40 letters and last 40 letters of the sequence.  The str() operation obtains the actual string representation of this subinterval.
 
 \item
-NamedSequence(letter_string, name) creates a new sequence object whose sequence is letter_string, and whose ID is name.
+Sequence(letter_string, name) creates a new sequence object whose sequence is letter_string, and whose ID is name.
 
 \item
 Running the db.blast(s) method searches the BLAST database for homologies to s, using NCBI BLAST.  It chooses reasonable parameters based upon the sequence types of the database and supplied query.  However, you can specify extra parameter options if you wish.  It returns a Pygr sequence mapping (multiple alignment) that represents a standard Pygr graph of alignment relationships between s and the homologies that were found.
@@ -3508,7 +3509,7 @@ when the sequence string of a subinterval is requested, the cache actually retri
 
 \subsubsection{SQLSequence}
 
-Implements a subclass inheriting from SQLRow and NamedSequenceBase, to use a relational database table to obtain the actual sequence.  There are three minor variants DNASQLSequence, RNASQLSequence, ProteinSQLSequence (so that the sequence does not have to analyze itself to determine what kind of sequence it is).  Its constructor takes the same arguments as SQLRow(table, id), where table is the SQLTable object representing the table in which the sequence is stored, and id is the primary key of the row representing this sequence.  However, normally this class is simply passed to the Table object itself so that it will use it to instantiate new row objects whenever they are requested via its dictionary interface.  Here's a simple example:
+Implements a subclass inheriting from SQLRow and SequenceBase, to use a relational database table to obtain the actual sequence.  There are three minor variants DNASQLSequence, RNASQLSequence, ProteinSQLSequence (so that the sequence does not have to analyze itself to determine what kind of sequence it is).  Its constructor takes the same arguments as SQLRow(table, id), where table is the SQLTable object representing the table in which the sequence is stored, and id is the primary key of the row representing this sequence.  However, normally this class is simply passed to the Table object itself so that it will use it to instantiate new row objects whenever they are requested via its dictionary interface.  Here's a simple example:
 
 \begin{verbatim}
 class YiProteinSequence(ProteinSQLSequence): # CREATE A NEW SQL SEQUENCE CLASS
@@ -3523,7 +3524,7 @@ Let's go through this line by line:
 \begin{itemize}
 
 \item
-we create a subclass of ProteinSQLSequence to show how Python makes it easy to create customized behaviors that can make database access more efficient.  Here we've simply added a __len__ method that uses the protein_length attribute obtained directly from the database, courtesy of SQLRow.__getattr__, which knows what columns exist in the database, and provides them transparently as object attributes.  (The ordinary NamedSequenceBase __len__ method calculates it by obtaining the whole sequence string and calculating its length.  Clearly it's more efficient for the database to retrieve this number (stored as a column called protein_length) and return it, rather than making it send us the whole sequence).
+we create a subclass of ProteinSQLSequence to show how Python makes it easy to create customized behaviors that can make database access more efficient.  Here we've simply added a __len__ method that uses the protein_length attribute obtained directly from the database, courtesy of SQLRow.__getattr__, which knows what columns exist in the database, and provides them transparently as object attributes.  (The ordinary SequenceBase __len__ method calculates it by obtaining the whole sequence string and calculating its length.  Clearly it's more efficient for the database to retrieve this number (stored as a column called protein_length) and return it, rather than making it send us the whole sequence).
 
 \item
 next we call the protein.objclass() method to inform the table object that it should use our new class for instantiating any row objects for this table.  It will call this class with the usual SQLRow contructor arguments (table, id).
