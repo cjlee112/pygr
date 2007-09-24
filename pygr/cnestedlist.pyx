@@ -1455,6 +1455,8 @@ cdef class NLMSA:
     self.pathstem=pathstem
     if maxlen is None:
       maxlen=C_int_max-65536 # C_int_max MAXIMUM VALUE REPRESENTABLE BY int
+      if axtFiles is not None:
+        maxlen = maxlen/2
     self.maxlen=maxlen
     self.inlmsa=nPad
     self._ignoreShadowAttr={'sourceDB':None,'targetDB':None} # SCHEMA INFO
