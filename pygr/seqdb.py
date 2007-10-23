@@ -1517,8 +1517,9 @@ class BlastDBXMLRPC(BlastDB):
     def getSeqLenDict(self):
         'return seqLenDict over XMLRPC'
         d = {}
-        d.update(self.seqLenDict)
-        return d
+        for k,v in self.seqLenDict.items():
+            d[k] = v[0],str(v[1]) # CONVERT TO STR TO ALLOW OFFSET>2GB
+        return d # XML-RPC CANNOT HANDLE INT > 2 GB, SO FORCED TO CONVERT...
     def strslice(self,id,start,stop):
         'return string sequence for specified interval in the specified sequence'
         if start<0: # HANDLE NEGATIVE ORIENTATION
@@ -1550,7 +1551,10 @@ class XMLRPCSequence(SequenceBase):
 class XMLRPCSeqLenDict(object):
     'descriptor that returns dictionary of remote server seqLenDict'
     def __get__(self,obj,objtype):
-        return obj.server.getSeqLenDict()
+        d = obj.server.getSeqLenDict()
+        for k,v in d.items():
+            d[k] = v[0],int(v[1]) # CONVERT OFFSET STR BACK TO INT
+        return d
 
 
 class XMLRPCSequenceDB(SeqDBbase):
