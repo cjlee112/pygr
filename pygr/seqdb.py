@@ -1550,24 +1550,28 @@ class XMLRPCSequence(SequenceBase):
 
 class XMLRPCSeqLenDict(object):
     'descriptor that returns dictionary of remote server seqLenDict'
+    def __init__(self,attr):
+        self.attr = attr
     def __get__(self,obj,objtype):
+        'only called if attribute does not already exist. Saves result as attribute'
         d = obj.server.getSeqLenDict()
         for k,v in d.items():
             d[k] = v[0],int(v[1]) # CONVERT OFFSET STR BACK TO INT
+        obj.__dict__[self.attr] = d # PROVIDE DIRECTLY TO THE __dict__
         return d
 
 
 class XMLRPCSequenceDB(SeqDBbase):
     'XMLRPC client: access sequence database over XMLRPC'
-    itemClass=XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
-    itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
-    seqLenDict = XMLRPCSeqLenDict() # INTERFACE TO SEQLENDICT
+    itemClass = XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
+    itemSliceClass = SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
+    seqLenDict = XMLRPCSeqLenDict('seqLenDict') # INTERFACE TO SEQLENDICT
     def __init__(self,url=None,name=None):
         dict.__init__(self)
         import coordinator
-        self.server=coordinator.get_connection(url,name)
-        self.url=url
-        self.name=name
+        self.server = coordinator.get_connection(url,name)
+        self.url = url
+        self.name = name
     def __getstate__(self): ################ SUPPORT FOR UNPICKLING
         return dict(url=self.url,name=self.name)
     def __getitem__(self,id):
@@ -1575,11 +1579,25 @@ class XMLRPCSequenceDB(SeqDBbase):
             return dict.__getitem__(self,id)
         except:
             pass
-        l=self.server.getSeqLen(id)
+        l = self.server.getSeqLen(id)
         if l>0:
-            s=self.itemClass(self,id,l)
-            self[id]=s
+            s = self.itemClass(self,id,l)
+            self[id] = s
             return s
         raise KeyError('%s not in this database' % id)
+    def __iter__(self):
+        'generate all IDs in this database'
+        for id in self.seqLenDict:
+            yield id
+
+    def iteritems(self):
+        'generate all IDs in this database'
+        for id in self.seqLenDict:
+            yield id,self[id]
+
+    def __len__(self):
+        "number of total entries in this database"
+        return len(self.seqLenDict)
+
 
         
