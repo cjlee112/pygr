@@ -5383,18 +5383,98 @@ This class provides all the standard behaviors described above.  The current ref
 
 \subsubsection{Collection}
 Provides a generic holder for a collection of data objects, that can be
-pickled, stored in \module{pygr.Data} etc.
+pickled, stored in \module{pygr.Data} etc.  It is a generic dictionary-like interface
+for flexible storage mapping ID --> OBJECT, and depending on its 
+initial arguments will store the data in memory (e.g. using a Python \class{dict})
+or on-disk (e.g. using \class{PicklableShelve} or \class{IntShelve}, see details below).
+
+\begin{funcdesc}{Collection}{saveDict=None,dictClass=dict,filename=None,intKeys=False,**kwargs}
+  \var{saveDict}, if not None, is the internal mapping to use as our storage.
+        
+  \var{filename}: if provided, is a file path to a shelve (BerkeleyDB) file to
+  store the data in, using \class{PicklableShelve}, or \class{IntShelve} if \var{intKeys}
+  is True.  In this case \var{kwargs} are passed to the constructor for that class,
+  allowing you to specify \var{mode}, \var{writeback} and other \module{shelve} parameters.
+
+  \var{dictClass}: if provided, is the class to use for storage of the dict data.
+\end{funcdesc}
+
+\begin{funcdesc}{close}{}
+  After saving data into a \class{Collection} you must ``commit'' the transaction
+  by calling its \method{close}() method, which will ensure that all pending data
+  will be written to associated files (e.g. for \class{PicklableShelve} or \class{IntShelve}).
+\end{funcdesc}
+
+
+\subsubsection{PicklableShelve}
+Subclass of \class{Collection} that 
+provides an interface to the Python \module{shelve} persistent dictionary
+storage, as an object that can be pickled; unpickling the object will 
+correctly re-open the associated \module{shelve} file.  One important
+difference is that it allows you to specify both the mode flag for opening
+the shelve {\em now} and the mode flag for re-opening the shelve in the
+future whenever this object is unpickled.  
+
+Note also that since \class{PicklableShelve} is designed to be pickled
+and potentially shared among users, it automatically supports re-opening in
+read-only mode.  That is, if re-opening in read/write mode fails, it will 
+automatically re-open in read-only mode, and prints a warning message to the
+user.  This feature avoids permissions problems that commonly occur, e.g.
+if one user builds a PicklableShelve, and shares that to other users, they 
+typically will not have write-permission to the file, and could only access
+it in read-only mode.
+\begin{funcdesc}{PicklableShelve}{filename,mode=None,writeback=False,unpicklingMode=False,verbose=True,**kwargs}
+  Ideally, you
+  should specify a TWO letter mode string: the first letter to
+  indicate what mode the shelve should be initially opened in, and
+  the second to indicate the mode to open the shelve during unpickling.
+  e.g. \var{mode}='nr': to create an empty shelve (writable),
+  which in future will be re-opened read-only.
+
+  Single letter \var{mode} values such as 'n' (create empty file), 'c'
+  (open read-write, but create if missing), and 'w' (open read-write)
+  are permitted, but will default to read-only for re-opening the file
+  in {\em future} unpickling operations.  Use a two-letter \var{mode}
+  if you want the file re-opened in read-write mode; e.g. \var{mode}='nw'
+  to create an empty file now and re-open it in read-write mode in future
+  unpickling operations.
+
+  \var{mode=None} makes it first attempt to open read-only, but if the file
+  does not exist will create it using mode 'c'.  Note that it will also 
+  follow this behavior pattern in future unpickling operations (i.e. if
+  the file is missing, it will be silently re-created, empty, in read-write mode).
+  This is appropriate if you want to be able to ``empty the database'' by
+  simply deleting the shelve file manually.  This behavior is different from
+  the 'nr' mode, which will create the shelve file empty {\em now}, but 
+  will raise an exception if it is missing when future unpickling operations
+  attempt to re-open it read-only.
+\end{funcdesc}
+
+\begin{funcdesc}{reopen}{mode='r'}
+  Re-open the shelve file in the specified \var{mode} and also save this
+  \var{mode} as the mode for re-opening the shelve file in future unpickling
+  operations.
+\end{funcdesc}
+
+\begin{funcdesc}{close}{}
+  After saving data into a \class{PicklableShelve} you must ``commit'' the transaction
+  by calling its \method{close}() method, which will ensure that all pending data
+  will be written to its shelve file.
+\end{funcdesc}
 
 \subsubsection{IntShelve}
-Provides an interface to the Python \module{shelve} persistent dictionary
+Subclass of PicklableShelve,
+provides an interface to the Python \module{shelve} persistent dictionary
 storage, that can accept \class{int} values as keys.
-\begin{funcdesc}{__init__}{filename=None,mode='r'}
+\begin{funcdesc}{IntShelve}{filename,mode=None,writeback=False,unpicklingMode=False,verbose=True,**kwargs}
   Open the specified \module{shelve} BerkeleyDB file, using the specified
   mode.
 \end{funcdesc}
 
 \begin{funcdesc}{close}{}
-  calls the shelve file's \method{close} method.
+  After saving data into a \class{IntShelve} you must ``commit'' the transaction
+  by calling its \method{close}() method, which will ensure that all pending data
+  will be written to its shelve file.
 \end{funcdesc}
 In other respects the \class{IntShelve} behaves like a regular shelve
 (dictionary interface).
@@ -5476,7 +5556,34 @@ A GraphQuery is basically an iterator that returns all possible mappings of the 
 
 
 
+\subsection{classutil Module}
+\label{classutil-module}
+This module provides basic support functions for pickling and unpickling,
+etc.
 
+\subsubsection{open_shelve}
+Alternative to Python standard library function \class{shelve.open} with several benefits:
+\begin{funcdesc}{open_shelve}{filename,mode=None,writeback=False,allowReadOnly=False,useHash=False,verbose=True}
+\end{funcdesc}
+\begin{itemize}
+\item uses bsddb btree by default instead of bsddb hash, which is very slow
+for large databases.  Will automatically fall back to using bsddb hash
+for existing hash-based shelve files.  Set \var{useHash=True} to force it to use bsddb hash.
+In our experience, the Python standard library \class{shelve} object using
+bsddb hash file by default, becomes very slow and produces unreasonably large
+files, when the number of records exceeds several million.  Fortunately, the
+bsddb btree file seems to solve this problem, so \method{open_shelve}() uses
+it by default.
+      
+\item \var{allowReadOnly=True} will automatically suppress permissions errors so
+user can at least get read-only access to the desired shelve, if no write permission.
+
+\item \var{mode=None} first attempts to open file in read-only mode, but if the file
+does not exist, opens it in create mode.
+
+\item raises standard exceptions defined in dbfile: \class{WrongFormatError}, 
+\class{PermissionsError}, \class{ReadOnlyError}, \class{NoSuchFileError}
+\end{itemize}
 
 \subsection{coordinator Module}
 \label{coord-module}
