@@ -1,6 +1,5 @@
 from __future__ import generators
 import os
-import shelve
 from sqlgraph import *
 from poa import *
 from parse_blast import *
@@ -547,17 +546,17 @@ class BlastDBbase(SeqDBbase):
         if skipSeqLenDict:
             self.itemClass=BlastSequenceBase # DON'T USE seqLenDict
         else:
-            import anydbm
+            from dbfile import NoSuchFileError
             try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
-                self.seqLenDict=shelve.open(filepath+'.seqlen','r')
-            except anydbm.error: # READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
-                self.seqLenDict=shelve.open(filepath+'.seqlen') # OPEN IN DEFAULT "CREATE" MODE
+                self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+            except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+                self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
                 ifile,idFilter=self.raw_fasta_stream(ifile,idFilter)
                 import sys
                 print >>sys.stderr,'Building sequence length index...'
                 store_seqlen_dict(self.seqLenDict,ifile,filepath,idFilter)
                 self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
-                self.seqLenDict=shelve.open(filepath+'.seqlen','r') # REOPEN IT READ-ONLY
+                self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
         
         self.checkdb() # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
         if not self.blastReady and blastReady: # FORCE CONSTRUCTION OF BLAST DB
