@@ -296,7 +296,7 @@ class SQLTableClustered(SQLTable):
     def keys(self):
         return getKeys(self,'order by %s' %self.clusterKey)
     def clusterkeys(self):
-        return getClusterKeys(self, 'order by %s' %self.clusterKey):
+        return getClusterKeys(self, 'order by %s' %self.clusterKey)
     def __getitem__(self,k):
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
