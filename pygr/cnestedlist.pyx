@@ -1978,12 +1978,12 @@ def dump_textfile(pathstem,outfilename=None,verbose=True):
   cdef int n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode,nprefix
   cdef FILE *outfile
   cdef char err_msg[2048],tmp[2048],seqDictID[256]
-  err_msg[0]=0 # ENSURE STRING IS EMPTY
+  err_msg[0] = 0 # ENSURE STRING IS EMPTY
   if outfilename is None:
-    outfilename=pathstem+'.txt' # DEFAULT TEXTFILE NAME
-  import shelve,pickle,sys # NEED TO COPY THE WHOLE seqIDdict
-  seqIDdict=shelve.open(pathstem+'.seqIDdict','r')
-  n=len(seqIDdict)
+    outfilename = pathstem+'.txt' # DEFAULT TEXTFILE NAME
+  import classutil,pickle,sys # NEED TO COPY THE WHOLE seqIDdict
+  seqIDdict = classutil.open_shelve(pathstem+'.seqIDdict','r')
+  n = len(seqIDdict)
   seqDict = nlmsa_utils.read_seq_dict(pathstem) 
   try: # OBTAIN PREFIX INFO FOR SEQDICT
     prefixDict = seqDict.prefixDict
@@ -2097,9 +2097,9 @@ def textfile_to_binaries(filename,seqDict=None,prefixDict=None):
     elif 0!=strcmp(tmp,"None"): # TRY OBTAINING AS PGYR.DATA ID
       import pygr.Data
       seqDict = pygr.Data.getResource(tmp)
-    import shelve,pickle # CREATE THE seqIDdict
-    seqIDdict=shelve.open(basestem+'.seqIDdict','c')
-    IDdict=shelve.open(basestem+'.idDict','c')
+    import classutil,pickle # CREATE THE seqIDdict
+    seqIDdict = classutil.open_shelve(basestem+'.seqIDdict','n')
+    IDdict = classutil.open_shelve(basestem+'.idDict','n')
     d = {}
     if is_bidirectional != -1:
       d['is_bidirectional'] = is_bidirectional
