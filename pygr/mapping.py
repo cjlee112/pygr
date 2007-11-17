@@ -315,27 +315,59 @@ class Collection(object):
 
 class PicklableShelve(Collection):
     'persistent storage mapping ID --> OBJECT'
-    def __init__(self,filename,mode=None,writeback=True,**kwargs):
-        from pygr.classutil import SourceFileName
-        self.filename = SourceFileName(str(filename)) # MARKS THIS STR AS A FILE PATH
-        if mode=='c':
-            self.mode = 'w' # STORE FOR SUBSEQUENT REOPENING BY UNPICKLE...
-        else:
+    def __init__(self,filename,mode=None,writeback=False,unpicklingMode=False,
+                 verbose=True,**kwargs):
+        '''Wrapper for a shelve object that can be pickled.  Ideally, you
+should specify a TWO letter mode string: the first letter to
+indicate what mode the shelve should be initially opened in, and
+the second to indicate the mode to open the shelve during unpickling.
+e.g. mode='nr': to create an empty shelve (writable),
+which in future will be re-opened read-only.
+Also, mode=None makes it first attempt to open read-only, but if the file
+does not exist will create it using mode 'c'. '''
+        self.filename = classutil.SourceFileName(str(filename)) # MARKS THIS STR AS A FILE PATH
+        self.writeback = writeback
+        if unpicklingMode or mode is None or mode=='r': # JUST USE mode AS GIVEN
             self.mode = mode
-        self.d = classutil.open_shelve(filename,mode,writeback)
+        elif mode=='n' or mode=='c' or mode=='w': # AMBIGUOUS MODES, WARN & SET DEFAULT
+            if verbose:
+                import sys
+                print >>sys.stderr,'''Warning: you opened shelve file %s
+in mode '%s' but this is ambiguous for how the shelve should be
+re-opened later during unpickling.  By default it will be
+re-opened in mode 'r' (read-only).  To make it be re-opened
+writable, create it in mode '%sw', or call its method
+reopen('w'), which will make it be re-opened in mode 'w' now and
+in later unpickling.  To suppress this warning message, use the
+verbose=False option.''' % (filename,mode,mode)
+            self.mode = 'r'
+        else: # PROCESS UNAMBIGUOUS TWO-LETTER mode STRING
+            try:
+                if len(mode)==2 and mode[0] in 'ncwr' and mode[1] in 'cwr':
+                    self.mode = mode[1] # IN FUTURE OPEN IN THIS MODE
+                    mode = mode[0] # OPEN NOW IN THIS MODE
+                else:
+                    raise ValueError('invalid mode string: '+mode)
+            except TypeError:
+                raise ValueError('file mode must be a string!')
+        if unpicklingMode:
+            self.d = classutil.open_shelve(filename,mode,writeback,allowReadOnly=True)
+        else:
+            self.d = classutil.open_shelve(filename,mode,writeback)
         classutil.apply_itemclass(self,kwargs)
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
-    _pickleAttrs = dict(filename=0,mode=0)
+    _pickleAttrs = dict(filename=0,mode=0,writeback=0)
     def __setitem__(self,k,v):
         try:
             self.d[k]=v
         except TypeError:
             raise TypeError('to allow int keys, you must pass intKeys=True to constructor!')
     def reopen(self,mode='r'):
+        're-open shelve in the specified mode, and save mode on self'
         self.d.close()
-        import shelve
-        self.d = shelve.open(self.filename,mode)
+        self.d = classutil.open_shelve(self.filename,mode,writeback=self.writeback)
+        self.mode = mode
 
 
 class IntShelve(PicklableShelve):
