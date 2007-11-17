@@ -82,11 +82,11 @@ class NLMSASeqDict(dict):
     if mode=='memory': # JUST USE PYTHON DICTIONARY
       idDictClass=dict
     elif mode=='w': # NEW DATABASE
-      mode='c'
+      mode='n'
     if idDictClass is None: # USE PERSISTENT ID DICTIONARY STORAGE
-      import shelve
-      self.seqIDdict=shelve.open(filename+'.seqIDdict',mode)
-      self.IDdict=shelve.open(filename+'.idDict',mode)
+      from classutil import open_shelve
+      self.seqIDdict = open_shelve(filename+'.seqIDdict',mode)
+      self.IDdict = open_shelve(filename+'.idDict',mode)
     else: # USER SUPPLIED CLASS FOR ID DICTIONARY STORAGE
       self.seqIDdict=idDictClass()
       self.IDdict=idDictClass()
@@ -155,9 +155,9 @@ class NLMSASeqDict(dict):
   def reopenReadOnly(self,mode='r'):
     'save existing data and reopen in read-only mode'
     self.close()
-    import shelve
-    self.seqIDdict=shelve.open(self.filename+'.seqIDdict',mode)
-    self.IDdict=shelve.open(self.filename+'.idDict',mode)
+    from classutil import open_shelve
+    self.seqIDdict = open_shelve(self.filename+'.seqIDdict',mode)
+    self.IDdict = open_shelve(self.filename+'.idDict',mode)
   def getUnionSlice(self,seq):
     'get union coords for this seq interval, adding seq to index if needed'
     try:
