@@ -281,6 +281,12 @@ class SQLTable(SQLTableBase):
         self.load()
         return dict.itervalues(self)
 
+def getClusterKeys(self,queryOption=''):
+    'uses db select; does not force load'
+    self.cursor.execute('select distinct %s from %s %s'
+                        %(self.clusterKey,self.name,queryOption))
+    return [t[0] for t in self.cursor.fetchall()] # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
+
 
 class SQLTableClustered(SQLTable):
     '''use clusterKey to load a whole cluster of rows at once,
@@ -289,6 +295,8 @@ class SQLTableClustered(SQLTable):
     _pickleAttrs.update(dict(clusterKey=0,maxCache=0))
     def keys(self):
         return getKeys(self,'order by %s' %self.clusterKey)
+    def clusterkeys(self):
+        return getClusterKeys(self, 'order by %s' %self.clusterKey):
     def __getitem__(self,k):
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
