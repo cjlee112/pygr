@@ -3,7 +3,8 @@
 from __future__ import generators
 from mapping import *
 import types
-from classutil import ClassicUnpickler,methodFactory,standard_getstate,override_rich_cmp
+from classutil import ClassicUnpickler,methodFactory,standard_getstate,override_rich_cmp,\
+     generate_items
     
 
 class TupleO(object):
@@ -82,7 +83,8 @@ def getNameCursor(name,connect=None,configFile=None,**kwargs):
 class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
-                 clusterKey=None,createTable=None,graph=None,maxCache=None,**kwargs):
+                 clusterKey=None,createTable=None,graph=None,maxCache=None,
+                 arraysize=1024,**kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
             name,cursor=getNameCursor(name,**kwargs)
@@ -100,6 +102,9 @@ class SQLTableBase(dict):
             self.graph = graph
         if maxCache is not None:
             self.maxCache = maxCache
+        if arraysize is not None:
+            self.arraysize = arraysize
+            cursor.arraysize = arraysize
         icol=0
         cursor.execute('select * from %s limit 1' % name)
         for c in columns:
@@ -124,7 +129,7 @@ class SQLTableBase(dict):
 
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
-    _pickleAttrs = dict(name=0)
+    _pickleAttrs = dict(name=0,clusterKey=0,maxCache=0,arraysize=0)
     def __getstate__(self):
         state = standard_getstate(self)
         state['attrAlias'] = self.getAttrAlias() # SAVE ATTRIBUTE ALIASES
@@ -196,12 +201,15 @@ class SQLTableBase(dict):
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
         self.itemClass=oclass
+    def _select(self,whereClause='',params=None,selectCols='t1.*'):
+        'execute the specified query but do not fetch'
+        self.cursor.execute('select %s from %s t1 %s'
+                            % (selectCols,self.name,whereClause),params)
     def select(self,whereClause,params=None,oclass=None,selectCols='t1.*'):
         "Generate the list of objects that satisfy the database SELECT"
         if oclass is None:
             oclass=self.itemClass
-        self.cursor.execute('select %s from %s t1 %s'
-                            % (selectCols,self.name,whereClause),params)
+        self._select(whereClause,params,selectCols)
         l=self.cursor.fetchall()
         for t in l:
             yield self.cacheItem(t,oclass)
@@ -224,9 +232,32 @@ class SQLTableBase(dict):
         o=self.tupleItem(t,oclass)
         dict.__setitem__(self,id,o)   # CACHE THIS ITEM IN OUR DICTIONARY
         return o
+    def cache_items(self,rows,oclass=None):
+        if oclass is None:
+            oclass=self.itemClass
+        for t in rows:
+            yield self.cacheItem(t,oclass) 
     def foreignKey(self,attr,k):
         'get iterator for objects with specified foreign key value'
         return self.select('where %s=%%s'%attr,(k,))
+    def limit_cache(self):
+        'APPLY maxCache LIMIT TO CACHE SIZE'
+        try:
+            if self.maxCache<dict.__len__(self):
+                self.clear()
+        except AttributeError:
+            pass
+    def generic_iterator(self,fetch_f=None,cache_f=cache_items,map_f=iter):
+        'generic iterator that runs fetch, cache and map functions'
+        if fetch_f is None: # JUST USE CURSOR'S PREFERRED CHUNK SIZE
+            fetch_f = self.cursor.fetchmany
+        while True:
+            self.limit_cache()
+            rows = fetch_f() # FETCH THE NEXT SET OF ROWS
+            if len(rows)==0: # NO MORE DATA SO ALL DONE
+                break
+            for v in map_f(cache_f(rows)): # CACHE AND GENERATE RESULTS
+                yield v
 
 
 def getKeys(self,queryOption=''):
@@ -263,23 +294,24 @@ class SQLTable(SQLTableBase):
             l=self.cursor.fetchall()
             if len(l)!=1:
                 raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
+            self.limit_cache()
             return self.cacheItem(l[0],self.itemClass) # CACHE IT IN LOCAL DICTIONARY
     def items(self):
         'forces load of entire table into memory'
         self.load()
         return dict.items(self)
     def iteritems(self):
-        'forces load of entire table into memory'
-        self.load()
-        return dict.iteritems(self)
+        'uses arraysize / maxCache and fetchmany() to manage data transfer'
+        self._select()
+        return self.generic_iterator(map_f=generate_items)
     def values(self):
         'forces load of entire table into memory'
         self.load()
         return dict.values(self)
     def itervalues(self):
-        'forces load of entire table into memory'
-        self.load()
-        return dict.itervalues(self)
+        'uses arraysize / maxCache and fetchmany() to manage data transfer'
+        self._select()
+        return self.generic_iterator()
 
 def getClusterKeys(self,queryOption=''):
     'uses db select; does not force load'
@@ -291,8 +323,6 @@ def getClusterKeys(self,queryOption=''):
 class SQLTableClustered(SQLTable):
     '''use clusterKey to load a whole cluster of rows at once,
        specifically, all rows that share the same clusterKey value.'''
-    _pickleAttrs = SQLTable._pickleAttrs.copy()
-    _pickleAttrs.update(dict(clusterKey=0,maxCache=0))
     def keys(self):
         return getKeys(self,'order by %s' %self.clusterKey)
     def clusterkeys(self):
@@ -301,23 +331,49 @@ class SQLTableClustered(SQLTable):
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
-            try:
-                if self.maxCache<dict.__len__(self):
-                    self.clear() # CACHE IS TOO BIG, SO CLEAR IT.
-            except AttributeError:
-                pass
             self.cursor.execute('select t2.* from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s'
                                 % (self.name,self.name,self.primary_key,
                                    self.clusterKey,self.clusterKey),(k,))
             l=self.cursor.fetchall()
+            self.limit_cache()
             for t in l: # LOAD THE ENTIRE CLUSTER INTO OUR LOCAL CACHE
                 self.cacheItem(t,self.itemClass)
             return dict.__getitem__(self,k) # SHOULD BE IN CACHE, IF ROW k EXISTS
     def itercluster(self,cluster_id):
         'iterate over all items from the specified cluster'
+        self.limit_cache()
         return self.select('where %s=%%s'%self.clusterKey,(cluster_id,))
-
-
+    def fetch_cluster(self):
+        'use self.cursor.fetchmany to obtain all rows for next cluster'
+        icol = self.data[self.clusterKey]
+        result = []
+        try:
+            rows = self._fetch_cluster_cache # USE SAVED ROWS FROM PREVIOUS CALL
+            del self._fetch_cluster_cache
+        except AttributeError:
+            rows = self.cursor.fetchmany()
+        try:
+            cluster_id = rows[0][icol]
+        except IndexError:
+            return result
+        while len(rows)>0:
+            for i,t in enumerate(rows): # CHECK THAT ALL ROWS FROM THIS CLUSTER
+                if cluster_id != t[icol]: # START OF A NEW CLUSTER
+                    result += rows[:i] # RETURN ROWS OF CURRENT CLUSTER
+                    self._fetch_cluster_cache = rows[i:] # SAVE NEXT CLUSTER
+                    return result
+            result += rows
+            rows = self.cursor.fetchmany() # GET NEXT SET OF ROWS
+        return result
+    def itervalues(self):
+        'uses arraysize / maxCache and fetchmany() to manage data transfer'
+        self._select('order by %s' %self.clusterKey)
+        return self.generic_iterator(self.fetch_cluster)
+    def iteritems(self):
+        'uses arraysize / maxCache and fetchmany() to manage data transfer'
+        self._select('order by %s' %self.clusterKey)
+        return self.generic_iterator(self.fetch_cluster,map_f=generate_items)
+        
 class SQLForeignRelation(object):
     'mapping based on matching a foreign key in an SQL table'
     def __init__(self,table,keyName):
