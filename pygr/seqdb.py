@@ -925,12 +925,13 @@ class AnnotationDB(dict):
     def __init__(self,sliceDB,seqDB,annotationType=None,itemClass=AnnotationSeq,
                  itemSliceClass=AnnotationSlice,
                  itemAttrDict=None, # GET RID OF THIS BACKWARDS-COMPATIBILITY KLUGE!!
-                 sliceAttrDict=None,**kwargs):
+                 sliceAttrDict=None,maxCache=None,**kwargs):
         '''sliceDB must map identifier to a sliceInfo object;
-        sliceInfo must have name,start,stop,ori attributes;
-        seqDB must map sequence ID to a sliceable sequence object;
-        sliceAttrDict gives optional dict of item attributes that
-        should be mapped to sliceDB item attributes.'''
+sliceInfo must have name,start,stop,ori attributes;
+seqDB must map sequence ID to a sliceable sequence object;
+sliceAttrDict gives optional dict of item attributes that
+should be mapped to sliceDB item attributes.
+maxCache specfies the maximum number of annotation objects to keep in the cache.'''
         dict.__init__(self)
         if sliceAttrDict is None:
             sliceAttrDict = {}
@@ -943,12 +944,14 @@ class AnnotationDB(dict):
         self.itemClass=itemClass
         self.itemSliceClass=itemSliceClass
         self.sliceAttrDict=sliceAttrDict # USER-PROVIDED ALIASES
+        if maxCache is not None:
+            self.maxCache = maxCache
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(sliceDB=0,seqDB=0,annotationType=0,
-                        itemClass=0,itemSliceClass=0,sliceAttrDict=0)
+                        itemClass=0,itemSliceClass=0,sliceAttrDict=0,maxCache=0)
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
@@ -973,7 +976,7 @@ saved directly to the sliceDB.''')
             return getattr(sliceInfo,k)
         except TypeError: # TREAT AS int INDEX INTO A TUPLE
             return sliceInfo[k]
-    def sliceAnnotation(self,k,sliceInfo):
+    def sliceAnnotation(self,k,sliceInfo,limitCache=True):
         'create annotation and cache it'
         start = int(self.getSliceAttr(sliceInfo,'start'))
         stop = int(self.getSliceAttr(sliceInfo,'stop'))
@@ -986,6 +989,11 @@ saved directly to the sliceDB.''')
             raise IndexError('annotation %s has zero or negative length [%s:%s]!'
                              %(k,start,stop))
         a = self.itemClass(k,self,self.seqDB[self.getSliceAttr(sliceInfo,'id')],start,stop)
+        try: # APPLY CACHE SIZE LIMIT IF ANY
+            if limitCache and self.maxCache<dict.__len__(self):
+                self.clear()
+        except AttributeError:
+            pass
         dict.__setitem__(self,k,a) # CACHE THIS IN OUR DICT
         return a
     def new_annotation(self,k,sliceInfo):
@@ -1008,13 +1016,21 @@ saved directly to the sliceDB.''')
     def __iter__(self): return iter(self.sliceDB) ########## ITERATORS
     def keys(self): return self.sliceDB.keys()
     def iteritems(self):
+        'uses maxCache to manage caching of annotation objects'
         for k,sliceInfo in self.sliceDB.iteritems():
             yield k,self.sliceAnnotation(k,sliceInfo)
     def itervalues(self):
+        'uses maxCache to manage caching of annotation objects'
         for k,v in self.iteritems():
             yield v
-    def items(self): return [t for t in self.iteritems()]
-    def values(self): return [t[1] for t in self.iteritems()]
+    def items(self):
+        'forces load of all annotation objects into cache'
+        return [(k,self.sliceAnnotation(k,sliceInfo,limitCache=False))
+                for (k,sliceInfo) in self.sliceDB.items()]
+    def values(self):
+        'forces load of all annotation objects into cache'
+        return [self.sliceAnnotation(k,sliceInfo,limitCache=False)
+                for (k,sliceInfo) in self.sliceDB.items()]
     def add_homology(self,seq,search='blast',id=None,idFormat='%s_%d',
                      autoIncrement=False,maxAnnot=999999,
                      maxLoss=None,sliceInfo=None,**kwargs):
