@@ -118,6 +118,10 @@ def apply_itemclass(self,state):
     except KeyError:
         pass
 
+def generate_items(items):
+    'generate o.id,o for o in items'
+    for o in items:
+        yield o.id,o
 
 def item_unpickler(db,*args):
     'get an item or subslice of a database'
