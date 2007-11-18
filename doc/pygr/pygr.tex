@@ -3215,7 +3215,7 @@ to its {\em splice graph}.  \code{for e2,splice in e.next.items()} would iterate
 through the list of exons it is connected to by a forward splice, etc.
 
 \end{itemize}
-\begin{funcdesc}{__init__}{sliceDB,seqDB,annotationType=None,itemClass=AnnotationSeq,itemSliceClass=AnnotationSlice,itemAttrDict=None,sliceAttrDict=dict(),filename=None,mode='r'}
+\begin{funcdesc}{AnnotationDB}{sliceDB, seqDB, annotationType=None, itemClass=AnnotationSeq, itemSliceClass=AnnotationSlice, itemAttrDict=None, sliceAttrDict=dict(), filename=None, mode='r', maxCache=None}
   Constructs an annotation database using several arguments:
 
   \var{sliceDB}, a database that takes an annotation ID as a key, and returns
@@ -3295,6 +3295,12 @@ exon_db = AnnotationDB(exon_slices, db,
   to an AnnotationDB stored using a shelve, you {\em must} call its
   \method{close}() method to ensure that all data is saved to the Python
   shelve file!
+
+  \var{maxCache}, if not None, specifies the maximum number of annotation
+  objects to keep in the cache.  For large databases, this is an important
+  parameter for ensuring that the AnnotationDB will not consume too much
+  memory (e.g. if you iterate over all or a large fraction of the annotations
+  in the database).
 \end{funcdesc}
 
 \begin{funcdesc}{__getitem__}{id}
@@ -3321,7 +3327,7 @@ by the user could be stored persistently).
   Returns an annotation object associated with \var{sliceInfo}.
 \end{funcdesc}
 
-\begin{funcdesc}{add_homology}{seq,search='blast',id=None,idFormat='\%s_\%d',autoIncrement=False,maxAnnot=999999,maxLoss=None,sliceInfo=None,**kwargs}
+\begin{funcdesc}{add_homology}{seq, search='blast', id=None, idFormat='\%s_\%d', autoIncrement=False, maxAnnot=999999, maxLoss=None, sliceInfo=None, **kwargs}
   Search for homology to \var{seq} in the sequence database self.seqDB
   using the named method specified by the \var{search} argument,
   and filtered using the NLMSASlice.keys() function, and store
@@ -3372,6 +3378,26 @@ by the user could be stored persistently).
   \method{add_homology}() returns a list of the annotation objects 
   created as a result of the homology search.
 \end{funcdesc}
+
+For iteration over annotations in a very large annotation database, it is
+important to understand how to control the caching of annotation objects.
+We try to follow Python's iterators rules closely: \method{iteritems}()
+and \method{itervalues}() simply iterate over the annotation, applying
+the \var{maxCache} limit to the total number of annotations that will be
+kept in cache at any one time.  
+\begin{funcdesc}{iteritems}{}
+\end{funcdesc}
+\begin{funcdesc}{itervalues}{}
+\end{funcdesc}
+By contrast, \method{items}() and \method{values}()
+force loading of all annotations in the entire database into cache, since
+that is what these methods require.
+\begin{funcdesc}{items}{}
+\end{funcdesc}
+\begin{funcdesc}{values}{}
+\end{funcdesc}
+Finally, \method{__iter__}() and \method{keys}() just obtain the 
+list of annotation IDs, without loading anything into the cache.
 
 \begin{funcdesc}{close}{}
   You must call this method to ensure that any data added to the AnnotationDB
@@ -4930,6 +4956,12 @@ class Foo(object):
 \label{sqlgraph-module}
 This module provides back-end database access.
 
+\subsubsection{SQLTableBase}
+The base class for \class{SQLTable} and other variants below.
+This class is derived from
+the Python builtin \class{dict} class, so all standard methods of \class{dict}
+can be used.
+
 \subsubsection{SQLTable}
 Provides a \class{dict}-like interface to an SQL table.  It accepts
 an identifier as a key, and returns a Python object representing
@@ -4942,49 +4974,7 @@ This class assumes that the database table has a primary key,
 which is used as the key value for the dictionary.  For tables
 with no primary key see other variants below.
 
-This class and its variants follow a simple rule for controlling
-how data is loaded into memory: if you simply iterate over IDs
-(i.e. \code{for id in mytable}) data is not pre-loaded into memory;
-each object will be fetched individually when you try to access it
-(e.g. \code{obj=mytable[id]}).  By contrast, if you call the table's
-\method{items} method, it will load data for the entire table into
-memory, on the rational basis that making this call signals that you
-intend to work with each and every object in the database table.  Other
-``value'' iterators such as \method{iteritems}, \method{values},
-and \method{itervalues} also load all the data.
-
-\begin{funcdesc}{__iter__}{}
-  Iterate over all IDs (primary key values) in the table,
-  without loading the entire table into memory.
-\end{funcdesc}
-
-\begin{funcdesc}{items}{}
-  return a list of all (id,obj) pairs representing all data in the table,
-  after first loading the entire table into memory.
-\end{funcdesc}
-
-\begin{funcdesc}{__getitem__}{id}
-  get the object whose primary key is \var{id}, and cache it in
-  our local dictionary (so that subsequent requests will return the
-  same Python object, immediately, with no need to re-run an SQL query).
-  For non-caching versions of \class{SQLTable}, see below.
-\end{funcdesc}
-
-
-\begin{funcdesc}{load}{oclass=None}
-  Load all data from the table, using \var{oclass} as the row object
-  class if specified (otherwise use the oclass for this table).
-  All rows are loaded from the database and saved as row objects
-  in the Python dictionary of this class.
-\end{funcdesc}
-
-\subsubsection{SQLTableBase}
-The base class for \class{SQLTable} and other variants below.
-This class is derived from
-the Python builtin \class{dict} class, so all standard methods of \class{dict}
-can be used.
-
-\begin{funcdesc}{__init__}{name,cursor=None,itemClass=None,attrAlias=None,clusterKey=None}
+\begin{funcdesc}{SQLTable}{name, cursor=None, itemClass=None, attrAlias=None, clusterKey=None,maxCache=None, arraysize=1024}
   Open a connection to the existing SQL table specified by \var{name}.
   You can supply a Python DB API \var{cursor} providing a connection
   to the database server.  If \var{cursor} is None, it will attempt
@@ -5009,6 +4999,75 @@ can be used.
   of rows that share the same value of the specified \var{clusterKey} column.
   This caching hint is only used by the \class{Clustered} SQLTable variants
   described in detail below.
+
+  \var{maxCache}, if not None, specifies the maximum number of database
+  objects to keep in the cache.  For large databases, this is an important
+  parameter for ensuring that \class{SQLTable} will not consume too much
+  memory (e.g. if you iterate over all or a large fraction of the items
+  in the database).
+
+  \var{arraysize}: specifies the number of rows to be transfered from the
+  database server in each cursor.fetchmany() operation.  This can be important
+  for speeding up data transfer from the database server.
+
+\end{funcdesc}
+
+This class and its variants follow a simple rule for controlling
+how data is loaded into memory.  For the most common usage,
+iterating over the objects in the database, you should use the
+iterator methods \method{iteritems}() (which yields tuples of (\var{id,obj})),
+or \method{itervalues}() (which just yields each object).  These methods
+use the parameters \var{maxCache} and \var{arraysize} to control the
+size of caching and data transfer from the database server (see details above).
+This allows you to keep tight control over the total memory usage of \class{SQLTable}
+when iterating over all the items in a very large database, and also to ensure
+efficient data transfer using the Python DB API 2.0 \method{fetchmany}() method.
+\begin{funcdesc}{iteritems}{}
+\end{funcdesc}
+\begin{funcdesc}{itervalues}{}
+\end{funcdesc}
+
+By contrast, if you call the table's
+\method{items}() or \method{values}() method, it will load data for the entire table into
+memory, since these methods actually require creating a list object
+containing every object in the database.
+These methods ensure very efficient data transfer from the database server
+(using the \method{fetchall}() method), but can consume large amounts of
+memory limited only by the size of your database!
+\begin{funcdesc}{items}{}
+  return a list of all (id,obj) pairs representing all data in the table,
+  after first loading the entire table into memory.
+\end{funcdesc}
+\begin{funcdesc}{values}{}
+  return a list of all obj representing each row in the table,
+  after first loading the entire table into memory.
+\end{funcdesc}
+
+Finally, if you iterate over IDs using \method{__iter__}() or \method{keys}()
+(i.e. \code{for id in mytable}), data is not pre-loaded into memory;
+each object will be fetched individually when you try to access it
+(e.g. \code{obj=mytable[id]}).  
+
+\begin{funcdesc}{__iter__}{}
+  Iterate over all IDs (primary key values) in the table,
+  without loading the entire table into memory.
+\end{funcdesc}
+
+Accessing individual objects by \var{id} also obeys the \var{maxCache}
+caching limits:
+\begin{funcdesc}{__getitem__}{id}
+  get the object whose primary key is \var{id}, and cache it in
+  our local dictionary (so that subsequent requests will return the
+  same Python object, immediately, with no need to re-run an SQL query).
+  For non-caching versions of \class{SQLTable}, see below.
+\end{funcdesc}
+
+You can also force loading of the entire database directly:
+\begin{funcdesc}{load}{oclass=None}
+  Load all data from the table, using \var{oclass} as the row object
+  class if specified (otherwise use the oclass for this table).
+  All rows are loaded from the database and saved as row objects
+  in the Python dictionary of this class.
 \end{funcdesc}
 
 \begin{funcdesc}{objclass}{itemClass}
@@ -5050,6 +5109,16 @@ this can speed up performance considerably.  If the clustering
 closely mirrors how users are likely to access the data, this
 performance gain will have relatively little cost in terms
 of memory wasted on loading rows that the user will not need.
+
+Also provides a few convenience methods:
+\begin{funcdesc}{clusterkeys}{}
+  Return list of all cluster IDs (distinct values in the \var{clusterKey}
+  field of the database).
+\end{funcdesc}
+\begin{funcdesc}{itercluster}{cluster_id}
+  Return list of all objects in the database that have a \var{clusterKey}
+  value equal to \var{cluster_id}.
+\end{funcdesc}
 
 
 \subsubsection{SQLTableNoCache}
