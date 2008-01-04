@@ -84,12 +84,16 @@ def standard_getstate(self):
                 d[attr] = getattr(self,attr)
         except AttributeError:
             pass
-    try:
+    try: # DON'T SAVE itemClass IF SIMPLY A SHADOW CLASS FROM get_shadow_class()
         if not hasattr(self.__class__,'itemClass') or \
-           self.itemClass is not self.__class__.itemClass:
+           (self.itemClass is not self.__class__.itemClass and 
+            (not hasattr(self.itemClass,'_shadowParent') or
+             self.itemClass._shadowParent is not self.__class__.itemClass)):
             d['itemClass'] = self.itemClass
         if not hasattr(self.__class__,'itemSliceClass') or \
-           self.itemSliceClass is not self.__class__.itemSliceClass:
+           (self.itemSliceClass is not self.__class__.itemSliceClass and 
+            (not hasattr(self.itemSliceClass,'_shadowParent') or
+             self.itemSliceClass._shadowParent is not self.__class__.itemSliceClass)):
             d['itemSliceClass'] = self.itemSliceClass
     except AttributeError:
         pass
