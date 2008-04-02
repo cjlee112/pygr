@@ -654,13 +654,13 @@ Continuing with import...'''%dbpath
         
     def __call__(self,id,layer=None,debug=None,*args,**kwargs):
         'get the requested resource ID by searching all databases'
-        debug_state = self.debug # SAVE ORIGINAL STATE
-        if debug is not None:
-            self.debug = debug
         try:
             return self.d[id] # USE OUR CACHED OBJECT
         except KeyError:
             pass
+        debug_state = self.debug # SAVE ORIGINAL STATE
+        if debug is not None:
+            self.debug = debug
         if layer is not None: # USE THE SPECIFIED LAYER
             obj=self.layer[layer][id]
         else: # SEARCH ALL OF OUR DATABASES
