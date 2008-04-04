@@ -1,6 +1,8 @@
 
 import sys,os,nose
 
+pythonExe = sys.executable
+
 def do_test(modname,klassname,testname):
     'run the specified test with setup / teardown if provided. returns True if skipped'
     exec 'import %s' % modname
@@ -74,8 +76,8 @@ def run_all_tests(tests):
     for modname,klassname,testname in tests:
         outfile = 'err%d.tmp' % len(errors)
         tmpfiles[outfile] = 0
-        if os.system('python %s --test %s %s %s >%s'
-                     % (scriptName,modname,klassname,testname,outfile))!=0:
+        if os.system('%s %s --test %s %s %s >%s'
+                     % (pythonExe,scriptName,modname,klassname,testname,outfile))!=0:
             ifile = file(outfile)
             if ifile.read().endswith('PROTEST_SKIPTEST\n'):
                 skipped.append((modname,klassname,testname,outfile))
