@@ -24,12 +24,9 @@ def do_test(modname,klassname,testname):
 ##             obj.teardown()
 ##         print 'Assertion failed on test %s.%s.%s' %(modname,klassname,testname)
 ##         sys.exit(1) # HAND BACK FAILURE CODE
-    except:
+    finally: # DO TEARDOWN NO MATTER WHAT, BEFORE RAISING AN EXCEPTION
         if hasattr(obj,'teardown'):
             obj.teardown()
-        raise
-    if hasattr(obj,'teardown'):
-        obj.teardown()
     print 'test completed successfully'
     return False
 
