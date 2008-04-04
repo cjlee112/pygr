@@ -291,7 +291,7 @@ class XMLRPCServerBase(object):
             server.registerServer('%s:%d' % (self.host,self.port),data)
         else: # DEFAULT: SEARCH PYGRDATAPATH TO FIND INDEX SERVER
             import pygr.Data
-            pygr.data.getResource.registerServer('%s:%d' % (self.host,self.port),data)
+            pygr.Data.getResource.registerServer('%s:%d' % (self.host,self.port),data)
         
 class ResourceController(object):
     """Centralized controller for getting resources and rules for
