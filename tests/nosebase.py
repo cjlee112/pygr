@@ -187,8 +187,10 @@ class TestXMLRPCServer(object):
     def run_server(self):
         'this method blocks, so run it in a separate thread'
         print 'starting server on port',self.port
-        os.system('python pygrdata_server.py %d %s %s'
-                  %(self.port,self.pygrDataPath,' '.join(self.pygrDataNames)))
+        import sys
+        os.system('%s pygrdata_server.py %d %s %s'
+                  %(sys.executable,self.port,self.pygrDataPath,
+                    ' '.join(self.pygrDataNames)))
         print 'server exited.'
     def access_server(self):
         'force pygr.Data to only use the XMLRPC server'
