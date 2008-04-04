@@ -176,9 +176,13 @@ class TestXMLRPCServer(object):
             pass
         self.pygrDataNames = pygrDataNames
         try:
-            self.pygrDataPath = kwargs['PYGRDATAPATH']
+            self.pygrDataPath = kwargs['PYGRDATAPATH'] # USER-SPECIFIED PATH
         except KeyError:
-            self.pygrDataPath = 'PYGRDATAPATH'
+            self.pygrDataPath = 'PYGRDATAPATH' # DEFAULT: JUST USE ENV AS USUAL
+        try:
+            self.downloadDB = 'downloadDB='+kwargs['downloadDB']
+        except KeyError:
+            self.downloadDB = ''
         from threading import Thread
         t = Thread(target=self.run_server)
         t.start()
@@ -188,9 +192,9 @@ class TestXMLRPCServer(object):
         'this method blocks, so run it in a separate thread'
         print 'starting server on port',self.port
         import sys
-        os.system('%s pygrdata_server.py %d %s %s'
+        os.system('%s pygrdata_server.py %d %s %s %s'
                   %(sys.executable,self.port,self.pygrDataPath,
-                    ' '.join(self.pygrDataNames)))
+                    self.downloadDB,' '.join(self.pygrDataNames)))
         print 'server exited.'
     def access_server(self):
         'force pygr.Data to only use the XMLRPC server'

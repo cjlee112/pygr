@@ -2068,7 +2068,7 @@ to textfile_to_binaries() on the destination machine.''')
     ifile.close()
 
 
-def textfile_to_binaries(filename,seqDict=None,prefixDict=None):
+def textfile_to_binaries(filename,seqDict=None,prefixDict=None,buildpath=''):
   'convert pathstem.txt textfile to NLMSA binary files'
   cdef int i,n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode,nprefix
   cdef FILE *infile
@@ -2091,6 +2091,10 @@ def textfile_to_binaries(filename,seqDict=None,prefixDict=None):
     if 2>sscanf(line,"PATHSTEM\t%s\t%d\t%d\t%d\t%d\t%s",basestem,&n,
                 &is_bidirectional,&pairwiseMode,&nprefix,tmp):
       raise IOError('bad format in %s'%filename)
+    if buildpath!='': # USER-SPECIFIED PATH FOR BINARIES
+      import os
+      buildpath = os.path.join(buildpath,basestem) # CONSTRUCT FILE PATH
+      strcpy(basestem,buildpath) # COPY BACK TO C STRING USABLE IN C FUNCTIONS
     if 0==strcmp(tmp,"unknown"):
       if seqDict is None:
         raise ValueError('You must provide a seqDict for this NLMSA!')
@@ -2160,3 +2164,4 @@ dictionary argument: %s''' % missing)
   finally:
     fclose(infile)
     ifile.close()
+  return basestem # ACTUAL PATH TO NLMSA INDEX FILESET

@@ -250,3 +250,11 @@ class DBAttributeDescr(object):
         self.attr = attr
     def __get__(self,obj,objtype):
         return getattr(obj.db,self.attr)
+
+def get_env_or_cwd(envname):
+    'get the specified environment value or path to current directory'
+    import os
+    try:
+        return os.environ[envname] # USER-SPECIFIED DIRECTORY
+    except KeyError:
+        return os.getcwd() # DEFAULT: SAVE IN CURRENT DIRECTORY

@@ -1,5 +1,5 @@
 
-import pickle
+import pickle,sys
 from StringIO import StringIO
 import shelve
 from mapping import Collection,Mapping,Graph
@@ -132,20 +132,39 @@ class ResourceDBServer(object):
     xmlrpc_methods={'getResource':0,'registerServer':0,'delResource':0,
                     'getName':0,'dir':0,'get_version':0}
     _pygr_data_version=(0,1,0)
-    def __init__(self,name,readOnly=True):
+    def __init__(self,name,readOnly=True,downloadDB=None):
         self.name=name
         self.d={}
         self.docs={}
+        self.downloadDB = {}
+        self.downloadDocs = {}
         if readOnly: # LOCK THE INDEX.  DON'T ACCEPT FOREIGN DATA!!
             self.xmlrpc_methods={'getResource':0,'getName':0,'dir':0,
                                  'get_version':0} # ONLY ALLOW THESE METHODS!
+        if downloadDB is not None:
+            self.read_download_db(downloadDB)
+    def read_download_db(self,filename,location='default'):
+        'add the designated resource DB shelve to our downloadable resources'
+        d = shelve.open(filename,'r')
+        for k,v in d.items():
+            if k.startswith('__doc__.'): # SAVE DOC INFO FOR THIS ID
+                self.downloadDocs[k[8:]] = v
+            else: # SAVE OBJECT INFO
+                self.downloadDB.setdefault(k,{})[location] = v
+        d.close()
     def getName(self):
         'return layer name for this server'
         return self.name
-    def getResource(self,id):
+    def get_db(self,download):
+        if download: # USE SEPARATE DOWNLOAD DATABASE
+            return (self.downloadDB, self.downloadDocs)
+        else: # USE REGULAR XMLRPC SERVICES DATABASE
+            return (self.d, self.docs)
+    def getResource(self,id,download=False):
         'return dict of location:pickleData for requested ID'
+        db,docs = self.get_db(download)
         try:
-            d = self.d[id] # RETURN DICT OF PICKLED OBJECTS
+            d = db[id] # RETURN DICT OF PICKLED OBJECTS
         except KeyError:
             return '' # EMPTY STRING INDICATES FAILURE
         if id.startswith('SCHEMA.'): # THIS IS A REQUEST FOR SCHEMA INFO
@@ -156,7 +175,7 @@ class ResourceDBServer(object):
                     pass
         else: # THIS IS A REGULAR RESOURCE REQUEST
             try: # PASS ITS DOCSTRING AS A SPECIAL ENTRY
-                d['__doc__'] = self.docs[id]['__doc__']
+                d['__doc__'] = docs[id]['__doc__']
             except KeyError:
                 pass
         return d
@@ -164,10 +183,7 @@ class ResourceDBServer(object):
         'add services in serviceDict to this server under the specified location'
         n=0
         for id,(infoDict,pdata) in serviceDict.items():
-            try:
-                self.d[id][locationKey]=pdata # ADD TO DICT FOR THIS RESOURCE
-            except KeyError:
-                self.d[id]={locationKey:pdata} # CREATE NEW DICT FOR THIS RESOURCE
+            self.d.setdefault(id,{})[locationKey] = pdata # SAVE RESOURCE
             if infoDict is not None:
                 self.docs[id]=infoDict
             n+=1
@@ -181,19 +197,17 @@ class ResourceDBServer(object):
         except KeyError:
             pass
         return ''  # DUMMY RETURN VALUE FOR XMLRPC
-    def dir(self,prefix,asDict=False):
+    def dir(self,prefix,asDict=False,download=False):
         'return list or dict of resources beginning with the specified prefix'
+        db,docs = self.get_db(download)
         l=[]
-        for name in self.d:
+        for name in db: # FIND ALL ITEMS WITH MATCHING NAME
             if name.startswith(prefix):
                 l.append(name)
-        if asDict:
-            d={}
+        if asDict: # RETURN INFO DICT FOR EACH ITEM
+            d = {}
             for name in l:
-                try:
-                    d[name]=self.docs[name]
-                except KeyError:
-                    d[name]={} # EMPTY DICT -- NO INFO FOUND
+                d[name] = docs.get(name,{})
             return d
         return l
     def get_version(self):
@@ -214,9 +228,12 @@ class ResourceDBClient(object):
         self.finder=finder
         self.name=self.server.getName()
         finder.addLayer(self.name,self) # ADD NAMED RESOURCE LAYER
-    def __getitem__(self,id):
+    def __getitem__(self,id,download=False):
         'get construction rule from index server, and attempt to construct'
-        d=self.server.getResource(id) # RAISES KeyError IF NOT FOUND
+        if download: # SPECIFICALLY ASK SERVER FOR DOWNLOADABLE RESOURCES
+            d = self.server.getResource(id,download)
+        else: # NORMAL MODE TO GET XMLRPC SERVICES
+            d=self.server.getResource(id)
         if d=='':
             raise PygrDataNotFoundError('resource %s not found'%id)
         try:
@@ -243,9 +260,12 @@ class ResourceDBClient(object):
         for schemaDict in d.values():
             return schemaDict # HAND BACK FIRST SCHEMA WE FIND
         raise KeyError
-    def dir(self,prefix,asDict=False):
+    def dir(self,prefix,asDict=False,download=False):
         'return list or dict of resources starting with prefix'
-        return self.server.dir(prefix,asDict)
+        if download:
+            return self.server.dir(prefix,asDict,download)
+        else:
+            return self.server.dir(prefix,asDict)
     __setitem__ = raise_illegal_save # RAISE USEFUL EXPLANATORY ERROR MESSAGE
     __delitem__ = raise_illegal_save
     setschema = raise_illegal_save
@@ -288,7 +308,6 @@ table you want to create, and LAYERNAME is the layer name you want to assign it'
                 n = self.cursor.execute('select location from %s where pygr_id=%%s'
                                         % self.tablename,('PYGRLAYERNAME',))
             except StandardError:
-                import sys
                 print >>sys.stderr,'''%s
 Database table %s appears to be missing or has no layer name!
 To create this table, call pygr.Data.ResourceDBMySQL("%s",createLayer=<LAYERNAME>)
@@ -311,7 +330,7 @@ where <LAYERNAME> is the layer name you want to assign it.
         self.rootNames[name]=None
         self.cursor.execute('insert into %s (pygr_id,location,objdata) values (%%s,%%s,%%s)'
                             %self.tablename,('0root',name,'a'))
-    def __getitem__(self,id):
+    def __getitem__(self,id,download=False):
         'get construction rule from mysql, and attempt to construct'
         self.cursor.execute('select location,objdata,docstring from %s where pygr_id=%%s'
                             % self.tablename,(id,))
@@ -322,7 +341,7 @@ where <LAYERNAME> is the layer name you want to assign it.
                 return obj
             except KeyError: # MUST HAVE FAILED TO LOAD A REQUIRED DEPENDENCY
                 pass # HMM, TRY ANOTHER LOCATION
-        raise PygrDataNotFoundError('unable construct %s from remote services')
+        raise PygrDataNotFoundError('unable to construct %s from remote services')
     def __setitem__(self,id,obj):
         'add an object to this resource database'
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
@@ -367,7 +386,7 @@ where <LAYERNAME> is the layer name you want to assign it.
         for attr,objData in self.cursor.fetchall():
             d[attr]=self.finder.loads(objData)
         return d
-    def dir(self,prefix,asDict=False):
+    def dir(self,prefix,asDict=False,download=False):
         self.cursor.execute('select pygr_id,docstring,user,creation_time,pickle_size from %s where pygr_id like %%s'
                             % self.tablename,(prefix+'%',))
         d={}
@@ -422,7 +441,7 @@ class ResourceDBShelve(object):
     def reopen(self,mode):
         self.db.close()
         self.db=shelve.open(self.dbpath,mode)
-    def __getitem__(self,id):
+    def __getitem__(self,id,download=False):
         'get an item from this resource database'
         s=self.db[id] # RAISES KeyError IF NOT PRESENT
         obj = self.finder.loads(s) # RUN THE UNPICKLER ON THE STRING
@@ -435,33 +454,31 @@ class ResourceDBShelve(object):
         'add an object to this resource database'
         s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
-        self.db[id]=s # SAVE TO OUR SHELVE FILE
-        self.db['__doc__.'+id]=getResource.get_info_dict(obj,s)
-        root=id.split('.')[0] # SEE IF ROOT NAME IS IN THIS SHELVE
         try:
-            d=self.db['0root']
-        except KeyError:
-            d={}
-        if root not in d:
-            d[root]=None # ADD NEW ENTRY
-            self.db['0root']=d # SAVE BACK TO SHELVE
-        self.reopen('r') # REOPEN READ-ONLY
+            self.db[id]=s # SAVE TO OUR SHELVE FILE
+            self.db['__doc__.'+id]=getResource.get_info_dict(obj,s)
+            root=id.split('.')[0] # SEE IF ROOT NAME IS IN THIS SHELVE
+            d = self.db.get('0root',{})
+            if root not in d:
+                d[root]=None # ADD NEW ENTRY
+                self.db['0root']=d # SAVE BACK TO SHELVE
+        finally:
+            self.reopen('r') # REOPEN READ-ONLY
     def __delitem__(self,id):
         'delete this item from the database, with a modicum of safety'
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
-        missingKey=False
-        try: 
-            del self.db[id] # DELETE THE SPECIFIED RULE
+        try:
+            try:
+                del self.db[id] # DELETE THE SPECIFIED RULE
+            except KeyError:
+                raise PygrDataNotFoundError('ID %s not found in %s' % (id,self.dbpath))
             try:
                 del self.db['__doc__.'+id]
             except KeyError:
                 pass
-        except KeyError:
-            missingKey=True
-        self.reopen('r') # REOPEN READ-ONLY
-        if missingKey: # NOW IT'S SAFE TO RAISE THE EXCEPTION...
-            raise PygrDataNotFoundError('ID %s not found in %s' % (id,self.dbpath))
-    def dir(self,prefix,asDict=False):
+        finally:
+            self.reopen('r') # REOPEN READ-ONLY
+    def dir(self,prefix,asDict=False,download=False):
         'generate all item IDs starting with this prefix'
         l=[]
         for name in self.db:
@@ -470,10 +487,7 @@ class ResourceDBShelve(object):
         if asDict:
             d={}
             for name in l:
-                try:
-                    d[name]=self.db['__doc__.'+name]
-                except KeyError:
-                    d[name]=None
+                d[name] = self.db.get('__doc__.'+name,None)
             return d
         return l
     def setschema(self,id,attr,kwargs):
@@ -481,10 +495,7 @@ class ResourceDBShelve(object):
         if not attr.startswith('-'): # REAL ATTRIBUTE
             targetID=kwargs['targetID'] # RAISES KeyError IF NOT PRESENT
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
-        try:
-            d=self.db['SCHEMA.'+id]
-        except KeyError:
-            d={}
+        d = self.db.get('SCHEMA.'+id,{})
         d[attr]=kwargs # SAVE THIS SCHEMA RULE
         self.db['SCHEMA.'+id]=d # FORCE shelve TO RESAVE BACK
         self.reopen('r')  # REOPEN READ-ONLY
@@ -571,9 +582,14 @@ class ResourceFinder(object):
                                 self.layer['here'] = rdb
                         elif 'subdir' not in self.layer:
                             self.layer['subdir'] = rdb
-                except StandardError: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
+                except (KeyboardInterrupt,SystemExit):
+                    raise # DON'T TRAP THESE CONDITIONS
+                # FORCED TO ADOPT THIS STRUCTURE BECAUSE xmlrpc RAISES
+                # socket.gaierror WHICH IS NOT A SUBCLASS OF StandardError...
+                # SO I CAN'T JUST TRAP StandardError, UNFORTUNATELY...
+                except: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
                     if hasattr(self,'saveDict'): # IN THE MIDDLE OF MODULE IMPORT
-                        import traceback,sys
+                        import traceback
                         traceback.print_exc(10,sys.stderr) # JUST PRINT TRACEBACK
                         print >>sys.stderr,'''
 error loading resource %s
@@ -655,7 +671,7 @@ Continuing with import...'''%dbpath
         except StandardError:
             return None
         
-    def __call__(self,id,layer=None,debug=None,*args,**kwargs):
+    def __call__(self,id,layer=None,debug=None,download=False,*args,**kwargs):
         'get the requested resource ID by searching all databases'
         try:
             return self.d[id] # USE OUR CACHED OBJECT
@@ -668,15 +684,22 @@ Continuing with import...'''%dbpath
             obj = None
             for db in self.resourceDBiter(layer): # SEARCH ALL OF OUR DATABASES
                 try:
-                    obj = db[id] # TRY TO OBTAIN FROM THIS DATABASE
+                    obj = db.__getitem__(id,download) # TRY TO OBTAIN FROM THIS DATABASE
                     break # SUCCESS!  NOTHING MORE TO DO
                 except (KeyError,IOError): # NOT IN THIS DB, FILES NOT ACCESSIBLE...
                     if self.debug: # PASS ON THE ACTUAL ERROR IMMEDIATELY
                         raise
             if obj is None:
                 raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % id)
-            obj._persistent_id = id  # MARK WITH ITS PERSISTENT ID
-            self.d[id] = obj # SAVE TO OUR CACHE
+            if hasattr(obj,'_saveLocalBuild') and obj._saveLocalBuild:
+                # SAVE AUTO BUILT RESOURCE TO LOCAL PYGR.DATA 
+                print >>sys.stderr,'''Saving new resource %s to local pygr.Data...
+You must use pygr.Data.save() to commit!''' % id
+                self.addResource(id,obj)
+                obj._saveLocalBuild = False # NO NEED TO SAVE THIS AGAIN
+            else: # NORMAL USAGE
+                obj._persistent_id = id  # MARK WITH ITS PERSISTENT ID
+                self.d[id] = obj # SAVE TO OUR CACHE
             self.applySchema(id,obj) # BIND SHADOW ATTRIBUTES IF ANY
         finally: # RESTORE STATE BEFORE RAISING ANY EXCEPTION
             self.debug = debug_state
@@ -778,7 +801,7 @@ so report the reproducible steps to this error message as a bug report.''' % res
         del db[id]
         self.delSchema(id,layer)
     def newServer(self,name,serverClasses=None,clientHost=None,
-                  withIndex=False,excludeClasses=None,**kwargs):
+                  withIndex=False,excludeClasses=None,downloadDB=None,**kwargs):
         'construct server for the designated classes'
         if excludeClasses is None: # DEFAULT: NO POINT IN SERVING SQL TABLES...
             from sqlgraph import SQLTableBase,SQLGraphClustered
@@ -834,7 +857,8 @@ so report the reproducible steps to this error message as a bug report.''' % res
             server[id]=obj # ADD TO XMLRPC SERVER
         server.registrationData=clientDict # SAVE DATA FOR SERVER REGISTRATION
         if withIndex: # SERVE OUR OWN INDEX AS A STATIC, READ-ONLY INDEX
-            myIndex=ResourceDBServer(name,readOnly=True) # CREATE EMPTY INDEX
+            myIndex=ResourceDBServer(name,readOnly=True,
+                                     downloadDB=downloadDB) # CREATE EMPTY INDEX
             server['index']=myIndex # ADD TO OUR XMLRPC SERVER
             server.register('','',server=myIndex) # ADD OUR RESOURCES TO THE INDEX
         return server
@@ -933,11 +957,11 @@ so report the reproducible steps to this error message as a bug report.''' % res
             if attr.startswith('-'): # A SCHEMA OBJECT
                 obj.delschema(db) # DELETE ITS SCHEMA RELATIONS
             db.delschema(id,attr) # DELETE THIS ATTRIBUTE SCHEMA RULE
-    def dir(self,prefix,layer=None,asDict=False):
+    def dir(self,prefix,layer=None,asDict=False,download=False):
         'get list or dict of resources beginning with the specified string'
         if layer is not None:
             db=self.getLayer(layer)
-            return db.dir(prefix,asDict=asDict)
+            return db.dir(prefix,asDict=asDict,download=download)
         d={}
         def iteritems(s):
             try:
@@ -945,7 +969,7 @@ so report the reproducible steps to this error message as a bug report.''' % res
             except AttributeError:
                 return iter([(x,None) for x in s])
         for db in self.resourceDBiter():
-            for k,v in iteritems(db.dir(prefix,asDict=asDict)):
+            for k,v in iteritems(db.dir(prefix,asDict=asDict,download=download)):
                 if k[0].isalpha() and k not in d: # ALLOW EARLIER DB TO TAKE PRECEDENCE
                     d[k]=v
         if asDict:
@@ -969,7 +993,6 @@ so report the reproducible steps to this error message as a bug report.''' % res
         self.lastSchema = {}
         try:
             self.save_pending() # SEE WHETHER ANY DATA NEEDS SAVING
-            import sys
             print >>sys.stderr,'''
 WARNING: saving pygr.Data pending data that you forgot to save...
 Remember in the future, you must issue the command pygr.Data.save() to save
@@ -1155,14 +1178,6 @@ class ForeignKeyMap(object):
             return self._inverse
 
 
-try:
-    save_on_exit
-except NameError: # ONLY REGISTER ONCE, EVEN IF MODULE RELOADED MANY TIMES
-    def save_on_exit():
-        'try to save any pygr.Data that the user forgot...'
-        getResource.__del__()
-    import atexit
-    atexit.register(save_on_exit) # THIS SHOULD BE RUN ON INTERPRETER EXIT
 
 ###########################################################
 schema = SchemaPath() # ROOT OF OUR SCHEMA NAMESPACE
@@ -1191,7 +1206,6 @@ except NameError:
     pass
 else: # HMM. THIS MUST BE A reload() OF THIS MODULE
     if len(getResource.pendingData)>0 or len(getResource.pendingSchema)>0:
-        import sys
         print >>sys.stderr,'''
 WARNING: You appear to have forced a reload() of pygr.Data without first
 having called pygr.Data.save() on the new data resources that you
@@ -1203,7 +1217,7 @@ data that you added to pygr.Data!'''
         try:
             getResource.save_pending() # SAVE USER'S DATA FOR HIM...
         except StandardError: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
-            import traceback,sys
+            import traceback
             traceback.print_exc(10,sys.stderr) # JUST PRINT TRACEBACK
             print >>sys.stderr,'''
 An error occurred during the saving of your added resources.
@@ -1227,6 +1241,11 @@ try:
     firstLoad
 except NameError:
     firstLoad = True
+    def save_on_exit(): # THIS SHOULD BE RUN ON INTERPRETER EXIT
+        'try to save any pygr.Data that the user forgot...'
+        getResource.__del__()
+    import atexit
+    atexit.register(save_on_exit) # ONLY REGISTER ONCE, EVEN IF MODULE RELOADED MANY TIMES
 else:
     firstLoad = False
 try:
@@ -1234,3 +1253,47 @@ try:
 except NameError: # DEFAULT LIST OF CLASSES NOT PORTABLE TO REMOTE CLIENTS
     from pygr.classutil import SourceFileName
     nonPortableClasses = [SourceFileName]
+
+
+# METHODS FOR AUTOMATIC DOWNLOADING OF RESOURCES
+def uncompress_file(filepath):
+    'stub for applying appropriate uncompression based on file suffix (.gz for now)'
+    if filepath.endswith('.gz'):
+        cmd = 'gunzip "%s"' % filepath
+        print >>sys.stderr,cmd
+        import os
+        os.system(cmd)
+        return filepath[:-3] # DROP THE .gz SUFFIX
+    return filepath # DEFAULT: NOT COMPRESSED, SO JUST HAND BACK FILENAME
+
+def download_monitor(bcount,bsize,totalsize):
+    'show current download progress'
+    bytes = bcount*bsize
+    print >>sys.stderr,'downloaded %s bytes (%2.1f%%)...' \
+          % (bytes,bytes*100./totalsize)
+
+def download_unpickler(path,filename,kwargs):
+    'try to download the desired file, and uncompress it if need be'
+    import urllib,classutil,os
+    if filename is None:
+        filename = os.path.basename(path)
+    filepath = os.path.join(classutil.get_env_or_cwd('PYGRDATADOWNLOAD'),filename)
+    print >>sys.stderr,'Beginning download of %s to %s...' %(path,filepath)
+    t = urllib.urlretrieve(path,filepath,download_monitor)
+    print >>sys.stderr,'Download done.'
+    filepath = uncompress_file(filepath) # UNCOMPRESS IF NEEDED
+    o = classutil.SourceFileName(filepath) # PATH TO WHERE THIS FILE IS NOW STORED
+    o._saveLocalBuild = True # MARK THIS FOR SAVING IN LOCAL PYGR.DATA
+    return o
+download_unpickler.__safe_for_unpickling__ = 1
+
+class SourceURL(object):
+    '''unpickling this object will trigger downloading of the desired path,
+    which will be cached to PYGRDATADOWNLOAD directory if any.  The value returned
+    from unpickling will simply be the path to the downloaded file, as a SourceFileName'''
+    def __init__(self,path,filename=None,**kwargs):
+        self.path = path
+        self.kwargs = kwargs
+        self.filename = filename
+    def __reduce__(self):
+        return (download_unpickler,(self.path,self.filename,self.kwargs))

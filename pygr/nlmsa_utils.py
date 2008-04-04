@@ -306,3 +306,22 @@ def prune_self_mappings(src_prefix,dest_prefix,is_bidirectional):
     return 0
   else:
     return 1
+
+def nlmsa_textdump_unpickler(filepath,kwargs):
+  from classutil import get_env_or_cwd 
+  from cnestedlist import textfile_to_binaries,NLMSA
+  path = textfile_to_binaries(filepath,buildpath=get_env_or_cwd('PYGRDATABUILDDIR'),
+                              **kwargs)
+  o = NLMSA(path) # NOW OPEN IN READ MODE FROM THE SAVED INDEX FILESET
+  o._saveLocalBuild = True # MARK THIS FOR SAVING IN LOCAL PYGR.DATA
+  return o
+nlmsa_textdump_unpickler.__safe_for_unpickling__ = 1
+  
+class NLMSABuilder(object):
+  'when unpickled triggers construction of NLMSA from textdump'
+  def __init__(self,filepath,**kwargs):
+    self.filepath = filepath
+    self.kwargs = kwargs
+  def __reduce__(self):
+    return (nlmsa_textdump_unpickler,(self.filepath,self.kwargs))
+    
