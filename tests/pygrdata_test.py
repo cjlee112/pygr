@@ -31,7 +31,7 @@ class PygrSwissprotBase(object):
         filename = tmp.subfile('exonAnnot')
         nlmsa = cnestedlist.NLMSA(filename,'w',pairwiseMode=True,bidirectional=False)
         nlmsa.addAnnotation(exon)
-        nlmsa.build()
+        nlmsa.build(verbose=False)
         annoDB.__doc__ = 'a little annotation db'
         nlmsa.__doc__ = 'a little map'
         pygr.Data.Bio.Annotation.annoDB = annoDB
@@ -63,7 +63,7 @@ class DNAAnnotation_Test(object):
         nlmsa = cnestedlist.NLMSA('tryannot','w',pairwiseMode=True,bidirectional=False)
         for annID in annoDB:
             nlmsa.addAnnotation(annoDB[annID])
-        nlmsa.build()
+        nlmsa.build(verbose=False)
         nlmsa.__doc__ = 'trivial map'
         pygr.Data.Bio.Test.map = nlmsa
         pygr.Data.schema.Bio.Test.map = pygr.Data.ManyToManyRelation(db,annoDB,bindAttrs=('exons',))
