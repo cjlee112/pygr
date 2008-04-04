@@ -392,7 +392,7 @@ class SchemaEdge(object):
 class ResourceDBGraphDescr(object):
     'this property provides graph interface to schema'
     def __get__(self,obj,objtype):
-        g = Graph(filename=obj.dbpath+'_schema',mode='c',writeNow=True,
+        g = Graph(filename=obj.dbpath+'_schema',mode='cw',writeNow=True,
                   simpleKeys=True,unpack_edge=SchemaEdge(obj))
         obj.graph = g
         return g
@@ -600,8 +600,11 @@ Continuing with import...'''%dbpath
             for name in rootNames:
                 if name not in self.saveDict:
                     self.saveDict[name]=ResourcePath(name)
-    def resourceDBiter(self):
+    def resourceDBiter(self,layer=None):
         'iterate over all available databases, read from PYGRDATAPATH env var.'
+        if layer is not None: # USE THE SPECIFIED LAYER
+            yield self.layer[layer]
+            return
         self.update()
         if self.db is None or len(self.db)==0:
             raise ValueError('empty PYGRDATAPATH! Please check environment variable.')
@@ -661,32 +664,22 @@ Continuing with import...'''%dbpath
         debug_state = self.debug # SAVE ORIGINAL STATE
         if debug is not None:
             self.debug = debug
-        if layer is not None: # USE THE SPECIFIED LAYER
-            obj=self.layer[layer][id]
-        else: # SEARCH ALL OF OUR DATABASES
-            obj=None
-            for db in self.resourceDBiter():
+        try: # finally... TO RESTORE debug STATE EVEN IF EXCEPTION OCCURS.
+            obj = None
+            for db in self.resourceDBiter(layer): # SEARCH ALL OF OUR DATABASES
                 try:
-                    obj=db[id] # TRY TO OBTAIN FROM THIS DATABASE
+                    obj = db[id] # TRY TO OBTAIN FROM THIS DATABASE
                     break # SUCCESS!  NOTHING MORE TO DO
                 except (KeyError,IOError): # NOT IN THIS DB, FILES NOT ACCESSIBLE...
                     if self.debug: # PASS ON THE ACTUAL ERROR IMMEDIATELY
-                        self.debug = debug_state
                         raise
-                except: # RESTORE STATE BEFORE RAISING THE EXCEPTION
-                    self.debug = debug_state
-                    raise
             if obj is None:
-                self.debug = debug_state
                 raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % id)
-        obj._persistent_id=id  # MARK WITH ITS PERSISTENT ID
-        self.d[id]=obj # SAVE TO OUR CACHE
-        try:
+            obj._persistent_id = id  # MARK WITH ITS PERSISTENT ID
+            self.d[id] = obj # SAVE TO OUR CACHE
             self.applySchema(id,obj) # BIND SHADOW ATTRIBUTES IF ANY
-        except: # RESTORE STATE BEFORE RAISING THE EXCEPTION
+        finally: # RESTORE STATE BEFORE RAISING ANY EXCEPTION
             self.debug = debug_state
-            raise
-        self.debug = debug_state
         return obj
     def check_docstring(self,obj):
         'enforce requirement for docstring, by raising exception if not present'
