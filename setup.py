@@ -32,7 +32,10 @@ Topic :: Scientific/Engineering
 Topic :: Scientific/Engineering :: Bioinformatics
 """
 
-
+def ppath(*args):
+   'return path in form pygr/arg1/arg2... using os.path.join()'
+   l = ['pygr'] + list(args)
+   return os.path.join(*l)
 
 metadata = {
     'name': name,
@@ -45,35 +48,36 @@ metadata = {
     'platforms': "ALL",
     'url': "http://sourceforge.net/projects/pygr",
     'py_modules': [
-	"pygr/__init__",
-	"pygr/graphquery",
-	"pygr/mapping",
-        "pygr/coordinator",
-        "pygr/Data",
-        "pygr/classutil",
-        "pygr/dbfile",
-        "pygr/nlmsa_utils",
-        "pygr/nestedlist",
-        "pygr/xnestedlist",
-	"pygr/poa",
-	"pygr/schema",
-	"pygr/seqdb",
-	"pygr/sequence",
-	"pygr/sequtil",
-	"pygr/sqlgraph",
-        "pygr/parse_blast",
-	"pygr/apps/__init__",
-	"pygr/apps/leelabdb",
-	"pygr/apps/seqref",
-	"pygr/apps/splicegraph",
-        "pygr/apps/maf2VSgraph",
+	"pygr.__init__",
+	"pygr.graphquery",
+	"pygr.mapping",
+        "pygr.coordinator",
+        "pygr.Data",
+        "pygr.classutil",
+        "pygr.dbfile",
+        "pygr.nlmsa_utils",
+        "pygr.nestedlist",
+        "pygr.xnestedlist",
+	"pygr.poa",
+	"pygr.schema",
+	"pygr.seqdb",
+	"pygr.sequence",
+	"pygr.sequtil",
+	"pygr.sqlgraph",
+        "pygr.parse_blast",
+	"pygr.apps.__init__",
+	"pygr.apps.leelabdb",
+	"pygr.apps.seqref",
+	"pygr.apps.splicegraph",
+        "pygr.apps.maf2VSgraph",
         ]
    }
 
 def compilePyrex(cfile):
    'for proper class pickling, pyrexc needs full-dotted-module-path filename format'
    from shutil import copyfile
-   modulename='.'.join(cfile.split('/')) # e.g. pygr/cdict.c -> pygc.cdict.c
+   sep = os.path.join('foo','')[-1] # / separator used on this platform
+   modulename='.'.join(cfile.split(sep)) # e.g. pygr/cdict.c -> pygc.cdict.c
    ctarget=os.path.join(os.path.dirname(cfile),modulename) # ADD DIRECTORY PATH
    copyfile(cfile[:-2]+'.pyx',ctarget[:-2]+'.pyx') # COPY pyx FILE TO DESIRED NAME
    try: # COPY pxd FILE IF IT EXISTS...
@@ -107,13 +111,17 @@ def pyrexIsUpToDate(cfile):
 def add_pyrex_extensions():
    'prepare extension module code, add to setup metadata'
    buildExtensions=[]
-   pyrexTargets={'pygr/cdict.c':
-                 Extension('pygr.cdict',sources = ['pygr/cgraph.c', 'pygr/cdict.c']),
-                 'pygr/cnestedlist.c':
+   pyrexTargets={ppath('cdict.c'):
+                 Extension('pygr.cdict',
+                           sources = [ppath('cgraph.c'), ppath('cdict.c')]),
+                 ppath('cnestedlist.c'):
                  Extension('pygr.cnestedlist',
-                           sources = ['pygr/intervaldb.c', 'pygr/cnestedlist.c',
-                                      'pygr/apps/maf2nclist.c']),
-                 'pygr/seqfmt.c':Extension('pygr.seqfmt',sources = ['pygr/seqfmt.c'])}
+                           sources = [ppath('intervaldb.c'),
+                                      ppath('cnestedlist.c'),
+                                      ppath('apps','maf2nclist.c')]),
+                 ppath('seqfmt.c'):
+                 Extension('pygr.seqfmt',
+                           sources = [ppath('seqfmt.c')])}
    for cfile,extmodule in pyrexTargets.items():
       if os.access(cfile,os.R_OK) and pyrexIsUpToDate(cfile):
          print 'Using existing pyrexc-generated C-code',cfile
@@ -160,7 +168,8 @@ def check_extensions(dist,ext_modules):
 def clean_up_pyrex_files(ext_modules,base='pygr'):
    for ext_module in ext_modules:
       name = ext_module.name.split('.')[-1]
-      rmfiles = ['%s/%s.c' %(base,name),'%s/%s.%s.c' %(base,base,name)]
+      rmfiles = [os.path.join(base, name+'.c'),
+                 os.path.join(base, base+'.'+name+'.c')]
       for filename in rmfiles:
          try:
             os.remove(filename)
