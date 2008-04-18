@@ -91,7 +91,7 @@ cdef extern from "intervaldb.h":
   int write_padded_binary(IntervalMap im[],int n,int div,FILE *ifile)
   int read_imdiv(FILE *ifile,IntervalMap imdiv[],int div,int i_div,int ntop)
   int save_text_file(char filestem[],char basestem[],char err_msg[],FILE *ofile)
-  int text_file_to_binaries(FILE *infile,char err_msg[])
+  int text_file_to_binaries(FILE *infile,char buildpath[],char err_msg[])
   int C_int_max
 
 

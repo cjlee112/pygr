@@ -2093,8 +2093,10 @@ def textfile_to_binaries(filename,seqDict=None,prefixDict=None,buildpath=''):
       raise IOError('bad format in %s'%filename)
     if buildpath!='': # USER-SPECIFIED PATH FOR BINARIES
       import os
-      buildpath = os.path.join(buildpath,basestem) # CONSTRUCT FILE PATH
-      strcpy(basestem,buildpath) # COPY BACK TO C STRING USABLE IN C FUNCTIONS
+      buildpath1 = os.path.join(buildpath,basestem) # CONSTRUCT FILE PATH
+      strcpy(basestem,buildpath1) # COPY BACK TO C STRING USABLE IN C FUNCTIONS
+    else: # JUST USE PATH IN CURRENT DIRECTORY
+      buildpath1 = basestem
     if 0==strcmp(tmp,"unknown"):
       if seqDict is None:
         raise ValueError('You must provide a seqDict for this NLMSA!')
@@ -2149,19 +2151,23 @@ dictionary argument: %s''' % missing)
     seqIDdict.close() # DONE WRITING THE seqIDdict
     IDdict.close() # DONE WRITING THE seqIDdict
 
-    ifile = file(basestem+'.NLMSAindex',"w")
-  except:
-    fclose(infile)
-    raise
-  try:
+    NLMSAindexText = ''
+    if buildpath!='': # USER-SPECIFIED PATH FOR BINARIES
+      import os
+      buildpath2 = os.path.join(buildpath,'') # ENSURE THIS ENDS IN DIRECTORY SEPARATOR
+      strcpy(basestem,buildpath2) # COPY BACK TO C STRING USABLE IN C FUNCTIONS
+    else:
+      strcpy(basestem,'') # JUST USE BLANK STRING TO SAVE IN CURRENT DIRECTORY
     while fgets(line,32767,infile)!=NULL:
       s=line # CONVERT STRING TO PYTHON OBJECT
       if not s.startswith('NLMSASequence'):
         raise IOError('bad format in file %s'%filename)
-      ifile.write(s[14:]) # JUST PRINT THE DATA FIELDS
-      if text_file_to_binaries(infile,err_msg)<0:
+      NLMSAindexText = NLMSAindexText + s[14:] # JUST SAVE THE DATA FIELDS
+      if text_file_to_binaries(infile,basestem,err_msg)<0:
         raise IOError(err_msg)
+    ifile = file(buildpath1+'.NLMSAindex',"w") # LAST, WRITE TOP INDEX FILE
+    ifile.write(NLMSAindexText)
+    ifile.close()
   finally:
     fclose(infile)
-    ifile.close()
   return basestem # ACTUAL PATH TO NLMSA INDEX FILESET

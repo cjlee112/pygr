@@ -1002,7 +1002,7 @@ int save_text_file(char filestem[],char basestem[],
 
 
 
-int text_file_to_binaries(FILE *infile,char err_msg[])
+int text_file_to_binaries(FILE *infile,char buildpath[],char err_msg[])
 {
   int i,n,ntop,div,nlists,nii,npad;
   char path[2048],line[32768],filestem[2048];
@@ -1016,7 +1016,7 @@ int text_file_to_binaries(FILE *infile,char err_msg[])
   if (6!=sscanf(line,"SIZE\t%s\t%d %d %d %d %d",
 		filestem,&n,&ntop,&div,&nlists,&nii))
     goto fread_error_occurred;
-  sprintf(path,"%s.size",filestem); /* SAVE BASIC SIZE INFO*/
+  sprintf(path,"%s%s.size",buildpath,filestem); /* SAVE BASIC SIZE INFO*/
   ifile=fopen(path,"w");
   if (!ifile) 
     goto unable_to_open_file;
@@ -1030,7 +1030,7 @@ int text_file_to_binaries(FILE *infile,char err_msg[])
     npad=ntop;
 
   if (nii>0) {
-    sprintf(path,"%s.index",filestem); /* SAVE INDEX INFO*/
+    sprintf(path,"%s%s.index",buildpath,filestem); /* SAVE INDEX INFO*/
     ifile=fopen(path,"w");
     if (!ifile) 
       goto unable_to_open_file;
@@ -1046,7 +1046,7 @@ int text_file_to_binaries(FILE *infile,char err_msg[])
   }
 
   if(nlists>0){
-    sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
+    sprintf(path,"%s%s.subhead",buildpath,filestem); /* SAVE THE SUBHEADER LIST */
     ifile=fopen(path,"w");
     if (!ifile) 
       goto unable_to_open_file;
@@ -1062,7 +1062,7 @@ int text_file_to_binaries(FILE *infile,char err_msg[])
     fclose(ifile);
   }
 
-  sprintf(path,"%s.idb",filestem); /* SAVE THE ACTUAL INTERVAL DB*/
+  sprintf(path,"%s%s.idb",buildpath,filestem); /* SAVE THE ACTUAL INTERVAL DB*/
   ifile=fopen(path,"w");
   if (!ifile) 
     goto unable_to_open_file;
