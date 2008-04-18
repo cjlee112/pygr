@@ -97,7 +97,8 @@ def pyrexIsUpToDate(cfile):
    'True if .c file is newer than the .pyx file'
    cstat=os.stat(cfile)
    try: 
-      pyxstat=os.stat(cfile[:-2]+'.pyx')
+      if cstat[8]<os.stat(cfile[:-2]+'.pyx')[8]: # COMPARE THEIR st_mtime VALUES
+         return False # pyx FILE IS NEWER THAN C FILE, MUST RERUN PYREXC
    except OSError: # PYREX .pyx CODE IS MISSING??  JUST USE OUR EXISTING C CODE THEN.
       print 'Warning: pyrex code %s is missing!  Check your distribution!' % (cfile[:-2]+'.pyx')
       return True
@@ -106,7 +107,7 @@ def pyrexIsUpToDate(cfile):
          return False # pxd FILE IS NEWER THAN C FILE, MUST RERUN PYREXC
    except OSError:
       pass
-   return cstat[8]>pyxstat[8] # COMPARE THEIR st_mtime VALUES
+   return True # c file is up to date
 
 def add_pyrex_extensions():
    'prepare extension module code, add to setup metadata'
@@ -150,22 +151,26 @@ else:
 
 
 def check_extensions(dist,ext_modules):
+   'True if all ext_modules can be successfully imported'
    from distutils.command.build import build
    b = build(dist)
    b.finalize_options()
    if '--inplace' in sys.argv:
-      sys.path.append('pygr') # handles --inplace case; look for modules in source code
-   else:
-      sys.path.append(os.path.join(b.build_lib,'pygr')) # look for modules in build
+      modpath = 'pygr' # handles --inplace case; look for modules in source code
+   else: # look for modules in build
+      modpath = os.path.join(b.build_lib,'pygr')
+   sys.path.append(modpath) # make import look in this directory
    for extmodule in ext_modules:
       try:
          exec 'import %s' % extmodule.name.split('.')[-1]
       except ImportError:
-         print >>sys.stderr,'Build of module %s appears to have failed!' % extmodule.name
+         print >>sys.stderr,'''Unable to find module %s in build directory: %s
+Did the build fail?''' % (extmodule.name, modpath)
          return False
    return True
       
 def clean_up_pyrex_files(ext_modules,base='pygr'):
+   'remove pyrex-compiled C files'
    for ext_module in ext_modules:
       name = ext_module.name.split('.')[-1]
       rmfiles = [os.path.join(base, name+'.c'),
@@ -190,7 +195,9 @@ if __name__=='__main__':
       add_pyrex_extensions()
       dist = setup(**metadata)
       if not check_extensions(dist,metadata['ext_modules']):
-         raise OSError('Build failed. You are either missing pyrex or a C compiler.\nPlease fix this, and run the build command again!')
+         raise OSError('''Build appears to have failed.
+You may be missing pyrex or a C compiler.
+Please fix this, and run the build command again!''')
       else:
          print 'Build succeeded!'
 
