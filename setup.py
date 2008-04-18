@@ -145,7 +145,10 @@ def check_extensions(dist,ext_modules):
    from distutils.command.build import build
    b = build(dist)
    b.finalize_options()
-   sys.path.append(os.path.join(b.build_lib,'pygr'))
+   if '--inplace' in sys.argv:
+      sys.path.append('pygr') # handles --inplace case; look for modules in source code
+   else:
+      sys.path.append(os.path.join(b.build_lib,'pygr')) # look for modules in build
    for extmodule in ext_modules:
       try:
          exec 'import %s' % extmodule.name.split('.')[-1]
