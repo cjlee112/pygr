@@ -38,28 +38,30 @@ pattern arguments modRE, klassRE, methodRE which
 default to "_test.py$", "_Test$", "_test$" respectively.
 Returns tests as a list of triples of the form
 (modulename,klassname,methodname)'''
+    import re
     if len(files)==0:
-        files = os.listdir(os.getcwd())
+        modRE = kwargs.get('modRE','_test.py$')
+        modmatch = re.compile(modRE)
+        files = []
+        for path in os.listdir(os.getcwd()):
+            if modmatch.search(path) is not None:
+                files.append(path)
     tests = []
-    modRE = kwargs.get('modRE','_test.py$')
     klassRE = kwargs.get('klassRE','_Test$')
     methodRE = kwargs.get('methodRE','_test$')
-    import re
-    modmatch = re.compile(modRE)
     klassmatch = re.compile(klassRE)
     methodmatch = re.compile(methodRE)
     for path in files:
-        if modmatch.search(path) is not None:
-            if path.endswith('.py'):
-                path = path[:-3]
-            exec 'import %s' % path
-            mod = locals()[path]
-            for name in dir(mod):
-                if klassmatch.search(name) is not None:
-                    klass = getattr(mod,name)
-                    for methodname in dir(klass):
-                        if methodmatch.search(methodname) is not None:
-                            tests.append((path,name,methodname))
+        if path.endswith('.py'):
+            path = path[:-3]
+        exec 'import %s' % path
+        mod = locals()[path]
+        for name in dir(mod):
+            if klassmatch.search(name) is not None:
+                klass = getattr(mod,name)
+                for methodname in dir(klass):
+                    if methodmatch.search(methodname) is not None:
+                        tests.append((path,name,methodname))
     return tests
 
 
