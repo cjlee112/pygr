@@ -70,6 +70,7 @@ metadata = {
 	"pygr.apps.seqref",
 	"pygr.apps.splicegraph",
         "pygr.apps.maf2VSgraph",
+        "pygr.apps.catalog_downloads"
         ]
    }
 
