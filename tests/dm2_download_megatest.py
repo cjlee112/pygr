@@ -15,8 +15,9 @@ def rm_recursive(top):
     os.rmdir(top)
 
 class NLMSADownload_Test(object):
-    def __init__(self,url=
-       'http://biodb.bioinformatics.ucla.edu/PYGRDATA/dm2_multiz9way.txt.gz',
+    '''try to save and build via download catalog auto-constructed from biodb site'''
+    def __init__(self,url='http://biodb.bioinformatics.ucla.edu/PYGRDATA/'
+       #'http://biodb.bioinformatics.ucla.edu/PYGRDATA/dm2_multiz9way.txt.gz',
                  testDir = '/tmp'):
         self.url = url
         import random
@@ -24,16 +25,22 @@ class NLMSADownload_Test(object):
         self.pygrdatapath = ','.join([self.testDir,
                                'http://biodb2.bioinformatics.ucla.edu:5000'])
     def setup(self):
-        'create pygr.Data entries for building the target NLMSA'
+        'create pygr.Data entries for all NLMSAs on biodb/PYGRDATA site'
         os.mkdir(self.testDir)
         pygrData = get_pygr_data_path(self.pygrdatapath)
-        source = pygrData.SourceURL(self.url)
-        source.__doc__ = 'textdump of NLMSA to test'
-        pygrData.Bio.MSA.UCSC.dm2_multiz9way.txt = source
-        msaref = nlmsa_utils.NLMSABuilder(source)
-        msaref.__doc__ = 'NLMSA builder to test'
-        pygrData.Bio.MSA.UCSC.dm2_multiz9way = msaref
-        pygrData.save()
+        from pygr.apps.catalog_downloads import save_NLMSA_downloaders
+        save_NLMSA_downloaders(self.url)
+    ## def setup(self):
+    ##     'create pygr.Data entries for building the target NLMSA'
+    ##     os.mkdir(self.testDir)
+    ##     pygrData = get_pygr_data_path(self.pygrdatapath)
+    ##     source = pygrData.SourceURL(self.url)
+    ##     source.__doc__ = 'textdump of NLMSA to test'
+    ##     pygrData.Bio.MSA.UCSC.dm2_multiz9way.txt = source
+    ##     msaref = nlmsa_utils.NLMSABuilder(source)
+    ##     msaref.__doc__ = 'NLMSA builder to test'
+    ##     pygrData.Bio.MSA.UCSC.dm2_multiz9way = msaref
+    ##     pygrData.save()
     def download_test(self):
         'test building the NLMSA, and a simple query'
         os.environ['PYGRDATADOWNLOAD'] = self.testDir
@@ -50,4 +57,5 @@ class NLMSADownload_Test(object):
         'clean up our temporary directory'
         rm_recursive(self.testDir)
         
+    
     

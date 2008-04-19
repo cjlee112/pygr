@@ -310,6 +310,8 @@ def prune_self_mappings(src_prefix,dest_prefix,is_bidirectional):
 def nlmsa_textdump_unpickler(filepath,kwargs):
   from classutil import get_env_or_cwd 
   from cnestedlist import textfile_to_binaries,NLMSA
+  import sys
+  print >>sys.stderr,'Saving NLMSA indexes from textdump',filepath
   path = textfile_to_binaries(filepath,buildpath=get_env_or_cwd('PYGRDATABUILDDIR'),
                               **kwargs)
   o = NLMSA(path) # NOW OPEN IN READ MODE FROM THE SAVED INDEX FILESET

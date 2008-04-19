@@ -2158,11 +2158,13 @@ dictionary argument: %s''' % missing)
       strcpy(basestem,buildpath2) # COPY BACK TO C STRING USABLE IN C FUNCTIONS
     else:
       strcpy(basestem,'') # JUST USE BLANK STRING TO SAVE IN CURRENT DIRECTORY
+    import sys
     while fgets(line,32767,infile)!=NULL:
       s=line # CONVERT STRING TO PYTHON OBJECT
       if not s.startswith('NLMSASequence'):
         raise IOError('bad format in file %s'%filename)
       NLMSAindexText = NLMSAindexText + s[14:] # JUST SAVE THE DATA FIELDS
+      sys.stderr.write('Saving NLMSA binary index: '+s[14:]+'...\n')
       if text_file_to_binaries(infile,basestem,err_msg)<0:
         raise IOError(err_msg)
     ifile = file(buildpath1+'.NLMSAindex',"w") # LAST, WRITE TOP INDEX FILE

@@ -725,6 +725,10 @@ You must use pygr.Data.save() to commit!''' % id
         except KeyError:
             pass
         self.d[resID] = obj # SAVE TO OUR CACHE
+    def addResourceDict(self,d,layer=None):
+        'queue a dict of name:object pairs for saving to specified db layer'
+        for k,v in d.items():
+            self.addResource(k,v,layer)
     def queue_schema_obj(self,schemaPath,attr,layer,schemaObj):
         'add a schema object to the queue for saving to the specified database layer'
         resID = schemaPath.getPath(attr) # GET STRING ID
