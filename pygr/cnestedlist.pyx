@@ -182,6 +182,7 @@ cdef class IntervalFileDBIterator:
       nbuffer=len(rawIvals)
     self.im_buf=interval_map_alloc(nbuffer)
     self.nbuf=nbuffer
+    self.nhit=0
     if rawIvals is not None:
       i=0
       for ival in rawIvals:
@@ -214,20 +215,15 @@ cdef class IntervalFileDBIterator:
     cdef IntervalMap *new_buf
     istart=self.nbuf-ikeep
     length=sizeof(IntervalMap)*istart # #BYTES WE MUST KEEP
-    if ikeep==0: # KEEPING THE WHOLE BUFFER, SO MUST ALLOCATE NEW SPACE
-      new_buf=<IntervalMap *>realloc(self.im_buf,2*length) # DOUBLE OUR BUFFER
+    if ikeep>0 and length>0: # SHIFT [ikeep:] SLICE OF BUFFER TO [0:istart]
+      memmove(self.im_buf,self.im_buf+ikeep,length)
+    if ikeep<8: # RUNNING OUT OF ROOM, SO DOUBLE OUR BUFFER
+      new_buf=<IntervalMap *>realloc(self.im_buf,
+                                     sizeof(IntervalMap)*2*self.nbuf)
       if new_buf==NULL:
         raise MemoryError('out of memory')
       self.im_buf=new_buf
       self.nbuf=2*self.nbuf
-    elif ikeep<8: # RUNNING OUT OF ROOM, SO EXPAND BUFFER
-      self.nbuf=2*self.nbuf
-      new_buf=interval_map_alloc(self.nbuf)
-      memcpy(new_buf,self.im_buf+ikeep,length)
-      free(self.im_buf)
-      self.im_buf=new_buf
-    else: # JUST SHIFT [ikeep:] SLICE OF BUFFER TO FRONT [0:istart]
-      memmove(self.im_buf,self.im_buf+ikeep,length)
     return istart # RETURN START OF EMPTY BLOCK WHERE WE CAN ADD NEW DATA
 
   cdef int saveInterval(self,int start,int end,int target_id,
