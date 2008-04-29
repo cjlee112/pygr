@@ -1,6 +1,32 @@
 
 from nosebase import *
 
+class PygrDownload_Test(object):
+    'save seq db and interval to pygr.Data shelve'
+    tempDirClass = TempPygrData
+    def setup(self,**kwargs):
+        self.tempdir = self.tempDirClass(**kwargs)
+        import pygr.Data
+        s = pygr.Data.SourceURL('http://www.doe-mbi.ucla.edu/~leec/test.gz')
+        s.__doc__ = 'test download'
+        pygr.Data.Bio.Test.Download1 = s
+        pygr.Data.save()
+        self.tempdir.force_reload()
+    def download_test(self):
+        'test downloading of gzipped file using pygr.Data'
+        import pygr.Data
+        filepath = pygr.Data.Bio.Test.Download1()
+        pygr.Data.save()
+        ifile = file(filepath)
+        import md5,os
+        h = md5.md5(ifile.read())
+        assert h.hexdigest() == 'f95656496c5182d6cff9a56153c9db73'
+        ifile.close()
+        os.remove(filepath)
+    def teardown(self):
+        self.tempdir.__del__() # FORCE IT TO RELEASE PYGR DATA
+
+
 class PygrSwissprotBase(object):
     'save seq db and interval to pygr.Data shelve'
     tempDirClass = TempPygrData

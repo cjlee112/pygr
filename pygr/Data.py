@@ -1260,14 +1260,47 @@ except NameError: # DEFAULT LIST OF CLASSES NOT PORTABLE TO REMOTE CLIENTS
 
 
 # METHODS FOR AUTOMATIC DOWNLOADING OF RESOURCES
-def uncompress_file(filepath):
-    'stub for applying appropriate uncompression based on file suffix (.gz for now)'
+def uncompress_file(filepath,unzipToFile=False,**kwargs):
+    '''stub for applying appropriate uncompression based on file suffix
+    (.gz and .zip for now)'''
     if filepath.endswith('.gz'):
-        cmd = 'gunzip "%s"' % filepath
-        print >>sys.stderr,cmd
-        import os
-        os.system(cmd)
+        # could use gzip module, but it's two times slower!!
+        # from gzip import GzipFile
+        # newpath = filepath[:-3]
+        # f = GzipFile(filepath)
+        # ifile = file(newpath,'w')
+        # try:
+        #     while True:
+        #         s = f.read(8192000)
+        #         if s == '': break
+        #         ifile.write(s)
+        # finally:
+        #     ifile.close()
+        #     f.close()
+        # return newpath
+        print >>sys.stderr, 'gunzip "%s"' % filepath
+        from subprocess import call # secure way to run process
+        retcode = call(['gunzip',filepath])
+        if retcode != 0:
+            raise OSError('gunzip "%s" failed!' % filepath)
         return filepath[:-3] # DROP THE .gz SUFFIX
+    elif filepath.endswith('.zip'):
+        # could use zip module, but it reads entire file into memory!
+        newpath = filepath[:-4] # DROP THE .zip SUFFIX
+        from subprocess import Popen,call
+        if unzipToFile: # concatenate all files into newpath
+            import os
+            ifile = file(newpath,'w')
+            try:
+                p = Popen(['unzip', '-p',filepath], stdout=ifile)
+                pid,status = os.waitpid(p.pid, 0) # wait for unzip to exit
+            finally:
+                ifile.close()
+        else: # just unzip the package as usual
+            status = call(['unzip',filepath])
+        if status != 0:
+            raise OSError('unzip "%s" failed!' % filepath)
+        return newpath
     return filepath # DEFAULT: NOT COMPRESSED, SO JUST HAND BACK FILENAME
 
 def download_monitor(bcount,bsize,totalsize):
@@ -1285,7 +1318,7 @@ def download_unpickler(path,filename,kwargs):
     print >>sys.stderr,'Beginning download of %s to %s...' %(path,filepath)
     t = urllib.urlretrieve(path,filepath,download_monitor)
     print >>sys.stderr,'Download done.'
-    filepath = uncompress_file(filepath) # UNCOMPRESS IF NEEDED
+    filepath = uncompress_file(filepath, **kwargs) # UNCOMPRESS IF NEEDED
     o = classutil.SourceFileName(filepath) # PATH TO WHERE THIS FILE IS NOW STORED
     o._saveLocalBuild = True # MARK THIS FOR SAVING IN LOCAL PYGR.DATA
     return o
