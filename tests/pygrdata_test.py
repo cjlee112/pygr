@@ -6,9 +6,10 @@ class PygrDownload_Test(object):
     tempDirClass = TempPygrData
     def setup(self,**kwargs):
         self.tempdir = self.tempDirClass(**kwargs)
-        import pygr.Data
-        s = pygr.Data.SourceURL('http://www.doe-mbi.ucla.edu/~leec/test.gz')
+        from pygr.downloader import SourceURL
+        s = SourceURL('http://www.doe-mbi.ucla.edu/~leec/test.gz')
         s.__doc__ = 'test download'
+        import pygr.Data
         pygr.Data.Bio.Test.Download1 = s
         pygr.Data.save()
         self.tempdir.force_reload()
@@ -20,8 +21,8 @@ class PygrDownload_Test(object):
         ifile = file(filepath)
         import md5,os
         h = md5.md5(ifile.read())
-        assert h.hexdigest() == 'f95656496c5182d6cff9a56153c9db73'
         ifile.close()
+        assert h.hexdigest() == 'f95656496c5182d6cff9a56153c9db73'
         os.remove(filepath)
     def teardown(self):
         self.tempdir.__del__() # FORCE IT TO RELEASE PYGR DATA

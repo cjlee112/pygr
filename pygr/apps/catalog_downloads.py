@@ -45,14 +45,15 @@ def save_NLMSA_downloaders(url,fileFilter=lambda x: x.endswith(".txt.gz"),
         fileDocumenter = lambda x: 'NLMSA alignment '+x
     if fileNamer is None: # a default resource naming function
         fileNamer = lambda x:resourceStem+x[:-3] # remove .gz suffix
-    import pygr.Data
     from pygr.nlmsa_utils import NLMSABuilder
+    from pygr.downloader import SourceURL
     d = catalog_downloads(url, fileFilter, fileNamer,
-                          fileDocumenter, pygr.Data.SourceURL)
+                          fileDocumenter, SourceURL)
     for resID,o in d.items():
         nlmsa = NLMSABuilder(o)
         nlmsa.__doc__ = fileDocumenter(resID)
         d[resID[:-4]] = nlmsa # remove .txt suffix
+    import pygr.Data
     pygr.Data.getResource.addResourceDict(d,layer)
     pygr.Data.save()
     return d # just in case the user wants to see what was saved

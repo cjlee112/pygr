@@ -53,6 +53,7 @@ metadata = {
 	"pygr.mapping",
         "pygr.coordinator",
         "pygr.Data",
+        "pygr.downloader",
         "pygr.classutil",
         "pygr.dbfile",
         "pygr.nlmsa_utils",
