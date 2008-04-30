@@ -528,6 +528,7 @@ class ResourceFinder(object):
         self.cursors=[]
         self.clear_pending()
         self.debug = False
+        self.download = False
         if saveDict is not None:
             self.saveDict=saveDict # SAVE NEW LAYER NAMES HERE...
             self.update(PYGRDATAPATH) # LOAD RESOURCE DBs FROM PYGRDATAPATH
@@ -671,15 +672,20 @@ Continuing with import...'''%dbpath
         except StandardError:
             return None
         
-    def __call__(self,id,layer=None,debug=None,download=False,*args,**kwargs):
+    def __call__(self,id,layer=None,debug=None,download=None,*args,**kwargs):
         'get the requested resource ID by searching all databases'
         try:
             return self.d[id] # USE OUR CACHED OBJECT
         except KeyError:
             pass
         debug_state = self.debug # SAVE ORIGINAL STATE
+        download_state = self.download
         if debug is not None:
             self.debug = debug
+        if download is not None: # apply the specified download mode
+            self.download = download
+        else: # just use our current download mode
+            download = self.download
         try: # finally... TO RESTORE debug STATE EVEN IF EXCEPTION OCCURS.
             obj = None
             for db in self.resourceDBiter(layer): # SEARCH ALL OF OUR DATABASES
@@ -703,6 +709,7 @@ You must use pygr.Data.save() to commit!''' % id
             self.applySchema(id,obj) # BIND SHADOW ATTRIBUTES IF ANY
         finally: # RESTORE STATE BEFORE RAISING ANY EXCEPTION
             self.debug = debug_state
+            self.download = download_state
         return obj
     def check_docstring(self,obj):
         'enforce requirement for docstring, by raising exception if not present'
