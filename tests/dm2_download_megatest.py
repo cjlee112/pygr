@@ -17,7 +17,7 @@ def rm_recursive(top):
 #'http://biodb.bioinformatics.ucla.edu/PYGRDATA/dm2_multiz9way.txt.gz',
 class NLMSADownload_Test(object):
     '''try to save and build via download catalog auto-constructed from biodb site'''
-    def __init__(self,url='http://biodb.bioinformatics.ucla.edu/PYGRDATA/'
+    def __init__(self,url='http://biodb.bioinformatics.ucla.edu/PYGRDATA/',
                  testDir = '/tmp'):
         self.url = url
         import random
