@@ -2168,4 +2168,4 @@ dictionary argument: %s''' % missing)
     ifile.close()
   finally:
     fclose(infile)
-  return basestem # ACTUAL PATH TO NLMSA INDEX FILESET
+  return buildpath1 # ACTUAL PATH TO NLMSA INDEX FILESET
