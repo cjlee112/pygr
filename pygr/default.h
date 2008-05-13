@@ -5,7 +5,16 @@
 /* ON LINUX, GIVE US SUPPORT FOR LARGE FILES BY DEFAULT */
 #define _FILE_OFFSET_BITS 64
 #define PYGR_OFF_T off_t
+
+/* try to get 64 bit fseek on Windows if available, otherwise fall
+   back to regular fseek version.  On other platforms use POSIX fseeko */
+#ifdef __MSVCRT__
+#define PYGR_FSEEK(IFILE,OFFSET,WHENCE) fseeko64(IFILE,OFFSET,WHENCE)
+#elif defined(_WIN32)
+#define PYGR_FSEEK(IFILE,OFFSET,WHENCE) fseek(IFILE,OFFSET,WHENCE)
+#else
 #define PYGR_FSEEK(IFILE,OFFSET,WHENCE) fseeko(IFILE,OFFSET,WHENCE)
+#endif
 
 #ifdef BUILD_C_LIBRARY
 #include <sys/types.h>
