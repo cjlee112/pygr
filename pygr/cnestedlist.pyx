@@ -1439,7 +1439,8 @@ cdef class NLMSA:
                maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666,
                trypath=None,bidirectional=True,pairwiseMode= -1,
                bidirectionalRule=nlmsa_utils.prune_self_mappings,
-               use_virtual_lpo=None,maxLPOcoord=None,**kwargs):
+               use_virtual_lpo=None,maxLPOcoord=None,
+               inverseDB=None,**kwargs):
     try:
       import resource # WE MAY NEED TO OPEN A LOT OF FILES...
       resource.setrlimit(resource.RLIMIT_NOFILE,(maxOpenFiles,-1))
@@ -1449,6 +1450,7 @@ cdef class NLMSA:
     self.seqs=nlmsa_utils.NLMSASeqDict(self,pathstem,mode,**kwargs)
     self.seqlist=self.seqs.seqlist
     self.pathstem=pathstem
+    self.inverseDB = inverseDB
     if maxlen is None:
       maxlen=C_int_max-65536 # C_int_max MAXIMUM VALUE REPRESENTABLE BY int
       if axtFiles is not None:
@@ -1515,7 +1517,8 @@ cdef class NLMSA:
   def __getstate__(self):
     if self.in_memory_mode:
       raise ValueError("can't pickle NLMSA.in_memory_mode")
-    return dict(pathstem=self.pathstem,seqDict=self.seqDict)
+    return dict(pathstem=self.pathstem,seqDict=self.seqDict,
+                inverseDB=self.inverseDB)
   def __setstate__(self,state):
     self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
 
@@ -1965,6 +1968,13 @@ To turn off this message, use the verbose=False option
     'get specified interval in the target sequence'
     seq=self.seqlist.getSeq(iseq) # JUST THE SEQ OBJECT
     return sequence.relativeSlice(seq,istart,istop)
+  def __invert__(self):
+    if self.inverseDB is not None: # use the specified inverseDB
+      return self.inverseDB
+    elif self.is_bidirectional: # provides mapping both directions
+      return self
+    else:
+      raise ValueError('this mapping is not invertible')
 
 
 

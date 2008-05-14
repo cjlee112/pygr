@@ -172,6 +172,7 @@ cdef class NLMSA:
   cdef int lpo_id
   cdef readonly int maxlen,inlmsa,is_bidirectional,pairwiseMode,in_memory_mode
   cdef public object _persistent_id,_ignoreShadowAttr,__doc__,_saveLocalBuild
+  cdef public object inverseDB
 
   cdef void free_seqidmap(self,int nseq0,SeqIDMap *seqidmap)
   cdef void save_nbuild(self,int nbuild[])
