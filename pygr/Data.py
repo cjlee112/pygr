@@ -698,11 +698,20 @@ Continuing with import...'''%dbpath
             if obj is None:
                 raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % id)
             if hasattr(obj,'_saveLocalBuild') and obj._saveLocalBuild:
-                # SAVE AUTO BUILT RESOURCE TO LOCAL PYGR.DATA 
-                print >>sys.stderr,'''Saving new resource %s to local pygr.Data...
-You must use pygr.Data.save() to commit!''' % id
-                self.addResource(id,obj)
+                # SAVE AUTO BUILT RESOURCE TO LOCAL PYGR.DATA
+                hasPending = self.has_pending() # any pending transaction?
+                self.addResource(id, obj) # add to queue for commit
                 obj._saveLocalBuild = False # NO NEED TO SAVE THIS AGAIN
+                if hasPending:
+                    print >>sys.stderr,'''Saving new resource %s to local pygr.Data...
+You must use pygr.Data.save() to commit!
+You are seeing this message because you appear to be in the
+middle of a pygr.Data transaction.  Ordinarily pygr.Data would
+automatically commit this new downloaded resource, but doing so
+now would also commit your pending transaction, which you may
+not be ready to do!''' % id
+                else: # automatically save new resource
+                    self.save_pending() # commit it
             else: # NORMAL USAGE
                 obj._persistent_id = id  # MARK WITH ITS PERSISTENT ID
                 self.d[id] = obj # SAVE TO OUR CACHE
@@ -750,6 +759,9 @@ so report the reproducible steps to this error message as a bug report.''' % res
         db = self.getLayer(layer)
         db[resID] = obj # FINALLY, SAVE THE OBJECT TO THE DATABASE
         self.d[resID] = obj # SAVE TO OUR CACHE
+    def has_pending(self):
+        'return True if there are resources pending to be committed'
+        return len(self.pendingData)>0 or len(self.pendingSchema)>0
     def save_pending(self,layer=None):
         'save any pending pygr.Data resources and schema'
         if layer is not None:
