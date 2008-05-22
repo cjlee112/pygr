@@ -88,13 +88,13 @@ def uncompress_file(filepath,**kwargs):
         return do_untar(filepath,newpath=filepath[:-4],**kwargs)
     elif filepath.endswith('.tgz'):
         print >>sys.stderr, 'untarring %s...' % filepath
-        return do_untar(filepath,mode='r|gz',newpath=filepath[:-4],**kwargs)
+        return do_untar(filepath,mode='r:gz',newpath=filepath[:-4],**kwargs)
     elif filepath.endswith('.tar.gz'):
         print >>sys.stderr, 'untarring %s...' % filepath
-        return do_untar(filepath,mode='r|gz',newpath=filepath[:-7],**kwargs)
+        return do_untar(filepath,mode='r:gz',newpath=filepath[:-7],**kwargs)
     elif filepath.endswith('.tar.bz2'):
         print >>sys.stderr, 'untarring %s...' % filepath
-        return do_untar(filepath,mode='r|bz2',newpath=filepath[:-8],**kwargs)
+        return do_untar(filepath,mode='r:bz2',newpath=filepath[:-8],**kwargs)
     elif filepath.endswith('.gz'):
         print >>sys.stderr, 'gunzipping %s...' % filepath
         try:  # could use gzip module, but it's two times slower!!
