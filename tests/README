@@ -1,0 +1,27 @@
+Running Tests:
+First, you must have nose installed. To get nose, see
+http://www.somethingaboutorange.com/mrl/projects/nose/
+
+Then simply go to the pygr/tests directory and run the tests:
+
+cd pygr/tests
+python protest.py
+
+Note: depending on what modules you have installed, and what data 
+resources you have available locally, some tests may be skipped; 
+it will indicate which tests were skipped.
+
+You can also run individual test files by name:
+python protest.py pygrdata_test.py
+
+To run ALL tests, including very time-consuming and resource-intensive 
+NLMSA build tests, tell it to run our ``megatests'':
+python protest.py *_megatest.py
+
+NOTE: what is protest.py?
+For testing pygr.Data, it is helpful to use a testing framework that 
+enables each test to run in a separate process. Since nose does not allow 
+this, we use a small script compatible with nose, that runs the each 
+test in a separate process (i.e. separate Python interpreter session).
+
+For more details, see the Pygr Testing Documentation.
