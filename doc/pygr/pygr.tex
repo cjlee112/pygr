@@ -6027,30 +6027,32 @@ First, you must have \code{nose} installed.  Then simply go to
 the testing directory and run the tests:
 \begin{verbatim}
 cd pygr/tests
-nosetests
-\end{verbatim}
-To run ALL tests, including very time-consuming and resource-intensive
-NLMSA build tests, tell it to include our ``megatests'':
-\begin{verbatim}
-nosetests -i megatest
-\end{verbatim}
-Note: depending on what modules you have installed, and what data resources
-you have available locally, some tests may be skipped; nose will indicate
-which tests were skipped.
-
-For testing pygr.Data, it is helpful to use a testing framework
-that enables each test to run in a separate process.  Since nose does
-not allow this, we use a small script compatible with nose, that
-runs the each test in a separate process (i.e. separate Python interpreter
-session):
-\begin{verbatim}
-cd pygr/tests
 python protest.py
 \end{verbatim}
 One can also run individual test files:
 \begin{verbatim}
 python protest.py pygrdata_test.py
 \end{verbatim}
+
+To run ALL tests, including very time-consuming and resource-intensive
+NLMSA build tests, tell it to include our ``megatests'':
+\begin{verbatim}
+python protest.py *_megatest.py
+\end{verbatim}
+Note: depending on what modules you have installed, and what data resources
+you have available locally, some tests may be skipped; it will indicate
+which tests were skipped.  Note that you must have the necessary input 
+datasets to run some of the megatests.  For obvious reasons, we do not include
+these massive datasets in the Pygr source code repository or install packages.
+To run a specific megatest, first look at its source code to determine what
+input data it requires; often this is obvious from the megatest file name.
+
+\subsubsection{What is protest.py?}
+For testing pygr.Data, it is helpful to use a testing framework
+that enables each test to run in a separate process.  Since nose does
+not allow this, we use a small script compatible with nose, that
+runs the each test in a separate process (i.e. separate Python interpreter
+session).
 
 \subsection{Testing Approach}
 \label{test-utils}
@@ -6246,8 +6248,237 @@ in the Makefile.
 I also suggest you start by looking at intervaldb.c, which has build_nested_list() functions, query functions for both in-memory and on-disk nested list databases (find_intervals() and find_file_intervals() respectively), and reading / writing functions for the binary index (on-disk nested list), read_binary_files() and write_binary_files().
 
 \subsubsection{Important Caveats}
-Note that the Python alignment class (NLMSA) built on top of intervaldb can handle much larger alignments than can be built in memory, because it knows how to split up an alignment into separate coordinate systems that can each be built separately.  At this time, intervaldb.c is limited in the size of nested list it can build, by the total amount of memory you can allocate.  This only affects the build phase, obviously, not the on-disk query phase.  We haven't gotten around to implementing a pure on-disk build algorithm, which would obviously be a lot slower, but would eliminate this memory size build limitation.
+Note that the Python alignment class (NLMSA) built on top of intervaldb can handle much larger alignments than can be built in memory, because it knows how to split up an alignment into separate coordinate systems that can each be built separately.  At this time, intervaldb.c is limited in the size of nested list it can build, by the total amount of memory you can allocate.  This only affects the build phase, obviously, not the on-disk query phase.  We haven't gotten around to implementing a pure on-disk build algorithm, which would obviously be slower, but would eliminate this memory size build limitation.
 
+\section{Pygr Developer's Guide}
+\label{api-doc}
+
+Pygr attempts to provide a highly Pythonic interface to bioinformatics datatypes
+such as sequence, alignments and databases.  This document explains the interfaces
+for how different parts of Pygr fit together, for developers seeking to extend
+Pygr's capabilities.  Overall, Pygr follows several principles:
+\begin{itemize}
+\item dictionary interfaces: Dictionaries (i.e. the Mapping Protocol) are
+the core of the Python language.  In Pygr, we use dictionary interfaces to 
+represent database tables, mappings and graphs.  In relational databases
+(and indeed any kind of federated database architecture where data from one
+dataset need to be able to refer to specific items in another dataset),
+each item in a database ordinarily has a "primary key" that has a unique
+value for each item.  Python dictionaries mirror this behavior by associating
+each (unique) key value with a specific object.  Thus dictionaries are a
+natural interface to external databases.  However, the dictionary interface
+is also useful for representing entity-relationships, which can be one-to-one
+(i.e. \code{y = m[x]}), many-to-many (i.e. \code{for y in m[x]}), etc.  Pygr
+graph interfaces are simply two-level mappings (i.e. \code{m[x][y] = edge}).
+
+\item sequence interfaces: One of the main features of sequences is that they
+are sliceable using integer number ranges (e.g. \code{s[5:10]}).  Pygr uses
+sequence interfaces for both bio-sequence objects, intervals (slices) and 
+annotations.
+
+\item pickling: Python included a powerful, elegant and general method for
+object persistence from very early in the language's history.  pygr.Data simply
+leverages this strong foundation to provide convenient data sharing of 
+any picklable data.
+\end{itemize}
+
+\subsection{Dictionary Interfaces}
+Dictionary interfaces play a key role in Pygr modularization, because they
+provide a clean, general interface that Python programmers intuitively
+understand, hiding the complexities of interacting with a backend database,
+so that user code can work transparently with {\em any} database that
+follows this interface.
+\begin{itemize}
+\item identifier: one of the key principles of database
+design is that every item should have a unique identifier ("primary key").
+Identifiers are always basic data types such as integer or string, allowing
+them to act as a portable system of reference for different datasets to keep
+persistent references to each other (e.g. the identifier can be transmitted  
+or stored by a relational database server or XMLRPC service)
+The most common usage is \code{obj = m[k]} which returns the object associated
+with key value \code{k}.
+
+\item reverse mapping: one crucial operation is to obtain the identifier for
+a given object from the database.  The database therefore provides an
+inverse operator that returns the inverse mapping, i.e. 
+\code{k = (}\textasciitilde\code{m)[obj]}.
+
+\item Each database should have a \member{itemClass} attribute, that 
+gives the class to be used for constructing an object to represent a 
+database row (e.g. a sequence from a sequence database).  
+This is used by pygr.Data to bind schema rules automatically
+to items from a given database.  Similarly, the \member{itemSliceClass} attribute
+gives the class to be used for constructing subslices of database row 
+objects (e.g. sequence intervals).  Again, this is used for binding automatic
+schema rules.
+
+\item Caching: Pygr persistent database objects perform local caching of objects
+from the database that have been requested by the user.  This guarantees that
+different requests for the same identifier will return the same object.
+
+\item iteration: Pygr follows a simple logic for allowing users to control
+how data (objects) are loaded into memory.  Iterating over identifiers
+(e.g. using __iter__() or keys()) simply retrieves the list of identifiers,
+but does not load the set of objects from the database.  Thus, the object
+associated with a specific identifier will only be loaded if the user
+explicitly requests it, e.g via \code{m[k]}.  By contrast, iterating over
+items or values from the database (e.g. using items() or values()) signals
+to Pygr that the user intends to examine all objects in the database, so
+the entire dataset is automatically retrieved using a single query (to 
+maximize performance), and kept in local cache as usual.  In this case
+a subsequent user request \code{m[k]} will simply be returned immediately
+from local cache.  Note that it is possible to customize exactly what
+columns from the database get actually loaded into memory
+by writing row object subclasses.
+
+\subsubsection{Example: SQLTable}
+A very common usage is to employ a dictionary interface to a relational
+database table.  In this case the key value must be a valid identifier
+in the database (primary key); a Python object representing that row in the database
+will be returned.  The class to be used for constructing the "row object"
+is controlled by setting the \member{itemClass} attribute.  The default
+row class (TupleO) simply provides attributes that mirror the column names
+in the database.
+\begin{verbatim}
+seq_region = sqlgraph.SQLTable('homo_sapiens_core_47_36i.seq_region',
+                               cursor) 
+\end{verbatim}
+We can then request information about a specific sequence region, e.g.
+\begin{verbatim}
+sr = seq_region[143909]
+print sr.name, sr.coord_system_id
+\end{verbatim}
+
+As a more sophisticated example, we can force rows from a specific table
+to be interpreted as sequence objects:
+\begin{verbatim}
+class EnsemblDNA(seqdb.DNASQLSequence):
+    def __len__(self): # just speed optimization
+        return self._select('length(sequence)') # SQL SELECT expression
+dna = sqlgraph.SQLTable('homo_sapiens_core_47_36i.dna', cursor, 
+                        itemClass=EnsemblDNA, attrAlias=dict(seq='sequence'))
+s = dna [143909] # get this sequence object
+print len(s) # 41877
+print str(s[:10]) # CACCCTGCCC
+\end{verbatim}
+Note the use of the \var{attrAlias} to provide a dictionary for remapping
+the actual column names used in the Ensembl database ("sequence") to the
+canonical name expected by seqdb.DNASQLSequence ("seq").  Note also how
+we introduce a custom method for calculating the sequence length entirely on
+the server side, to avoid Pygr having to retrieve the sequence string just to 
+calculate its length.
+
+
+\subsubsection{Example: PrefixUnionDict}
+Multigenome alignments pose a problem: instead of making references to 
+a set of sequences from a single database, they combine references to many
+different databases each representing one genome.  How can this be handled
+within the dictionary interface?  Simple: UCSC adds a prefix (representing the
+"name" of the genome database to each sequence identifier, e.g. "hg18.chr1" is
+sequence identifier "chr1" in database "hg18".  This can be considered an
+identifier in a new "database" that is itself just a union of all the databases
+that are included in the alignment.  Its job is to accept strings like "hg18.chr1"
+as keys, then request the right identifier ("chr1") from the right database (hg18)
+and return the resulting sequence object.
+We construct it by supplying a dictionary of string prefixes to associate
+with each sequence database as follows:
+\begin{verbatim}
+db = PrefixUnionDict({'hg18':hg18, 'mm7':mm7})
+\end{verbatim}
+where \code{hg18} is itself a sequence database that accepts string keys
+(like "chr1") and returns the correspond sequence object.  Then we can
+do things like:
+\begin{verbatim}
+s = db['hg18.chr1']
+\end{verbatim}
+Note that we will get different identifiers for s depending on whether
+we ask db or hg18: \textasciitilde db[s] gives "hg18.chr1" whereas
+\textasciitilde hg18[s] just gives "chr1", as it should.
+\end{itemize}
+
+\subsubsection{Example: Ensembl SeqRegion Database}
+Ensembl's annotation schema promulgates a single identifier space
+(seq_region_id) that can refer to any database listed in the 
+coord_systems table.  This is analogous to the UCSC prefix union,
+except that it uses an intermediary table seq_region that joins
+seq_region_id to coord_system_id.  
+
+Once again, Pygr provides a simple interface as a dictionary, which
+is itself initialized with a dictionary of {coord_system_id:seqDB}
+pairs.
+\begin{verbatim}
+seq_region = sqlgraph.SQLTable('homo_sapiens_core_47_36i.seq_region',
+                               cursor) 
+hg18 = pygr.Data.Bio.Seq.Genome.HUMAN.hg18() # human genome
+srdb = SeqRegion(seq_region, {17:hg18}) # trivial example, only 1 genome
+\end{verbatim}
+Now we can request seq_region_id values from \code{srdb}, e.g. 
+\code{chr1 = srdb[226034]} gets human chromosome 1.
+Note that we will get different identifiers for chr1 depending on whether
+we ask srdb or hg18: \textasciitilde srdb[chr1] gives 226034 whereas
+\textasciitilde hg18[chr1] just gives "chr1", as it should.
+
+
+\subsection{Annotation Databases}
+Pygr treats annotation as an intersection between two types of data:
+\begin{itemize}
+\item Slice database: a dictionary that takes annotation ID as a key,
+and returns an object that provides "slice information" for that annotation,
+consisting of sequenceID, start coordinate, stop coordinate, and orientation.
+
+\item Sequence database: a dictionary that takes a sequence ID as a key,
+and returns a sliceable sequence object.
+\end{itemize}
+
+It should be emphasized that you can use {\em any} dictionary-like object
+as either the slice database or sequence database.  Examples include
+\begin{itemize}
+\item Python built-in \class{dict}.
+
+\item Python persistent dictionary such as \module{shelve}, \module{anydbm} etc.
+
+\item Pygr classes that wrap such persistent dictionaries with convenient
+features, e.g. \class{PicklableShelve} (which, unlike \module{shelve} can be
+pickled, allowing it to be stored in pygr.Data), \class{IntShelve} (can accept
+integer keys, rather than just string keys like \module{shelve} etc.).
+
+\item Pygr sequence database such as \class{BlastDB}.
+
+\item "wrapper" or "union" dictionary interfaces like \class{PrefixUnionDict}
+or \class{SeqRegion}.
+
+\item Pygr wrapper for a relational database table such as \class{SQLTable}.
+\end{itemize}
+
+The AnnotationDB class supports
+simple "aliasing" of attribute names from the database to the canonical
+names expected by AnnotationDB, by supplying an \var{attrAliasDict} dictionary
+to its constructor.  See the \class{AnnotationDB} reference documentation for
+details.  If more sophisticated transformations need to be performed
+on the sliceDB data (e.g. mathematical functions), the best solution is to
+use a custom class for the sliceDB.itemClass (i.e. the row object class), 
+with descriptors (also known as properties) to compute the desired attribute
+values.
+
+For example, to convert Ensembl annotations to standard Python zero-offset
+coordinates (from the Ensembl coordinate system that starts at 1), we
+can define a Python descriptor class, then bind it as the \member{start}
+attribute for the row class, which is then supplied as the \member{itemClass}.
+\begin{verbatim}
+class SeqRegionStartDescr(object):
+    'converts seq_region_start to Python zero-offset coordinate system'
+    def __get__(self, obj, objtype):
+        return obj.seq_region_start - 1
+
+from pygr import sqlgraph
+
+class EnsemblRow(sqlgraph.TupleO): # TupleO is generic tuple with named attrs
+    'use this for all Ensembl tables with seq_region_start'
+    start = SeqRegionStartDescr()
+
+exonSliceDB = sqlgraph.SQLTable('homo_sapiens_core_47_36i.exon',
+                                cursor, itemClass=EnsemblRow)
+\end{verbatim}
 
 
 \end{document}
