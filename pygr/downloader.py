@@ -36,7 +36,6 @@ def run_gunzip(filepath,newpath=None):
 def run_unzip(filepath,newpath=None,singleFile=False,**kwargs):
     '''run unzip program as a sub process,
     save to single file newpath if desired.'''
-    # could use zip module, but it reads entire file into memory!
     if newpath is None:
         newpath = filepath[:-4] # DROP THE .zip SUFFIX
     from subprocess import Popen,call
@@ -53,6 +52,48 @@ def run_unzip(filepath,newpath=None,singleFile=False,**kwargs):
     if status != 0:
         raise OSError('unzip "%s" failed!' % filepath)
     return newpath
+
+
+def create_dir_if_needed(path):
+    'ensure that this directory exists, by creating it if needed'
+    import os
+    if os.path.isdir(path):
+        return # directory exists so nothing to do
+    create_dir_if_needed(os.path.dirname(path)) # ensure parent exists
+    os.mkdir(path) # create this directory
+
+def create_file_with_path(basepath, filepath):
+    'create file in write mode, creating parent directory(s) if needed'
+    import os.path
+    newpath = os.path.join(basepath, filepath)
+    create_dir_if_needed(os.path.dirname(newpath))
+    return file(newpath, 'w')
+        
+
+def do_unzip(filepath, newpath=None,singleFile=False,**kwargs):
+    'extract zip archive, to single file given by newpath if desired'
+    # WARNING: zipfile module reads entire file into memory!
+    if newpath is None:
+        newpath = filepath[:-4]
+    from zipfile import ZipFile
+    t = ZipFile(filepath, 'r')
+    try:
+        if singleFile: # extract to a single file
+            ifile = file(newpath,'w')
+            try:
+                for name in t.namelist():
+                    ifile.write(t.read(name)) # may run out of memory!!
+            finally:
+                ifile.close()
+        else: # extract a bunch of files as usual
+            for name in t.namelist():
+                ifile = create_file_with_path(newpath, name)
+                ifile.write(t.read(name)) # may run out of memory!!
+                ifile.close()
+    finally:
+        t.close()
+    return newpath
+
 
 def do_untar(filepath,mode='r|',newpath=None,singleFile=False,**kwargs):
     'extract tar archive, to single file given by newpath if desired'
@@ -82,7 +123,10 @@ def uncompress_file(filepath,**kwargs):
     (.tar .tar.gz .tgz .tar.bz2 .gz and .zip for now)'''
     if filepath.endswith('.zip'):
         print >>sys.stderr, 'unzipping %s...' % filepath
-        return run_unzip(filepath,**kwargs)
+        try:
+            return run_unzip(filepath,**kwargs)
+        except OSError:
+            return do_unzip(filepath, **kwargs)
     elif filepath.endswith('.tar'):
         print >>sys.stderr, 'untarring %s...' % filepath
         return do_untar(filepath,newpath=filepath[:-4],**kwargs)
@@ -146,3 +190,22 @@ class SourceURL(object):
                 conn.close()
     def __reduce__(self):
         return (download_unpickler,(self.path,self.filename,self.kwargs))
+
+def generic_build_unpickler(cname, args, kwargs):
+    'does nothing but construct the specified klass with the specified args'
+    if cname=='BlastDB':
+        from seqdb import BlastDb as klass
+    else:
+        raise ValueError('''class name not registered for unpickling security.
+Add it to pygr.downloader.generic_build_unpickler if needed: ''' + cname)
+    return klass(*args, **kwargs)
+generic_build_unpickler.__safe_for_unpickling__ = 1
+
+class GenericBuilder(object):
+    'proxy for constructing the desired klass on unpickling'
+    def __init__(self, cname, *args, **kwargs):
+        self.cname = klass
+        self.args = args
+        self.kwargs = kwargs
+    def __reduce__(self):
+        return (generic_build_unpickler,(self.cname,self.args,self.kwargs))

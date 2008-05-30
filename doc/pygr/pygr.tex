@@ -588,6 +588,31 @@ settings).  However, if a particular resource is not available locally,
 Pygr will transparently get access to it from the server we created,
 using XMLRPC.
 
+\subsubsection{download=True Mode}
+Pygr.Data provides powerful automation for allowing you to have
+both the convenience of obtaining resources automatically from
+remote servers, but also the performance of local resources
+stored on your computer(s).  If you specify the optional
+\var{download=True} argument, pygr.Data will try to find a 
+server that will allow download of the entire dataset, and
+will then download and initialize the resource for you --
+completely automatically.
+\begin{verbatim}
+nlmsa = pygr.Data.Bio.MSA.UCSC.dm2_multiz9way(download=True)
+\end{verbatim}
+The location in which downloads and constructed index files
+will be stored is controlled by environment variables
+PYGRDATADOWNLOAD and PYGRDATABUILDDIR.  If these variables are
+not set, data files are simply stored in current directory.
+
+If the resource you requested with download=True has resource
+dependencies, they will also be downloaded and built automatically,
+if you do not already have a local copy of a given resource.  In general,
+if you place your local resource databases before remote resource
+servers in your PYGRDATAPATH, download=True will always default to
+any local resource that you already have, rather than downloading
+a new copy of it.
+
 \subsubsection{pygr.Data Layers}
 Based on your PYGRDATAPATH, pygr.Data provides a number of named {\em layers}
 that give abstract names for where you want to read or store your pygr.Data info.
@@ -3976,6 +4001,166 @@ Such resource databases are accessed by pygr.Data using its
 \class{ResourceDBMySQL} class.
 \end{itemize}
 
+\subsubsection{download=True Mode}
+When requesting a pygr.Data resource name, you can specify 
+the optional argument \var{download=True}, which forces pygr.Data
+to search for a resource that can be downloaded to your local
+filesystem (instead of accessed via XMLRPC from a remote server).
+\begin{itemize}
+\item If you already have a local copy of the resource, that will be used.
+
+\item If no local copy of the resource exists, and a downloadable
+resource is found, it will be automatically downloaded and initialized
+for you.  The result of the resource request will be the fully
+initialized local copy of the resource, ready for use.  Of course,
+downloading a very large dataset may take a long time, but
+the download and processing is completely automatic.
+
+\item If the downloaded resource itself depends on other 
+resources that you do not have local copies of, they will also
+be requested using the download=True mode, and so on, until
+all resource dependencies are satisfied.  In this way, pygr.Data
+can automatically obtain for you the complete set of local 
+resources needed to work with a multi-genome alignment, for example:
+\begin{verbatim}
+nlmsa = pygr.Data.Bio.MSA.UCSC.dm2_multiz9way(download=True)
+\end{verbatim}
+
+\item After a resource has been successfully downloaded and
+initialized, it will be automatically saved to your local pygr.Data resource
+database (specifically, the first resource database in your
+PYGRDATAPATH) for future usage.  Future requests for this
+resource do not need to specify download=True, because the 
+resource is now recorded in your local pygr.Data resource database
+as being available locally.
+
+\item To see what downloadable resources are available, pass the
+download=True option to pygr.Data.dir().  Note: currently, this 
+also lists resources that you have available locally.
+
+\item A downloadable resource can be any URL that returns
+a dataset usable in Pygr as a data resource.  Examples:
+a FASTA sequence dataset (accessed in Pygr as a BlastDB);
+an NLMSA textdump file (loaded in Pygr as an NLMSA using the
+textdump_to_binaries() function).  The URL can be anything 
+that can be downloaded using the Python \module{urllib}
+module.
+
+\item Pygr.Data searches its resource databases for records
+of downloadable resources matching the requested name.  
+Currently, only XMLRPC pygr.Data servers will return
+lists of downloadable resources.  Note that the resource
+database does not store the resource, and the resource will not
+be directly downloaded from the resource database.  Instead,
+the resource database simply stores a record indicating the location
+(URL) for downloading the resource, and how to initialize it
+automatically on your local computer.
+
+\end{itemize}
+
+\subsubsection{Adding Downloadable Resources to Pygr.Data}
+Only a few steps are required to add a downloadable resource
+to pygr.Data.  The main difference is that instead of saving an
+actual resource, you are merely saving a pointer to download / 
+initialize the resource, which will only be invoked when a user
+requests that the resource be downloaded to their local computer.
+\begin{itemize}
+\item First, you need the URL for downloading a data file that 
+Pygr could use as a resource.  Obvious examples include a FASTA
+sequence database, or an NLMSA textdump.  Compressed or archived
+data files are supported (for details, see the \module{downloader}
+module documentation).
+
+\item Next, create a \class{SourceURL} object with the desired URL:
+\begin{verbatim}
+from pygr.downloader import SourceURL
+dfile = SourceURL('http://biodb.bioinformatics.ucla.edu/PYGRDATA/dm2_multiz9way.txt.gz')
+\end{verbatim}
+Note that this represents just a file, not an actual resource usable
+in Pygr.  This is the difference between a textdump file, and a 
+Pygr NLMSA object built from that textdump.
+
+\item Just save the SourceURL to a local pygr.Data resource
+database (i.e. shelve storage) in the usual way:
+\begin{verbatim}
+dfile.__doc__ = 'DM2 based nine genome alignment from UCSC in textfile  dump format'
+pygr.Data.Bio.MSA.UCSC.dm2_multiz9way.txt = dfile
+\end{verbatim}
+Note that we added the suffix ".txt" to the usual resource name, because
+this is just a textdump file instead of the actual resource that can be
+used in Pygr.  Strictly speaking there is no need to save the textfile
+directly to pygr.Data, but this improves modularity (e.g. there might
+be multiple URLs from which we could download the same resource text file).
+
+\item Finally, we create a rule for initializing the actual resource
+object (in this case, NLMSA) from the downloaded text.  As an example,
+the \class{NLMSABuilder} class saves the appropriate rule for 
+initializing an NLMSA from a text file:
+\begin{verbatim}
+from pygr.nlmsa_utils import NLMSABuilder
+nbuilder = NLMSABuilder(dfile)
+nbuilder.__doc__ = 'DM2 based nine genome alignment from UCSC'
+pygr.Data.Bio.MSA.UCSC.dm2_multiz9way = nbuilder
+pygr.Data.save() 
+\end{verbatim}
+Note that we saved this as the actual resource representing the
+dm2_multiz9way alignment, because that is what it will return
+when unpickled by pygr.Data.
+
+Here is another example, for downloading and initializing a
+FASTA sequence database:
+\begin{verbatim}
+src = SourceURL('ftp://hgdownload.cse.ucsc.edu/goldenPath/droVir3/bigZips/droVir3.fa.gz')
+src.__doc__ = 'D. virilis Genome (February 2006) FASTA file'
+pygr.Data.Bio.Seq.Genome.DROVI.droVir3.fasta = src
+from pygr.downloader import GenericBuilder
+rsrc = GenericBuilder('BlastDB', src)
+rsrc.__doc__ = 'D. virilis Genome (February 2006)'
+pygr.Data.Bio.Seq.Genome.DROVI.droVir3 = rsrc
+pygr.Data.save()
+\end{verbatim}
+Note that we used the \class{GenericBuilder} class, which acts as proxy
+for the class we want to use for building the resource (\class{BlastDB}).
+At this moment we do not actually want to make a BlastDB, we simply
+want to save a rule for making a BlastDB when the user actually
+requests that this resource be downloaded.  
+Upon unpickling by pygr.Data, \class{GenericBuilder}
+simply calls its target class with the exact list of arguments / 
+keyword arguments it originally received.  When \var{src} is
+unpickled by pygr.Data, it will be transformed into the local
+filename where the FASTA file was downloaded to (after automatic gunzipping).
+Since \class{BlastDB} just expects a filename as its first argument,
+we provide \var{src} as the only additional argument to \class{GenericBuilder}.
+Note that you specify the target class as a string; GenericBuilder
+matches this against its list of accepted classes, to avoid creating
+a security hole wide enough to drive a truck through!
+
+\item Setting up an XMLRPC server to serve the downloadable 
+resources you saved to your pygr.Data shelve database is easy.    
+When you create the server object, just pass the optional 
+\var{downloadDB} argument as follows.  It should give
+the path to your shelve file containing this resource database:
+
+\begin{verbatim}
+import pygr.Data
+nlmsa = pygr.Data.Bio.Seq.MSA.ucsc17() # data to serve: NLMSA AND SEQ DBs
+server = pygr.Data.getResource.newServer('nlmsa_server',
+                  downloadDB='/your/path/to/the/shelve/.pygr_data')
+server.register() # TELL PYGRDATA INDEX SERVER WHAT RESOURCES WE'RE SERVING
+server.serve_forever() # START THE SERVICE...
+\end{verbatim}
+You can also directly call the server method \method{read_download_db}(path)
+to read a list of downloadable resources from a shelve specified by
+the \var{path}.  Resources from the new file will be added to
+the current list of downloadable resources.
+Note however that the server object currently can only store one
+download rule for a given resource name, so a duplicate rule for
+a resource name already in its downloadDB index will overwrite the
+previously existing rule.
+
+\end{itemize}
+
+
 \subsubsection{Convenience functions}
 \begin{funcdesc}{save}{layer=None}
   Saves all pending pygr.Data additions to the resource database.
@@ -4507,7 +4692,7 @@ top-level of the module as \code{pygr.Data.getResource}.  It
 provides methods for adding, deleting and controlling pygr.Data
 resources and schema.
 
-\begin{funcdesc}{getResource}{id,layer=None,debug=None,*args,**kwargs}
+\begin{funcdesc}{getResource}{id, layer=None, debug=None, download=False, *args, **kwargs}
   Look up pygr.Data resource \var{id}, using the specified abstract
   resource \var{layer} if provided.  Searches the resouce database(s)
   for \var{id}, constructs it from the saved resource rule (e.g. from
@@ -4516,6 +4701,14 @@ resources and schema.
   ID will return the same object.  Applies the stored pygr.Data schema
   rules to it using \method{applySchema}().  Marks the object with
   its \member{_persistent_id} attribute, whose value is just \var{id}.
+
+  The \var{download=True} option forces pygr.Data to restrict the
+  search to downloadable resources.  If a downloadable resource
+  matching the requested ID is found, it will be downloaded to a local
+  file, uncompressed, and any necessary initialization steps 
+  performed automatically.  The returned object will be a fully
+  initialized local copy of the requested resource.
+
   Passing the option \var{debug=True} will cause it to raise any 
   exception that occurs during resource loading immediately, rather
   than continuing to search its resource database list.  This is
@@ -4951,6 +5144,147 @@ class Foo(object):
     self.filename = SourceFileName(str(filename)) # MARK THIS A BEING A FILE NAME
     ifile = file(self.filename) # OPEN THIS FILE NOW IF YOU WANT...
 \end{verbatim}
+
+\subsection{downloader Module}
+The downloader module supports automatic download of resources,
+primarily for pygr.Data.  It consists of several pieces:
+\begin{itemize}
+\item \class{SourceURL}: use this class to create a picklable reference
+to a resource that can be downloaded from a specific URL.  
+
+\item download_unpickler: Unpickling the
+SourceURL object (e.g. when it is retrieved from pygr.Data) will trigger
+downloading of the resource from this URL, as a local file.  That means
+that the unpickled form of the SourceURL is simply the local filename
+where the resource is now stored.
+
+\item unzip, gunzip, untar support: If the downloaded resource
+is a zip archive, a gzip compressed file, or a tar archive (possibly
+with compression), it will by default be uncompressed / extracted.
+Currently, the following file suffixes are recognized automatically:
+\code{.gz} (gunzip); \code{.zip} (unzip); \code{.tar}, 
+\code{.tar.gz}, \code{.tar.bz2} or \code{.tgz} (extract tar
+archive, with uncompression if appropriate).
+\end{itemize}
+
+\subsubsection{SourceURL}
+This class exists solely to be saved in pygr.Data (or any other
+pickle-based persistence storage) so that unpickling the object
+will trigger automatic download of a desired URL.
+
+\begin{funcdesc}{SourceURL}{path, filename=None, **kwargs}
+  \var{path} must be a URL to a downloadable file.
+
+  \var{filename}, if given, will be used as the local filename
+  to save the file as.  A resource should be given a local
+  filename that uniquely identifies this resource (e.g. "hg17"
+  instead of "chromFa" as is often used by UCSC genome packages).
+  Without a unique filename, there is no way to guarantee that
+  name collisions will not occur, potentially over-writing other
+  local resource files.
+
+  Additional \var{kwargs} are simply passed on to the download
+  unpickler.  Currently, the only useful option is \var{singleFile=True},
+  which forces extraction of a multi-file archive (zip or tar) to
+  be concatenated into a single file (useful for a genome sequence
+  database stored as a zip archive of multiple FASTA files, one for
+  each chromosome).
+\end{funcdesc}
+
+Here is an example of saving a downloadable file reference to
+pygr.Data:
+\begin{verbatim}
+dfile = pygr.Data.SourceURL('http://biodb.bioinformatics.ucla.edu/PYGRDATA/dm2_multiz9way.txt.gz')
+dfile.__doc__ = 'DM2 based nine genome alignment from UCSC in textfile dump format'
+pygr.Data.Bio.MSA.UCSC.dm2_multiz9way.txt = dfile # SAVE AS RESOURCE NAME
+nbuilder = NLMSABuilder(dfile) # will make NLMSA from this when unpickled
+nbuilder.__doc__ = 'DM2 based nine genome alignment from UCSC'
+pygr.Data.Bio.MSA.UCSC.dm2_multiz9way = nbuilder
+pygr.Data.save() 
+\end{verbatim}
+
+When this object is retrieved from pygr.Data, that will trigger  
+construction of the binary indexes (in a location that can be  
+controlled by the PYGRDATABUILDDIR environment variable).  The product  
+of the unpickling will simply be a properly initialized NLMSA object  
+using these index files. i.e.
+\begin{verbatim}
+nlmsa = pygr.Data.Bio.MSA.UCSC.dm2_multiz9way(download=True) # get the download
+\end{verbatim}
+
+\subsubsection{NLMSABuilder}
+This class is defined in the module \module{nlmsa_utils}, but its
+sole purpose is to support auto-download of NLMSA alignments.
+When unpickled, it triggers unpacking of NLMSA binary index files
+from a NLMSA textdump file (usually provided using a \class{SourceURL}
+object).  For a usage example, see the previous section immediately
+above.
+ 
+\begin{funcdesc}{NLMSABuilder}{filepath, **kwargs}
+  \var{filepath} should be a \class{SourceURL} object.  When an NLMSABuilder
+  object is pickled, it saves its filepath in the pickle.  When 
+  the NLMSABuilder is unpickled, the filepath object is also unpickled,
+  which will trigger downloading of the \class{SourceURL} file, 
+  which in turn will be used by the nlmsa_textdump_unpickler
+  to extract the binary index files for the NLMSA.  The final product
+  of unpickling an NLMSABuilder object is simply the fully initialized
+  NLMSA object that it constructed.
+
+  \var{kwargs} can be any keyword arguments understood by the
+  textdump_to_binaries() function (see \module{cnestedlist} module
+  documentation for details).
+\end{funcdesc}
+
+\subsubsection{GenericBuilder}
+\begin{funcdesc}{GenericBuilder}{classname, *args, **kwargs}
+  \var{classname} should be a string specifying the name of
+  the class to be used for building the resource when this
+  object is unpickled by pygr.Data.  As a security precaution,
+  this class name is checked against the unpickler's list of
+  allowed target classes.  Currently, the only 
+  allowed target class is 'BlastDB'.
+
+  To build the target resource upon unpickling, the
+  target class is simply called with the exact same list
+  of arguments and keyword arguments (less the initial \var{classname}
+  argument) as originally supplied to \class{GenericBuilder}.
+\end{funcdesc}
+
+\subsubsection{Environment Variables Controlling Downloads}
+Two environment variables control where downloaded files will be
+stored:
+\begin{itemize}
+\item \code{PYGRDATADOWNLOAD}: sets the directory where files will
+be downloaded to.  If it is not set, files are downloaded to the current
+directory.
+
+\item \code{PYGRDATABUILDDIR}: sets the directory where indexes will
+be saved in subsequent steps that may occur after download of
+a resource, e.g. NLMSA index files.  If not set, indexes will be
+saved in the current directory.
+\end{itemize}
+
+\subsubsection{Performance and Platform Independence Issues}
+Uncompression and archive extraction depend on tools such gunzip,
+which create performance vs. platform-independence issues, as
+summarized here:
+\begin{itemize}
+\item Python provides platform-independent modules \module{tarfile},
+\module{gzip}, \module{zipfile}, so Pygr uses these, with the following
+caveats.
+
+\item The Python module \module{gzip} appears to be about half the 
+speed of the command line program \code{gunzip} on UNIX.  Therefore,
+Pygr attempts first to run the \code{gunzip} program if available; if 
+not, it uses the \module{gzip} module.
+
+\item The Python module \module{zipfile} only provides an interface
+to read an entire file from the archive into memory (!), which is
+impractical for very large datasets.  Instead, we just want to extract
+each archive file directly to disk.  We therefore use the UNIX 
+program \code{unzip} to do this.  If that fails, we try using 
+the \module{zipfile} module.
+\end{itemize}
 
 \subsection{sqlgraph Module}
 \label{sqlgraph-module}
