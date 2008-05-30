@@ -6072,6 +6072,24 @@ in \code{pygr/tests} in files with names like ``foo_test.py''.
 \item Tests that take a long time or a lot of resources (e.g. 28 vertebrate genome alignment NLMSA build) will have the suffix "_megatest" (instead of the default suffix "_test"), and thus will be omitted by a normal nosetests run.  We will include all megatests on our nightly test platform.  
 \end{itemize}
 
+\subsubsection{How To Automatically Skip Tests?}
+When resources necessary for running a specific test are missing
+(such as a data file, or network access), the test should be automatically
+skipped.  The pattern mandated by nose, which we follow, is that the 
+\method{setup}() method should raise a nose.SkipTest exception to 
+indicate that the test should be skipped.  E.g.
+\begin{verbatim}
+class PygrDownload_Test(object):
+    def setup(self,**kwargs):
+        try:
+            s = SourceURL('http://www.doe-mbi.ucla.edu/~leec/test.gz')
+        except socket.gaierror:
+            raise nose.SkipTest
+\end{verbatim}
+The \class{SourceURL} class raises an exception if the network connection
+fails, which in turn causes the test to be skipped (rather than being 
+reported as "test failed".
+
 \subsection{Testing Utilities}
 \subsubsection{nosebase Module}
 This module is included in the pygr/tests directory and provides the following
