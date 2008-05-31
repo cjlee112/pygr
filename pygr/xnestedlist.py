@@ -7,8 +7,11 @@ class NLMSAServer(cnestedlist.NLMSA):
     xmlrpc_methods={'getSlice':0,'getInfo':0}
     def getSlice(self,seqID,start,stop):
         'perform an interval query and return results as raw ivals'
-        seq=self.seqDict[seqID]
-        nlmsa_id,ns,offset=self.seqs[seq] # GET UNION INFO FOR THIS SEQ
+        try:
+            seq=self.seqDict[seqID]
+            nlmsa_id,ns,offset=self.seqs[seq] # GET UNION INFO FOR THIS SEQ
+        except KeyError:
+            return '' # failure code
         ival=sequence.absoluteSlice(seq,start,stop) # GET THE INTERVAL
 	try:
 	    myslice=self[ival] # DO THE QUERY

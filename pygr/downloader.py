@@ -198,7 +198,9 @@ def generic_build_unpickler(cname, args, kwargs):
     else:
         raise ValueError('''class name not registered for unpickling security.
 Add it to pygr.downloader.generic_build_unpickler if needed: ''' + cname)
-    return klass(*args, **kwargs)
+    o = klass(*args, **kwargs)
+    o._saveLocalBuild = True # MARK FOR LOCAL PYGR.DATA SAVE
+    return o
 generic_build_unpickler.__safe_for_unpickling__ = 1
 
 class GenericBuilder(object):

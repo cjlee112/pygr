@@ -159,6 +159,7 @@ def check_dir(self,correct=['Bio.Annotation.annoDB','Bio.Annotation.map',
     import pygr.Data
     l = pygr.Data.dir('Bio')
     print 'dir:',l
+    correct.sort()
     assert l == correct
 def check_bind(self):
     import pygr.Data
@@ -255,12 +256,17 @@ class XMLRPC_Test(PygrSwissprotBase):
         PygrSwissprotBase.setup(self)
         self.server = TestXMLRPCServer('Bio.Seq.Swissprot.sp42',
                                        'Bio.Seq.frag','Bio.Seq.spmap',
+                                       'Bio.Annotation.annoDB',
+                                       'Bio.Annotation.map',
                                        PYGRDATAPATH=str(self.tempdir))
     def xmlrpc_test(self):
         pygrData = self.server.access_server()
         check_match(self)
-        check_dir(self,correct=['Bio.Seq.Swissprot.sp42','Bio.Seq.frag','Bio.Seq.spmap'])
+        check_dir(self,correct=['Bio.Seq.Swissprot.sp42','Bio.Seq.frag',
+                                'Bio.Seq.spmap','Bio.Annotation.annoDB',
+                                'Bio.Annotation.map'])
         check_bind(self)
+        check_bind2(self)
         from pygr import seqdb
         sp2 = seqdb.BlastDB(self.filename)
         sp2.__doc__ = 'another sp'

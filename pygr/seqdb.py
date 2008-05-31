@@ -1013,6 +1013,8 @@ saved directly to the sliceDB.''')
                 yield dict.__getitem__(self,t.id)
             except KeyError:
                 yield self.sliceAnnotation(t.id,t)
+    def __contains__(self, k): return k in self.sliceDB
+    def __len__(self): return len(self.sliceDB)
     def __iter__(self): return iter(self.sliceDB) ########## ITERATORS
     def keys(self): return self.sliceDB.keys()
     def iteritems(self):
@@ -1091,6 +1093,90 @@ new annotation data to it.  This could result in failure to properly
 store the data in the associated disk file.  To avoid this, we
 have automatically called AnnotationDB.sliceDB.close() to write the data
 for you, when the AnnotationDB was deleted.'''
+
+class AnnotationServer(AnnotationDB):
+    'XMLRPC-ready server for AnnotationDB'
+    xmlrpc_methods={'get_slice_tuple':0,'get_slice_items':0,
+                    'get_annotation_attr':0, 'keys':0,
+                    '__len__':0, '__contains__':0}
+    def get_slice_tuple(self, k):
+        'get (seqID,start,stop) for a given key'
+        try:
+            sliceInfo = self.sliceDB[k]
+        except KeyError:
+            return '' # XMLRPC-acceptable failure code
+        start = int(self.getSliceAttr(sliceInfo,'start'))
+        stop = int(self.getSliceAttr(sliceInfo,'stop'))
+        try:
+            if int(self.getSliceAttr(sliceInfo,'orientation'))<0 and start>=0:
+                start,stop = (-stop,-start) # NEGATIVE ORIENTATION COORDINATES
+        except AttributeError:
+            pass
+        return (self.getSliceAttr(sliceInfo, 'id'), start, stop)
+    def get_slice_items(self):
+        'get all (key,tuple) pairs in one query'
+        l = []
+        for k in self.sliceDB:
+            l.append((k,self.get_slice_tuple(k)))
+        return l
+    def get_annotation_attr(self, k, attr):
+        'get the requested attribute of the requested key'
+        try:
+            sliceInfo = self.sliceDB[k]
+        except KeyError:
+            return ''
+        try:
+            return self.getSliceAttr(sliceInfo, attr)
+        except AttributeError:
+            return ''
+
+class AnnotationClientSliceDB(dict):
+    'proxy just queries the server'
+    def __init__(self, db):
+        self.db = db
+        dict.__init__(self)
+    def __getitem__(self, k):
+        try:
+            return dict.__getitem__(self, k)
+        except KeyError:
+            t = self.db.server.get_slice_tuple(k)
+            if t == '':
+                raise KeyError('no such annotation: ' + str(k))
+            dict.__setitem__(self, k, t)
+            return t
+    def __setitem__(self, k, v): raise ValueError('XMLRPC client is read-only')
+    def keys(self): return self.db.server.keys()
+    def __iter__(self): return iter(self.keys())
+    def items(self): return self.db.server.get_slice_items()
+    def iteritems(self): return iter(self.items())
+    def __len__(self): return self.db.server.__len__()
+    def __contains__(self, k): return self.db.server.__contains__(k)
+
+class AnnotationClient(AnnotationDB):
+    'XMLRPC AnnotationDB client'
+    def __init__(self, url, name, seqDB,itemClass=AnnotationSeq,
+                 itemSliceClass=AnnotationSlice, **kwargs):
+        dict.__init__(self)
+        import coordinator
+        self.server = coordinator.get_connection(url, name)
+        self.url = url
+        self.name = name
+        self.seqDB = seqDB
+        self.sliceDB = AnnotationClientSliceDB(self)
+        self.itemClass = itemClass
+        self.itemSliceClass = itemSliceClass
+    def __getstate__(self):
+        return dict(url=self.url,name=self.name,seqDB=self.seqDB)
+    def getSliceAttr(self, sliceInfo, attr):
+        if attr=='id': return sliceInfo[0]
+        elif attr=='start': return sliceInfo[1]
+        elif attr=='stop': return sliceInfo[2]
+        elif attr=='orientation': raise AttributeError('ori not saved')
+        else:
+            v = self.server.get_annotation_attr(sliceInfo[0], attr)
+            if v=='':
+                raise AttributeError('this annotation has no attr: ' + attr)
+            return v
 
 
 class SliceDB(dict):

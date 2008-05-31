@@ -823,15 +823,18 @@ so report the reproducible steps to this error message as a bug report.''' % res
         db=self.getLayer(layer)
         del db[id]
         self.delSchema(id,layer)
-    def newServer(self,name,serverClasses=None,clientHost=None,
-                  withIndex=False,excludeClasses=None,downloadDB=None,**kwargs):
+    def newServer(self, name, serverClasses=None, clientHost=None,
+                  withIndex=False, excludeClasses=None, downloadDB=None,
+                  **kwargs):
         'construct server for the designated classes'
         if excludeClasses is None: # DEFAULT: NO POINT IN SERVING SQL TABLES...
             from sqlgraph import SQLTableBase,SQLGraphClustered
             excludeClasses = [SQLTableBase,SQLGraphClustered]
         if serverClasses is None: # DEFAULT TO ALL CLASSES WE KNOW HOW TO SERVE
-            from seqdb import BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC
-            serverClasses=[(BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC)]
+            from seqdb import BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC, \
+                 AnnotationDB, AnnotationClient, AnnotationServer
+            serverClasses=[(BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC),
+                           (AnnotationDB,AnnotationClient,AnnotationServer)]
             try:
                 from cnestedlist import NLMSA
                 from xnestedlist import NLMSAClient,NLMSAServer

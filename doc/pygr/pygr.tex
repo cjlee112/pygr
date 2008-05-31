@@ -4233,7 +4233,7 @@ databases, or in a specific layer:
   Otherwise they are returned as a list.
 \end{funcdesc}
 
-\begin{funcdesc}{newServer}{name,serverClasses=None,clientHost=None,withIndex=False, host=None, port=5000, excludeClasses=None, **kwargs}
+\begin{funcdesc}{newServer}{name,serverClasses=None,clientHost=None,withIndex=False, host=None, port=5000, excludeClasses=None, downloadDB=None, **kwargs}
   Create and return a new XMLRPC server to serve all pygr.Data resources 
   currently loaded in memory that are capable of XMLRPC client-server
   operation.  The server \var{name} will be used for 
@@ -4243,6 +4243,9 @@ databases, or in a specific layer:
   variable, to make its resources accessible to any Python script).
   In this case, the server will add itself as new pygr.Data layer
   \var{name}, for any Python script that accesses its resource index.
+
+  Currently, newServer() can serve three types of data as remote
+  XMLRPC services: \class{NLMSA}, \class{BlastDB}, and \class{AnnotationDB}.
 
   \var{serverClasses} allows you to specify a list of tuples of
   classes that can be served via XMLRPC.  Each tuple should consist of
@@ -4254,6 +4257,7 @@ databases, or in a specific layer:
   default is 
 \begin{verbatim}
 [(seqdb.BlastDB,seqdb.XMLRPCSequenceDB,seqdb.BlastDBXMLRPC),
+ (AnnotationDB,AnnotationClient,AnnotationServer),
  (cnestedlist.NLMSA,xnestedlist.NLMSAClient,xnestedlist.NLMSAServer)] 
 \end{verbatim}
   The \var{clientHost} option allows you to override the hostname
@@ -4269,6 +4273,10 @@ databases, or in a specific layer:
   such relational database resources are better accessed directly from
   the relational database server, rather than via the XMLRPC server as
   an intermediate step.
+
+  \var{downloadDB}, if not None, should be a file path to a pygr.Data
+  shelve file in which a set of downloadable resource records have been
+  stored.  See the section "download=True Mode" above for more details.
 
   \var{host, port} arguments are passed to the \class{XMLRPCServerBase} constructor.
   For details see that section below.
