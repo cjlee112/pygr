@@ -84,7 +84,7 @@ class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
-                 arraysize=1024,**kwargs):
+                 arraysize=1024, itemSliceClass=None, **kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
             name,cursor=getNameCursor(name,**kwargs)
@@ -122,11 +122,15 @@ class SQLTableBase(dict):
             self.addAttrAlias(**self._attr_alias)
         if itemClass is not None or not hasattr(self,'itemClass'):
             self.objclass(itemClass) # NEED TO SET OUR DEFAULT ITEM CLASS
+        if itemSliceClass is not None:
+            self.itemSliceClass = itemSliceClass
         if attrAlias is not None: # ADD ATTRIBUTE ALIASES
             self.data.update(attrAlias)
         if clusterKey is not None:
             self.clusterKey=clusterKey
 
+    def __hash__(self):
+        return id(self)
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
     _pickleAttrs = dict(name=0,clusterKey=0,maxCache=0,arraysize=0)
