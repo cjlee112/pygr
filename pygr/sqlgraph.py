@@ -17,6 +17,8 @@ class TupleO(object):
             return self.data[self._attrcol[attr]]
         except KeyError:
             raise AttributeError('no attribute %s' % attr)
+        except TypeError: # treat as an alias
+            return getattr(self, self._attrcol[attr])
 
 
 class SQLRow(object):
@@ -222,7 +224,11 @@ class SQLTableBase(dict):
         o=oclass(t)
         o.db=self # MARK THE OBJECT AS BEING PART OF THIS CONTAINER
         return o
-    def getID(self,t): return t[self.data['id']] # GET ID FROM TUPLE
+    def getID(self,t):
+        try:
+            return t[self.data['id']] # GET ID FROM TUPLE
+        except TypeError: # treat as alias
+            return t[self.data[self.data['id']]]
     def cacheItem(self,t,oclass):
         'get obj from cache if possible, or construct from tuple'
         try:
