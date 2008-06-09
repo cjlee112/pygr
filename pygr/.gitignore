@@ -1,0 +1,16 @@
+*.pyc
+*~
+cdict.c
+cdict.so
+cnestedlist.c
+cnestedlist.so
+pygr.cdict.c
+pygr.cdict.pxd
+pygr.cdict.pyx
+pygr.cnestedlist.c
+pygr.cnestedlist.pxd
+pygr.cnestedlist.pyx
+pygr.seqfmt.c
+pygr.seqfmt.pyx
+seqfmt.c
+seqfmt.so
