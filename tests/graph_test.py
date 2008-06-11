@@ -125,6 +125,7 @@ class GraphShelve_Test(Mapping_Test):
                                        intKeys=True)
         self.tempdir = tmp # KEEP BOUND SO NOT DELETED UNTIL THIS TEST COMPLETED
     def teardown(self):
+        self.datagraph.close() # close shelve before deleting directory
         self.tempdir.__del__() # FORCE IT TO DELETE TEMPORARY DIRECTORY
 
 class SQLGraph_Test(Mapping_Test):
