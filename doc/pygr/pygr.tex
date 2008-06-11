@@ -6618,6 +6618,12 @@ such as sequence, alignments and databases.  This document explains the interfac
 for how different parts of Pygr fit together, for developers seeking to extend
 Pygr's capabilities.  Overall, Pygr follows several principles:
 \begin{itemize}
+\item Pygr is Python + Databases: I want to unify the power and generality of
+Python's data models with the scalable principles of schema and data integrity
+that the database field has developed.  I will explain the database part of
+this in a moment; first, let's examine the Python data models that are central
+to Pygr:
+
 \item dictionary interfaces: Dictionaries (i.e. the Mapping Protocol) are
 the core of the Python language.  In Pygr, we use dictionary interfaces to 
 represent database tables, mappings and graphs.  In relational databases
@@ -6839,6 +6845,38 @@ class EnsemblRow(sqlgraph.TupleO): # TupleO is generic tuple with named attrs
 exonSliceDB = sqlgraph.SQLTable('homo_sapiens_core_47_36i.exon',
                                 cursor, itemClass=EnsemblRow)
 \end{verbatim}
+
+
+\subsection{Databases and Schema}
+First, let's define exactly what I mean by the word "database": a
+set of data that share a common schema; in other words that each item
+in the set participates in the same pattern of relations with other collections
+of data.  Example: an {\em exon} always has the following attributes: 
+\begin{itemize}
+\item it is part of a {\em gene}; this is a many-to-one relation.
+\item it is part of one or more {\em transcripts}; this is a many-to-many relation.
+\item it maps to a specific {\em interval on a genomic sequence};
+this is a one-to-one relation.
+\item it can be connected to other exons by one or more directed edges, called
+{\em splices} or {\em introns}.  This is a many-to-many graph relation
+(because it also involves edge-relation objects).
+\end{itemize}
+Thus we can think of a database as a set of things that are functionally
+equivalent in terms of having the same relations.
+
+Second, let's define what I mean by the word "schema": first, the
+list of {\em mappings} that items in a database participate in; second,
+the {\em bindings} that attach these relations to items in this database.
+A mapping is characterized by its {\em source} database, its {\em target}
+database, and optionally its {\em edge} database whose items represent the
+actual individual relations between a source-target pair of items.  In the example
+above, the {\em splice} objects functioned as such "edge relation" objects.
+A binding is typically an attribute name: i.e. for each item in the database,
+that attribute name will yield the target that this item maps to according
+to the mapping that is bound as this attribute.  For example, an exon object
+might have a "gene" attribute that would yield the gene object that this 
+exon "is part of".
+
 
 
 \end{document}
