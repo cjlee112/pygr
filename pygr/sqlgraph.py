@@ -3,8 +3,8 @@
 from __future__ import generators
 from mapping import *
 import types
-from classutil import ClassicUnpickler,methodFactory,standard_getstate,override_rich_cmp,\
-     generate_items
+from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
+     override_rich_cmp,generate_items,get_shadow_class
     
 
 class TupleO(object):
@@ -122,8 +122,7 @@ class SQLTableBase(dict):
             self.data['id']=self.data[self.primary_key]
         if hasattr(self,'_attr_alias'): # FINALLY, APPLY ANY ATTRIBUTE ALIASES FOR THIS CLASS
             self.addAttrAlias(**self._attr_alias)
-        if itemClass is not None or not hasattr(self,'itemClass'):
-            self.objclass(itemClass) # NEED TO SET OUR DEFAULT ITEM CLASS
+        self.objclass(itemClass) # NEED TO SET OUR DEFAULT ITEM CLASS
         if itemSliceClass is not None:
             self.itemSliceClass = itemSliceClass
         if attrAlias is not None: # ADD ATTRIBUTE ALIASES
@@ -139,8 +138,6 @@ class SQLTableBase(dict):
     def __getstate__(self):
         state = standard_getstate(self)
         state['attrAlias'] = self.getAttrAlias() # SAVE ATTRIBUTE ALIASES
-        if self.itemClass.__name__ == 'foo':  # NO NEED TO SAVE ITEM CLASS
-            del state['itemClass']
         return state
     def __setstate__(self,state):
         if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
@@ -198,15 +195,13 @@ class SQLTableBase(dict):
 
     def objclass(self,oclass=None):
         "Specify class for python object representing a row in this table"
-        if oclass==None: # DEFAULT: SUBCLASS TupleO TO PROVIDE ATTRIBUTE ACCESS
-            class foo(TupleO):
-                pass
-            oclass=foo
-        if issubclass(oclass,TupleO) and not hasattr(oclass,'_attrcol'):
+        if oclass is not None: # use this as our base itemClass
+            self.itemClass = oclass
+        oclass = get_shadow_class(self, 'itemClass', self.name)
+        if issubclass(oclass,TupleO): # TupleO needs _attrcol info
             oclass._attrcol=self.data # BIND ATTRIBUTE LIST TO TUPLEO INTERFACE
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
-        self.itemClass=oclass
     def _select(self,whereClause='',params=None,selectCols='t1.*'):
         'execute the specified query but do not fetch'
         self.cursor.execute('select %s from %s t1 %s'
@@ -279,6 +274,7 @@ def getKeys(self,queryOption=''):
 
 class SQLTable(SQLTableBase):
     "Provide on-the-fly access to rows in the database, caching the results in dict"
+    itemClass = TupleO # our default itemClass; constructor can override
     keys=getKeys
     def __iter__(self): return iter(self.keys())
     def load(self,oclass=None):
@@ -425,6 +421,7 @@ SQLRow._tableclass=SQLTableNoCache  # SQLRow IS FOR NON-CACHING TABLE INTERFACE
 
 class SQLTableMultiNoCache(SQLTableBase):
     "Trivial on-the-fly access for table with key that returns multiple rows"
+    itemClass = TupleO # default itemClass; constructor can override
     _distinct_key='id' # DEFAULT COLUMN TO USE AS KEY
     def __iter__(self):
         self.cursor.execute('select distinct(%s) from %s'
@@ -437,8 +434,6 @@ class SQLTableMultiNoCache(SQLTableBase):
         self.cursor.execute('select * from %s where %s=%%s'
                             %(self.name,self._attrSQL(self._distinct_key)),(id,))
         l=self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
-        if not hasattr(self,'itemClass'):
-            self.objclass() # GENERATE DEFAULT OBJECT CLASS BASED ON TupleO
         for row in l:
             yield self.itemClass(row)
     def addAttrAlias(self,**kwargs):

@@ -84,7 +84,7 @@ def standard_getstate(self):
                 d[attr] = getattr(self,attr)
         except AttributeError:
             pass
-    try: # DON'T SAVE itemClass IF SIMPLY A SHADOW CLASS FROM get_shadow_class()
+    try: # DON'T SAVE itemClass IF SIMPLY A SHADOW of default itemClass from __class__
         if not hasattr(self.__class__,'itemClass') or \
            (self.itemClass is not self.__class__.itemClass and 
             (not hasattr(self.itemClass,'_shadowParent') or
@@ -148,21 +148,29 @@ def shadow_reducer(self):
     if hasattr(trueClass,'__reduce__'): # USE trueClass.__reduce__
         result = trueClass.__reduce__(self)
     elif hasattr(trueClass,'__getstate__'): # USE trueClass.__getstate__
-        result = (ClassicUnpickler,(trueClass,self.__getstate()))
+        result = (ClassicUnpickler,(trueClass,self.__getstate__()))
     else: # PICKLE __dict__ AS USUAL PYTHON PRACTICE
         result = (ClassicUnpickler,(trueClass,self.__dict__))
     self.__class__ = shadowClass # RESTORE SHADOW CLASS
     return result
 
-def get_shadow_class(obj,classattr='__class__'):
+def get_shadow_class(obj,classattr='__class__', subname=None):
     'create a shadow class specifically for obj to bind its shadow attributes'
     targetClass = getattr(obj,classattr)
-    if hasattr(targetClass,'_shadowParent'): # ALREADY HAS A SHADOW CLASS
-        return targetClass
-    name = targetClass.__name__ + '_' + obj._persistent_id.split('.')[-1]
-    exec 'class %s(targetClass):\n    __reduce__ = shadow_reducer' % name
-    shadowClass = locals()[name] # SUBCLASS OF targetClass
-    shadowClass._shadowParent = targetClass # NEED TO KNOW ORIGINAL CLASS
+    try:
+        if targetClass._shadowOwner is obj:
+            return targetClass # already shadowed, so nothing to do
+    except AttributeError: # not a shadow class, so just shadow it
+        pass
+    else: # someone else's shadow class, so shadow its parent
+        targetClass = targetClass._shadowParent
+    if subname is None: # get a name from pygr.Data ID
+        subname = obj._persistent_id.split('.')[-1]
+    class shadowClass(targetClass):
+        __reduce__ = shadow_reducer
+        _shadowParent = targetClass # NEED TO KNOW ORIGINAL CLASS
+        _shadowOwner = obj # need to know who owns it
+    shadowClass.__name__ = targetClass.__name__ + '_' + subname
     setattr(obj,classattr,shadowClass) # SHADOW CLASS REPLACES ORIGINAL
     return shadowClass
 
