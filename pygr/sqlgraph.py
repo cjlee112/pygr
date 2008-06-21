@@ -5,7 +5,8 @@ from mapping import *
 import types
 from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
      override_rich_cmp,generate_items,get_shadow_class
-    
+import os
+import platform 
 
 class TupleO(object):
     """Provide attribute interface to a tuple.  Subclass this and create _attrcol
@@ -68,9 +69,22 @@ def getNameCursor(name,connect=None,configFile=None,**kwargs):
         kwargs = list_to_dict(argnames,argList[1:])
     else: # USE .my.cnf TO GET CONNECTION PARAMETERS
         kwargs = {}
-    if configFile is None:
-        import os
-        configFile=os.environ['HOME']+'/.my.cnf'
+    if configFile is None: #Find where config file is
+        home = (platform.platform()).split("-")[0]
+        if home == 'Windows': #Machine is a Windows box
+            windrv = os.environ.get('WINDIR')
+            sysdrv = os.environ.get('SYSTEMDRIVE')
+            if os.path.exists(os.path.join(windrv, 'my.ini')):
+                configFile=os.path.join(windrv, 'my.ini')
+            elif os.path.exists(os.path.join(windrv, 'my.cnf')):
+                configFile = os.path.join(windrv, 'my.cnf')
+            elif os.path.exists(os.path.join(sysdrv, '\my.ini')):
+                configFile = os.path.join(sysdrv, '\my.ini')
+            elif os.path.exists(os.path.join(sysdrv, '\my.cnf')):
+                configFile = os.path.join(sysdrv, '\my.cnf')
+        elif home == 'Linux': #Machine is a Linux box
+            homedrv = os.environ.get('HOME')
+            configFile=os.path.join(homedrv, '.my.cnf')
     try:
         ifile = file(configFile)
     except IOError:
