@@ -134,15 +134,21 @@ class SQLGraph_Test(Mapping_Test):
     def setup(self):
         from pygr import sqlgraph
         import MySQLdb # TEST WILL BE SKIPPED IF UNAVAILABLE
+	tempcurs = sqlgraph.getNameCursor('nothing')[1]
+	try: # Make the test db
+	    tempcurs.execute("""create database _pygrtestdb;""")
+	except MySQLdb.ProgrammingError: # Delete if exists and create again
+	    tempcurs.execute("""drop database _pygrtestdb;""")
+	    tempcurs.execute("""create database _pygrtestdb;""")
         try:
-            self.datagraph = sqlgraph.SQLGraph('test.dumbo_foo_test',
+            self.datagraph = sqlgraph.SQLGraph('_pygrtestdb.dumbo_foo_test',
                                                createTable=dict(source_id='int',
                                                                 target_id='int',
                                                                 edge_id='int'))
         except MySQLdb.MySQLError:
             raise ImportError # NO SERVER, DATABASE OR PRIVILEGES? SKIP TESTS.
     def teardown(self):
-        self.datagraph.cursor.execute('drop table test.dumbo_foo_test')
+        self.datagraph.cursor.execute("""drop database _pygrtestdb""")
 
 
 class Splicegraph_Test(object):
