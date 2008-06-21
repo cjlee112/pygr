@@ -9,6 +9,8 @@ import nose
 import os.path
 import subprocess
 
+import pygrtest_common
+
 #########
 
 pythonExe = sys.executable

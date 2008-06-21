@@ -1,3 +1,4 @@
+import pygrtest_common
 from pygr import sequence
 from nosebase import *
 
