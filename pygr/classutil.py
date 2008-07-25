@@ -89,12 +89,18 @@ def standard_getstate(self):
            (self.itemClass is not self.__class__.itemClass and 
             (not hasattr(self.itemClass,'_shadowParent') or
              self.itemClass._shadowParent is not self.__class__.itemClass)):
-            d['itemClass'] = self.itemClass
+            try:
+                d['itemClass'] = self.itemClass._shadowParent
+            except AttributeError:
+                d['itemClass'] = self.itemClass
         if not hasattr(self.__class__,'itemSliceClass') or \
            (self.itemSliceClass is not self.__class__.itemSliceClass and 
             (not hasattr(self.itemSliceClass,'_shadowParent') or
              self.itemSliceClass._shadowParent is not self.__class__.itemSliceClass)):
-            d['itemSliceClass'] = self.itemSliceClass
+            try:
+                d['itemSliceClass'] = self.itemSliceClass._shadowParent
+            except AttributeError:
+                d['itemSliceClass'] = self.itemSliceClass
     except AttributeError:
         pass
     try: # SAVE CUSTOM UNPACKING METHOD
@@ -154,7 +160,8 @@ def shadow_reducer(self):
     self.__class__ = shadowClass # RESTORE SHADOW CLASS
     return result
 
-def get_shadow_class(obj,classattr='__class__', subname=None):
+
+def get_shadow_class(obj, classattr='__class__', subname=None, factories=()):
     'create a shadow class specifically for obj to bind its shadow attributes'
     targetClass = getattr(obj,classattr)
     try:
@@ -170,6 +177,8 @@ def get_shadow_class(obj,classattr='__class__', subname=None):
         __reduce__ = shadow_reducer
         _shadowParent = targetClass # NEED TO KNOW ORIGINAL CLASS
         _shadowOwner = obj # need to know who owns it
+        for f in factories:
+            f(locals())
     shadowClass.__name__ = targetClass.__name__ + '_' + subname
     setattr(obj,classattr,shadowClass) # SHADOW CLASS REPLACES ORIGINAL
     return shadowClass

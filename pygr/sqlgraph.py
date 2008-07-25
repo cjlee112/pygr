@@ -4,21 +4,76 @@ from __future__ import generators
 from mapping import *
 import types
 from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
-     override_rich_cmp,generate_items,get_shadow_class
+     override_rich_cmp,generate_items,get_shadow_class,standard_setstate
     
 
 class TupleO(object):
     """Provide attribute interface to a tuple.  Subclass this and create _attrcol
     that maps attribute names to tuple index values."""
-    def __init__(self,data):
-        self.data=data
+    def __init__(self, data):
+        self.__dict__['_data'] = data # AVOID TRIGGERING __setattr__ !!
     def __getattr__(self,attr):
         try:
-            return self.data[self._attrcol[attr]]
+            return self._data[self._attrcol[attr]]
         except KeyError:
             raise AttributeError('no attribute %s' % attr)
         except TypeError: # treat as an alias
             return getattr(self, self._attrcol[attr])
+    def cache_id(self,row_id):
+        self.save_local('id',row_id)
+    def __setattr__(self,attr,val):
+        if attr=='id':
+            raise AttributeError('''you cannot change the ID of a database object by direct
+assignment x.id = new_id.  Instead use del db[x.id]; db[new_id] = x''')
+        col = self.db._attrSQL(attr,sqlColumn=True) # MAP THIS TO SQL COLUMN NAME
+        self.db._update(self.id,col,val) # AND UPDATE THE DATABASE
+        self.save_local(attr,val)
+    def save_local(self,attr,val):
+        icol = self._attrcol[attr]
+        try:
+            self._data[icol] = val # FINALLY UPDATE OUR LOCAL CACHE
+        except TypeError: # TUPLE CAN'T STORE NEW VALUE, SO USE A LIST
+            self.__dict__['_data'] = list(self._data)
+            self._data[icol] = val # FINALLY UPDATE OUR LOCAL CACHE
+        
+class ColumnDescriptor(object):
+    'read-write interface to column in a database, cached in obj.__dict__'
+    def __init__(self, db, attr, readOnly = False):
+        self.attr = attr
+        self.col = db._attrSQL(attr, sqlColumn=True) # MAP THIS TO SQL COLUMN NAME
+        self.db = db
+        if readOnly:
+            self.__class__ = self._readOnlyClass
+    def __get__(self, obj, objtype):
+        try:
+            return obj.__dict__[self.attr]
+        except KeyError: # NOT IN CACHE.  TRY TO GET IT FROM DATABASE
+            if self.col==self.db.primary_key:
+                raise AttributeError
+            self.db._select('where %s=%%s' % self.db.primary_key,(obj.id,),self.col)
+            l = self.db.cursor.fetchall()
+            if len(l)!=1:
+                raise AttributeError('db row not found or not unique!')
+            obj.__dict__[self.attr] = l[0][0] # UPDATE THE CACHE
+            return l[0][0]
+    def __set__(self, obj, val):
+        if not hasattr(obj,'_localOnly'): # ONLY CACHE, DON'T SAVE TO DATABASE
+            self.db._update(obj.id, self.col, val) # UPDATE THE DATABASE
+        obj.__dict__[self.attr] = val # UPDATE THE CACHE
+##         try:
+##             m = self.consequences
+##         except AttributeError:
+##             return
+##         m(obj,val) # GENERATE CONSEQUENCES
+##     def bind_consequences(self,f):
+##         'make function f be run as consequences method whenever value is set'
+##         import new
+##         self.consequences = new.instancemethod(f,self,self.__class__)
+class ReadOnlyColumnDesc(ColumnDescriptor):
+    def __set__(self, obj, val):
+        raise AttributeError('The ID of a database object is not writeable.')
+ColumnDescriptor._readOnlyClass = ReadOnlyColumnDesc
+    
 
 
 class SQLRow(object):
@@ -26,9 +81,8 @@ class SQLRow(object):
        will be mapped to SELECT of the appropriate column, but data is not cached
        on this object.
     """
-    def __init__(self,table,id):
-        self.db=table
-        self.id=id
+    def __init__(self, id):
+        self.__dict__['id'] = id # AVOID TRIGGERING __setattr__ !!
 
     def _select(self,what):
         "Get SQL select expression for this row"
@@ -42,6 +96,9 @@ class SQLRow(object):
 
     def __getattr__(self,attr):
         return self._select(self.db._attrSQL(attr))
+    def __setattr__(self,attr,val):
+        col = self.db._attrSQL(attr,sqlColumn=True)
+        self.db._update(self.id,col,val)
 
 
 
@@ -100,6 +157,9 @@ class SQLTableBase(dict):
         self.indexed={}
         self.data={}
         self.description={}
+        self.colname = []
+        self.columnType = {}
+        self.usesIntID = None
         if graph is not None:
             self.graph = graph
         if maxCache is not None:
@@ -107,25 +167,31 @@ class SQLTableBase(dict):
         if arraysize is not None:
             self.arraysize = arraysize
             cursor.arraysize = arraysize
-        icol=0
         cursor.execute('select * from %s limit 1' % name)
-        for c in columns:
+        for icol,c in enumerate(columns):
             field=c[0]
+            self.colname.append(field)
             if c[3]=="PRI":
                 self.primary_key=field
+                if c[1][:3].lower()=='int':
+                    self.usesIntID = True
+                else:
+                    self.usesIntID = False
             elif c[3]=="MUL":
                 self.indexed[field]=icol
             self.data[field]=icol
             self.description[field]=cursor.description[icol]
-            icol += 1
+            self.columnType[field] = c[1] # SQL COLUMN TYPE
         if self.primary_key != None: # MAKE PRIMARY KEY ALWAYS ACCESSIBLE AS ATTRIBUTE id
             self.data['id']=self.data[self.primary_key]
         if hasattr(self,'_attr_alias'): # FINALLY, APPLY ANY ATTRIBUTE ALIASES FOR THIS CLASS
-            self.addAttrAlias(**self._attr_alias)
-        self.objclass(itemClass) # NEED TO SET OUR DEFAULT ITEM CLASS
+            self.addAttrAlias(False,**self._attr_alias)
+        self.objclass(itemClass) # NEED TO SUBCLASS OUR ITEM CLASS
         if itemSliceClass is not None:
             self.itemSliceClass = itemSliceClass
+            get_shadow_class(self, 'itemSliceClass', self.name) # need to subclass itemSliceClass
         if attrAlias is not None: # ADD ATTRIBUTE ALIASES
+            self.attrAlias = attrAlias # RECORD FOR PICKLING PURPOSES
             self.data.update(attrAlias)
         if clusterKey is not None:
             self.clusterKey=clusterKey
@@ -134,11 +200,8 @@ class SQLTableBase(dict):
         return id(self)
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
-    _pickleAttrs = dict(name=0,clusterKey=0,maxCache=0,arraysize=0)
-    def __getstate__(self):
-        state = standard_getstate(self)
-        state['attrAlias'] = self.getAttrAlias() # SAVE ATTRIBUTE ALIASES
-        return state
+    _pickleAttrs = dict(name=0,clusterKey=0,maxCache=0,arraysize=0,attrAlias=0)
+    __getstate__ = standard_getstate
     def __setstate__(self,state):
         if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
             name = state[0]
@@ -161,45 +224,74 @@ class SQLTableBase(dict):
     def __repr__(self):
         return '<SQL table '+self.name+'>'
 
-    def _attrSQL(self,attr):
+    def _attrSQL(self,attr,sqlColumn=False,columnNumber=False):
         "Translate python attribute name to appropriate SQL expression"
         try: # MAKE SURE THIS ATTRIBUTE CAN BE MAPPED TO DATABASE EXPRESSION
             field=self.data[attr]
         except KeyError:
-            raise AttributeError('%s not a valid column in %s' % (attr,self.name))
+            raise AttributeError('attribute %s not a valid column or alias in %s'
+                                 % (attr,self.name))
+        if sqlColumn: # ENSURE THAT THIS TRULY MAPS TO A COLUMN NAME IN THE DB
+            try: # CHECK IF field IS COLUMN NUMBER
+                return self.colname[field] # RETURN SQL COLUMN NAME
+            except TypeError:
+                try: # CHECK IF field IS SQL COLUMN NAME
+                    return self.colname[self.data[field]] # THIS WILL JUST RETURN field...
+                except (KeyError,TypeError):
+                    raise AttributeError('attribute %s does not map to an SQL column in %s'
+                                         % (attr,self.name))
+        if columnNumber:
+            try: # CHECK IF field IS A COLUMN NUMBER
+                return field+0 # ONLY RETURN AN INTEGER
+            except TypeError:
+                try: # CHECK IF field IS ITSELF THE SQL COLUMN NAME
+                    return self.data[field]+0 # ONLY RETURN AN INTEGER
+                except (KeyError,TypeError):
+                    raise ValueError('attribute %s does not map to a SQL column!' % attr)
         if isinstance(field,types.StringType):
             attr=field # USE ALIASED EXPRESSION FOR DATABASE SELECT INSTEAD OF attr
         elif attr=='id':
             attr=self.primary_key
         return attr
-    def getAttrAlias(self):
-        'get a dict of attribute aliases'
-        d={}
-        for k,v in self.data.items():
-            if isinstance(v,types.StringType):
-                d[k]=v
-        return d
-    def addAttrAlias(self,**kwargs):
+    def addAttrAlias(self,saveToPickle=True,**kwargs):
         """Add new attributes as aliases of existing attributes.
            They can be specified either as named args:
            t.addAttrAlias(newattr=oldattr)
            or by passing a dictionary kwargs whose keys are newattr
            and values are oldattr:
            t.addAttrAlias(**kwargs)
+           saveToPickle=True forces these aliases to be saved if object is pickled.
         """
+        if saveToPickle:
+            self.attrAlias.update(kwargs)
         for key,val in kwargs.items():
-            try: # 1ST TREAT AS ALIAS TO EXISTING COLUMN
-                self.data[key]=self.data[val]
+            try: # 1st CHECK WHETHER val IS AN EXISTING COLUMN / ALIAS
+                self.data[val]+0 # CHECK WHETHER val MAPS TO A COLUMN NUMBER
+                raise KeyError # YES, val IS ACTUAL SQL COLUMN NAME, SO SAVE IT DIRECTLY
+            except TypeError: # val IS ITSELF AN ALIAS
+                self.data[key] = self.data[val] # SO MAP TO WHAT IT MAPS TO
             except KeyError: # TREAT AS ALIAS TO SQL EXPRESSION
-                self.data[key]=val
-
+                self.data[key] = val
+    def add_descriptors(self,d,descriptor):
+        'factory for adding multiple descriptors to a class definition'
+        for attr in self.colname: # ONLY BIND ACTUAL SQL COLUMNS
+            if attr == self.primary_key: # primary_key IS SPECIALLY BOUND AS id
+                d['id'] = descriptor(self,attr,readOnly=True)
+            else:
+                d[attr] = descriptor(self,attr)
+    _descriptorClass = ColumnDescriptor # STORAGE BINDING FOR UPDATING DB...
     def objclass(self,oclass=None):
-        "Specify class for python object representing a row in this table"
+        "Create class representing a row in this table by subclassing oclass, adding data"
         if oclass is not None: # use this as our base itemClass
             self.itemClass = oclass
-        oclass = get_shadow_class(self, 'itemClass', self.name)
-        if issubclass(oclass,TupleO): # TupleO needs _attrcol info
-            oclass._attrcol=self.data # BIND ATTRIBUTE LIST TO TUPLEO INTERFACE
+        if not issubclass(self.itemClass,TupleO): # NEED TO ADD DESCRIPTORS
+            factories = [lambda d: self.add_descriptors(d,self._descriptorClass)]
+        else:
+            factories = ()
+        oclass = get_shadow_class(self,'itemClass',self.name,factories) # SET NEW itemClass
+        oclass.db = self # BIND THIS ENTIRE SHADOW CLASS TO THIS DB
+        if issubclass(oclass, TupleO):
+            oclass._attrcol = self.data # BIND ATTRIBUTE LIST TO TUPLEO INTERFACE
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
     def _select(self,whereClause='',params=None,selectCols='t1.*'):
@@ -214,10 +306,24 @@ class SQLTableBase(dict):
         l=self.cursor.fetchall()
         for t in l:
             yield self.cacheItem(t,oclass)
+    def query(self,**kwargs):
+        'query for intersection of all specified kwargs, returned as iterator'
+        criteria = []
+        params = []
+        for k,v in kwargs.items(): # CONSTRUCT THE LIST OF WHERE CLAUSES
+            if v is None: # CONVERT TO SQL NULL TEST
+                criteria.append('%s IS NULL' % self._attrSQL(k))
+            else: # TEST FOR EQUALITY
+                criteria.append('%s=%%s' % self._attrSQL(k))
+                params.append(v)
+        return self.select('where '+' and '.join(criteria),params)
+    def _update(self,row_id,col,val):
+        'update a single field in the specified row to the specified value'
+        self.cursor.execute('update %s set %s=%%s where %s=%%s' %(self.name,col,self.primary_key),
+                            (val,row_id))
     def tupleItem(self,t,oclass):
         'create object to represent this row, using oclass'
         o=oclass(t)
-        o.db=self # MARK THE OBJECT AS BEING PART OF THIS CONTAINER
         return o
     def getID(self,t):
         try:
@@ -263,7 +369,41 @@ class SQLTableBase(dict):
                 break
             for v in map_f(cache_f(rows)): # CACHE AND GENERATE RESULTS
                 yield v
-
+    def insert(self,obj):
+        '''insert new row by transforming obj to tuple of values for table schema.
+        Note this uses the MySQL extension REPLACE, which overwrites any duplicate key.'''
+        l = [None]*len(self.description) # DEFAULT COLUMN VALUES ARE NULL
+        for col,icol in self.data.items():
+            try:
+                l[icol] = getattr(obj,col)
+            except (AttributeError,TypeError):
+                pass
+        s = 'replace into '+self.name+' values ('+ ','.join(['%s']*len(l))+')'
+        self.cursor.execute(s,l)
+    def get_next_id(self): # DEPRECATED
+        'add obj to the database with auto_increment integer ID'
+        if not self.usesIntID:
+            raise TypeError('''You cannot use get_next_id() if db has non-numeric primary key!
+You must directly assign obj an ID, i.e. db[new_id] = obj''')
+        self._select(selectCols='max(%s)' % self.primary_key)
+        l = self.cursor.fetchall()
+        try:
+            return l[0][0] + 1
+        except TypeError: # MySQL RETURNS None FOR AN EMPTY TABLE
+            return 1
+    def new(self,**kwargs):
+        'return a new record with the assigned attributes, added to DB'
+        obj = self.itemClass(self,**kwargs) # CONSTRUCT NEW INSTANCE
+        self.insert(obj) # SAVE TO DATABASE: FAILS UNLESS AUTO INCR, OR obj HAS id
+        try: # ATTEMPT TO GET ASSIGNED ID FROM DB
+            auto_id = self.cursor.lastrowid
+        except AttributeError: # CURSOR DOESN'T SUPPORT lastrowid
+            raise NotImplementedError('''db.new() currently requires lastrowid extension
+            which your DB lacks''')
+        if auto_id > 0: # CACHE AUTO_INCREMENT ID IN LOCAL OBJECT
+            obj.cache_id(auto_id)
+        dict.__setitem__(self,obj.id,obj) # AND SAVE TO OUR LOCAL DICT CACHE
+        return obj
 
 def getKeys(self,queryOption=''):
     'uses db select; does not force load'
@@ -302,6 +442,19 @@ class SQLTable(SQLTableBase):
                 raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
             self.limit_cache()
             return self.cacheItem(l[0],self.itemClass) # CACHE IT IN LOCAL DICTIONARY
+    def __setitem__(self,k,v):
+        v.cache_id(k) # BIND THIS OBJECT TO DATABASE BY MARKING ITS DB AND ID
+        try:
+            if v.db != self:
+                raise AttributeError
+        except AttributeError:
+            v.db = self
+        self.insert(v) # SAVE TO THE RELATIONAL DB SERVER
+        dict.__setitem__(self,v.id,v)   # CACHE THIS ITEM IN OUR DICTIONARY
+    def __delitem__(self,k):
+        self.cursor.execute('delete from %s where %s=%%s'
+                            % (self.name,self.primary_key),(k,))
+        dict.__delitem__(self,k)
     def items(self):
         'forces load of entire table into memory'
         self.load()
@@ -351,7 +504,7 @@ class SQLTableClustered(SQLTable):
         return self.select('where %s=%%s'%self.clusterKey,(cluster_id,))
     def fetch_cluster(self):
         'use self.cursor.fetchmany to obtain all rows for next cluster'
-        icol = self.data[self.clusterKey]
+        icol = self._attrSQL(self.clusterKey,columnNumber=True)
         result = []
         try:
             rows = self._fetch_cluster_cache # USE SAVED ROWS FROM PREVIOUS CALL
@@ -480,11 +633,12 @@ class SQLEdgeDict(object):
     def __init__(self,fromNode,table):
         self.fromNode=fromNode
         self.table=table
-        if self.table.cursor.execute('select %s from %s where %s=%%s limit 1'
-                                     %(self.table._attrSQL('source_id'),
-                                       self.table.name,
-                                       self.table._attrSQL('source_id')),
-                                     (self.fromNode,))<1:
+        if not hasattr(self.table,'allowMissingNodes') and \
+               self.table.cursor.execute('select %s from %s where %s=%%s limit 1'
+                                         %(self.table._attrSQL('source_id'),
+                                           self.table.name,
+                                           self.table._attrSQL('source_id')),
+                                         (self.fromNode,))<1:
             raise KeyError('node not in graph!')
 
     def __getitem__(self,target):
@@ -516,24 +670,30 @@ class SQLEdgeDict(object):
                                      (self.fromNode,self.table.pack_target(target)))<1:
             raise KeyError('no edge from node to target')
         
-    def __iter__(self): return self.iteritems(0)
-    def keys(self): return [k for k in self]
-    def itervalues(self): return self.iteritems(1)
-    def values(self): return [k for k in self.iteritems(1)]
-    def items(self): return [k for k in self.iteritems()]
-    def edges(self): return [(self.table.unpack_source(self.fromNode),)
-                             +k for k in self.iteritems()]
-    def iteritems(self,k=slice(0,2)):
+    def iterator_query(self):
         self.table.cursor.execute('select %s,%s from %s where %s=%%s and %s is not null'
                                   %(self.table._attrSQL('target_id'),
                                     self.table._attrSQL('edge_id'),
                                     self.table.name,self.table._attrSQL('source_id'),
                                     self.table._attrSQL('target_id')),
                                   (self.fromNode,))
-        for target_id,edge_id in self.table.cursor.fetchall():
-            row = (self.table.unpack_target(target_id),
-                   self.table.unpack_edge(edge_id))
-            yield row[k]
+        return self.table.cursor.fetchall()
+    def keys(self):
+        return [self.table.unpack_target(target_id)
+                for target_id,edge_id in self.iterator_query()]
+    def values(self):
+        return [self.table.unpack_edge(edge_id)
+                for target_id,edge_id in self.iterator_query()]
+    def edges(self):
+        return [(self.table.unpack_source(self.fromNode),self.table.unpack_target(target_id),
+                 self.table.unpack_edge(edge_id))
+                for target_id,edge_id in self.iterator_query()]
+    def items(self):
+        return [(self.table.unpack_target(target_id),self.table.unpack_edge(edge_id))
+                for target_id,edge_id in self.iterator_query()]
+    def __iter__(self): return iter(self.keys())
+    def itervalues(self): return iter(self.values())
+    def iteritems(self): return iter(self.items())
     def __len__(self):
         return len(self.keys())
     __cmp__ = graph_cmp
@@ -541,8 +701,13 @@ class SQLEdgeDict(object):
 class SQLGraphEdgeDescriptor(object):
     'provide an SQLEdges interface on demand'
     def __get__(self,obj,objtype):
-        return SQLEdges(obj.name,obj.cursor,attrAlias=obj.getAttrAlias(),
-                        graph=obj)
+        try:
+            attrAlias=obj.attrAlias.copy()
+        except AttributeError:
+            return SQLEdges(obj.name, obj.cursor, graph=obj)
+        else:
+            return SQLEdges(obj.name, obj.cursor, attrAlias=attrAlias,
+                            graph=obj)
 
 def getColumnTypes(createTable,attrAlias={},defaultColumnType='int',
                   columnAttrs=('source','target','edge'),**kwargs):
@@ -555,6 +720,8 @@ def getColumnTypes(createTable,attrAlias={},defaultColumnType='int',
             attrName = attr+'_id'
         try:
             db = kwargs[attr+'DB']
+            if db is None:
+                raise KeyError # FORCE IT TO USE DEFAULT TYPE
         except KeyError:
             try: # SEE IF USER SPECIFIED A DESIRED TYPE
                 l.append((attrName,createTable[attr+'_id']))
@@ -562,13 +729,17 @@ def getColumnTypes(createTable,attrAlias={},defaultColumnType='int',
                 l.append((attrName,defaultColumnType))
         else: # INFER THE COLUMN TYPE FROM THE ASSOCIATED DATABASE KEYS...
             it = iter(db)
-            k = it.next()
-            if isinstance(k,int):
-                l.append((attrName,'int'))
-            elif isinstance(k,str):
-                l.append((attrName,'varchar(32)'))
-            else:
-                raise ValueError('SQLGraph node / edge must be int or str!')
+            try: # GET ONE IDENTIFIER FROM THE DATABASE
+                k = it.next()
+            except StopIteration: # TABLE IS EMPTY, SO READ SQL TYPE FROM db OBJECT
+                l.append((attrName,db.columnType[db.primary_key]))
+            else: # GET THE TYPE FROM THIS IDENTIFIER
+                if isinstance(k,int) or isinstance(k,long):
+                    l.append((attrName,'int'))
+                elif isinstance(k,str):
+                    l.append((attrName,'varchar(32)'))
+                else:
+                    raise ValueError('SQLGraph node / edge must be int or str!')
     return l
 
 
@@ -583,13 +754,16 @@ class SQLGraph(SQLTableMultiNoCache):
        '''
     _distinct_key='source_id'
     _pickleAttrs = SQLTableMultiNoCache._pickleAttrs.copy()
-    _pickleAttrs.update(dict(sourceDB=0,targetDB=0,edgeDB=0))
+    _pickleAttrs.update(dict(sourceDB=0,targetDB=0,edgeDB=0,allowMissingNodes=0))
     def __init__(self,name,*l,**kwargs):
         if 'createTable' in kwargs: # CREATE A SCHEMA FOR THIS TABLE
             c = getColumnTypes(**kwargs)
             kwargs['createTable'] = \
               'create table %s (%s %s not null,%s %s,%s %s,unique(%s,%s))' \
               % (name,c[0][0],c[0][1],c[1][0],c[1][1],c[2][0],c[2][1],c[0][0],c[1][0])
+        try:
+            self.allowMissingNodes = kwargs['allowMissingNodes']
+        except KeyError: pass
         SQLTableMultiNoCache.__init__(self,name,*l,**kwargs)
         save_graph_db_refs(self,**kwargs)
     def __getitem__(self,k):
@@ -619,9 +793,9 @@ class SQLGraph(SQLTableMultiNoCache):
             return self._inverse
         except AttributeError: # CONSTRUCT INTERFACE TO INVERSE MAPPING
             self._inverse=SQLGraph(self.name,self.cursor, # SWAP SOURCE & TARGET
-                                   attrAlias=dict(source_id=self.data['target_id'],
-                                                  target_id=self.data['source_id'],
-                                                  edge_id=self.data['edge_id']),
+                                   attrAlias=dict(source_id=self._attrSQL('target_id'),
+                                                  target_id=self._attrSQL('source_id'),
+                                                  edge_id=self._attrSQL('edge_id')),
                                    **graph_db_inverse_refs(self))
             self._inverse._inverse=self
             return self._inverse
@@ -826,6 +1000,119 @@ class SQLEdgesClustered(SQLGraphClustered):
                                self.graph.unpack_edge(edge_id)))
         return result
 
+class ForeignKeyInverse(object):
+    'map each key to a single value according to its foreign key'
+    def __init__(self,g):
+        self.g = g
+    def __getitem__(self,obj):
+        self.check_obj(obj)
+        source_id = getattr(obj,self.g.keyColumn)
+        if source_id is None:
+            return None
+        return self.g.sourceDB[source_id]
+    def __setitem__(self,obj,source):
+        self.check_obj(obj)
+        if source is not None:
+            self.g[source][obj] = None # ENSURES ALL THE RIGHT CACHING OPERATIONS DONE
+        else: # DELETE PRE-EXISTING EDGE IF PRESENT
+            if not hasattr(obj,'_localOnly'): # ONLY CACHE, DON'T SAVE TO DATABASE
+                old_source = self[obj]
+                if old_source is not None:
+                    del self.g[old_source][obj]
+    def check_obj(self,obj):
+        'raise KeyError if obj not from this db'
+        try:
+            if obj.db != self.g.targetDB:
+                raise AttributeError
+        except AttributeError:
+            raise KeyError('key is not from targetDB of this graph!')
+    def __contains__(self,obj):
+        try:
+            self.check_obj(obj)
+            return True
+        except KeyError:
+            return False
+    def __iter__(self):
+        return self.g.targetDB.itervalues()
+    def keys(self):
+        return self.g.targetDB.values()
+    def iteritems(self):
+        for obj in self:
+            source_id = getattr(obj,self.g.keyColumn)
+            if source_id is None:
+                yield obj,None
+            else:
+                yield obj,self.g.sourceDB[source_id]
+    def items(self):
+        return list(self.iteritems())
+    def itervalues(self):
+        for obj,val in self.iteritems():
+            yield val
+    def values(self):
+        return list(self.itervalues())
+    def __invert__(self):
+        return self.g
+
+class ForeignKeyEdge(dict):
+    '''edge interface to a foreign key in an SQL table.
+Caches dict of target nodes in itself; provides dict interface.
+Adds or deletes edges by setting foreign key values in the table'''
+    def __init__(self,g,k):
+        dict.__init__(self)
+        self.g = g
+        self.src = k
+        for v in g.targetDB.select('where %s=%%s' % g.keyColumn,(k.id,)): # SEARCH THE DB
+            dict.__setitem__(self,v,None) # SAVE IN CACHE
+    def __setitem__(self,dest,v):
+        if not hasattr(dest,'db') or dest.db != self.g.targetDB:
+            raise KeyError('dest is not in the targetDB bound to this graph!')
+        if v is not None:
+            raise ValueError('sorry,this graph cannot store edge information!')
+        if not hasattr(dest,'_localOnly'): # ONLY CACHE, DON'T SAVE TO DATABASE
+            old_source = self.g._inverse[dest] # CHECK FOR PRE-EXISTING EDGE
+            if old_source is not None: # REMOVE OLD EDGE FROM CACHE
+                dict.__delitem__(self.g[old_source],dest)
+        #self.g.targetDB._update(dest.id,self.g.keyColumn,self.src.id) # SAVE TO DB
+        setattr(dest,self.g.keyColumn,self.src.id) # SAVE TO DB ATTRIBUTE
+        dict.__setitem__(self,dest,None) # SAVE IN CACHE
+    def __delitem__(self,dest):
+        #self.g.targetDB._update(dest.id,self.g.keyColumn,None) # REMOVE FOREIGN KEY VALUE
+        setattr(dest,self.g.keyColumn,None) # SAVE TO DB ATTRIBUTE
+        dict.__delitem__(self,dest) # REMOVE FROM CACHE
+
+class ForeignKeyGraph(dict):
+    '''graph interface to a foreign key in an SQL table
+Caches dict of target nodes in itself; provides dict interface.
+    '''
+    def __init__(self,sourceDB,targetDB,keyColumn,**kwargs):
+        '''sourceDB is any database of source nodes;
+targetDB must be an SQL database of target nodes;
+keyColumn is the foreign key column name in targetDB for looking up sourceDB IDs.'''
+        dict.__init__(self)
+        self.sourceDB = sourceDB
+        self.targetDB = targetDB
+        self.keyColumn = keyColumn
+        self._inverse = ForeignKeyInverse(self)
+    _pickleAttrs = dict(sourceDB=0,targetDB=0,keyColumn=0)
+    def __reduce__(self): ############################# SUPPORT FOR PICKLING
+        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
+    __getstate__ = standard_getstate
+    __setstate__ = standard_setstate
+    def _inverse_schema(self):
+        'provide custom schema rule for inverting this graph... just use keyColumn!'
+        return dict(invert=True,uniqueMapping=True)
+    def __getitem__(self,k):
+        if not hasattr(k,'db') or k.db != self.sourceDB:
+            raise KeyError('object is not in the sourceDB bound to this graph!')
+        try:
+            return dict.__getitem__(self,k.id)
+        except KeyError:
+            pass
+        d = ForeignKeyEdge(self,k)
+        dict.__setitem__(self,k.id,d)
+        return d
+    def __invert__(self):
+        return self._inverse
 
 def describeDBTables(name,cursor,idDict):
     """
