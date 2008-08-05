@@ -59,8 +59,25 @@ def init_row_subclass(cls):
 
 
 class TupleO(object):
-    """Provide attribute interface to a tuple.  Subclass this and create _attrcol
-    that maps attribute names to tuple index values."""
+    """Provides attribute interface to a database tuple.
+    Storing the data as a tuple instead of a standard Python object
+    (which is stored using __dict__) uses about five-fold less
+    memory and is also much faster (the tuples returned from the
+    DB API fetch are simply referenced by the TupleO, with no
+    need to copy their individual values into __dict__).
+
+    This class follows the 'subclass binding' pattern, which
+    means that instead of using __getattr__ to process all
+    attribute requests (which is un-modular and leads to all
+    sorts of trouble), we follow Python's new model for
+    customizing attribute access, namely Descriptors.
+    We use classutil.get_bound_subclass() to automatically
+    create a subclass of this class, calling its _init_subclass()
+    class method to add all the descriptors needed for the
+    database table to which it is bound.
+
+    See the Pygr Developer Guide section of the docs for a
+    complete discussion of the subclass binding pattern."""
     _columnDescriptor = _idDescriptor = TupleDescriptor
     _sqlDescriptor = SQLDescriptor
     _init_subclass = classmethod(init_row_subclass)
