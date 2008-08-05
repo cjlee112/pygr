@@ -258,6 +258,38 @@ class AbsIntervalDescr(object):
             return -(seq.stop),-(seq.start)
 
 
+class SeqStartDescr(object):
+    'implements deferred bounds checking -- only checked when needed'
+    def __init__(self, attr):
+        self.attr = attr
+    def __get__(self, seq, objtype):
+        if seq.path is seq: # TOP-LEVEL SEQUENCE OBJECT
+            if self.attr=='start':
+                if seq.orientation>0:
+                    return 0 # FORWARD ORI
+                else:
+                    return -len(seq._reverse) # REVERSE ORI
+            elif self.attr=='stop': 
+                if seq.orientation<0:
+                    return 0 # REVERSE ORI
+                else:
+                    return len(seq) # FORWARD ORI
+        else: # A SEQUENCE SLICE
+            try:
+                rawVal = getattr(seq, '_raw_'+self.attr)
+            except AttributeError:
+                return getattr(seq.path, self.attr) #GET FROM TOP-LEVEL SEQUENCE
+            # HAVE A RAW VALUE, MUST CHECK IT!
+            i = seq.check_bounds(rawVal, seq.path, self.attr, True)
+            setattr(seq, self.attr, i) # SAVE THE TRUNCATED VALUE
+            try: # SEE IF NEW INTERVAL BOUNDS ARE EMPTY...
+                if seq._start>=seq._stop: # AVOIDS INFINITE getattr LOOP!
+                    raise IndexError('caught empty sequence interval!')
+            except AttributeError: pass # OTHER ATTRIBUTE MISSING... IGNORE.
+            delattr(seq, '_raw_'+self.attr) # GET RID OF THE RAW VALUE
+            return i
+
+
 class SeqPath(object):
     '''Base class for specifying a path, ie. sequence interval.
     This implementation takes a sequence object as initializer
@@ -265,6 +297,8 @@ class SeqPath(object):
     orientation=SeqOriDescriptor()  # COMPUTE ORIENTATION AUTOMATICALLY
     _start=ShadowAttribute('start') # SHADOW start, stop WITHOUT TRIGGERING
     _stop=ShadowAttribute('stop')   #  getattr IF THEY ARE ABSENT
+    start = SeqStartDescr('start')
+    stop = SeqStartDescr('stop')
     pathForward=PathForwardDescr()  # GET THE TOP-LEVEL FORWARD SEQUENCE OBJ
     _abs_interval=AbsIntervalDescr()
     def __init__(self,path,start=0,stop=None,step=None,reversePath=None,
@@ -366,35 +400,6 @@ class SeqPath(object):
             except IndexError: # OUT OF BOUNDS, SO NO NEXT NODE
                 return {}
         raise KeyError('requires a slice object or integer key')
-
-    def __getattr__(self,attr):
-        'automatically generate start and stop if needed'
-        if attr=='__setstate__': # PROTECT PICKLING OPERATIONS...
-            raise AttributeError
-        elif self.__dict__['path'] is self: # TOP-LEVEL SEQUENCE OBJECT
-            if attr=='start':
-                if self.orientation>0:
-                    return 0 # FORWARD ORI
-                else:
-                    return -len(self._reverse) # REVERSE ORI
-            elif attr=='stop': 
-                if self.orientation<0:
-                    return 0 # REVERSE ORI
-                else:
-                    return len(self) # FORWARD ORI
-        elif attr=='start' or attr=='stop': # A SEQUENCE SLICE
-            if '_raw_'+attr in self.__dict__: # HAVE A RAW VALUE, MUST CHECK IT!
-                i=self.check_bounds(getattr(self,'_raw_'+attr),self.path,attr,True)
-                setattr(self,attr,i) # SAVE THE TRUNCATED VALUE
-                try: # SEE IF NEW INTERVAL BOUNDS ARE EMPTY...
-                    if self._start>=self._stop: # AVOIDS INFINITE getattr LOOP!
-                        raise IndexError('caught empty sequence interval!')
-                except AttributeError: pass # OTHER ATTRIBUTE MISSING... IGNORE.
-                delattr(self,'_raw_'+attr) # GET RID OF THE RAW VALUE
-                return i
-            else:
-                return getattr(self.path,attr) # GET FROM TOP-LEVEL SEQUENCE
-        raise AttributeError('SeqPath object has no attribute '+attr)
 
     def __len__(self):
         if self.path is self and self.orientation<0:
@@ -598,19 +603,14 @@ class SequenceBase(SeqPath):
     orientation=1
     def __init__(self):
         self.path=self
-        #self.stop=len(self) # NOW HANDLED AUTOMATICALLY BY SeqPath.__getattr__
-
     def update(self,seq):
         'change this sequence to the string <seq>'
         self.seq=seq
-        #self.stop=len(self) # NOW HANDLED AUTOMATICALLY BY SeqPath.__getattr__
-
     def __len__(self):
         'default: get the whole self.seq and compute its length'
         return len(self.seq) # COMPUTE IT FROM THE SEQUENCE
-
     def strslice(self,start,stop):
-        'default method assumes self.seq yields string slices representing sequence'
+        'default method assumes self.seq is a sliceable string'
         return self.seq[start:stop]
 
 

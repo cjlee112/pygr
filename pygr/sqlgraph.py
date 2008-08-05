@@ -4,21 +4,72 @@ from __future__ import generators
 from mapping import *
 import types
 from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
-     override_rich_cmp,generate_items,get_shadow_class,standard_setstate
+     override_rich_cmp,generate_items,get_bound_subclass,standard_setstate
     
+
+class TupleDescriptor(object):
+    'return tuple entry corresponding to named attribute'
+    def __init__(self, db, attr):
+        self.icol = db.data[attr] # index of this attribute in the tuple
+    def __get__(self, obj, klass):
+        return obj._data[self.icol]
+    def __set__(self, obj, val):
+        raise AttributeError('this database is read-only!')
+
+class SQLDescriptor(object):
+    'return attribute value by querying the database'
+    def __init__(self, db, attr):
+        self.selectSQL = db._attrSQL(attr) # SQL expression for this attr
+    def __get__(self, obj, klass):
+        return obj._select(self.selectSQL)
+    def __set__(self, obj, val):
+        raise AttributeError('this database is read-only!')
+
+class ReadOnlyDescriptor(object):
+    'enforce read-only policy, e.g. for ID attribute'
+    def __init__(self, db, attr):
+        self.attr = '_'+attr
+    def __get__(self, obj, klass):
+        return getattr(obj, self.attr)
+    def __set__(self, obj, val):
+        raise AttributeError('attribute %s is read-only!' % self.attr)
+
+
+def select_from_row(row, what):
+    "return value from SQL expression applied to this row"
+    if row.db.cursor.execute('select %s from %s where %s=%%s'
+                             % (what,row.db.name,row.db.primary_key),
+                             (row.id,)) != 1:
+        raise KeyError('%s[%s].%s not found, or not unique'
+                       % (row.db.name,str(row.id),what))
+    return row.db.cursor.fetchall()[0][0] #return the single field we requested
+
+def init_row_subclass(cls):
+    'add descriptors for db attributes'
+    for attr in cls.db.data: # bind all database columns
+        if attr == 'id': # handle ID attribute specially
+            setattr(cls, attr, cls._idDescriptor(cls.db, attr))
+            continue
+        try: # check if this attr maps to an SQL column
+            cls.db._attrSQL(attr, columnNumber=True)
+        except AttributeError: # treat as SQL expression
+            setattr(cls, attr, cls._sqlDescriptor(cls.db, attr))
+        else: # treat as interface to our stored tuple
+            setattr(cls, attr, cls._columnDescriptor(cls.db, attr))
+
 
 class TupleO(object):
     """Provide attribute interface to a tuple.  Subclass this and create _attrcol
     that maps attribute names to tuple index values."""
+    _columnDescriptor = _idDescriptor = TupleDescriptor
+    _sqlDescriptor = SQLDescriptor
+    _init_subclass = classmethod(init_row_subclass)
+    _select = select_from_row
     def __init__(self, data):
-        self.__dict__['_data'] = data # AVOID TRIGGERING __setattr__ !!
-    def __getattr__(self,attr):
-        try:
-            return self._data[self._attrcol[attr]]
-        except KeyError:
-            raise AttributeError('no attribute %s' % attr)
-        except TypeError: # treat as an alias
-            return getattr(self, self._attrcol[attr])
+        self._data = data # save our data tuple
+
+class TupleORW(TupleO):
+    'read-write version of TupleO'
     def cache_id(self,row_id):
         self.save_local('id',row_id)
     def __setattr__(self,attr,val):
@@ -78,27 +129,22 @@ ColumnDescriptor._readOnlyClass = ReadOnlyColumnDesc
 
 class SQLRow(object):
     """Provide transparent interface to a row in the database: attribute access
-       will be mapped to SELECT of the appropriate column, but data is not cached
-       on this object.
+       will be mapped to SELECT of the appropriate column, but data is not 
+       cached on this object.
     """
+    _columnDescriptor = _sqlDescriptor = SQLDescriptor
+    _idDescriptor = ReadOnlyDescriptor
+    _init_subclass = classmethod(init_row_subclass)
+    _select = select_from_row
     def __init__(self, id):
-        self.__dict__['id'] = id # AVOID TRIGGERING __setattr__ !!
+        self._id = id
 
-    def _select(self,what):
-        "Get SQL select expression for this row"
-        self.db.cursor.execute('select %s from %s where %s=%%s'
-                               % (what,self.db.name,self.db.primary_key),(self.id,))
-        l=self.db.cursor.fetchall()
-        if len(l)!=1:
-            raise KeyError('%s[%s].%s not found, or not unique'
-                           % (self.db.name,str(self.id),what))
-        return l[0][0] # RETURN THE SINGLE FIELD WE REQUESTED
 
-    def __getattr__(self,attr):
-        return self._select(self.db._attrSQL(attr))
-    def __setattr__(self,attr,val):
-        col = self.db._attrSQL(attr,sqlColumn=True)
-        self.db._update(self.id,col,val)
+## class SQLRowRW(SQLRow):
+##     'read-write version of SQLRow'
+##     def __setattr__(self,attr,val):
+##         col = self.db._attrSQL(attr,sqlColumn=True)
+##         self.db._update(self.id,col,val)
 
 
 
@@ -143,10 +189,14 @@ class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
-                 arraysize=1024, itemSliceClass=None, **kwargs):
+                 arraysize=1024, itemSliceClass=None,
+                 serverInfo=None, **kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
-            name,cursor=getNameCursor(name,**kwargs)
+            if serverInfo is not None: # get cursor from serverInfo
+                cursor = serverInfo.cursor()
+            else: # try to read connection info from name or config file
+                name,cursor=getNameCursor(name,**kwargs)
         if createTable is not None: # RUN COMMAND TO CREATE THIS TABLE
             cursor.execute(createTable)
         cursor.execute('describe %s' % name)
@@ -189,38 +239,30 @@ class SQLTableBase(dict):
         self.objclass(itemClass) # NEED TO SUBCLASS OUR ITEM CLASS
         if itemSliceClass is not None:
             self.itemSliceClass = itemSliceClass
-            get_shadow_class(self, 'itemSliceClass', self.name) # need to subclass itemSliceClass
+            get_bound_subclass(self, 'itemSliceClass', self.name) # need to subclass itemSliceClass
         if attrAlias is not None: # ADD ATTRIBUTE ALIASES
             self.attrAlias = attrAlias # RECORD FOR PICKLING PURPOSES
             self.data.update(attrAlias)
         if clusterKey is not None:
             self.clusterKey=clusterKey
+        if serverInfo is not None:
+            self.serverInfo = serverInfo
 
     def __hash__(self):
         return id(self)
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (ClassicUnpickler, (self.__class__,self.__getstate__()))
-    _pickleAttrs = dict(name=0,clusterKey=0,maxCache=0,arraysize=0,attrAlias=0)
+    _pickleAttrs = dict(name=0,clusterKey=0,maxCache=0,arraysize=0,attrAlias=0,
+                        serverInfo=0)
     __getstate__ = standard_getstate
     def __setstate__(self,state):
-        if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
-            name = state[0]
-        else:
-            name = state['name']
-        try: # SEE IF WE CAN GET CURSOR DIRECTLY FROM RESOURCE DATABASE
-            from Data import getResource
-            cursor=getResource.getTableCursor(name)
-        except ImportError:
-            cursor=None # FAILED, SO TRY TO GET A CURSOR IN THE USUAL WAYS...
-        if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
-            state[1] = cursor
-            self.__init__(*state)
-            import sys
-            print >>sys.stderr,'WARNING: obsolete list pickle %s. Update by resaving!' \
-                  % repr(self)
-        else:
-            state['cursor'] = cursor
-            self.__init__(**state)
+        if 'serverInfo' not in state: # hmm, no address for db server?
+            try: # SEE IF WE CAN GET CURSOR DIRECTLY FROM RESOURCE DATABASE
+                from Data import getResource
+                state['cursor'] = getResource.getTableCursor(state['name'])
+            except ImportError:
+                pass # FAILED, SO TRY TO GET A CURSOR IN THE USUAL WAYS...
+        self.__init__(**state)
     def __repr__(self):
         return '<SQL table '+self.name+'>'
 
@@ -272,29 +314,17 @@ class SQLTableBase(dict):
                 self.data[key] = self.data[val] # SO MAP TO WHAT IT MAPS TO
             except KeyError: # TREAT AS ALIAS TO SQL EXPRESSION
                 self.data[key] = val
-    def add_descriptors(self,d,descriptor):
-        'factory for adding multiple descriptors to a class definition'
-        for attr in self.colname: # ONLY BIND ACTUAL SQL COLUMNS
-            if attr == self.primary_key: # primary_key IS SPECIALLY BOUND AS id
-                d['id'] = descriptor(self,attr,readOnly=True)
-            else:
-                d[attr] = descriptor(self,attr)
-    _descriptorClass = ColumnDescriptor # STORAGE BINDING FOR UPDATING DB...
     def objclass(self,oclass=None):
         "Create class representing a row in this table by subclassing oclass, adding data"
         if oclass is not None: # use this as our base itemClass
             self.itemClass = oclass
-        if not issubclass(self.itemClass,TupleO): # NEED TO ADD DESCRIPTORS
-            factories = [lambda d: self.add_descriptors(d,self._descriptorClass)]
-        else:
-            factories = ()
-        oclass = get_shadow_class(self,'itemClass',self.name,factories) # SET NEW itemClass
-        oclass.db = self # BIND THIS ENTIRE SHADOW CLASS TO THIS DB
+        oclass = get_bound_subclass(self, 'itemClass', self.name,
+                                    attrDict=dict(db=self)) # SET NEW itemClass
         if issubclass(oclass, TupleO):
             oclass._attrcol = self.data # BIND ATTRIBUTE LIST TO TUPLEO INTERFACE
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
-    def _select(self,whereClause='',params=None,selectCols='t1.*'):
+    def _select(self, whereClause='', params=None, selectCols='t1.*'):
         'execute the specified query but do not fetch'
         self.cursor.execute('select %s from %s t1 %s'
                             % (selectCols,self.name,whereClause),params)
@@ -321,10 +351,6 @@ class SQLTableBase(dict):
         'update a single field in the specified row to the specified value'
         self.cursor.execute('update %s set %s=%%s where %s=%%s' %(self.name,col,self.primary_key),
                             (val,row_id))
-    def tupleItem(self,t,oclass):
-        'create object to represent this row, using oclass'
-        o=oclass(t)
-        return o
     def getID(self,t):
         try:
             return t[self.data['id']] # GET ID FROM TUPLE
@@ -335,12 +361,12 @@ class SQLTableBase(dict):
         try:
             id=self.getID(t)
         except KeyError: # NO PRIMARY KEY?  IGNORE THE CACHE.
-            return self.tupleItem(t,oclass)
+            return oclass(t)
         try: # IF ALREADY LOADED IN OUR DICTIONARY, JUST RETURN THAT ENTRY
             return dict.__getitem__(self,id)
         except KeyError:
             pass
-        o=self.tupleItem(t,oclass)
+        o = oclass(t)
         dict.__setitem__(self,id,o)   # CACHE THIS ITEM IN OUR DICTIONARY
         return o
     def cache_items(self,rows,oclass=None):
@@ -557,13 +583,11 @@ class SQLTableNoCache(SQLTableBase):
     def select(self,whereClause,params):
         return SQLTableBase.select(self,whereClause,params,self.oclass,
                                    self._attrSQL('id'))
-    def oclass(self,t): # CREATE OBJECT FROM TUPLE
-        return self.itemClass(self,t[0]) # AN EMPTY CONTAINER FOR ACCESSING THIS ROW
     def __getitem__(self,k): # FIRST TRY LOCAL INDEX, THEN TRY DATABASE
         try:
             return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
-            o=self.itemClass(self,k) # RETURN AN EMPTY CONTAINER FOR ACCESSING THIS ROW
+            o=self.itemClass(k) # RETURN AN EMPTY CONTAINER FOR ACCESSING THIS ROW
             dict.__setitem__(self,k,o) # STORE EMPTY CONTAINER IN LOCAL DICTIONARY
             return o
     def addAttrAlias(self,**kwargs):
@@ -1257,3 +1281,27 @@ class TableGroup(dict):
             self[k]=v
     def __getattr__(self,k):
         return self[k]
+
+
+class DBServerInfo(object):
+    'picklable reference to a database server'
+    def __init__(self, get_connection=None, **kwargs):
+        self.kwargs = kwargs # connection arguments
+        self.get_connection = get_connection
+    def cursor(self):
+        'returns cursor to this database server'
+        try:
+            return self._cursor
+        except AttributeError:
+            if self.get_connection is None: # default: use MySQL
+                from MySQLdb import connect
+            else:
+                connect = self.get_connection
+            self._cursor = connect(**self.kwargs).cursor()
+            return self._cursor
+    def __getstate__(self):
+        'return all picklable arguments'
+        return dict(kwargs=self.kwargs, get_connection=self.get_connection)
+
+
+            

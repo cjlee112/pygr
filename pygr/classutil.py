@@ -161,8 +161,9 @@ def shadow_reducer(self):
     return result
 
 
-def get_shadow_class(obj, classattr='__class__', subname=None, factories=()):
-    'create a shadow class specifically for obj to bind its shadow attributes'
+def get_bound_subclass(obj, classattr='__class__', subname=None, factories=(),
+                       attrDict=None):
+    'create a subclass specifically for obj to bind its shadow attributes'
     targetClass = getattr(obj,classattr)
     try:
         if targetClass._shadowOwner is obj:
@@ -177,8 +178,16 @@ def get_shadow_class(obj, classattr='__class__', subname=None, factories=()):
         __reduce__ = shadow_reducer
         _shadowParent = targetClass # NEED TO KNOW ORIGINAL CLASS
         _shadowOwner = obj # need to know who owns it
+        if attrDict is not None: # add attributes to the class dictionary
+            locals().update(attrDict)
         for f in factories:
             f(locals())
+    try: # run subclass initializer if present
+        subclass_init = shadowClass._init_subclass
+    except AttributeError: # no subclass initializer, so nothing to do
+        pass
+    else: # run the subclass initializer
+        subclass_init()
     shadowClass.__name__ = targetClass.__name__ + '_' + subname
     setattr(obj,classattr,shadowClass) # SHADOW CLASS REPLACES ORIGINAL
     return shadowClass

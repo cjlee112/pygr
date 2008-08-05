@@ -53,6 +53,8 @@ class ItemDescriptor(object):
             result=getattr(result,self.targetAttr) # GET ATTRIBUTE OF THE result
         obj.__dict__[self.attr]=result # CACHE IN THE __dict__
         return result
+
+class ItemDescriptorRW(ItemDescriptor):
     def __set__(self,obj,newTarget):
         if not self.uniqueMapping:
             raise PygrDataSchemaError('''You attempted to directly assign to a graph mapping
@@ -967,17 +969,17 @@ so report the reproducible steps to this error message as a bug report.''' % res
             return obj._ignoreShadowAttr[attr] # IF PRESENT, NOTHING TO DO
         except (AttributeError,KeyError):
             pass # PROCEED AS NORMAL
-        from classutil import get_shadow_class
+        from classutil import get_bound_subclass
         if itemRule: # SHOULD BIND TO ITEMS FROM obj DATABASE
-            targetClass = get_shadow_class(obj,'itemClass') # CLASS USED FOR CONSTRUCTING ITEMS
+            targetClass = get_bound_subclass(obj,'itemClass') # CLASS USED FOR CONSTRUCTING ITEMS
             descr=ItemDescriptor(attr,**kwargs)
         else: # SHOULD BIND DIRECTLY TO obj VIA ITS CLASS
-            targetClass = get_shadow_class(obj)
+            targetClass = get_bound_subclass(obj)
             descr=OneTimeDescriptor(attr,**kwargs)
         setattr(targetClass,attr,descr) # BIND descr TO targetClass.attr
         if itemRule:
             try: # BIND TO itemSliceClass TOO, IF IT EXISTS...
-                targetClass = get_shadow_class(obj,'itemSliceClass')
+                targetClass = get_bound_subclass(obj,'itemSliceClass')
             except AttributeError:
                 pass # NO itemSliceClass, SO SKIP
             else: # BIND TO itemSliceClass
