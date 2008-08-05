@@ -95,7 +95,7 @@ extern int find_file_intervals(IntervalIterator *it0,int start,int end,
 			       int ntop,int div,FILE *ifile,
 			       IntervalMap buf[],int nbuf,
 			       int *p_nreturn,IntervalIterator **it_return);
-
+extern int write_padded_binary(IntervalMap im[],int n,int div,FILE *ifile);
 extern char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
 				SublistHeader *subheader,int nlists,char filestem[]);
 extern IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
