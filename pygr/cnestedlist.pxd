@@ -115,7 +115,6 @@ cdef extern from "apps/maf2nclist.h":
                   char *dest_prefix)
   int seqnameID_qsort_cmp(void *void_a,void *void_b)
   int seqidmap_qsort_cmp(void *void_a,void *void_b)
-  void free_seqnames(SeqNameID_T seqnames[],int n)
 
 
 
