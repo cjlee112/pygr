@@ -687,6 +687,29 @@ class Seq2SeqEdge(object):
             l.append((absoluteSlice(self.sourcePath,srcStart,srcEnd),
                       absoluteSlice(self.targetPath,destStart,destEnd)))
         return l
+    def get_gaps(self):
+        'return list of (srcIval,destIval) representing gaps / insertions'
+        if self.matchIntervals is False:
+            raise ValueError('no matchIntervals information!')
+        elif self.matchIntervals is None or len(self.matchIntervals)<2:
+            return [] # no gaps here...
+        srcLast = self.matchIntervals[0][1] # ends of 1st aligned intervals
+        destLast = self.matchIntervals[0][3]
+        l = []
+        for t in self.matchIntervals[1:]:
+            if t[0]>srcLast: # gap region
+                srcIval = absoluteSlice(self.sourcePath, srcLast, t[0])
+            else:
+                srcIval = None
+            if t[2]>destLast: # insertion region
+                destIval = absoluteSlice(self.targetPath, destLast, t[2])
+            else:
+                destIval = None
+            if srcIval is not None or destIval is not None:
+                l.append((srcIval,destIval))
+            srcLast = t[1] # ends of these aligned intervals
+            destLast = t[3]
+        return l
     def __iter__(self,sourceOnly=True,**kwargs):
         return iter([t[0] for t in self.items(sourceOnly=sourceOnly,**kwargs)])
 
