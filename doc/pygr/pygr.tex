@@ -93,7 +93,7 @@ and \code{ss2}:
 
 \begin{verbatim}
 import pygr.Data # FINDS DATA WHEREVER IT'S REGISTERED
-msa = pygr.Data.Bio.Seq.MSA.ucsc17() # SANTA CRUZ 17-GENOME ALIGNMENT
+msa = pygr.Data.Bio.MSA.UCSC.hg17_multiz17way() # SANTA CRUZ 17-GENOME ALIGNMENT
 exons = pygr.Data.Leelab.ASAP2.hg17.exons() # ASAP2 HUMAN EXONS
 idDict = ~(msa.seqDict) # INVERSE: MAPS SEQ --> STRING IDENTIFIER
 def printConservation(id,label,site):
@@ -419,7 +419,7 @@ from pygr import cnestedlist
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
 nlmsa = cnestedlist.NLMSA('/loaner/ucsc17')
 nlmsa.__doc__ = 'UCSC 17way multiz alignment, rooted on hg17'
-pygr.Data.Bio.Seq.MSA.ucsc17 = nlmsa
+pygr.Data.Bio.MSA.UCSC.hg17_multiz17way = nlmsa
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 This works, even though using this 17-genome alignment (behind the
@@ -438,7 +438,7 @@ for id,genome in nlmsa.seqDict.prefixDict.items(): # 1st SAVE THE GENOMES
     genome.__doc__ = 'genome sequence '+id
     pygr.Data.getResource.addResource('Bio.Seq.Genome.'+id,genome)
 nlmsa.__doc__ = 'UCSC 17way multiz alignment, rooted on hg17'
-pygr.Data.Bio.Seq.MSA.ucsc17 = nlmsa # NOW SAVE THE ALIGNMENT
+pygr.Data.MSA.Bio.UCSC.hg17_multiz17way = nlmsa # NOW SAVE THE ALIGNMENT
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 
@@ -532,7 +532,7 @@ if the user tries to actually use the \code{next} attribute.
 
 \subsubsection{pygr.Data Sharing Over a Network via XMLRPC}
 Sometimes individual compute nodes may not have sufficient disk space to
-store all the data resources (for example, just the single ucsc17 17-genome alignment and 
+store all the data resources (for example, just the single UCSC hg17 17-genome alignment and 
 associated genome databases takes about 200 GB).  Yet it would be useful
 to run compute-intensive analyses on those machines accessing such data.
 pygr.Data makes that easy.  The default setting of PYGRDATAPATH (if you
@@ -567,7 +567,7 @@ has access to the data:
 
 \begin{verbatim}
 import pygr.Data
-nlmsa = pygr.Data.Bio.Seq.MSA.ucsc17() # GET OUR NLMSA AND SEQ DBs
+nlmsa = pygr.Data.Bio.MSA.UCSC.hg17_multiz17way() # GET OUR NLMSA AND SEQ DBs
 server = pygr.Data.getResource.newServer('nlmsa_server') # SERVE ALL LOADED DATA
 server.register() # TELL PYGRDATA INDEX SERVER WHAT RESOURCES WE'RE SERVING
 server.serve_forever() # START THE SERVICE...
@@ -578,7 +578,7 @@ and registers our resources to that index.  Now any machine that can access
 your servers can access the alignment as easily as:
 \begin{verbatim}
 import pygr.Data
-nlmsa = pygr.Data.Bio.Seq.MSA.ucsc17() # GET THE NLMSA AND SEQ DBs
+nlmsa = pygr.Data.Bio.MSA.UCSC.hg17_multiz17way() # GET THE NLMSA AND SEQ DBs
 \end{verbatim}
 Alignment queries and sequence strings will be obtained via XMLRPC 
 queries over the network.  Note that if any of the sequence databases
@@ -619,7 +619,7 @@ that give abstract names for where you want to read or store your pygr.Data info
 For example, if you wanted to store a resource specifically in the resource
 database in your current directory, you could type:
 \begin{verbatim}
-pygr.Data.here.Bio.Seq.MSA.ucsc17=nlmsa # SAVE THE NLMSA AND SEQ DBs
+pygr.Data.here.Bio.MSA.UCSC.hg17_multiz17way = nlmsa # SAVE THE NLMSA AND SEQ DBs
 \end{verbatim}
 \begin{itemize}
 \item The abstract pygr.Data layer \code{here} refers to the first entry in your
@@ -645,7 +645,7 @@ when you import it.  For example, to delete this particular resource rule
 from our lab's central resource database (called ``leelab'', because it is
 not accessible outside our lab):
 \begin{verbatim}
-del pygr.Data.leelab.Bio.Seq.MSA.ucsc17 # DELETE THIS RESOURCE RULE
+del pygr.Data.leelab.Bio.MSA.UCSC.hg17_multiz17way # DELETE THIS RESOURCE RULE
 \end{verbatim}
 \end{itemize}
 
@@ -3784,10 +3784,10 @@ example, see the classes \class{seqdb.AnnotationDB,seqdb.SeqDBbase,seqdb.XMLRPCS
 \item pygr.Data provides a {\em namespace} for commonly used data resources.
 Once you import pygr.Data, you can save resources into it just as you would into
 any python namespace.  For example to save an alignment object \code{nlmsa}
-as the resource ID ``Bio.Seq.MSA.ucsc17.foo'':
+as the resource ID ``Bio.MSA.UCSC.foo17'':
 \begin{verbatim}
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-pygr.Data.Bio.Seq.MSA.ucsc17.foo = nlmsa # NOW SAVE THE ALIGNMENT
+pygr.Data.Bio.MSA.UCSC.foo17 = nlmsa # NOW SAVE THE ALIGNMENT
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 The crucial point is that this namespace is {\em persistent} between
@@ -3813,7 +3813,7 @@ namespace, but with a ``constructor syntax'', i.e. add a call at the end of
 the resource name:
 \begin{verbatim}
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-nlmsa = pygr.Data.Bio.Seq.MSA.ucsc17.foo() # SYNTAX EMPHASIZES CONSTRUCTION OF INSTANCE
+nlmsa = pygr.Data.Bio.MSA.UCSC.foo17() # SYNTAX EMPHASIZES CONSTRUCTION OF INSTANCE
 \end{verbatim}
 The actual resource object is not obtained until you call the constructor.
 
@@ -3821,11 +3821,11 @@ The actual resource object is not obtained until you call the constructor.
 These represent relationships between one resource and another resource
 (or their contents).  For example
 \begin{verbatim}
-pygr.Data.schema.Bio.Genomics.ASAP2.hg17.splicegraph = \
+pygr.Data.schema.Bio.Annotation.ASAP2.hg17.splicegraph = \
   pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
                                bindAttrs=('next','previous','exons'))
 \end{verbatim}
-indicates that the pygr.Data resource \code{Bio.Genomics.ASAP2.hg17.splicegraph}
+indicates that the pygr.Data resource \code{Bio.Annotation.ASAP2.hg17.splicegraph}
 is a many-to-many mapping of the pygr.Data resource \var{exons} onto itself,
 with additional ``edge information'' for each exon-to-exon mapping
 provided by the pygr.Data resource \var{splices}.  Furthermore, this mapping
@@ -3847,7 +3847,7 @@ refer to.  Using pygr.Data, we can simply load the exon annotation
 resource, and it will automatically get the genomic sequence data
 for us.  Thus to get an exon's sequence all we have to do is:
 \begin{verbatim}
-exons = pygr.Data.Bio.Genomics.ASAP2.hg17.exons() # ANNOTATION DATABASE
+exons = pygr.Data.Bio.Annotation.ASAP2.hg17.exons() # ANNOTATION DATABASE
 str(exons[464].sequence) # GET THE SEQUENCE OF THIS SPECIFIC EXON
 \end{verbatim}
 
@@ -4143,10 +4143,10 @@ the path to your shelve file containing this resource database:
 
 \begin{verbatim}
 import pygr.Data
-nlmsa = pygr.Data.Bio.Seq.MSA.ucsc17() # data to serve: NLMSA AND SEQ DBs
+nlmsa = pygr.Data.Bio.MSA.UCSC.hg17_multiz17way() # data to serve: NLMSA AND SEQ DBs
 server = pygr.Data.getResource.newServer('nlmsa_server',
-                  downloadDB='/your/path/to/the/shelve/.pygr_data')
-server.register() # TELL PYGRDATA INDEX SERVER WHAT RESOURCES WE'RE SERVING
+                  downloadDB='/your/path/to/the/shelve/.pygr_data',
+                  withIndex=True)
 server.serve_forever() # START THE SERVICE...
 \end{verbatim}
 You can also directly call the server method \method{read_download_db}(path)
@@ -4364,13 +4364,13 @@ Lee lab, we keep a MySQL resource database whose layer name is ``leelab''.
 \item You can specify precisely which layer you want to access by prefixing
 your pygr.Data resource name with the desired layer name, e.g.
 \begin{verbatim}
-nlmsa = pygr.Data.leelab.Bio.Seq.MSA.ucsc17()
+nlmsa = pygr.Data.leelab.Bio.MSA.UCSC.hg17_multiz17way()
 \end{verbatim}
 
 \item Similarly, you can specify which layer you want to store a resource
 or schema, in the same way:
 \begin{verbatim}
-pygr.Data.leelab.schema.Bio.Genomics.ASAP2.hg17.splicegraph = \
+pygr.Data.leelab.schema.Bio.Annotation.ASAP2.hg17.splicegraph = \
   pygr.Data.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
                                bindAttrs=('next','previous','exons'))
 \end{verbatim}
@@ -4381,7 +4381,7 @@ database in its list that returns the desired resource.
 \item You can delete a resource and its schema rules from a specific resource
 database by specifying its layer name:
 \begin{verbatim}
-del pygr.Data.leelab.Bio.Seq.MSA.ucsc17
+del pygr.Data.leelab.Bio.MSA.UCSC.hg17_multiz17way
 \end{verbatim}
 
 \item pygr.Data provides a set of default layer names:
@@ -5478,7 +5478,7 @@ requires an SQL query.  You can customize the class used for
 providing this interface by specifying a different \var{itemClass}
 to the constructor.
 
-\subsubsection{SQLMultiTableNoCache}
+\subsubsection{SQLTableMultiNoCache}
 Drops the assumption of a one-to-one
 mapping between each key and a row object (i.e. removes the
 assertion that the key is unique, a ``primary key''), allowing
@@ -6785,6 +6785,37 @@ we ask srdb or hg18: \textasciitilde srdb[chr1] gives 226034 whereas
 \textasciitilde hg18[chr1] just gives "chr1", as it should.
 
 
+\subsection{Databases and Schema}
+First, let's define exactly what I mean by the word "database": a
+set of data that share a common schema; in other words that each item
+in the set participates in the same pattern of relations with other collections
+of data.  Example: an {\em exon} always has the following attributes: 
+\begin{itemize}
+\item it is part of a {\em gene}; this is a many-to-one relation.
+\item it is part of one or more {\em transcripts}; this is a many-to-many relation.
+\item it maps to a specific {\em interval on a genomic sequence};
+this is a one-to-one relation.
+\item it can be connected to other exons by one or more directed edges, called
+{\em splices} or {\em introns}.  This is a many-to-many graph relation
+(because it also involves edge-relation objects).
+\end{itemize}
+Thus we can think of a database as a set of things that are functionally
+equivalent in terms of having the same relations.
+
+Second, let's define what I mean by the word "schema": first, the
+list of {\em mappings} that items in a database participate in; second,
+the {\em bindings} that attach these relations to items in this database.
+A mapping is characterized by its {\em source} database, its {\em target}
+database, and optionally its {\em edge} database whose items represent the
+actual individual relations between a source-target pair of items.  In the example
+above, the {\em splice} objects functioned as such "edge relation" objects.
+A binding is typically an attribute name: i.e. for each item in the database,
+that attribute name will yield the target that this item maps to according
+to the mapping that is bound as this attribute.  For example, an exon object
+might have a "gene" attribute that would yield the gene object that this 
+exon "is part of".
+
+
 \subsection{Annotation Databases}
 Pygr treats annotation as an intersection between two types of data:
 \begin{itemize}
@@ -6845,37 +6876,6 @@ class EnsemblRow(sqlgraph.TupleO): # TupleO is generic tuple with named attrs
 exonSliceDB = sqlgraph.SQLTable('homo_sapiens_core_47_36i.exon',
                                 cursor, itemClass=EnsemblRow)
 \end{verbatim}
-
-
-\subsection{Databases and Schema}
-First, let's define exactly what I mean by the word "database": a
-set of data that share a common schema; in other words that each item
-in the set participates in the same pattern of relations with other collections
-of data.  Example: an {\em exon} always has the following attributes: 
-\begin{itemize}
-\item it is part of a {\em gene}; this is a many-to-one relation.
-\item it is part of one or more {\em transcripts}; this is a many-to-many relation.
-\item it maps to a specific {\em interval on a genomic sequence};
-this is a one-to-one relation.
-\item it can be connected to other exons by one or more directed edges, called
-{\em splices} or {\em introns}.  This is a many-to-many graph relation
-(because it also involves edge-relation objects).
-\end{itemize}
-Thus we can think of a database as a set of things that are functionally
-equivalent in terms of having the same relations.
-
-Second, let's define what I mean by the word "schema": first, the
-list of {\em mappings} that items in a database participate in; second,
-the {\em bindings} that attach these relations to items in this database.
-A mapping is characterized by its {\em source} database, its {\em target}
-database, and optionally its {\em edge} database whose items represent the
-actual individual relations between a source-target pair of items.  In the example
-above, the {\em splice} objects functioned as such "edge relation" objects.
-A binding is typically an attribute name: i.e. for each item in the database,
-that attribute name will yield the target that this item maps to according
-to the mapping that is bound as this attribute.  For example, an exon object
-might have a "gene" attribute that would yield the gene object that this 
-exon "is part of".
 
 
 
