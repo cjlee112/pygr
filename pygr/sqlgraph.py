@@ -676,18 +676,20 @@ class SQLEdgeDict(object):
         self.table=table
         if not hasattr(self.table,'allowMissingNodes') and \
                self.table.cursor.execute('select %s from %s where %s=%%s limit 1'
-                                         %(self.table._attrSQL('source_id'),
+                                         %(self.table.sourceSQL,
                                            self.table.name,
-                                           self.table._attrSQL('source_id')),
+                                           self.table.sourceSQL),
                                          (self.fromNode,))<1:
             raise KeyError('node not in graph!')
 
     def __getitem__(self,target):
-        self.table.cursor.execute('select %s from %s where %s=%%s and %s=%%s'
-                                  %(self.table._attrSQL('edge_id'),
-                                    self.table.name,self.table._attrSQL('source_id'),
-                                    self.table._attrSQL('target_id')),
-                                  (self.fromNode,self.table.pack_target(target)))
+        if self.table.cursor.execute('select %s from %s where %s=%%s and %s=%%s'
+                                     %(self.table.edgeSQL,
+                                       self.table.name,self.table.sourceSQL,
+                                       self.table.targetSQL),
+                                     (self.fromNode,
+                                      self.table.pack_target(target))) != 1:
+            raise KeyError('either no edge from source to target or not unique!')
         l=self.table.cursor.fetchall()
         try:
             return self.table.unpack_edge(l[0][0]) # RETURN EDGE
@@ -706,17 +708,18 @@ class SQLEdgeDict(object):
         return self # iadd MUST RETURN self!
     def __delitem__(self,target):
         if self.table.cursor.execute('delete from %s where %s=%%s and %s=%%s'
-                                     %(self.table.name,self.table._attrSQL('source_id'),
-                                       self.table._attrSQL('target_id')),
+                                     %(self.table.name,self.table.sourceSQL,
+                                       self.table.targetSQL),
                                      (self.fromNode,self.table.pack_target(target)))<1:
             raise KeyError('no edge from node to target')
         
     def iterator_query(self):
         self.table.cursor.execute('select %s,%s from %s where %s=%%s and %s is not null'
-                                  %(self.table._attrSQL('target_id'),
-                                    self.table._attrSQL('edge_id'),
-                                    self.table.name,self.table._attrSQL('source_id'),
-                                    self.table._attrSQL('target_id')),
+                                  %(self.table.targetSQL,
+                                    self.table.edgeSQL,
+                                    self.table.name,
+                                    self.table.sourceSQL,
+                                    self.table.targetSQL),
                                   (self.fromNode,))
         return self.table.cursor.fetchall()
     def keys(self):
@@ -738,6 +741,28 @@ class SQLEdgeDict(object):
     def __len__(self):
         return len(self.keys())
     __cmp__ = graph_cmp
+
+class SQLEdgelessDict(SQLEdgeDict):
+    'for SQLGraph tables that lack edge_id column'
+    def __getitem__(self,target):
+        if self.table.cursor.execute('select %s from %s where %s=%%s and %s=%%s'
+                                     %(self.table.targetSQL,
+                                       self.table.name,self.table.sourceSQL,
+                                       self.table.targetSQL),
+                                     (self.fromNode,
+                                      self.table.pack_target(target))) != 1:
+            raise KeyError('either no edge from source to target or not unique!')
+        return None # no edge info!
+    def iterator_query(self):
+        self.table.cursor.execute('select %s from %s where %s=%%s and %s is not null'
+                                  %(self.table.targetSQL,
+                                    self.table.name,
+                                    self.table.sourceSQL,
+                                    self.table.targetSQL),
+                                  (self.fromNode,))
+        return [(t[0],None) for t in self.table.cursor.fetchall()]
+
+SQLEdgeDict._edgelessClass = SQLEdgelessDict
 
 class SQLGraphEdgeDescriptor(object):
     'provide an SQLEdges interface on demand'
@@ -796,6 +821,7 @@ class SQLGraph(SQLTableMultiNoCache):
     _distinct_key='source_id'
     _pickleAttrs = SQLTableMultiNoCache._pickleAttrs.copy()
     _pickleAttrs.update(dict(sourceDB=0,targetDB=0,edgeDB=0,allowMissingNodes=0))
+    _edgeClass = SQLEdgeDict
     def __init__(self,name,*l,**kwargs):
         if 'createTable' in kwargs: # CREATE A SCHEMA FOR THIS TABLE
             c = getColumnTypes(**kwargs)
@@ -806,43 +832,52 @@ class SQLGraph(SQLTableMultiNoCache):
             self.allowMissingNodes = kwargs['allowMissingNodes']
         except KeyError: pass
         SQLTableMultiNoCache.__init__(self,name,*l,**kwargs)
+        self.sourceSQL = self._attrSQL('source_id')
+        self.targetSQL = self._attrSQL('target_id')
+        try:
+            self.edgeSQL = self._attrSQL('edge_id')
+        except AttributeError:
+            self.edgeSQL = None
+            self._edgeClass = self._edgeClass._edgelessClass
         save_graph_db_refs(self,**kwargs)
     def __getitem__(self,k):
-        return SQLEdgeDict(self.pack_source(k),self)
+        return self._edgeClass(self.pack_source(k),self)
     def __iadd__(self,k):
         self.cursor.execute('delete from %s where %s=%%s and %s is null'
-                            % (self.name,self._attrSQL('source_id'),
-                               self._attrSQL('target_id')),
+                            % (self.name,self.sourceSQL,self.targetSQL),
                             (self.pack_source(k),))
         self.cursor.execute('insert ignore into %s values (%%s,NULL,NULL)'
                             % self.name,(self.pack_source(k),))
         return self # iadd MUST RETURN SELF!
     def __isub__(self,k):
         if self.cursor.execute('delete from %s where %s=%%s'
-                               % (self.name,self._attrSQL('source_id')),
+                               % (self.name,self.sourceSQL),
                                (self.pack_source(k),))==0:
             raise KeyError('node not found in graph')
         return self # iadd MUST RETURN SELF!
     __setitem__ = graph_setitem
     def __contains__(self,k):
         return self.cursor.execute('select * from %s where %s=%%s'
-                                   %(self.name,self._attrSQL('source_id')),
+                                   %(self.name,self.sourceSQL),
                                    (self.pack_source(k),))>0
     def __invert__(self):
         'get an interface to the inverse graph mapping'
         try: # CACHED
             return self._inverse
         except AttributeError: # CONSTRUCT INTERFACE TO INVERSE MAPPING
-            self._inverse=SQLGraph(self.name,self.cursor, # SWAP SOURCE & TARGET
-                                   attrAlias=dict(source_id=self._attrSQL('target_id'),
-                                                  target_id=self._attrSQL('source_id'),
-                                                  edge_id=self._attrSQL('edge_id')),
+            attrAlias = dict(source_id=self.targetSQL, # SWAP SOURCE & TARGET
+                             target_id=self.sourceSQL,
+                             edge_id=self.edgeSQL)
+            if self.edgeSQL is None: # no edge interface
+                del attrAlias['edge_id']
+            self._inverse=SQLGraph(self.name,self.cursor,
+                                   attrAlias=attrAlias,
                                    **graph_db_inverse_refs(self))
             self._inverse._inverse=self
             return self._inverse
     def iteritems(self,myslice=slice(0,2)):
         for k in self:
-            result=(self.pack_source(k),SQLEdgeDict(k,self))
+            result=(self.pack_source(k),self._edgeClass(k,self))
             yield result[myslice]
     def keys(self): return [k for k in self]
     def itervalues(self): return self.iteritems(1)
@@ -853,7 +888,7 @@ class SQLGraph(SQLTableMultiNoCache):
     def __len__(self):
         'get number of nodes in graph'
         return self.cursor.execute('select distinct(%s) from %s'
-                                   %(self._attrSQL('source_id'),self.name))
+                                   %(self.sourceSQL,self.name))
     __cmp__ = graph_cmp
     override_rich_cmp(locals()) # MUST OVERRIDE __eq__ ETC. TO USE OUR __cmp__!
 ##     def __cmp__(self,other):
