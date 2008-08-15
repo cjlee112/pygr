@@ -313,8 +313,8 @@ NEED TO UPDATE THESE RESULTS
 >>> str(s)
 'TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA'
 >>> m = db.blast(s) # get alignment to all BLAST hits in db
->>> for src,dest,edge in m.edges(): # print out the alignment edges
-...     print src,repr(src),'\n',dest,repr(dest),e.pIdentity(),'\n'
+>>> for src,dest,edge in m[s].edges(): # print out the alignment edges
+...     print src,repr(src),'\n',dest,repr(dest),edge.pIdentity(),'\n'
 ... 
 TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPP CYGB_HUMAN[90:145] 
 TLVENLRDADKLNTIFNQMGKSHALRHKVDPVYFKILAGVILEVLVEAFPQCFSP CYGB_BRARE[87:142] 72
