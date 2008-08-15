@@ -26,6 +26,9 @@ def get_ori_letterunit(start,end,seq,gapchar='-'):
         letterunit=1
     return ori,letterunit
 
+class BlastIval(object):
+    pass
+
 class BlastHitParser(object):
     """reads alignment info from blastall standard output.
     Method parse_file(fo) reads file object fo, and generates tuples
@@ -97,24 +100,35 @@ class BlastHitParser(object):
                 This should not happen!  To ignore this error, please
                 create an attribute ignore_query_truncation on the
                 BlastHitParser object.""" % (self.query_seq,self.subject_seq)) 
-    def repr_tuple(self,q_start,q_end,s_start,s_end,
-                   query_ori,query_factor,subject_ori,subject_factor):
-        "return as tuple following our orientation, location conventions"
-        query_start=self.query_start+q_start*query_ori*query_factor
-        query_end=self.query_start+q_end*query_ori*query_factor
-        subject_start=self.subject_start+s_start*subject_ori*subject_factor
-        subject_end=self.subject_start+s_end*subject_ori*subject_factor
-        l=[self.hit_id,self.query_id,self.subject_id,self.blast_score,
-           self.e_value,self.identity_percent,query_ori,subject_ori]
+    def get_interval_obj(self, q_start, q_end, s_start, s_end,
+                         query_ori, query_factor, subject_ori, subject_factor):
+        "return interval result as an object with attributes"
+        o = BlastIval()
+        o.hit_id = self.hit_id
+        o.src_id = self.query_id
+        o.dest_id = self.subject_id
+        o.blast_score = self.blast_score
+        o.e_value = self.e_value
+        o.percent_id = self.identity_percent
+        o.src_ori = query_ori
+        o.dest_ori = subject_ori
+        query_start = self.query_start+q_start*query_ori*query_factor
+        query_end = self.query_start+q_end*query_ori*query_factor
+        subject_start = self.subject_start+s_start*subject_ori*subject_factor
+        subject_end = self.subject_start+s_end*subject_ori*subject_factor
         if query_start<query_end:
-            l+=(query_start,query_end)
+            o.src_start = query_start
+            o.src_end = query_end
         else:
-            l+=(query_end,query_start)
+            o.src_start = query_end
+            o.src_end = query_start
         if subject_start<subject_end:
-            l+=(subject_start,subject_end)
+            o.dest_start = subject_start
+            o.dest_end = subject_end
         else:
-            l+=(subject_end,subject_start)
-        return tuple(l)
+            o.dest_start = subject_end
+            o.dest_end = subject_start
+        return o
     def is_valid_hit(self):
         return self.query_seq and self.subject_seq
     def generate_intervals(self):
@@ -130,9 +144,10 @@ class BlastHitParser(object):
         for i in range(len(self.query_seq)): # SCAN ALIGNMENT FOR GAPS
             if self.query_seq[i]==self.gapchar or self.subject_seq[i]==self.gapchar:
                 if q_start>=0: # END OF AN UNGAPPED INTERVAL
-                    yield self.repr_tuple(q_start,i_query,s_start,i_subject,
-                                          query_ori,query_factor,
-                                          subject_ori,subject_factor)
+                    yield self.get_interval_obj(q_start, i_query,
+                                                s_start, i_subject,
+                                                query_ori, query_factor,
+                                                subject_ori, subject_factor)
                 q_start= -1
             elif q_start<0: # START OF AN UNGAPPED INTERVAL
                 q_start=i_query
@@ -142,9 +157,10 @@ class BlastHitParser(object):
             if self.subject_seq[i]!=self.gapchar: # COUNT SUBJECT LETTERS
                 i_subject+=1
         if q_start>=0: # REPORT THE LAST INTERVAL
-            yield self.repr_tuple(q_start,i_query,s_start,i_subject,
-                                  query_ori,query_factor,
-                                  subject_ori,subject_factor)
+            yield self.get_interval_obj(q_start, i_query,
+                                        s_start, i_subject,
+                                        query_ori, query_factor,
+                                        subject_ori, subject_factor)
     def parse_file(self,myfile):
         "generate interval tuples by parsing BLAST output from myfile"
         for line in myfile:

@@ -28,4 +28,6 @@ extern CDictEntry *cdict_getitem(CDict *d,int k);
 extern CGraph *cgraph_alloc(int n);
 extern int cgraph_free(CGraph *d);
 extern CGraphEntry *cgraph_getitem(CGraph *d,int k);
+extern int *calloc_int(int n);
+
 

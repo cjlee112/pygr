@@ -30,19 +30,13 @@ def tryPathList(filepath,pathlist,mode='r'):
 
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
-    def __init__(self,table,id):
-        SQLRow.__init__(self,table,id)
+    def __init__(self, id):
+        SQLRow.__init__(self, id)
         SequenceBase.__init__(self)
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return self._select('substring(%s FROM %d FOR %d)'
                             %(self.db._attrSQL('seq'),start+1,end-start))
-    def __getattr__(self,attr):
-        'both parent classes have getattr, so have to call both'
-        try:
-            return SQLRow.__getattr__(self,attr)
-        except AttributeError:
-            return SequenceBase.__getattr__(self,attr)
 
 class DNASQLSequence(SQLSequence):
     _seqtype=DNA_SEQTYPE
@@ -348,28 +342,6 @@ def blast_program(query_type,db_type):
     return progs[query_type][db_type]
 
 
-class BlastIval(TupleO):
-    "Wrap a tuple with same attribute names as poa.IntervalTransform.repr_dict"
-    _attrcol={'hit_id':0, 'src_id':1, 'dest_id':2, 'blast_score':3, 'e_value':4,
-              'percent_id':5, 'src_ori':6,'dest_ori':7,
-              'src_start':8, 'src_end':9,'dest_start':10,'dest_end':11}
-
-class BlastHitInfo(TupleO):
-    _attrcol={'blast_score':0,'e_value':1,'percent_id':2}
-    def __init__(self,ival):
-        "save edge info from ival onto our TupleO"
-        ei=len(self._attrcol)*[None] # RIGHT LENGTH LIST
-        for a,i in self._attrcol.items():
-            try:
-                ei[i]=getattr(ival,a) # CONSTRUCT ATTRS IN RIGHT ORDER
-            except AttributeError:
-                pass # OK FOR ival TO LACK SOME ATTRIBUTES...
-        TupleO.__init__(self,ei)
-        
-    def repr_dict(self):
-        return {'blast_score':self.data[0],'e_value':self.data[1],
-                'percent_id':self.data[2]}
-
 def get_interval(seq,start,end,ori):
     "trivial function to get the interval seq[start:end] with requested ori"
     ival=seq[start:end]
@@ -377,7 +349,7 @@ def get_interval(seq,start,end,ori):
         ival= -ival
     return ival
 
-def save_interval_alignment(m,ival,srcSet,destSet=None,edgeClass=BlastHitInfo,
+def save_interval_alignment(m, ival, srcSet, destSet=None, edgeClass=None,
                             ivalXform=get_interval):
     "Add ival to alignment m, with edge info if requested"
     if destSet is None:
@@ -398,18 +370,13 @@ def read_interval_alignment(ofile,srcSet,destSet,al=None,edgeClass=None):
     "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
     needToBuild=False
     if al is None:
-        try:
-            import cnestedlist
-            al=cnestedlist.NLMSA('blasthits','memory',pairwiseMode=True)
-            edgeClass=None
-            needToBuild=True
-        except ImportError:
-            print 'WARNING: import cnestedlist failed. Using old-style PathMapping()'
-            al=PathMapping()
-            edgeClass=BlastHitInfo
+        import cnestedlist
+        al=cnestedlist.NLMSA('blasthits','memory',pairwiseMode=True)
+        edgeClass=None
+        needToBuild=True
     p=BlastHitParser()
-    for t in p.parse_file(ofile):
-        save_interval_alignment(al,BlastIval(t),srcSet,destSet,edgeClass)
+    for ival in p.parse_file(ofile):
+        save_interval_alignment(al, ival, srcSet, destSet, edgeClass)
     if p.nline==0: # NO BLAST OUTPUT??
         raise IOError('no BLAST output.  Check that blastall is in your PATH')
     if needToBuild:
@@ -830,43 +797,9 @@ class BlastDB(BlastDBbase):
 
 
 
-class StoredPathMapping(PathMapping):
-    _edgeClass=BlastHitInfo
-    def __init__(self,table,srcSet,destSet,edgeClass=None):
-        PathMapping.__init__(self)
-        self.table=table
-        self.srcSet=srcSet
-        self.destSet=destSet
-        if edgeClass is not None:
-            self._edgeClass=edgeClass
-
-    def __getitem__(self,p):
-        "Get mapping of a path, using stored table if necessary"
-        try: # RETURN STORED MAPPING
-            return PathMapping.__getitem__(self,p)
-        except KeyError: # TRY TO GET IT FROM THE STORED TABLE
-            for ival in self.table[p.path.id]: # READ INTERVAL MAPPINGS ONE BY ONE
-                save_interval_alignment(self,ival,self.srcSet,self.destSet,
-                                        self._edgeClass) # SAVE IT
-            return PathMapping.__getitem__(self,p) # RETURN TOTAL RESULT
-
-    def all_paths(self):
-        "Get all source sequences in this mapping"
-        for id in self.table:
-            p=self.srcSet[id]
-            yield p
-
-    # NEED TO ADD APPROPRIATE HOOKS FOR __iter__, items(), ETC.
-
 def getAnnotationAttr(self,attr):
     'forward attributes from slice object if available'
-    try:
-        return SeqPath.__getattr__(self,attr)
-    except AttributeError:
-        try:
-            return self.db.getSliceAttr(self.db.sliceDB[self.id],attr)
-        except KeyError:
-            raise AttributeError
+    return self.db.getSliceAttr(self.db.sliceDB[self.id], attr)
 
 def annotation_repr(self):
     if self.annotationType is not None:
@@ -1263,69 +1196,6 @@ class VirtualSeqDB(dict):
             s=VirtualSeq(k)
             self[k]=s
             return s
-
-
-class TempMAFIntervalDict(object):
-    "placeholder for generating edges that map a given interval to its targets"
-    def __init__(self,map,ival):
-        self.map=map
-        self.ival=ival
-    def edges(self):
-        "get all mappings of this interval"
-        return self.map.edges(self.ival)
-
-def MAF_get_interval(seq,start,end,ori):
-    "Alex's reverse intervals are shifted by one, so correct them..."
-    if ori== -1:
-        return get_interval(seq,start-1,end-1,ori)
-    else:
-        return get_interval(seq,start,end,ori)
-
-class MAFStoredPathMapping(PathMapping):
-    def __init__(self,ival,table,dbset,vdbset=None):
-        """Load all alignments that overlap ival, from the database table,
-        using dbset as the interface to all of the sequences.
-        """
-        if vdbset is None: # CREATE A VIRTUAL SEQ DB FOR REFERENCE SEQUENCES
-            vdbset=VirtualSeqDB()
-        PathMapping.__init__(self)
-        self.ival=ival
-        self.table=table
-        self.dbset=dbset
-        vseqs={}
-        self.vseqs=vseqs
-        id=dbset.getName(ival.path)
-        start,stop=ival._abs_interval # GET ABSOLUTE COORDINATES
-        for i in table.select('where src_id=%s and src_start<%s and src_end>%s',
-                              (id,stop,start)):  # SAVE MAPPING TO vdbset
-            save_interval_alignment(self,i,dbset,vdbset,None,MAF_get_interval)
-            vseqs[i.dest_id]=None # KEEP TRACK OF ALL OUR VIRTUAL SEQUENCES...
-        for vseqID in vseqs: # GET EVERYTHING THAT OUR vseqs MAP TO...
-            for i in table.select('where src_id=%s',(vseqID,)): # SAVE MAPPING TO dbset
-                if i.src_id==vseqID: # FILTER OUT MYSQL'S CASE-INSENSITIVE MATCHES!!!
-                    save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
-
-# THIS VERSION FAILS IF vseqs HAS TOO MANY ENTRIES!!
-##         for i in table.select('where src_id in %s'%(str(tuple(vseqs.keys()+['None'])))): # SAVE MAPPING TO dbset
-##             if vseqs.has_key(i.src_id): # FILTER OUT MYSQL'S CASE-INSENSITIVE MATCHES!!!
-##                 save_interval_alignment(self,i,vdbset,dbset,None,MAF_get_interval)
-
-    def __getitem__(self,k):
-        return TempMAFIntervalDict(self,k)
-
-    def edges(self,ival=None):
-        "get all mappings of self.ival, as edges"
-        if ival is None:
-            ival=self.ival
-        try:
-            edgeset=PathMapping.__getitem__(self,ival)
-        except KeyError: # OK, ACTUALLY NO RESULTS
-            print 'KeyError: no results?'
-            return # SO NOTHING TO YIELD...
-        for e in edgeset.edges():
-            for e2 in PathMapping.__getitem__(self,e.destPath).edges():
-                if e2.destPath.path!=ival.path: # IGNORE SELF-MATCH
-                    yield IntervalTransform(e.reverse(e2.srcPath),e2.destPath)
 
 
 class KeepUniqueDict(dict):

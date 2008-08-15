@@ -21,30 +21,48 @@ class OneTimeDescriptor(object):
 class ItemDescriptor(object):
     'provides shadow attribute for items in a db, based on schema'
     def __init__(self,attrName,invert=False,getEdges=False,mapAttr=None,
-                 targetAttr=None,**kwargs):
+                 targetAttr=None,uniqueMapping=False,**kwargs):
         self.attr=attrName
         self.invert=invert
         self.getEdges=getEdges
         self.mapAttr=mapAttr
         self.targetAttr=targetAttr
-    def __get__(self,obj,objtype):
+        self.uniqueMapping = uniqueMapping
+    def get_target(self,obj):
+        'return the mapping object for this schema relation'
         try:
-            id=obj.db._persistent_id # GET RESOURCE ID OF DATABASE
+            id = obj.db._persistent_id # GET RESOURCE ID OF DATABASE
         except AttributeError:
             raise AttributeError('attempt to access pygr.Data attr on non-pygr.Data object')
-        targetDict=getResource.schemaAttr(id,self.attr) # ATTEMPT TO GET FROM pygr.Data
+        targetDict = getResource.schemaAttr(id,self.attr) # ATTEMPT TO GET FROM pygr.Data
         if self.invert:
-            targetDict= ~targetDict
+            targetDict = ~targetDict
         if self.getEdges:
-            targetDict=targetDict.edges
+            targetDict = targetDict.edges
+        return targetDict
+    def __get__(self,obj,objtype):
+        targetDict = self.get_target(obj)
         if self.mapAttr is not None: # USE mapAttr TO GET ID FOR MAPPING obj
-            result=targetDict[getattr(obj,self.mapAttr)]
+            obj_id = getattr(obj,self.mapAttr)
+            if obj_id is None: # None MAPS TO None, SO RETURN IMMEDIATELY
+                return None # DON'T BOTHER CACHING THIS
+            result=targetDict[obj_id] # MAP USING THE SPECIFIED MAPPING
         else:
             result=targetDict[obj] # NOW PERFORM MAPPING IN THAT RESOURCE...
         if self.targetAttr is not None:
             result=getattr(result,self.targetAttr) # GET ATTRIBUTE OF THE result
-        obj.__dict__[self.attr]=result # PROVIDE DIRECTLY TO THE __dict__
+        obj.__dict__[self.attr]=result # CACHE IN THE __dict__
         return result
+
+class ItemDescriptorRW(ItemDescriptor):
+    def __set__(self,obj,newTarget):
+        if not self.uniqueMapping:
+            raise PygrDataSchemaError('''You attempted to directly assign to a graph mapping
+(x.graph = y)! Instead, treat the graph like a dictionary: x.graph[y] = edgeInfo''')
+        targetDict = self.get_target(obj)
+        targetDict[obj] = newTarget
+        obj.__dict__[self.attr] = newTarget # CACHE IN THE __dict__
+
 
 class ForwardingDescriptor(object):
     'forward an attribute request to item from another container'
@@ -101,7 +119,9 @@ class PygrDataEmptyError(ValueError):
 class PygrDataReadOnlyError(ValueError):
     'attempt to write data to a read-only resource database'
     pass
-
+class PygrDataSchemaError(ValueError):
+    "attempt to set attribute to an object not in the database bound by schema"
+    pass
 
 class PygrPickler(pickle.Pickler):
     def persistent_id(self,obj):
@@ -762,6 +782,13 @@ so report the reproducible steps to this error message as a bug report.''' % res
     def has_pending(self):
         'return True if there are resources pending to be committed'
         return len(self.pendingData)>0 or len(self.pendingSchema)>0
+    def get_pending_or_find(self,resID,**kwargs):
+        'find resID even if only pending (not actually saved yet)'
+        try: # 1st LOOK IN PENDING QUEUE
+            return self.pendingData[resID][0]
+        except KeyError:
+            pass
+        return self(resID,**kwargs)
     def save_pending(self,layer=None):
         'save any pending pygr.Data resources and schema'
         if layer is not None:
@@ -942,17 +969,17 @@ so report the reproducible steps to this error message as a bug report.''' % res
             return obj._ignoreShadowAttr[attr] # IF PRESENT, NOTHING TO DO
         except (AttributeError,KeyError):
             pass # PROCEED AS NORMAL
-        from classutil import get_shadow_class
+        from classutil import get_bound_subclass
         if itemRule: # SHOULD BIND TO ITEMS FROM obj DATABASE
-            targetClass = get_shadow_class(obj,'itemClass') # CLASS USED FOR CONSTRUCTING ITEMS
+            targetClass = get_bound_subclass(obj,'itemClass') # CLASS USED FOR CONSTRUCTING ITEMS
             descr=ItemDescriptor(attr,**kwargs)
         else: # SHOULD BIND DIRECTLY TO obj VIA ITS CLASS
-            targetClass = get_shadow_class(obj)
+            targetClass = get_bound_subclass(obj)
             descr=OneTimeDescriptor(attr,**kwargs)
         setattr(targetClass,attr,descr) # BIND descr TO targetClass.attr
         if itemRule:
             try: # BIND TO itemSliceClass TOO, IF IT EXISTS...
-                targetClass = get_shadow_class(obj,'itemSliceClass')
+                targetClass = get_bound_subclass(obj,'itemSliceClass')
             except AttributeError:
                 pass # NO itemSliceClass, SO SKIP
             else: # BIND TO itemSliceClass
@@ -1074,6 +1101,14 @@ class SchemaPath(ResourcePath):
         getResource.queue_schema_obj(self,name,self._layer,schema) # QUEUE IT
     def __delattr__(self,attr):
         raise NotImplementedError('schema deletion is not yet implemented.')
+    def set_attr_mapping(self,attr,targetDB,mapAttr=None):
+        'bind attr to targetDB[getattr(self,mapAttr)]; mapAttr default is attr+"_id"'
+        if idAttr is None: # CREATE DEFAULT 
+            mapAttr = attr+'_id'
+        b = ItemRelation(targetDB)
+        b.saveSchema(self._path,attr,self._layer,dict(mapAttr=mapAttr))
+    def del_attr_mapping(self,attr):
+        raise NotImplementedError('schema deletion is not yet implemented.')
 SchemaPath._pathClass=SchemaPath
 
 class ResourceLayer(object):
@@ -1089,23 +1124,29 @@ class ResourceLayer(object):
 class DirectRelation(object):
     'bind an attribute to the target'
     def __init__(self,target):
-        self.target=getID(target)
+        self.targetID = getID(target)
     def schemaDict(self):
-        return dict(targetID=self.target)
+        return dict(targetID=self.targetID)
     def saveSchema(self,source,attr,layer=None,**kwargs):
-        d=self.schemaDict()
+        d = self.schemaDict()
         d.update(kwargs) # ADD USER-SUPPLIED ARGS
+        try: # IF kwargs SUPPLIED A TARGET, SAVE ITS ID
+            d['targetID'] = getID(d['targetDB'])
+            del d['targetDB']
+        except KeyError:
+            pass
         getResource.saveSchema(getID(source),attr,d,layer)
 
 class ItemRelation(DirectRelation):
     'bind item attribute to the target'
     def schemaDict(self):
-        return dict(targetID=self.target,itemRule=True)
+        return dict(targetID=self.targetID,itemRule=True)
 
 class ManyToManyRelation(object):
     'a general graph mapping from sourceDB -> targetDB with edge info'
     _relationCode='many:many'
-    def __init__(self,sourceDB,targetDB,edgeDB=None,bindAttrs=None):
+    def __init__(self,sourceDB,targetDB,edgeDB=None,bindAttrs=None,
+                 sourceNotNone=None,targetNotNone=None):
         self.sourceDB=getID(sourceDB) # CONVERT TO STRING RESOURCE ID
         self.targetDB=getID(targetDB)
         if edgeDB is not None:
@@ -1113,24 +1154,36 @@ class ManyToManyRelation(object):
         else:
             self.edgeDB=None
         self.bindAttrs=bindAttrs
-    def saveSchema(self,source,attr,layer=None):
-        'save schema bindings associated with this rule'
-        source=source.getPath(attr) # GET STRING ID FOR source
-        self.name = source
+        if sourceNotNone is not None:
+            self.sourceNotNone = sourceNotNone
+        if targetNotNone is not None:
+            self.targetNotNone = targetNotNone
+    def save_graph_bindings(self,graphDB,attr,layer=None):
+        'save standard schema bindings to graphDB attributes sourceDB, targetDB, edgeDB'
+        graphDB = graphDB.getPath(attr) # GET STRING ID FOR source
+        self.name = graphDB
         getResource.saveSchemaEdge(self,layer) #SAVE THIS RULE
-        b=DirectRelation(self.sourceDB) # SAVE sourceDB BINDING
-        b.saveSchema(source,'sourceDB',layer)
-        b=DirectRelation(self.targetDB) # SAVE targetDB BINDING
-        b.saveSchema(source,'targetDB',layer)
+        b = DirectRelation(self.sourceDB) # SAVE sourceDB BINDING
+        b.saveSchema(graphDB,'sourceDB',layer)
+        b = DirectRelation(self.targetDB) # SAVE targetDB BINDING
+        b.saveSchema(graphDB,'targetDB',layer)
         if self.edgeDB is not None: # SAVE edgeDB BINDING
-            b=DirectRelation(self.edgeDB)
-            b.saveSchema(source,'edgeDB',layer)
+            b = DirectRelation(self.edgeDB)
+            b.saveSchema(graphDB,'edgeDB',layer)
+        return graphDB
+    def saveSchema(self,path,attr,layer=None):
+        'save schema bindings associated with this rule'
+        graphDB = self.save_graph_bindings(path,attr,layer)
         if self.bindAttrs is not None:
-            bindObj=(self.sourceDB,self.targetDB,self.edgeDB)
-            bindArgs=({},dict(invert=True),dict(getEdges=True))
+            bindObj = (self.sourceDB,self.targetDB,self.edgeDB)
+            bindArgs = [{},dict(invert=True),dict(getEdges=True)]
+            try: # USE CUSTOM INVERSE SCHEMA IF PROVIDED BY TARGET DB
+                bindArgs[1] = getResource.get_pending_or_find(graphDB)._inverse_schema()
+            except AttributeError:
+                pass
             for i in range(3):
                 if len(self.bindAttrs)>i and self.bindAttrs[i] is not None:
-                    b=ItemRelation(source) # SAVE ITEM BINDING
+                    b = ItemRelation(graphDB) # SAVE ITEM BINDING
                     b.saveSchema(bindObj[i],self.bindAttrs[i],
                                  layer,**bindArgs[i])
     def delschema(self,resourceDB):
@@ -1161,10 +1214,10 @@ class InverseRelation(DirectRelation):
         DirectRelation.saveSchema(self,source,'inverseDB',
                                   layer,**kwargs) # source -> target
         b=DirectRelation(source) # CREATE REVERSE MAPPING
-        b.saveSchema(self.target,'inverseDB',
+        b.saveSchema(self.targetID,'inverseDB',
                      layer,**kwargs) # target -> source
     def delschema(self,resourceDB):
-        resourceDB.delschema(self.target,'inverseDB')
+        resourceDB.delschema(self.targetID,'inverseDB')
         
 def getID(obj):
     'get persistent ID of the object or raise AttributeError'
@@ -1210,6 +1263,7 @@ schema = SchemaPath() # ROOT OF OUR SCHEMA NAMESPACE
 
 # PROVIDE TOP-LEVEL NAMES IN OUR RESOURCE HIERARCHY
 Bio = ResourcePath('Bio')
+Life = ResourcePath('Life')
 
 
 # TOP-LEVEL NAMES FOR STANDARDIZED LAYERS

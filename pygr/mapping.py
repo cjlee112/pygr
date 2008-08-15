@@ -665,15 +665,15 @@ class IDNodeDictWriteback(IDNodeDict):
         self.graph.d[self.fromNode] = d # WRITE IT BACK... REQUIRED FOR SHELVE
 
 class IDNodeDictWriteNow(IDNodeDictWriteback):
-    'opens shelve for writing, writes an item, immediately reopens read-only'
+    'opens shelve for writing, writes an item, immediately reopens'
     def __setitem__(self,target,edgeInfo):
         self.graph.d.reopen('w')
         IDNodeDictWriteback.__setitem__(self,target,edgeInfo)
-        self.graph.d.reopen('r')
+        self.graph.d.reopen('w')
     def __delitem__(self,target):
         self.graph.d.reopen('w')
         IDNodeDictWriteback.__delitem__(self,target)
-        self.graph.d.reopen('r')
+        self.graph.d.reopen('w')
 
 class IDGraphEdges(object):
     '''provides iterator over edges as (source,target,edge) tuples
