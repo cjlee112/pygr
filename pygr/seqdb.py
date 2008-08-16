@@ -532,6 +532,9 @@ class BlastDBbase(SeqDBbase):
             ifile.close() # THIS SIGNALS WE'RE COMPLETELY DONE CONSTRUCTING THIS RESOURCE
         classutil.apply_itemclass(self,kwargs)
 
+    def __repr__(self):
+        return "<BlastDBbase '%s'>" % (self.filepath)
+
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     _pickleAttrs = dict(filepath=0,skipSeqLenDict=0,blastIndexPath=0)
 
@@ -774,7 +777,8 @@ class BlastDB(BlastDBbase):
                     return id # OK, FOUND A MAPPING TO REAL ID
             except KeyError:
                 pass # KEEP TRYING...
-        raise KeyError # FOUND NO MAPPING, SO RAISE EXCEPTION
+        # FOUND NO MAPPING, SO RAISE EXCEPTION            
+        raise KeyError, "no key '%s' in database %s" % (bogusID, repr(self),)
 
     def __getitem__(self,id):
         "Get sequence matching this ID, using dict as local cache"
@@ -795,7 +799,8 @@ class BlastDB(BlastDBbase):
             dict.__setitem__(self,id,s) # CACHE IT
             return s
 
-
+    def __repr__(self):
+        return "<BlastDB '%s'>" % (self.filepath)
 
 def getAnnotationAttr(self,attr):
     'forward attributes from slice object if available'
@@ -1308,7 +1313,10 @@ Set trypath to give a list of directories to search.'''
         try: # TRY TO USE int KEY FIRST
             return d[int(id)]
         except (ValueError,KeyError,TypeError): # USE DEFAULT str KEY
-            return d[id]
+            try:
+                return d[id]
+            except KeyError:
+                raise KeyError, "no key '%s' in %s" % (k, repr(self),)
 
     def __contains__(self,k):
         "test whether ID in union; also check whether seq key in one of our DBs"
