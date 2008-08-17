@@ -4,7 +4,6 @@ from sqlgraph import *
 from poa import *
 from parse_blast import *
 import classutil
-import UserDict
 
 def tryPathList(filepath,pathlist,mode='r'):
     'return successful path based on trying pathlist locations'
@@ -428,7 +427,7 @@ class BlastDBinverse(object):
         except AttributeError:
             return False
 
-class SeqDBbase(UserDict.DictMixin, dict):
+class SeqDBbase(dict):
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __setstate__(self,state):
@@ -478,47 +477,6 @@ class SeqDBbase(UserDict.DictMixin, dict):
                     ival.append(s)
                 return s[start-ival[0]:stop-ival[0]]
         raise IndexError('interval not found in cache')
-
-    # these methods should all be implemented on all SeqDBs.
-    def __len__(self):
-        raise NotImplementedError
-    def __getitem__(self, key):
-        raise NotImplementedError
-    def __iter__(self):
-        raise NotImplementedError
-    def __contains__(self, key):
-        raise NotImplementedError
-    def keys(self):
-        raise NotImplementedError
-    
-#    def values(self):
-#        raise NotImplementedError
-#    def items(self):
-#        raise NotImplementedError
-#    def has_key(self, key):
-#        raise NotImplementedError
-#    def get(self, key, defaultvalue):
-#        raise NotImplementedError
-#    def iterkeys(self):
-#        raise NotImplementedError
-#    def itervalues(self):
-#        raise NotImplementedError
-#    def iteritems(self):
-#        raise NotImplementedError
-
-    # these methods should not be implemented for read-only database.
-    def clear(self):
-        raise NotImplementedError, "read only dict"
-    def setdefault(self):
-        raise NotImplementedError, "read only dict"
-    def pop(self):
-        raise NotImplementedError, "read only dict"
-    def popitem(self):
-        raise NotImplementedError, "read only dict"
-    def copy(self):
-        raise NotImplementedError, "read only dict"
-    def update(self, other):
-        raise NotImplementedError, "read only dict"
 
 class SeqDBDescriptor(object):
     'forwards attribute requests to self.pathForward'
@@ -706,12 +664,6 @@ class BlastDBbase(SeqDBbase):
             s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
             dict.__setitem__(self,id,s) # CACHE IT
             return s
-
-    def keys(self):
-        return self.seqLenDict.keys()
-
-    def __contains__(self, key):
-        return key in self.seqLenDict
 
     def warn_about_self_masking(self,seq,methodname='blast'):
         try:
@@ -1314,7 +1266,7 @@ class PrefixUnionMemberDict(dict):
             except AttributeError:
                 raise KeyError('key not a member of this union!')
 
-class PrefixUnionDict(object, UserDict.DictMixin):
+class PrefixUnionDict(object):
     """union interface to a series of dicts, each assigned a unique prefix
        ID 'foo.bar' --> ID 'bar' in dict f associated with prefix 'foo'."""
     def __init__(self,prefixDict=None,separator='.',filename=None,
@@ -1354,7 +1306,7 @@ Set trypath to give a list of directories to search.'''
         except ValueError: # id CONTAINS separator CHARACTER?
             t = k.split(self.separator)
             if len(t)<2:
-                raise KeyError('invalid id format; no prefix: '+k)
+                raise ValueError('invalid id format; no prefix: '+k)
             prefix = t[0] # ASSUME PREFIX DOESN'T CONTAIN separator
             id = k[len(prefix)+1:] # SKIP PAST PREFIX
         d=self.prefixDict[prefix]
@@ -1369,10 +1321,7 @@ Set trypath to give a list of directories to search.'''
     def __contains__(self,k):
         "test whether ID in union; also check whether seq key in one of our DBs"
         if isinstance(k,str):
-            try:
-                (prefix,id) = k.split(self.separator)
-            except ValueError:
-                return False
+            (prefix,id) =k.split(self.separator)
             return id in self.prefixDict[prefix]
         else: # TREAT KEY AS A SEQ, CHECK IF IT IS FROM ONE OF OUR DB
             try:
@@ -1381,20 +1330,11 @@ Set trypath to give a list of directories to search.'''
                 raise AttributeError('key must be a sequence with db attribute!')
             return db in self.dicts
 
-    def has_key(self,k):
-        return self.__contains__(k)
-
     def __iter__(self):
         "generate union of all dicts IDs, each with appropriate prefix."
         for p,d in self.prefixDict.items():
             for id in d:
                 yield p+self.separator+id
-
-    def keys(self):
-        return list(self.iterkeys())
-
-    def iterkeys(self):
-        return iter(self)
     
     def iteritems(self):
         "generate union of all dicts items, each id with appropriate prefix."
