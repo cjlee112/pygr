@@ -93,10 +93,12 @@ def run_all_tests(tests):
         if p.returncode != 0:
             if stdout.endswith('PROTEST_SKIPTEST\n'):
                 skipped.append((modname, klassname, testname))
+                sys.stdout.write('S')
             else:
                 errors.append((modname, klassname, testname, stdout, stderr))
-                
-        sys.stdout.write('.')
+                sys.stdout.write('E')
+        else:
+            sys.stdout.write('.')
         sys.stdout.flush()
     
     print
