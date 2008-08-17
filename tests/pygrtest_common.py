@@ -64,7 +64,7 @@ if record_code_coverage:
     os.environ['_PYGRTEST_FIGLEAF_ON'] = 'yes'
 
     def save_figleaf_info():
-	figleaf.stop()
-	figleaf.write_coverage('.figleaf')
+        figleaf.stop()
+        figleaf.write_coverage('.figleaf')
 
     atexit.register(save_figleaf_info)

@@ -134,12 +134,12 @@ class SQLGraph_Test(Mapping_Test):
     def setup(self):
         from pygr import sqlgraph
         import MySQLdb # TEST WILL BE SKIPPED IF UNAVAILABLE
-	tempcurs = sqlgraph.getNameCursor('nothing')[1]
-	try: # Make the test db
-	    tempcurs.execute("""create database _pygrtestdb;""")
-	except MySQLdb.ProgrammingError: # Delete if exists and create again
-	    tempcurs.execute("""drop database _pygrtestdb;""")
-	    tempcurs.execute("""create database _pygrtestdb;""")
+        tempcurs = sqlgraph.getNameCursor('nothing')[1]
+        try: # Make the test db
+            tempcurs.execute("""create database _pygrtestdb;""")
+        except MySQLdb.ProgrammingError: # Delete if exists and create again
+            tempcurs.execute("""drop database _pygrtestdb;""")
+            tempcurs.execute("""create database _pygrtestdb;""")
         try:
             self.datagraph = sqlgraph.SQLGraph('_pygrtestdb.dumbo_foo_test',
                                                createTable=dict(source_id='int',

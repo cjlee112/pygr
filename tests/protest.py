@@ -107,15 +107,15 @@ def run_all_tests(tests):
         print 'SKIPPED: %s.%s.%s()' % (modname, klassname, testname)
     for modname, klassname, testname, stdout, stderr in errors:
         print '-'*60
-	print 'FAILED:%s.%s.%s()' % (modname,klassname,testname)
-	print '-'*60
-	print 'OUTPUT:'
-	print stdout
+        print 'FAILED:%s.%s.%s()' % (modname,klassname,testname)
+        print '-'*60
+        print 'OUTPUT:'
+        print stdout
         print 'STDERR:'
         print stderr
         
     print '\n\n\nFINAL: %d error(s) in %d tests, %d skipped in %2.3f sec' \
-	  % (len(errors), len(tests), len(skipped), time.time() - start_time)
+          % (len(errors), len(tests), len(skipped), time.time() - start_time)
 
 if __name__ == '__main__':
     scriptName = sys.argv[0]
