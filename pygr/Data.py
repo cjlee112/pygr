@@ -123,10 +123,21 @@ class PygrDataSchemaError(ValueError):
     "attempt to set attribute to an object not in the database bound by schema"
     pass
 
+class PygrDataNoModuleError(pickle.PickleError):
+    'attempt to pickle a class from a non-importable module'
+    pass
+
 class PygrPickler(pickle.Pickler):
     def persistent_id(self,obj):
         'convert objects with _persistent_id to PYGR_ID strings during pickling'
         import types
+        try: # check for unpicklable class (i.e. not loaded via a module import)
+            if isinstance(obj, types.TypeType) and obj.__module__ == '__main__':
+                raise PygrDataNoModuleError('''You cannot pickle a class from __main__!
+To make this class (%s) picklable, it must be loaded via a regular import
+statement.''' % obj.__name__)
+        except AttributeError:
+            pass
         try:
             if not isinstance(obj,types.TypeType) and obj is not self.root:
                 try:
@@ -1331,7 +1342,7 @@ else:
 try:
     nonPortableClasses
 except NameError: # DEFAULT LIST OF CLASSES NOT PORTABLE TO REMOTE CLIENTS
-    from pygr.classutil import SourceFileName
+    from classutil import SourceFileName
     nonPortableClasses = [SourceFileName]
 
 

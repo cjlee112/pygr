@@ -281,3 +281,20 @@ class XMLRPC_Test(PygrSwissprotBase):
         self.server.close()
         PygrSwissprotBase.teardown(self)
 
+class InvalidPickle_Test(object):
+    def setup(self):
+        class MyUnpicklableClass(object):
+            pass
+        MyUnpicklableClass.__module__ = '__main__'
+        self.bad = MyUnpicklableClass()
+        import datetime
+        self.good = datetime.datetime.today()
+    def main_pickle_test(self):
+        import pygr.Data
+        s = pygr.Data.dumps(self.good) # should pickle with no errors
+        try:
+            s = pygr.Data.dumps(self.bad) # should raise exception
+            raise ValueError('failed to catch bad attempt to invalid module ref')
+        except pygr.Data.PygrDataNoModuleError:
+            pass
+        
