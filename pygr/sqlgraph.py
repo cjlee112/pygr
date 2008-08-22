@@ -196,8 +196,8 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
             sysdrv = os.environ.get('SYSTEMDRIVE')
             configFile = get_valid_path((windir, 'my.ini'),
                                         (windir, 'my.cnf'),
-                                        (sysdrv, '\my.ini'),
-                                        (sysdrv, '\my.cnf'))
+                                        (sysdrv, os.path.sep + 'my.ini'),
+                                        (sysdrv, os.path.sep + 'my.cnf'))
         else: # treat as normal platform with $HOME defined
             homedir = os.environ.get('HOME')
             configFile = os.path.join(homedir, '.my.cnf')
