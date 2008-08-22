@@ -1,5 +1,17 @@
+#! /usr/bin/env python
+"""
+Test runner for main pygr tests.
+"""
 
-import sys,os,nose
+import sys
+import os
+import nose
+import os.path
+import subprocess
+
+import pygrtest_common
+
+#########
 
 pythonExe = sys.executable
 
@@ -71,37 +83,39 @@ def run_all_tests(tests):
     start_time = time.time()
     errors = []
     skipped = []
-    tmpfiles = {}
     for modname,klassname,testname in tests:
-        outfile = 'err%d.tmp' % len(errors)
-        tmpfiles[outfile] = 0
-        if os.system('%s %s --test %s %s %s >%s'
-                     % (pythonExe,scriptName,modname,klassname,testname,outfile))!=0:
-            ifile = file(outfile)
-            if ifile.read().endswith('PROTEST_SKIPTEST\n'):
-                skipped.append((modname,klassname,testname,outfile))
+        p = subprocess.Popen([pythonExe, scriptName, '--test',
+                              modname, klassname, testname],
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        
+        (stdout, stderr) = p.communicate()
+        if p.returncode != 0:
+            if stdout.endswith('PROTEST_SKIPTEST\n'):
+                skipped.append((modname, klassname, testname))
+                sys.stdout.write('S')
             else:
-                errors.append((modname,klassname,testname,outfile))
-            ifile.close()
-        print '.',
+                errors.append((modname, klassname, testname, stdout, stderr))
+                sys.stdout.write('E')
+        else:
+            sys.stdout.write('.')
         sys.stdout.flush()
+    
     print
     print '='*60
-    for modname,klassname,testname,outfile in skipped:
-        print 'SKIPPED: %s.%s.%s()' % (modname,klassname,testname)
-    for modname,klassname,testname,outfile in errors:
+    for modname, klassname, testname in skipped:
+        print 'SKIPPED: %s.%s.%s()' % (modname, klassname, testname)
+    for modname, klassname, testname, stdout, stderr in errors:
         print '-'*60
         print 'FAILED:%s.%s.%s()' % (modname,klassname,testname)
         print '-'*60
         print 'OUTPUT:'
-        ifile = file(outfile)
-        print ifile.read()
-        ifile.close()
+        print stdout
+        print 'STDERR:'
+        print stderr
+        
     print '\n\n\nFINAL: %d error(s) in %d tests, %d skipped in %2.3f sec' \
-          % (len(errors),len(tests),len(skipped),time.time()-start_time)
-    for outfile in tmpfiles: # CLEAN UP
-        os.remove(outfile)
-    
+          % (len(errors), len(tests), len(skipped), time.time() - start_time)
 
 if __name__ == '__main__':
     scriptName = sys.argv[0]

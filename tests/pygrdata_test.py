@@ -1,4 +1,4 @@
-
+import pygrtest_common
 from nosebase import *
 import nose
 import socket

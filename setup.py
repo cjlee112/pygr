@@ -1,6 +1,5 @@
-#!/usr/bin/python
-"""\
-
+#!/usr/bin/env python
+"""
 Pygr
 ****
 
@@ -8,13 +7,25 @@ Pygr is an open source software project used to develop graph database
 interfaces for the popular Python language, with a strong emphasis 
 on bioinformatics applications ranging from genome-wide analysis of 
 alternative splicing patterns, to comparative genomics queries of 
-multi-genome alignment data. 
-"""\
+multi-genome alignment data.
+"""
 
-
+try:
+   from setuptools import setup
+except ImportError:
+   print '(WARNING: importing distutils, not setuptools!)'
+   from distutils.core import setup
+                  
 import os
 import sys
+import imp
+from stat import ST_MTIME
+
+from distutils.command.build import build
 from distutils.core import setup, Extension
+from shutil import copyfile
+
+###
 
 name = "pygr"
 version = "0.7"
@@ -76,131 +87,188 @@ metadata = {
    }
 
 def compilePyrex(cfile):
-   'for proper class pickling, pyrexc needs full-dotted-module-path filename format'
-   from shutil import copyfile
-   sep = os.path.join('foo','')[-1] # / separator used on this platform
-   modulename='.'.join(cfile.split(sep)) # e.g. pygr/cdict.c -> pygc.cdict.c
-   ctarget=os.path.join(os.path.dirname(cfile),modulename) # ADD DIRECTORY PATH
-   copyfile(cfile[:-2]+'.pyx',ctarget[:-2]+'.pyx') # COPY pyx FILE TO DESIRED NAME
-   try: # COPY pxd FILE IF IT EXISTS...
-      copyfile(cfile[:-2]+'.pxd',ctarget[:-2]+'.pxd') # COPY pxd FILE TO DESIRED NAME
+   # for proper class pickling, pyrexc needs full-dotted-module-path
+   # filename format
+   
+   sep = os.path.sep                    # path separator used on this platform
+
+   # e.g. pygr/cdict.c -> pygc.cdict.c   
+   modulename = '.'.join(cfile.split(sep))
+
+   # add dir path
+   ctarget = os.path.join(os.path.dirname(cfile), modulename)
+   
+   # copy pyx file to desired name
+   copyfile(cfile[:-2] + '.pyx', ctarget[:-2] + '.pyx')
+   
+   # copy pxd file if it exists
+   try:
+      copyfile(cfile[:-2] + '.pxd', ctarget[:-2] + '.pxd') 
    except IOError:
       pass
-   cmd='pyrexc %s.pyx'%ctarget[:-2]
-   print cmd
-   exit_status=os.system(cmd) # TRY USING PYREX TO COMPILE EXTENSIONS
-   if exit_status!=0:  # CAN'T RUN THE PYREX COMPILER TO PRODUCE C
-      print '\n\nPyrex compilation failed!  Is pyrexc missing or not in your PATH?'
-      return False # SIGNAL COMPILATION FAILED
-   copyfile(ctarget,cfile) # COPY .c FILE BACK TO DESIRED NAME
-   return True # SIGNAL COMPILATION SUCCEEDED
+   
+   cmd = 'pyrexc %s.pyx' % ctarget[:-2]
+   
+   print '** Running:', cmd
+   exit_status = os.system(cmd) # Try compiling with pyrex
+   
+   if exit_status != 0:
+      print >>sys.stderr, '''
+      
+Pyrex compilation failed!  Is pyrexc missing or not in your PATH?
+'''
+      return False
+
+   # success!
+   
+   copyfile(ctarget, cfile) # copy .c file back to desired name
+   return True
 
 def pyrexIsUpToDate(cfile):
    'True if .c file is newer than the .pyx file'
-   cstat=os.stat(cfile)
-   try: 
-      if cstat[8]<os.stat(cfile[:-2]+'.pyx')[8]: # COMPARE THEIR st_mtime VALUES
-         return False # pyx FILE IS NEWER THAN C FILE, MUST RERUN PYREXC
-   except OSError: # PYREX .pyx CODE IS MISSING??  JUST USE OUR EXISTING C CODE THEN.
-      print 'Warning: pyrex code %s is missing!  Check your distribution!' % (cfile[:-2]+'.pyx')
-      return True
+   
+   c_modtime = os.stat(cfile)[ST_MTIME]
+   
+   # Is pyx file newer than C file?
+   pyx_file = cfile[:-2] + '.pyx'
    try:
-      if cstat[8]<os.stat(cfile[:-2]+'.pxd')[8]:
-         return False # pxd FILE IS NEWER THAN C FILE, MUST RERUN PYREXC
+      # compare time of last modification
+      if c_modtime < os.stat(pyx_file)[ST_MTIME]:
+         return False
+   except OSError:
+      print 'Warning: pyrex code %s is missing!  Check your distribution!' \
+            % (pyrex_file)
+      return True
+
+   # Is pxd file newer than C file?
+   pxd_file = cfile[:-2] + '.pxd'
+   try:
+      if c_modtime < os.stat(pxd_file)[ST_MTIME]:
+         return False
    except OSError:
       pass
-   return True # c file is up to date
+
+   # C file is up to date
+   return True
 
 def add_pyrex_extensions():
    'prepare extension module code, add to setup metadata'
-   buildExtensions=[]
-   pyrexTargets={ppath('cdict.c'):
-                 Extension('pygr.cdict',
-                           sources = [ppath('cgraph.c'), ppath('cdict.c')]),
-                 ppath('cnestedlist.c'):
-                 Extension('pygr.cnestedlist',
-                           sources = [ppath('intervaldb.c'),
-                                      ppath('cnestedlist.c'),
-                                      ppath('apps','maf2nclist.c')]),
-                 ppath('seqfmt.c'):
-                 Extension('pygr.seqfmt',
-                           sources = [ppath('seqfmt.c')])}
-   for cfile,extmodule in pyrexTargets.items():
-      if os.access(cfile,os.R_OK) and pyrexIsUpToDate(cfile):
-         print 'Using existing pyrexc-generated C-code',cfile
+   buildExtensions = []
+   
+   pyrex_targets={ppath('cdict.c'):
+                  Extension('pygr.cdict',
+                            sources = [ppath('cgraph.c'), ppath('cdict.c')]),
+                  ppath('cnestedlist.c'):
+                  Extension('pygr.cnestedlist',
+                            sources = [ppath('intervaldb.c'),
+                                       ppath('cnestedlist.c'),
+                                       ppath('apps','maf2nclist.c')]),
+                  ppath('seqfmt.c'):
+                  Extension('pygr.seqfmt',
+                            sources = [ppath('seqfmt.c')])}
+   
+   for cfile, extmodule in pyrex_targets.items():
+      if os.access(cfile, os.R_OK) and pyrexIsUpToDate(cfile):
+         print 'Using existing pyrexc-generated C-code', cfile
       else:
-         compilePyrex(cfile)  # HMM, NO PYREXC COMPILED CODE, HAVE TO RUN PYREXC
-      if os.access(cfile,os.R_OK): 
-         buildExtensions.append(extmodule)
-      else: # PYREX COMPILATION FAILED, CAN'T ADD THIS MODULE TO OUR EXTENSIONS
-         print 'Skipping extension module... you will be lacking some functionality:',\
-               cfile[:-2]
+         # hmm, no pyrexc compiled code; have to run pyrexc
+         compilePyrex(cfile)
 
-   if len(buildExtensions)>0:
+      if os.access(cfile, os.R_OK): 
+         buildExtensions.append(extmodule)
+         
+      else: # pyrex compilation failed; can't add this module to our extensions
+         print 'Skipping extension module:', cfile[:-2]
+         # @CTB fail?
+
+   if len(buildExtensions) > 0:
       metadata['ext_modules'] = buildExtensions
 
 
 try:
-   v1, v2, v3 = sys.version_info[:3] # ONLY AVAILABLE IN >= 2.0
-   if v1 == 2 and v2 < 2: # 2.1 LACKS GENERATORS... SO NOT GOOD ENOUGH
+   v1, v2, v3 = sys.version_info[:3]
+   
+   if v1 == 2 and v2 < 2: # 2.1 lacks generators!
       raise AttributeError
 except AttributeError:
-   raise EnvironmentError('Sorry, pygr does not support python versions before 2.2')
+   raise EnvironmentError('pygr does not support python versions before 2.2')
 else:
-   if v1>2 or v2>2 or v3>=3: # ONLY ALLOWED IF >=2.2.3
+   if v1 > 2 or v2 > 2 or v3 >= 3: # ONLY ALLOWED IF >=2.2.3
       metadata['download_url'] = "http://prdownloads.sourceforge.net/pygr/pygr-%s.tar.gz" % version
       metadata['classifiers'] = [ c for c in classifiers.split('\n') if c ]
 
+def try_load_extension(name, modpath):
+   "Try to load 'name' module from the given module path."
+   try:
+      (fp, pathname, descr) = imp.find_module(name, [modpath])
+   except ImportError:
+      return False
 
-def check_extensions(dist,ext_modules):
+   fp.close()
+   return True
+
+def check_extensions(dist, ext_modules):
    'True if all ext_modules can be successfully imported'
-   from distutils.command.build import build
+
    b = build(dist)
    b.finalize_options()
-   if '--inplace' in sys.argv:
-      modpath = 'pygr' # handles --inplace case; look for modules in source code
-   else: # look for modules in build
-      modpath = os.path.join(b.build_lib,'pygr')
-   sys.path.append(modpath) # make import look in this directory
-   for extmodule in ext_modules:
-      try:
-         exec 'import %s' % extmodule.name.split('.')[-1]
-      except ImportError:
-         print >>sys.stderr,'''Unable to find module %s in build directory: %s
-Did the build fail?''' % (extmodule.name, modpath)
+   
+   # by default, look for modules in build
+   modpath = os.path.join(b.build_lib, 'pygr')
+   
+   # if --inplace specified, look for modules in source code.
+   if '--inplace' in sys.argv or '-i' in sys.argv:
+      modpath = 'pygr'
+
+   for module in ext_modules:
+      module_name = module.name.split('.')[-1]
+      if not try_load_extension(module_name, modpath):
+         print >>sys.stderr, '''\
+Unable to find module %s in build directory: %s
+Did the build fail?
+''' % (module.name, modpath)
          return False
+      
    return True
       
-def clean_up_pyrex_files(ext_modules,base='pygr'):
+def clean_up_pyrex_files(ext_modules, base='pygr'):
    'remove pyrex-compiled C files'
+
+   rmfiles = []
    for ext_module in ext_modules:
       name = ext_module.name.split('.')[-1]
-      rmfiles = [os.path.join(base, name+'.c'),
-                 os.path.join(base, base+'.'+name+'.c')]
-      for filename in rmfiles:
-         try:
-            os.remove(filename)
-         except OSError:
-            pass
+      
+      rmfiles.append(os.path.join(base, name + '.c'))
+      rmfiles.append(os.path.join(base, base + '.' + name + '.c'))
 
+   for filename in rmfiles:
+      try:
+         os.remove(filename)
+      except OSError:
+         pass
 
 if __name__=='__main__':
-   add_pyrex_extensions() # PREPARE EXTENSION CODE FOR COMPILATION
+   # Prepare extension code for compilation
+   add_pyrex_extensions()
+   
    retry = False
    try:
-      dist = setup(**metadata) # NOW DO THE BUILD AND WHATEVER ELSE IS REQUESTED
-   except SystemExit: # SOMETHING WENT WRONG WITH THE BUILD, CLEAN UP AND RETRY IT...
+      # Now do the build & whatever else is requested
+      dist = setup(**metadata)
+   except SystemExit:
+      # If something went wrong with the build, clean up & retry it
       retry = True
-   if retry or not check_extensions(dist,metadata['ext_modules']):
-      print >>sys.stderr,'Attempting to clean up pyrex files and try again...'
+      
+   if retry or not check_extensions(dist, metadata['ext_modules']):
+      print >>sys.stderr, 'Attempting to clean up pyrex files and try again...'
       clean_up_pyrex_files(metadata['ext_modules'])
+      
       add_pyrex_extensions()
       dist = setup(**metadata)
-      if not check_extensions(dist,metadata['ext_modules']):
-         raise OSError('''Build appears to have failed.
+      
+   if not check_extensions(dist, metadata['ext_modules']):
+      raise OSError('''Build appears to have failed.
 You may be missing pyrex or a C compiler.
 Please fix this, and run the build command again!''')
-      else:
-         print 'Build succeeded!'
 
-   
+   print 'Build succeeded!'

@@ -1,5 +1,6 @@
 *.pyc
 *~
+.figleaf
 all_vs_all.NLMSAindex
 all_vs_all.attrDict
 all_vs_all.idDict
@@ -51,3 +52,5 @@ tryannot1.idb
 tryannot1.index
 tryannot1.size
 tryannot1.subhead
+dnaseq.pureseq
+dnaseq.seqlen

@@ -13,8 +13,8 @@ class NLMSAServer(cnestedlist.NLMSA):
         except KeyError:
             return '' # failure code
         ival=sequence.absoluteSlice(seq,start,stop) # GET THE INTERVAL
-	try:
-	    myslice=self[ival] # DO THE QUERY
+        try:
+            myslice=self[ival] # DO THE QUERY
         except EmptySliceError:
             return 'EMPTY'
         except KeyError:
