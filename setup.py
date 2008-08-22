@@ -86,6 +86,22 @@ metadata = {
         ]
    }
 
+pyrexTargetDict = {ppath('cdict.c'):
+                   Extension('pygr.cdict',
+                             sources = [ppath('cgraph.c'),
+                                        ppath('cdict.c')]),
+                   ppath('cnestedlist.c'):
+                   Extension('pygr.cnestedlist',
+                             sources = [ppath('intervaldb.c'),
+                                        ppath('cnestedlist.c'),
+                                        ppath('apps','maf2nclist.c')]),
+                   ppath('seqfmt.c'):
+                   Extension('pygr.seqfmt',
+                             sources = [ppath('seqfmt.c')])}
+
+
+
+
 def compilePyrex(cfile):
    # for proper class pickling, pyrexc needs full-dotted-module-path
    # filename format
@@ -151,22 +167,9 @@ def pyrexIsUpToDate(cfile):
    # C file is up to date
    return True
 
-def add_pyrex_extensions():
+def add_pyrex_extensions(pyrex_targets):
    'prepare extension module code, add to setup metadata'
    buildExtensions = []
-   
-   pyrex_targets={ppath('cdict.c'):
-                  Extension('pygr.cdict',
-                            sources = [ppath('cgraph.c'), ppath('cdict.c')]),
-                  ppath('cnestedlist.c'):
-                  Extension('pygr.cnestedlist',
-                            sources = [ppath('intervaldb.c'),
-                                       ppath('cnestedlist.c'),
-                                       ppath('apps','maf2nclist.c')]),
-                  ppath('seqfmt.c'):
-                  Extension('pygr.seqfmt',
-                            sources = [ppath('seqfmt.c')])}
-   
    for cfile, extmodule in pyrex_targets.items():
       if os.access(cfile, os.R_OK) and pyrexIsUpToDate(cfile):
          print 'Using existing pyrexc-generated C-code', cfile
@@ -249,7 +252,7 @@ def clean_up_pyrex_files(ext_modules, base='pygr'):
 
 if __name__=='__main__':
    # Prepare extension code for compilation
-   add_pyrex_extensions()
+   add_pyrex_extensions(pyrexTargetDict)
    
    retry = False
    try:
@@ -259,14 +262,14 @@ if __name__=='__main__':
       # If something went wrong with the build, clean up & retry it
       retry = True
       
-   if retry or not check_extensions(dist, metadata['ext_modules']):
+   if retry or not check_extensions(dist, pyrexTargetDict.values()):
       print >>sys.stderr, 'Attempting to clean up pyrex files and try again...'
-      clean_up_pyrex_files(metadata['ext_modules'])
+      clean_up_pyrex_files(pyrexTargetDict.values())
       
-      add_pyrex_extensions()
+      add_pyrex_extensions(pyrexTargetDict)
       dist = setup(**metadata)
       
-   if not check_extensions(dist, metadata['ext_modules']):
+   if not check_extensions(dist, pyrexTargetDict.values()):
       raise OSError('''Build appears to have failed.
 You may be missing pyrex or a C compiler.
 Please fix this, and run the build command again!''')
