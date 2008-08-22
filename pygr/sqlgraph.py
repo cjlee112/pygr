@@ -190,21 +190,21 @@ def getNameCursor(name,connect=None,configFile=None,**kwargs):
     else: # USE .my.cnf TO GET CONNECTION PARAMETERS
         kwargs = {}
     if configFile is None: #Find where config file is
-        home = (platform.platform()).split("-")[0]
-        if home == 'Windows': #Machine is a Windows box
-            windrv = os.environ.get('WINDIR')
+        osname = (platform.platform()).split("-")[0]
+        if osname == 'Windows': #Machine is a Windows box
+            windir = os.environ.get('WINDIR')
             sysdrv = os.environ.get('SYSTEMDRIVE')
-            if os.path.exists(os.path.join(windrv, 'my.ini')):
-                configFile=os.path.join(windrv, 'my.ini')
-            elif os.path.exists(os.path.join(windrv, 'my.cnf')):
-                configFile = os.path.join(windrv, 'my.cnf')
+            if os.path.exists(os.path.join(windir, 'my.ini')):
+                configFile=os.path.join(windir, 'my.ini')
+            elif os.path.exists(os.path.join(windir, 'my.cnf')):
+                configFile = os.path.join(windir, 'my.cnf')
             elif os.path.exists(os.path.join(sysdrv, '\my.ini')):
                 configFile = os.path.join(sysdrv, '\my.ini')
             elif os.path.exists(os.path.join(sysdrv, '\my.cnf')):
                 configFile = os.path.join(sysdrv, '\my.cnf')
-        elif home == 'Linux': #Machine is a Linux box
-            homedrv = os.environ.get('HOME')
-            configFile=os.path.join(homedrv, '.my.cnf')
+        else: # treat as normal platform with $HOME defined
+            homedir = os.environ.get('HOME')
+            configFile = os.path.join(homedir, '.my.cnf')
     try:
         ifile = file(configFile)
     except IOError:
