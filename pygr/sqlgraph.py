@@ -4,7 +4,8 @@ from __future__ import generators
 from mapping import *
 import types
 from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
-     override_rich_cmp,generate_items,get_bound_subclass,standard_setstate
+     override_rich_cmp,generate_items,get_bound_subclass,standard_setstate,\
+     get_valid_path
 import os
 import platform 
     
@@ -166,53 +167,48 @@ class SQLRow(object):
 
 
 
-def list_to_dict(names,values):
-    'return dictionary of those named args that are present'
+def list_to_dict(names, values):
+    'return dictionary of those named args that are present in values[]'
     d={}
-    for i in range(len(values)):
+    for i,v in enumerate(values):
         try:
-            d[names[i]]=values[i]
+            d[names[i]] = v
         except IndexError:
-            pass
+            break
     return d
 
 
-def getNameCursor(name,connect=None,configFile=None,**kwargs):
-    'get table name and cursor by parsing name or using configFile'
-    if connect is None:
-        import MySQLdb
-        connect=MySQLdb.connect
-    argList=name.split() # TREAT AS WS-SEPARATED LIST
-    if len(argList)>1:
-        name=argList[0] # USE 1ST ARG AS TABLE NAME
-        argnames=('host','user','passwd') # READ ARGS IN THIS ORDER
-        kwargs = list_to_dict(argnames,argList[1:])
-    else: # USE .my.cnf TO GET CONNECTION PARAMETERS
-        kwargs = {}
-    if configFile is None: #Find where config file is
+def getNameCursor(name=None, connect=None, configFile=None, **args):
+    '''get table name and cursor by parsing name or using configFile.
+    If neither provided, will try to get via your MySQL config file.
+    If connect is None, will use MySQLdb.connect()'''
+    kwargs = args.copy() # a copy we can modify
+    if name is not None:
+        argList = name.split() # TREAT AS WS-SEPARATED LIST
+        if len(argList)>1:
+            name = argList[0] # USE 1ST ARG AS TABLE NAME
+            argnames = ('host','user','passwd') # READ ARGS IN THIS ORDER
+            kwargs = list_to_dict(argnames, argList[1:])
+    if 'user' not in kwargs and configFile is None: #Find where config file is
         osname = (platform.platform()).split("-")[0]
         if osname == 'Windows': #Machine is a Windows box
             windir = os.environ.get('WINDIR')
             sysdrv = os.environ.get('SYSTEMDRIVE')
-            if os.path.exists(os.path.join(windir, 'my.ini')):
-                configFile=os.path.join(windir, 'my.ini')
-            elif os.path.exists(os.path.join(windir, 'my.cnf')):
-                configFile = os.path.join(windir, 'my.cnf')
-            elif os.path.exists(os.path.join(sysdrv, '\my.ini')):
-                configFile = os.path.join(sysdrv, '\my.ini')
-            elif os.path.exists(os.path.join(sysdrv, '\my.cnf')):
-                configFile = os.path.join(sysdrv, '\my.cnf')
+            configFile = get_valid_path((windir, 'my.ini'),
+                                        (windir, 'my.cnf'),
+                                        (sysdrv, '\my.ini'),
+                                        (sysdrv, '\my.cnf'))
         else: # treat as normal platform with $HOME defined
             homedir = os.environ.get('HOME')
             configFile = os.path.join(homedir, '.my.cnf')
-    try:
-        ifile = file(configFile)
-    except IOError:
-        pass
-    else:
-        ifile.close()
+    if configFile and os.path.exists(configFile):
         kwargs['read_default_file'] = configFile
-    cursor=connect(compress=True,**kwargs).cursor()
+        connect = None # force it to use MySQLdb
+    if connect is None:
+        import MySQLdb
+        connect = MySQLdb.connect
+        kwargs['compress'] = True
+    cursor = connect(**kwargs).cursor()
     return name,cursor
 
 

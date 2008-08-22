@@ -58,6 +58,14 @@ def file_dirpath(filename):
     else:
         return dirname
 
+def get_valid_path(*pathTuples):
+    '''for each tuple in args, build path using os.path.join(),
+    and return the first path that actually exists, or else None.'''
+    for t in pathTuples:
+        mypath = os.path.join(*t)
+        if os.path.exists(mypath):
+            return mypath
+
 def default_tmp_path():
     'find out default location for temp files, e.g. /tmp'
     import os

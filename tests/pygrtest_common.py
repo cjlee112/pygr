@@ -1,6 +1,6 @@
 import sys
 import os
-import distutils
+import distutils.util
 import platform
 import os.path
 
