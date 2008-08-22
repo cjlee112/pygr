@@ -133,22 +133,26 @@ class SQLGraph_Test(Mapping_Test):
     @skip_errors(ImportError)
     def setup(self):
         from pygr import sqlgraph
-        import MySQLdb # TEST WILL BE SKIPPED IF UNAVAILABLE
-        tempcurs = sqlgraph.getNameCursor()[1]
-        try: # Make the test db
-            tempcurs.execute("""create database _pygrtestdb;""")
-        except MySQLdb.ProgrammingError: # Delete if exists and create again
-            tempcurs.execute("""drop database _pygrtestdb;""")
-            tempcurs.execute("""create database _pygrtestdb;""")
+        import MySQLdb # test will be skipped if unavailable
+        createOpts = dict(source_id='int', target_id='int', edge_id='int')
         try:
-            self.datagraph = sqlgraph.SQLGraph('_pygrtestdb.dumbo_foo_test',
-                                               createTable=dict(source_id='int',
-                                                                target_id='int',
-                                                                edge_id='int'))
+            self.datagraph = sqlgraph.SQLGraph('test.dumbo_foo_test',
+                                               dropIfExists=True,
+                                               createTable=createOpts)
         except MySQLdb.MySQLError:
-            raise ImportError # NO SERVER, DATABASE OR PRIVILEGES? SKIP TESTS.
+            tempcurs = sqlgraph.getNameCursor()[1]
+            try: # hmm, maybe need to create the test database
+                tempcurs.execute('create database if not exists test')
+                self.datagraph = sqlgraph.SQLGraph('test.dumbo_foo_test',
+                                                   dropIfExists=True,
+                                                   createTable=createOpts)
+            except MySQLdb.MySQLError: # no server, database or privileges?
+                print """The MySQL 'test' database doesn't exist and/or can't be
+                created or accessed on this account. This test will be skipped
+                """
+                raise ImportError #  skip tests.
     def teardown(self):
-        self.datagraph.cursor.execute("""drop database _pygrtestdb""")
+        self.datagraph.cursor.execute('drop table if exists test.dumbo_foo_test')
 
 
 class Splicegraph_Test(object):
