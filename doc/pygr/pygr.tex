@@ -6697,6 +6697,88 @@ from local cache.  Note that it is possible to customize exactly what
 columns from the database get actually loaded into memory
 by writing row object subclasses.
 
+\subsection{Databases and Schema}
+First, let's define exactly what I mean by the word "database": a
+set of data that share a common schema; in other words that each item
+in the set participates in the same pattern of relations with other collections
+of data.  Example: an {\em exon} always has the following attributes: 
+\begin{itemize}
+\item it is part of a {\em gene}; this is a many-to-one relation.
+\item it is part of one or more {\em transcripts}; this is a many-to-many relation.
+\item it maps to a specific {\em interval on a genomic sequence};
+this is a one-to-one relation.
+\item it can be connected to other exons by one or more directed edges, called
+{\em splices} or {\em introns}.  This is a many-to-many graph relation
+(because it also involves edge-relation objects).
+\end{itemize}
+Thus we can think of a database as a set of things that are functionally
+equivalent in terms of having the same relations.
+
+Second, let's define what I mean by the word "schema": first, the
+list of {\em mappings} that items in a database participate in; second,
+the {\em bindings} that attach these relations to items in this database.
+A mapping is characterized by its {\em source} database, its {\em target}
+database, and optionally its {\em edge} database whose items represent the
+actual individual relations between a source-target pair of items.  In the example
+above, the {\em splice} objects functioned as such "edge relation" objects.
+A binding is typically an attribute name: i.e. for each item in the database,
+that attribute name will yield the target that this item maps to according
+to the mapping that is bound as this attribute.  For example, an exon object
+might have a "gene" attribute that would yield the gene object that this 
+exon "is part of".
+
+\subsubsection{Subclass Binding}
+Python has one "old-style" mechanism for customizing attribute access
+(\code{__getattr__()}), and a "new-style" mechanism, called "descriptors".
+Descriptors are modular -- each attribute is handled by a separate object
+bound to the class -- whereas __getattr__() is not (a single super-function
+handles all custom attribute requests... even worse, __setattr__() intercepts
+ALL write requests for the object).  Pygr uses descriptors to implement
+schema binding.  This has several pieces
+\begin{itemize}
+\item Subclassing: descriptors are bound to the {\em class}, not the instance
+object.  So if we want to bind descriptors for a specific object, we need to 
+create a subclass.  Pygr.classutil.get_bound_subclass() does this for you.
+The current class is just subclassed, and any desired descriptors are bound
+to the subclass.
+\item _init_subclass: if provided by the parent class, this classmethod will be called when
+the subclass is created, to let it do whatever it needs to initialize itself
+and its relation with its target database, such as...
+\item Binding: descriptors for all the relations we want are bound as
+attributes to the subclass.  This makes them appear on all instances of this
+subclass.
+\item Pygr.Data uses this for automatic schema binding.  SQLTable uses this 
+for efficient attribute access on TupleO (values stored locally as a tuple)
+and SQLRow (all requests relayed as queries to the back-end database).
+\item The subclass pickles as its parent class.
+\end{itemize}
+
+\subsection{Persistence}
+Python built in a clean, modular system for persistence from very early in its
+history: pickling.  Pygr.Data is built on pickling.  To make your classes
+picklable, you need to follow some simple guidelines.  Your class will fall
+in one of several categories:
+\begin{itemize}
+\item Simple: if the information needed to "resurrect" your object from storage
+is nothing more than its attributes, and those attributes are picklable, you
+don't need to do anything.  Pickling will by default just pickle all the 
+attributes, and restore them during unpickling.
+
+\item State: if your object needs control over what gets saved during pickling,
+it should define a \method{__getstate__()} method that returns just the
+data you want saved as the object's "state".  E.g. a database object might have a
+cursor object as an attribute, which can't be pickled.  Your db object must
+save "state information" sufficient for it to re-connect to the database server
+upon unpickling.  Pygr.classutil.standard_getstate() and standard_setstate()
+provide default Pygr behaviors (_pickleAttrs attribute controls list of attributes
+to pickle).
+
+\item Total control: if your object needs to determine what class it should
+become at the moment of unpickling, you need to provide a \method{__reduce__}()
+method.  NB: this is always needed if you subclass a built-in class like \class{dict}.
+\end{itemize}
+
+\subsection{Examples}
 \subsubsection{Example: SQLTable}
 A very common usage is to employ a dictionary interface to a relational
 database table.  In this case the key value must be a valid identifier
@@ -6785,38 +6867,7 @@ we ask srdb or hg18: \textasciitilde srdb[chr1] gives 226034 whereas
 \textasciitilde hg18[chr1] just gives "chr1", as it should.
 
 
-\subsection{Databases and Schema}
-First, let's define exactly what I mean by the word "database": a
-set of data that share a common schema; in other words that each item
-in the set participates in the same pattern of relations with other collections
-of data.  Example: an {\em exon} always has the following attributes: 
-\begin{itemize}
-\item it is part of a {\em gene}; this is a many-to-one relation.
-\item it is part of one or more {\em transcripts}; this is a many-to-many relation.
-\item it maps to a specific {\em interval on a genomic sequence};
-this is a one-to-one relation.
-\item it can be connected to other exons by one or more directed edges, called
-{\em splices} or {\em introns}.  This is a many-to-many graph relation
-(because it also involves edge-relation objects).
-\end{itemize}
-Thus we can think of a database as a set of things that are functionally
-equivalent in terms of having the same relations.
-
-Second, let's define what I mean by the word "schema": first, the
-list of {\em mappings} that items in a database participate in; second,
-the {\em bindings} that attach these relations to items in this database.
-A mapping is characterized by its {\em source} database, its {\em target}
-database, and optionally its {\em edge} database whose items represent the
-actual individual relations between a source-target pair of items.  In the example
-above, the {\em splice} objects functioned as such "edge relation" objects.
-A binding is typically an attribute name: i.e. for each item in the database,
-that attribute name will yield the target that this item maps to according
-to the mapping that is bound as this attribute.  For example, an exon object
-might have a "gene" attribute that would yield the gene object that this 
-exon "is part of".
-
-
-\subsection{Annotation Databases}
+\subsubsection{Annotation Databases}
 Pygr treats annotation as an intersection between two types of data:
 \begin{itemize}
 \item Slice database: a dictionary that takes annotation ID as a key,
