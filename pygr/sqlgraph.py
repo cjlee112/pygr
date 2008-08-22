@@ -216,7 +216,7 @@ class SQLTableBase(dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
-                 arraysize=1024, itemSliceClass=None,
+                 arraysize=1024, itemSliceClass=None, dropIfExists=False,
                  serverInfo=None, **kwargs):
         dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
         if cursor is None:
@@ -225,6 +225,8 @@ class SQLTableBase(dict):
             else: # try to read connection info from name or config file
                 name,cursor=getNameCursor(name,**kwargs)
         if createTable is not None: # RUN COMMAND TO CREATE THIS TABLE
+            if dropIfExists: # get rid of any existing table
+                cursor.execute('drop table if exists ' + name)
             cursor.execute(createTable)
         cursor.execute('describe %s' % name)
         columns=cursor.fetchall()
