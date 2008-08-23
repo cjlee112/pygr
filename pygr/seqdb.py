@@ -6,29 +6,6 @@ from parse_blast import *
 import classutil
 import UserDict
 
-def tryPathList(filepath,pathlist,mode='r'):
-    'return successful path based on trying pathlist locations'
-    def tryopen(mypath):
-        myfile=file(mypath,mode)
-        myfile.close()
-        return mypath
-    try: # JUST TRY filepath
-        return tryopen(filepath)
-    except IOError:
-        pass
-    if pathlist is None: # TREAT AS EMPTY LIST
-        pathlist=[]
-    import os.path
-    b=os.path.basename(filepath)
-    for s in pathlist: # NOW TRY EACH DIRECTORY IN pathlist
-        try:
-            return tryopen(os.path.join(s,b))
-        except IOError:
-            pass
-    raise IOError('unable to open %s from any location in %s'
-                  %(filepath,pathlist))
-
-
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
     def __init__(self, id):
@@ -1316,7 +1293,8 @@ class PrefixUnionDict(object, UserDict.DictMixin):
             for line in it:
                 prefix,filepath=line.strip().split('\t')[:2]
                 try:
-                    prefixDict[prefix]=dbClass(tryPathList(filepath,trypath))
+                    prefixDict[prefix] = \
+                      dbClass(classutil.search_dirs_for_file(filepath, trypath))
                 except IOError:
                     raise IOError('''unable to open database %s: check path or privileges.
 Set trypath to give a list of directories to search.'''

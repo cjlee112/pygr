@@ -1,4 +1,4 @@
-
+import os,sys
 
 def ClassicUnpickler(cls, state):
     'standard python unpickling behavior'
@@ -15,16 +15,16 @@ ClassicUnpickler.__safe_for_unpickling__ = 1
 
 def filename_unpickler(cls,path,kwargs):
     'raise IOError if path not readable'
-    try:
-        file(path).close() # WILL RAISE IOError IF path NOT ACCESSIBLE, READABLE
-    except IOError:
-        try: # CONVERT TO ABSOLUTE PATH BASED ON SAVED DIRECTORY PATH
-            import os
-            path = os.path.normpath(os.path.join(kwargs['curdir'],path))
-            file(path).close() # WILL RAISE IOError IF path NOT ACCESSIBLE, READABLE
+    if not os.path.exists(path):
+        try:# CONVERT TO ABSOLUTE PATH BASED ON SAVED DIRECTORY PATH
+            path = os.path.normpath(os.path.join(kwargs['curdir'], path))
+            if not os.path.exists(path):
+                raise IOError('unable to open file %s' % path)
         except KeyError:
             raise IOError('unable to open file %s' % path)
-    return cls(path)
+    if cls==SourceFileName:
+        return SourceFileName(path)
+    raise ValueError('Attempt to unpickle untrusted class ' + cls.__name__)
 filename_unpickler.__safe_for_unpickling__ = 1
 
 class SourceFileName(str):
@@ -32,7 +32,6 @@ class SourceFileName(str):
 if filepath not readable, and complain if the user tries
 to pickle a relative path'''
     def __reduce__(self):
-        import os,sys
         if not os.path.isabs(str(self)):
             print >>sys.stderr,'''
 WARNING: You are trying to pickle an object that has a local
@@ -51,7 +50,6 @@ or pickle!''' % str(self)
 
 def file_dirpath(filename):
     'return path to directory containing filename'
-    import os
     dirname = os.path.dirname(filename)
     if dirname=='':
         return os.curdir
@@ -66,9 +64,20 @@ def get_valid_path(*pathTuples):
         if os.path.exists(mypath):
             return mypath
 
+def search_dirs_for_file(filepath, pathlist=()):
+    'return successful path based on trying pathlist locations'
+    if os.path.exists(filepath):
+        return filepath
+    b = os.path.basename(filepath)
+    for s in pathlist: # NOW TRY EACH DIRECTORY IN pathlist
+        mypath = os.path.join(s,b)
+        if os.path.exists(mypath):
+            return mypath
+    raise IOError('unable to open %s from any location in %s'
+                  %(filepath,pathlist))
+
 def default_tmp_path():
     'find out default location for temp files, e.g. /tmp'
-    import os
     for tmp in ['/tmp','/usr/tmp']: # RETURN THE 1ST WRITABLE LOCATION
         if os.access(tmp,os.W_OK):
             return tmp
@@ -76,7 +85,7 @@ def default_tmp_path():
 
 def report_exception():
     'print string message from exception to stderr'
-    import sys,traceback
+    import traceback
     info = sys.exc_info()[:2]
     l = traceback.format_exception_only(info[0],info[1])
     print >>sys.stderr,'Warning: caught %s\nContinuing...' % l[0]
@@ -122,7 +131,6 @@ def standard_setstate(self,state):
     'apply dict of saved state by passing as kwargs to constructor'
     if isinstance(state,list):  # GET RID OF THIS BACKWARDS-COMPATIBILITY CODE!
         self.__init__(*state)
-        import sys
         print >>sys.stderr,'WARNING: obsolete list pickle %s. Update by resaving!' \
               % repr(self)
     else:
@@ -234,7 +242,6 @@ def open_shelve(filename,mode=None,writeback=False,allowReadOnly=False,
         if allowReadOnly:
             d = dbfile.BtreeShelf(filename,'r',useHash=useHash)
             if verbose:
-                import sys
                 print >>sys.stderr,'''Opening shelve file %s in read-only mode because you lack
 write permissions to this file.  You will NOT be able to modify the contents
 of this shelve dictionary.  To avoid seeing this warning message, use verbose=False
@@ -257,10 +264,8 @@ def get_shelve_or_dict(filename=None,dictClass=None,**kwargs):
 class PathSaver(object):
     def __init__(self,origPath):
         self.origPath = origPath
-        import os
         self.origDir = os.getcwd()
     def __str__(self):
-        import os
         if os.access(self.origPath,os.R_OK):
             return self.origPath
         trypath = os.path.join(self.origDir,self.origPath)
@@ -287,7 +292,6 @@ class DBAttributeDescr(object):
 
 def get_env_or_cwd(envname):
     'get the specified environment value or path to current directory'
-    import os
     try:
         return os.environ[envname] # USER-SPECIFIED DIRECTORY
     except KeyError:
