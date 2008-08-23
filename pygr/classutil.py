@@ -90,6 +90,15 @@ def report_exception():
     l = traceback.format_exception_only(info[0],info[1])
     print >>sys.stderr,'Warning: caught %s\nContinuing...' % l[0]
 
+def standard_invert(self):
+    'keep a reference to an inverse mapping, using self._inverseClass'
+    try:
+        return self._inverse
+    except AttributeError:
+        self._inverse = self._inverseClass(self)
+        return self._inverse
+
+
 def standard_getstate(self):
     'get dict of attributes to save, using self._pickleAttrs dictionary'
     d={}

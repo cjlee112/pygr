@@ -211,11 +211,7 @@ class dictGraphFB(dictGraph):
     def __init__(self,**kwargs):
         dictGraph.__init__(self,**kwargs)
         self._inverse=self.dictClass()
-
-    def __invert__(self):
-        "Get reverse mapping: edges TO a given node"
-        return self._inverse
-
+    __invert__ = classutil.standard_invert
     def __delitem__(self,node):
         "Delete node from the graph"
         try:
@@ -467,7 +463,7 @@ class MappingInverse(object):
         self.attr=db.inverseAttr
     def __getitem__(self,k):
         return self._inverse.sourceDB[getattr(k,self.attr)]
-    def __invert__(self): return self._inverse
+    __invert__ = classutil.standard_invert
 
 class Mapping(object):
     '''dict-like class suitable for persistent usages.  Extracts ID values from
@@ -560,12 +556,8 @@ class Mapping(object):
         for kID,vID in self.d.iteritems():
             yield self.sourceDB[kID],self.getTarget(vID)
     def items(self): return [x for x in self.iteritems()]
-    def __invert__(self):
-        try:
-            return self._inverse
-        except AttributeError:
-            self._inverse=MappingInverse(self)
-            return self._inverse
+    __invert__ = classutil.standard_invert
+    _inverseClass = MappingInverse
     close = close_if_possible
     def __del__(self):
         close_if_possible(self)

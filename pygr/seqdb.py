@@ -277,7 +277,7 @@ def repeat_mask(seq,progname='RepeatMasker',opts=''):
     return seq_masked # ONLY THE REPEATS ARE IN LOWERCASE NOW
 
 
-class BlastDBinverse(object):
+class SequenceDBInverse(object):
     'implements trivial inverse mapping seq --> id'
     def __init__(self,db):
         self.db=db
@@ -328,13 +328,8 @@ class SequenceDB(UserDict.DictMixin, dict):
         return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __setstate__(self,state):
         self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
-    def __invert__(self):
-        'keep a reference to an inverse mapping'
-        try:
-            return self._inverse
-        except AttributeError:
-            self._inverse=BlastDBinverse(self)
-            return self._inverse
+    __invert__ = classutil.standard_invert
+    _inverseClass = SequenceDBInverse
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
@@ -1200,13 +1195,8 @@ Set trypath to give a list of directories to search.'''
             except AttributeError:
                 raise AttributeError('seq db %s has no filepath; you can save this to pygr.Data but not to a text HeaderFile!' % k)
         ifile.close()
-
-    def __invert__(self):
-        try:
-            return self._inverse
-        except AttributeError:
-            self._inverse=PrefixDictInverse(self)
-            return self._inverse
+    __invert__ = classutil.standard_invert
+    _inverseClass = PrefixDictInverse
     def __len__(self):
         "number of total entries in this database"
         n=0

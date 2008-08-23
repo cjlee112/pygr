@@ -3,6 +3,7 @@ import pickle,sys
 from StringIO import StringIO
 import shelve
 from mapping import Collection,Mapping,Graph
+from classutil import standard_invert
 
 
 class OneTimeDescriptor(object):
@@ -1248,8 +1249,7 @@ class ForeignKeyMapInverse(object):
         self._inverse=forwardMap
     def __getitem__(self,k):
         return self._inverse.sourceDB[getattr(k,self._inverse.keyName)]
-    def __invert__(self):
-        return self._inverse
+    __invert__ = standard_invert
 
 
 class ForeignKeyMap(object):
@@ -1260,12 +1260,8 @@ class ForeignKeyMap(object):
         self.targetDB=targetDB
     def __getitem__(self,k):
         return [x for x in self.targetDB.foreignKey(self.keyName,k.id)]
-    def __invert__(self):
-        try:
-            return self._inverse
-        except AttributeError:
-            self._inverse=ForeignKeyMapInverse(self)
-            return self._inverse
+    __invert__ = standard_invert
+    _inverseClass = ForeignKeyMapInverse
 
 
 

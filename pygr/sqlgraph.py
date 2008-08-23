@@ -5,7 +5,7 @@ from mapping import *
 import types
 from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
      override_rich_cmp,generate_items,get_bound_subclass,standard_setstate,\
-     get_valid_path
+     get_valid_path,standard_invert
 import os
 import platform 
     
@@ -1199,8 +1199,7 @@ keyColumn is the foreign key column name in targetDB for looking up sourceDB IDs
         d = ForeignKeyEdge(self,k)
         dict.__setitem__(self,k.id,d)
         return d
-    def __invert__(self):
-        return self._inverse
+    __invert__ = standard_invert
 
 def describeDBTables(name,cursor,idDict):
     """
