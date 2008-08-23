@@ -846,3 +846,19 @@ class IDGraph(Graph):
     add_trivial_packing_methods(locals())
 
 Graph._IDGraphClass = IDGraph
+
+class KeepUniqueDict(dict):
+    'dict that blocks attempts to overwrite an existing key'
+    def __setitem__(self,k,v):
+        try:
+            if self[k] is v:
+                return # ALREADY SAVED.  NOTHING TO DO!
+        except KeyError: # NOT PRESENT, SO JUST SAVE THE VALUE
+            dict.__setitem__(self,k,v)
+            return
+        raise KeyError('attempt to overwrite existing key!')
+    def __hash__(self):
+        'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
+        return id(self)
+
+

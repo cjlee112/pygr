@@ -145,124 +145,25 @@ option to force a clean install''' % sys.version_info[:2])
     dw=dictwrapper(idFilter,d) # FORCE C FUNC TO WRITE TO WRAPPER...
     return seqfmt.read_fasta_lengths(dw,filename)
     
-##     if idFilter is not None: # HAVE TO CLEAN UP BLAST'S MESSY IDs
-##         for id,seqLength in read_fasta_lengths(ifile):
-##             d[idFilter(id)] = (seqLength,) # SAVE TO DICTIONARY
-##     else: # JUST USE id AS-IS
-##         for id,seqLength in read_fasta_lengths(ifile):
-##             d[id] = (seqLength,) # SAVE TO DICTIONARY
-        
-
-def fastacmd_seq(filepath,id,start=None,end=None):
-    "Get complete sequence or slice from a BLAST formatted database"
-    maxlen=None
-    if start is not None: # USE ABILITY TO GRAB A SLICE OF THE SEQUENCE
-        if start==0 and end==1: # fastacmd FAILS ON -L 1,1: RETURNS WHOLE SEQ! UGH!
-            cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end+1)
-            maxlen=1 # GOT 2 LETTERS, SO HAVE TO SLICE DOWN TO 1... UGH!
-        else: # NORMAL USAGE... AT LEAST fastacmd WORKS SOME OF THE TIME...
-            cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end)
-    else:
-        cmd='fastacmd -d %s -s "%s"' % (filepath,id)
-    ofile=os.popen(cmd)
-    ofile.readline() # SKIP TITLE LINE
-    s=''
-    for line in ofile:
-        for word in line.split(): # GET RID OF WHITESPACE...
-            s += word
-    exitstatus=ofile.close()
-    if exitstatus==768:
-        raise KeyError('sequence %s not found in %s' %(id,filepath))
-    elif exitstatus is not None:
-        raise OSError('command %s failed. Not in PATH?' % cmd)
-    if maxlen is None:
-        return s
-    else: # PROTECT AGAINST fastacmd SCREWUPS
-        return s[:maxlen]
-
-
-class FastacmdIntervalCache(object):
-    """caches a single interval of sequence:
-       expandable by self+=slice
-       get sequence strslice by self[slice]"""
-    maxlen=20000 # DEFAULT MAXIMUM WIDTH
-    def __init__(self,start,end,strslice,path):
-        "strslice must be callable as strslice(i,j) to get seq[i:j]"
-        self.start=start
-        self.end=end
-        self.strslice=strslice # SAVE METHOD FOR GETTING SUBSEQUENCE
-        self.path=path
-
-    def delseq(self):
-        "drop our cached sequence"
-        try:
-            del self.seq
-        except AttributeError:
-            pass
-
-    def __iadd__(self,k):
-        "expand our interval by merging with slice k"
-        if k.stop-self.start>self.maxlen or self.end-k.start>self.maxlen:
-            raise ValueError('interval is beyond max extension radius')
-        if k.start<self.start:
-            self.start=k.start
-            self.delseq() # IF INTERVAL CHANGED, BETTER REFRESH CACHED SEQ
-        if k.stop>self.end:
-            self.end=k.stop
-            self.delseq() # IF INTERVAL CHANGED, BETTER REFRESH CACHED SEQ
-        return self # iadd METHOD MUST ALWAYS RETURN self!!!
-
-    def __getitem__(self,k):
-        "return seq slice corresponding to slice given by argument k"
-        if k.start<self.start or k.stop>self.end:
-            self+=k # TRY EXTENDING OUR INTERVAL TO CONTAIN k
-        if not hasattr(self,'seq'):
-            self.seq=self.strslice(self.start,self.end) # USE SAVED METHOD
-        return self.seq[k.start-self.start:k.stop-self.start]
-
-
-class BlastSeqDescriptor(object):
-    "Get sequence from a blast formatted database for obj.id"
+class FileDBSeqDescriptor(object):
+    "Get sequence from a concatenated pureseq database for obj.id"
     def __get__(self,obj,objtype):
-        return fastacmd_seq(obj.db.filepath,obj.id)
+        return obj.strslice(0,obj.db.seqLenDict[obj.id][0])
 
-class BlastSequenceBase(SequenceBase):
-    "Represents a sequence in a blast database, w/o keeping seq in memory"
-    seq=BlastSeqDescriptor()
+class FileDBSequence(SequenceBase):
+    seq=FileDBSeqDescriptor()
+    __reduce__ = classutil.item_reducer
     def __init__(self,db,id):
         self.db=db
         self.id=id
         SequenceBase.__init__(self)
         self.checkID() # RAISE KeyError IF THIS SEQ NOT IN db
-    def checkID(self):
-        'check whether this seq ID actually present in the DB, KeyError if not'
-        return self.strslice(0,2) # TRY TO GET TINY PIECE OF SEQUENCE
-    def strslice(self,start,end,useCache=True):
-        "Efficient access to slice of a sequence, useful for huge contigs"
-        if useCache:
-            try:
-                return self.db.strsliceCache(self,start,end)
-            except IndexError: # NOT FOUND IN CACHE
-                pass # JUST USE OUR REGULAR METHOD
-        return fastacmd_seq(self.db.filepath,self.id,start,end)
-
-class BlastSequence(BlastSequenceBase):
-    "Rely on seqLenDict to give fast access to sequence lengths"
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
         return self.db.seqLenDict[self.id][0]
     def checkID(self):
         'check whether this seq ID actually present in the DB, KeyError if not'
         return self.db.seqLenDict[self.id][0]
-
-class FileDBSeqDescriptor(object):
-    "Get sequence from a concatenated pureseq database for obj.id"
-    def __get__(self,obj,objtype):
-        return obj.strslice(0,obj.db.seqLenDict[obj.id][0])
-
-class FileDBSequence(BlastSequence):
-    seq=FileDBSeqDescriptor()
-    __reduce__ = classutil.item_reducer
     def strslice(self,start,end,useCache=True):
         "Efficient access to slice of a sequence, useful for huge contigs"
         if useCache:
@@ -278,37 +179,6 @@ class FileDBSequence(BlastSequence):
         ifile.seek(self.db.seqLenDict[self.id][1]+start)
         return ifile.read(end-start)
     
-
-class BlastSequenceCache(BlastSequence):
-    """represents a sequence, with interval caching
-    slicing operations are recorded, and merged into one or more cache intervals
-    Subsequent requests for subsequence will use these cached intervals."""
-    def __init__(self,db,id):
-        super(BlastSequenceCache,self).__init__(db,id)
-        self.cache=[]
-    def __getitem__(self,k):
-        "record all slices taken of this sequence, constructing a cache for fast access"
-        ival=super(BlastSequenceCache,self).__getitem__(k) # GET THE INTERVAL OBJECT AS USUAL
-        for i in self.cache:
-            try:
-                i+=ival # TRY TO EXTEND THIS INTERVAL CACHE TO CONTAIN ival
-                return ival # SUCCESS.  JUST RETURN ival AS USUAL
-            except ValueError:
-                pass
-        # HAVE TO ADD ival AS A NEW INTERVAL CACHE OBJECT
-        self.cache.append(FastacmdIntervalCache(ival.start,ival.stop,
-                                                super(BlastSequenceCache,self).strslice,self))
-        return ival
-    def strslice(self,start,end):
-        "get sequence from our interval cache"
-        s=slice(start,end)
-        for i in self.cache:
-            try:
-                return i[s] # TRY TO GET SEQUENCE FROM INTERVAL CACHE
-            except ValueError: # NOT IN THIS CACHE ITEM, SO KEEP TRYING
-                pass
-        return str(self[s]) # FORCE __getitem__ TO LOAD s INTO THE CACHE
-
 
 def blast_program(query_type,db_type):
     progs= {DNA_SEQTYPE:{DNA_SEQTYPE:'blastn', PROTEIN_SEQTYPE:'blastx'},
@@ -495,20 +365,17 @@ class BlastDBbase(SeqDBbase):
             self.blastIndexPath = blastIndexPath
         if blastIndexDirs is not None:
             self.blastIndexDirs = blastIndexDirs
-        if skipSeqLenDict:
-            self.itemClass=BlastSequenceBase # DON'T USE seqLenDict
-        else:
-            from dbfile import NoSuchFileError
-            try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
-                self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
-            except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
-                self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
-                ifile,idFilter=self.raw_fasta_stream(ifile,idFilter)
-                import sys
-                print >>sys.stderr,'Building sequence length index...'
-                store_seqlen_dict(self.seqLenDict,ifile,filepath,idFilter)
-                self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
-                self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        from dbfile import NoSuchFileError
+        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
+            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
+            ifile,idFilter=self.raw_fasta_stream(ifile,idFilter)
+            import sys
+            print >>sys.stderr,'Building sequence length index...'
+            store_seqlen_dict(self.seqLenDict,ifile,filepath,idFilter)
+            self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
+            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
         
         self.checkdb() # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
         if not self.blastReady and blastReady: # FORCE CONSTRUCTION OF BLAST DB
@@ -1134,31 +1001,6 @@ class SliceDB(dict):
 
 
 
-"""
-class SliceDB(dict):
-    'associates an ID with a specific slice of a specific db sequence'
-    def __init__(self,sliceDB,seqDB):
-        '''sliceDB must map identifier to a sliceInfo object;
-        sliceInfo must have name,start,stop,ori attributes;
-        seqDB must map sequence ID to a sliceable sequence object'''
-        dict.__init__(self)
-        self.sliceDB=sliceDB
-        self.seqDB=seqDB
-    def __getitem__(self,k):
-        try:
-            return dict.__getitem__(self,k)
-        except KeyError:
-            sliceInfo=self.sliceDB[k]
-            seq=self.seqDB[sliceInfo.name]
-            myslice=seq[sliceInfo.start:sliceInfo.stop]
-            if sliceInfo.ori<0:
-                myslice= -myslice
-            self[k]=myslice
-            return myslice
-
-"""
-
-
 class VirtualSeq(SeqPath):
     """Empty sequence object acts purely as a reference system.
     Automatically elongates if slice extends beyond current stop.
@@ -1192,21 +1034,6 @@ class VirtualSeqDB(dict):
             s=VirtualSeq(k)
             self[k]=s
             return s
-
-
-class KeepUniqueDict(dict):
-    'dict that blocks attempts to overwrite an existing key'
-    def __setitem__(self,k,v):
-        try:
-            if self[k] is v:
-                return # ALREADY SAVED.  NOTHING TO DO!
-        except KeyError: # NOT PRESENT, SO JUST SAVE THE VALUE
-            dict.__setitem__(self,k,v)
-            return
-        raise KeyError('attempt to overwrite existing key!')
-    def __hash__(self):
-        'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
-        return id(self)
 
 
 class PrefixDictInverse(object):
