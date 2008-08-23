@@ -153,6 +153,20 @@ class FileDBSeqDescriptor(object):
 class FileDBSequence(SequenceBase):
     seq=FileDBSeqDescriptor()
     __reduce__ = classutil.item_reducer
+    @classmethod
+    def _init_subclass(cls, db, filepath, ifile=None, idFilter=None):
+        'open or build seqLenDict if needed'
+        from dbfile import NoSuchFileError
+        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
+            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
+            ifile,idFilter = db.raw_fasta_stream(ifile,idFilter)
+            import sys
+            print >>sys.stderr,'Building sequence length index...'
+            store_seqlen_dict(db.seqLenDict, ifile, filepath, idFilter)
+            db.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
+            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
     def __init__(self,db,id):
         self.db=db
         self.id=id
@@ -275,7 +289,41 @@ class BlastDBinverse(object):
         except AttributeError:
             return False
 
-class SeqDBbase(UserDict.DictMixin, dict):
+class SeqDBDescriptor(object):
+    'forwards attribute requests to self.pathForward'
+    def __init__(self,attr):
+        self.attr=attr
+    def __get__(self,obj,objtype):
+        return getattr(obj.pathForward,self.attr) # RAISES AttributeError IF NONE
+
+class SeqDBSlice(SeqPath):
+    'JUST A WRAPPER FOR SCHEMA TO HANG SHADOW ATTRIBUTES ON...'
+    id=SeqDBDescriptor('id')
+    db=SeqDBDescriptor('db')
+
+class SequenceDB(UserDict.DictMixin, dict):
+    itemClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
+    itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
+    def __init__(self, filepath=None, **kwargs):
+        "Initialize seq db from filepath or ifile"
+        kwargs = kwargs.copy() # get a copy we can modify w/o side effects
+        if filepath is None:
+            try:
+                filepath = kwargs['ifile'].name
+            except (KeyError, AttributeError):
+                raise TypeError("unable to obtain a filename")
+        self.filepath = classutil.SourceFileName(str(filepath))
+        dict.__init__(self)
+        classutil.apply_itemclass(self, kwargs)
+        kwargs['db'] = self
+        kwargs['filepath'] = filepath
+        classutil.get_bound_subclass(self, 'itemClass',
+                                     os.path.basename(filepath),
+                                     subclassArgs=kwargs)
+        self.set_seqtype()
+        try: # signal that we're done constructing, by closing the file object
+            kwargs['ifile'].close()
+        except (KeyError, AttributeError): pass
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __setstate__(self,state):
@@ -290,6 +338,16 @@ class SeqDBbase(UserDict.DictMixin, dict):
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
+    def set_seqtype(self):
+        'guess seqtype from 100 res of 1st seq if not already known'
+        try: # if already known, no need to do anything
+            return self._seqtype
+        except AttributeError:
+            pass
+        for seqID in self:
+            seq = self[seqID] # get the 1st sequence
+            self._seqtype = guess_seqtype(str(seq[:100]))
+            break
     _cache_max=10000
     def cacheHint(self,owner,ivalDict):
         'save a cache hint dict of {id:(start,stop)} associated with owner'
@@ -333,57 +391,19 @@ class SeqDBbase(UserDict.DictMixin, dict):
     clear = setdefault = pop = popitem = copy = update = \
             classutil.read_only_error
 
-class SeqDBDescriptor(object):
-    'forwards attribute requests to self.pathForward'
-    def __init__(self,attr):
-        self.attr=attr
-    def __get__(self,obj,objtype):
-        return getattr(obj.pathForward,self.attr) # RAISES AttributeError IF NONE
-
-class SeqDBSlice(SeqPath):
-    'JUST A WRAPPER FOR SCHEMA TO HANG SHADOW ATTRIBUTES ON...'
-    id=SeqDBDescriptor('id')
-    db=SeqDBDescriptor('db')
-
-class BlastDBbase(SeqDBbase):
+class BlastDBbase(SequenceDB):
     "Container representing Blast database"
-    itemClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
-    itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
-    def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
-                 blastReady=False,blastIndexPath=None,blastIndexDirs=None,**kwargs):
+    def __init__(self, filepath=None, blastReady=False, blastIndexPath=None,
+                 blastIndexDirs=None, **kwargs):
         "format database and build indexes if needed. Provide filepath or file object"
-        if filepath is None:
-            try:
-                filepath=ifile.name
-            except AttributeError:
-                raise  TypeError("unable to obtain a filename")
-        self.filepath = classutil.SourceFileName(str(filepath)) # MARKS AS A FILE PATH
-        dict.__init__(self)
-        self.set_seqtype()
-        self.skipSeqLenDict=skipSeqLenDict
+        SequenceDB.__init__(self, filepath, **kwargs)
         if blastIndexPath is not None:
             self.blastIndexPath = blastIndexPath
         if blastIndexDirs is not None:
             self.blastIndexDirs = blastIndexDirs
-        from dbfile import NoSuchFileError
-        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
-            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
-        except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
-            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
-            ifile,idFilter=self.raw_fasta_stream(ifile,idFilter)
-            import sys
-            print >>sys.stderr,'Building sequence length index...'
-            store_seqlen_dict(self.seqLenDict,ifile,filepath,idFilter)
-            self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
-            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
-        
         self.checkdb() # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
         if not self.blastReady and blastReady: # FORCE CONSTRUCTION OF BLAST DB
             self.formatdb()
-        if ifile is not None: # NOW THAT WE'RE DONE CONSTRUCTING, CLOSE THE FILE OBJECT
-            ifile.close() # THIS SIGNALS WE'RE COMPLETELY DONE CONSTRUCTING THIS RESOURCE
-        classutil.apply_itemclass(self,kwargs)
-
     def __repr__(self):
         return "<BlastDBbase '%s'>" % (self.filepath)
 
@@ -464,24 +484,6 @@ class BlastDBbase(SeqDBbase):
             except (IOError,OSError): # BUILD FAILED 
                 classutil.report_exception() # REPORT IT AND CONTINUE
             
-    def set_seqtype(self):
-        "Determine whether this database is DNA or protein"
-        if os.path.isfile(self.get_blast_index_path()+'.psd') \
-               or os.path.isfile(self.get_blast_index_path()+'.00.psd'):
-            self._seqtype=PROTEIN_SEQTYPE
-            return
-        elif os.path.isfile(self.get_blast_index_path()+'.nsd') \
-                 or os.path.isfile(self.get_blast_index_path()+'.00.nsd'):
-            self._seqtype=DNA_SEQTYPE
-            return
-        else:
-            ifile = file(self.filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
-            try:
-                id,title,seq = read_fasta_one_line(ifile)
-                self._seqtype = guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
-            finally:
-                ifile.close()
-
     def raw_fasta_stream(self,ifile=None,idFilter=None):
         'return a stream of fasta-formatted sequences, and ID filter function if needed'
         if ifile is not None: # JUST USE THE STREAM WE ALREADY HAVE OPEN
@@ -1371,7 +1373,7 @@ class XMLRPCSeqLenDict(object):
         return d
 
 
-class XMLRPCSequenceDB(SeqDBbase):
+class XMLRPCSequenceDB(SequenceDB):
     'XMLRPC client: access sequence database over XMLRPC'
     itemClass = XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     itemSliceClass = SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
