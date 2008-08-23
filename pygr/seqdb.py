@@ -457,30 +457,11 @@ class SeqDBbase(UserDict.DictMixin, dict):
         raise IndexError('interval not found in cache')
 
     # these methods should all be implemented on all SeqDBs.
-    def __len__(self):
-        raise NotImplementedError
-    def __getitem__(self, key):
-        raise NotImplementedError
-    def __iter__(self):
-        raise NotImplementedError
-    def __contains__(self, key):
-        raise NotImplementedError
-    def keys(self):
-        raise NotImplementedError
-    
+    __len__ = __getitem__ = __iter__ = __contains__ = keys = \
+              classutil.method_not_implemented
     # these methods should not be implemented for read-only database.
-    def clear(self):
-        raise NotImplementedError, "read only dict"
-    def setdefault(self):
-        raise NotImplementedError, "read only dict"
-    def pop(self):
-        raise NotImplementedError, "read only dict"
-    def popitem(self):
-        raise NotImplementedError, "read only dict"
-    def copy(self):
-        raise NotImplementedError, "read only dict"
-    def update(self, other):
-        raise NotImplementedError, "read only dict"
+    clear = setdefault = pop = popitem = copy = update = \
+            classutil.read_only_error
 
 class SeqDBDescriptor(object):
     'forwards attribute requests to self.pathForward'

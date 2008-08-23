@@ -208,9 +208,18 @@ def get_bound_subclass(obj, classattr='__class__', subname=None, factories=(),
     setattr(obj,classattr,shadowClass) # SHADOW CLASS REPLACES ORIGINAL
     return shadowClass
 
-def methodFactory(methodList,methodStr,localDict):
+def method_not_implemented(*args,**kwargs):
+    raise NotImplementedError
+def read_only_error(*args, **kwargs):
+    raise NotImplementedError("read only dict")
+
+def methodFactory(methodList, methodStr, localDict):
+    'save a method or exec expression for each name in methodList'
     for methodName in methodList:
-        localDict[methodName]=eval(methodStr%methodName)
+        if callable(methodStr):
+            localDict[methodName] = methodStr
+        else:
+            localDict[methodName]=eval(methodStr%methodName)
 
 def open_shelve(filename,mode=None,writeback=False,allowReadOnly=False,
                 useHash=False,verbose=True):
