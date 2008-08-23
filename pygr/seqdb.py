@@ -118,6 +118,26 @@ def read_fasta_lengths(ifile):
     elif isEmpty:
         raise IOError('no readable sequence in FASTA file!')
 
+class SeqLenObject(object):
+    def __init__(self, seqID, seqDB):
+        self.id = seqID
+        self.db = seqDB
+        t = seqDB.seqLenDict[seqID]
+        self.length = t[0]
+        self.offset = t[1]
+
+class SeqLenDictWrapper(object,UserDict.DictMixin):
+    'seqInfoDict interface based on SequenceDB.seqLenDict'
+    def __init__(self, db):
+        self.seqDB = db
+    def __getitem__(self, k):
+        return SeqLenObject(k, self.seqDB)
+    def __len__(self):
+        return len(self.seqDB.seqLenDict)
+    def __iter__(self):
+        return iter(self.seqDB.seqLenDict)
+    def keys(self):
+        return self.seqDB.seqLenDict.keys()
 
 def store_seqlen_dict(d,ifile,filename,idFilter=None):
     "store sequence lengths in a dictionary"
@@ -167,6 +187,7 @@ class FileDBSequence(SequenceBase):
             store_seqlen_dict(db.seqLenDict, ifile, filepath, idFilter)
             db.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
             db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        db.seqInfoDict = SeqLenDictWrapper(db) # standard interface
     def __init__(self,db,id):
         self.db=db
         self.id=id
@@ -382,6 +403,28 @@ class SequenceDB(UserDict.DictMixin, dict):
     # these methods should all be implemented on all SeqDBs.
     __len__ = __getitem__ = __iter__ = __contains__ = keys = \
               classutil.method_not_implemented
+    def __iter__(self):
+        return iter(self.seqInfoDict)
+    def iteritems(self):
+        for seqID in self:
+            yield seqID,self[seqID]
+    def __len__(self):
+        "number of total entries in this database"
+        return len(self.seqInfoDict)
+    def __getitem__(self,id):
+        "Get sequence matching this ID, using dict as local cache"
+        try:
+            return dict.__getitem__(self,id)
+        except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
+            s=self.itemClass(self,id)
+            s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
+            dict.__setitem__(self,id,s) # CACHE IT
+            return s
+    def keys(self):
+        return self.seqInfoDict.keys()
+    def __contains__(self, key):
+        return key in self.seqInfoDict
+
     # these methods should not be implemented for read-only database.
     clear = setdefault = pop = popitem = copy = update = \
             classutil.read_only_error
@@ -488,37 +531,6 @@ class BlastDBbase(SequenceDB):
         except IOError: # TRY READING FROM FORMATTED BLAST DATABASE
             cmd='fastacmd -D -d "%s"' % self.get_blast_index_path()
             return os.popen(cmd),NCBI_ID_PARSER #BLAST ADDS lcl| TO id
-
-
-    def __iter__(self):
-        'generate all IDs in this database'
-        for id in self.seqLenDict:
-            yield id
-
-    def iteritems(self):
-        'generate all IDs in this database'
-        for id in self.seqLenDict:
-            yield id,self[id]
-
-    def __len__(self):
-        "number of total entries in this database"
-        return len(self.seqLenDict)
-
-    def __getitem__(self,id):
-        "Get sequence matching this ID, using dict as local cache"
-        try:
-            return dict.__getitem__(self,id)
-        except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
-            s=self.itemClass(self,id)
-            s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
-            dict.__setitem__(self,id,s) # CACHE IT
-            return s
-
-    def keys(self):
-        return self.seqLenDict.keys()
-
-    def __contains__(self, key):
-        return key in self.seqLenDict
 
     def warn_about_self_masking(self,seq,methodname='blast'):
         try:
@@ -1081,6 +1093,24 @@ class PrefixUnionMemberDict(dict):
             except AttributeError:
                 raise KeyError('key not a member of this union!')
 
+class PUDSeqInfoDict(object,UserDict.DictMixin):
+    'seqInfoDict interface based on SequenceDB.seqLenDict'
+    def __init__(self, db):
+        self.seqDB = db
+    def __iter__(self):
+        return iter(self.seqDB)
+    def keys(self): return list(iter(self.seqDB))
+    def iteritems(self):
+        for p,d in self.seqDB.prefixDict.items():
+            for seqID,info in d.seqInfoDict.iteritems():
+                yield self.seqDB.format_id(p,seqID),info
+    def __getitem__(self, k):
+        prefix,seqID = self.seqDB.get_prefix_id(k)
+        return self.seqDB.get_subitem(self.seqDB.prefixDict[prefix].seqInfoDict,
+                                      seqID)
+    def has_key(self, k):
+        return k in self.seqDB
+
 class PrefixUnionDict(object, UserDict.DictMixin):
     """union interface to a series of dicts, each assigned a unique prefix
        ID 'foo.bar' --> ID 'bar' in dict f associated with prefix 'foo'."""
@@ -1114,34 +1144,45 @@ Set trypath to give a list of directories to search.'''
         for k,v in self.prefixDict.items():
             d[v]=k # CREATE A REVERSE MAPPING
         self.dicts=d
-
-    def __getitem__(self,k):
-        "for ID 'foo.bar', return item 'bar' in dict f associated with prefix 'foo'"
+        self.seqInfoDict = PUDSeqInfoDict(self) # standard interface
+    def format_id(self, prefix, seqID):
+        return prefix + self.separator + seqID
+    def get_prefix_id(self, k):
+        'subdivide key into prefix, id using separator'
         try:
-            (prefix,id) = k.split(self.separator)
-        except ValueError: # id CONTAINS separator CHARACTER?
             t = k.split(self.separator)
-            if len(t)<2:
-                raise KeyError('invalid id format; no prefix: '+k)
+        except AttributeError:
+            raise KeyError('key should be string! ' + repr(k))
+        l = len(t)
+        if l == 2:
+            return t
+        elif l<2:
+            raise KeyError('invalid id format; no prefix: '+k)
+        else: # id CONTAINS separator CHARACTER?
             prefix = t[0] # ASSUME PREFIX DOESN'T CONTAIN separator
             id = k[len(prefix)+1:] # SKIP PAST PREFIX
-        d=self.prefixDict[prefix]
+            return prefix,id
+    def get_subitem(self, d, seqID):
         try: # TRY TO USE int KEY FIRST
-            return d[int(id)]
+            return d[int(seqID)]
         except (ValueError,KeyError,TypeError): # USE DEFAULT str KEY
             try:
-                return d[id]
+                return d[seqID]
             except KeyError:
-                raise KeyError, "no key '%s' in %s" % (k, repr(self),)
+                raise KeyError, "no key '%s' in %s" % (seqID, repr(d))
+    def __getitem__(self,k):
+        "for ID 'foo.bar', return item 'bar' in dict f associated with prefix 'foo'"
+        prefix,seqID = self.get_prefix_id(k)
+        return self.get_subitem(self.prefixDict[prefix], seqID)
 
     def __contains__(self,k):
         "test whether ID in union; also check whether seq key in one of our DBs"
         if isinstance(k,str):
             try:
-                (prefix,id) = k.split(self.separator)
-            except ValueError:
+                (prefix,id) = self.get_prefix_id(k)
+                return id in self.prefixDict[prefix]
+            except KeyError:
                 return False
-            return id in self.prefixDict[prefix]
         else: # TREAT KEY AS A SEQ, CHECK IF IT IS FROM ONE OF OUR DB
             try:
                 db=k.pathForward.db
@@ -1156,7 +1197,7 @@ Set trypath to give a list of directories to search.'''
         "generate union of all dicts IDs, each with appropriate prefix."
         for p,d in self.prefixDict.items():
             for id in d:
-                yield p+self.separator+id
+                yield self.format_id(p, id)
 
     def keys(self):
         return list(self.iterkeys())
@@ -1168,13 +1209,13 @@ Set trypath to give a list of directories to search.'''
         "generate union of all dicts items, each id with appropriate prefix."
         for p,d in self.prefixDict.items():
             for id,seq in d.iteritems():
-                yield p+self.separator+id,seq
+                yield self.format_id(p, id),seq
 
     def iteritemlen(self):
         "generate union of all dicts item lengths, each id with appropriate prefix."
         for p,d in self.prefixDict.items():
             for id,l in d.seqLenDict.iteritems():
-                yield p+self.separator+id,l[0]
+                yield self.format_id(p, id),l[0]
 
     def getName(self,path):
         "return fully qualified ID i.e. 'foo.bar'"
