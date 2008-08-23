@@ -401,8 +401,8 @@ class SequenceDB(UserDict.DictMixin, dict):
         raise IndexError('interval not found in cache')
 
     # these methods should all be implemented on all SeqDBs.
-    __len__ = __getitem__ = __iter__ = __contains__ = keys = \
-              classutil.method_not_implemented
+    ## __len__ = __getitem__ = __iter__ = __contains__ = keys = \
+    ##           classutil.method_not_implemented
     def __iter__(self):
         return iter(self.seqInfoDict)
     def iteritems(self):
@@ -1214,8 +1214,8 @@ Set trypath to give a list of directories to search.'''
     def iteritemlen(self):
         "generate union of all dicts item lengths, each id with appropriate prefix."
         for p,d in self.prefixDict.items():
-            for id,l in d.seqLenDict.iteritems():
-                yield self.format_id(p, id),l[0]
+            for id,info in d.seqInfoDict.iteritems():
+                yield self.format_id(p, id),info.length
 
     def getName(self,path):
         "return fully qualified ID i.e. 'foo.bar'"
@@ -1403,7 +1403,6 @@ class XMLRPCSeqLenDict(object):
         obj.__dict__[self.attr] = d # PROVIDE DIRECTLY TO THE __dict__
         return d
 
-
 class XMLRPCSequenceDB(SequenceDB):
     'XMLRPC client: access sequence database over XMLRPC'
     itemClass = XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
@@ -1415,6 +1414,7 @@ class XMLRPCSequenceDB(SequenceDB):
         self.server = coordinator.get_connection(url,name)
         self.url = url
         self.name = name
+        self.seqInfoDict = SeqLenDictWrapper(self)
     def __getstate__(self): ################ SUPPORT FOR UNPICKLING
         return dict(url=self.url,name=self.name)
     def __getitem__(self,id):

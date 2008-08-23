@@ -12,6 +12,14 @@ class BlastDB_Test(object):
         assert 'seq1' in self.db
         assert 'seq2' in self.db
         assert 'foo' not in self.db
+    def keys_info_test(self):
+        k = self.db.seqInfoDict.keys()
+        k.sort()
+        assert k == ['seq1', 'seq2']
+    def contains_info_test(self):
+        assert 'seq1' in self.db.seqInfoDict
+        assert 'seq2' in self.db.seqInfoDict
+        assert 'foo' not in self.db.seqInfoDict
     def has_key_test(self):
         assert self.db.has_key('seq1')
         assert self.db.has_key('seq2')
