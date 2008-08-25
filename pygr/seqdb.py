@@ -1,5 +1,6 @@
 from __future__ import generators
 import os
+from sequence import SeqPath, NOT_ON_SAME_PATH
 from sqlgraph import *
 from poa import *
 from parse_blast import *
@@ -879,6 +880,14 @@ class AnnotationSeq(SeqPath):
     annotationType = classutil.DBAttributeDescr('annotationType')
     _seqtype = AnnotationSeqtypeDescr()
     __repr__ =  annotation_repr
+    def __cmp__(self, other):
+        if not isinstance(other, AnnotationSeq):
+            return -1
+        if cmp(self.sequence, other.sequence) == 0:
+            if self.id is other.id and self.db is other.db:
+                return cmp((self.start,self.stop),(other.start,other.stop))
+        return NOT_ON_SAME_PATH
+    
     def strslice(self,start,stop):
         raise ValueError('''this is an annotation, and you cannot get a sequence string from it.
 Use its sequence attribute to get a sequence object representing this interval.''')
@@ -891,7 +900,7 @@ class AnnotationSlice(SeqDBSlice):
     annotationType = classutil.DBAttributeDescr('annotationType')
     __repr__ =  annotation_repr
 
-class AnnotationDB(dict):
+class AnnotationDB(UserDict.DictMixin, dict):
     'container of annotations as specific slices of db sequences'
     def __init__(self,sliceDB,seqDB,annotationType=None,itemClass=AnnotationSeq,
                  itemSliceClass=AnnotationSlice,
