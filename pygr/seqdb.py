@@ -1211,12 +1211,6 @@ Set trypath to give a list of directories to search.'''
             for id,seq in d.iteritems():
                 yield self.format_id(p, id),seq
 
-    def iteritemlen(self):
-        "generate union of all dicts item lengths, each id with appropriate prefix."
-        for p,d in self.prefixDict.items():
-            for id,info in d.seqInfoDict.iteritems():
-                yield self.format_id(p, id),info.length
-
     def getName(self,path):
         "return fully qualified ID i.e. 'foo.bar'"
         path=path.pathForward
@@ -1428,22 +1422,13 @@ class XMLRPCSequenceDB(SequenceDB):
             self[id] = s
             return s
         raise KeyError('%s not in this database' % id)
-    def __iter__(self):
-        'generate all IDs in this database'
-        for id in self.seqLenDict:
-            yield id
-
-    def iteritems(self):
-        'generate all IDs in this database'
-        for id in self.seqLenDict:
-            yield id,self[id]
-
-    def __len__(self):
-        "number of total entries in this database"
-        return len(self.seqLenDict)
 
 
 def fastaDB_unpickler(klass,srcfile,kwargs):
+    if klass is BlastDB or klass == 'BlastDB':
+        klass = BlastDB
+    else:
+        raise ValueError('Caught attempt to unpickle untrusted class %s' %klass)
     o = klass(srcfile,**kwargs) # INITIALIZE, BUILD INDEXES, ETC.
     o._saveLocalBuild = True # MARK FOR LOCAL PYGR.DATA SAVE
     return o

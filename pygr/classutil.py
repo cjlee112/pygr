@@ -22,7 +22,7 @@ def filename_unpickler(cls,path,kwargs):
                 raise IOError('unable to open file %s' % path)
         except KeyError:
             raise IOError('unable to open file %s' % path)
-    if cls==SourceFileName:
+    if cls is SourceFileName:
         return SourceFileName(path)
     raise ValueError('Attempt to unpickle untrusted class ' + cls.__name__)
 filename_unpickler.__safe_for_unpickling__ = 1
