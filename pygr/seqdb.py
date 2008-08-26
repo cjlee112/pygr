@@ -5,6 +5,7 @@ from poa import *
 from parse_blast import *
 import classutil
 import UserDict
+import weakref
 
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
@@ -322,11 +323,15 @@ class SeqDBSlice(SeqPath):
     id=SeqDBDescriptor('id')
     db=SeqDBDescriptor('db')
 
-class SequenceDB(UserDict.DictMixin, dict):
+class SequenceDB(object, UserDict.DictMixin):
     itemClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
-    def __init__(self, filepath=None, **kwargs):
+    def __init__(self, filepath=None, autoGC=True, **kwargs):
         "Initialize seq db from filepath or ifile"
+        if autoGC: # automatically garbage collect unused objects
+            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+        else:
+            self._weakValueDict = {}
         kwargs = kwargs.copy() # get a copy we can modify w/o side effects
         if filepath is None:
             try:
@@ -334,7 +339,6 @@ class SequenceDB(UserDict.DictMixin, dict):
             except (KeyError, AttributeError):
                 raise TypeError("unable to obtain a filename")
         self.filepath = classutil.SourceFileName(str(filepath))
-        dict.__init__(self)
         classutil.apply_itemclass(self, kwargs)
         kwargs['db'] = self
         kwargs['filepath'] = filepath
@@ -411,14 +415,14 @@ class SequenceDB(UserDict.DictMixin, dict):
     def __len__(self):
         "number of total entries in this database"
         return len(self.seqInfoDict)
-    def __getitem__(self,id):
+    def __getitem__(self, seqID):
         "Get sequence matching this ID, using dict as local cache"
         try:
-            return dict.__getitem__(self,id)
+            return self._weakValueDict[seqID]
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
-            s=self.itemClass(self,id)
-            s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
-            dict.__setitem__(self,id,s) # CACHE IT
+            s = self.itemClass(self, seqID)
+            s.db = self # LET IT KNOW WHAT DATABASE IT'S FROM...
+            self._weakValueDict[seqID] = s # CACHE IT
             return s
     def keys(self):
         return self.seqInfoDict.keys()
@@ -655,7 +659,7 @@ class BlastDB(BlastDBbase):
             except KeyError:
                 pass
         try:
-            return dict.__getitem__(self,id)
+            return self._weakValueDict[id]
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
             try:
                 s=self.itemClass(self,id)
@@ -663,7 +667,7 @@ class BlastDB(BlastDBbase):
                 id=self.get_real_id(id)
                 s=self.itemClass(self,id)
             s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
-            dict.__setitem__(self,id,s) # CACHE IT
+            self._weakValueDict[id] = s # CACHE IT
             return s
 
     def __repr__(self):
@@ -1402,8 +1406,11 @@ class XMLRPCSequenceDB(SequenceDB):
     itemClass = XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     itemSliceClass = SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
     seqLenDict = XMLRPCSeqLenDict('seqLenDict') # INTERFACE TO SEQLENDICT
-    def __init__(self,url=None,name=None):
-        dict.__init__(self)
+    def __init__(self, url=None, name=None, autoGC=True):
+        if autoGC: # automatically garbage collect unused objects
+            self._weakValueDict = weakref.WeakValueDictionary()
+        else:
+            self._weakValueDict = {}
         import coordinator
         self.server = coordinator.get_connection(url,name)
         self.url = url
@@ -1413,13 +1420,13 @@ class XMLRPCSequenceDB(SequenceDB):
         return dict(url=self.url,name=self.name)
     def __getitem__(self,id):
         try:
-            return dict.__getitem__(self,id)
+            return self._weakValueDict[id]
         except:
             pass
         l = self.server.getSeqLen(id)
         if l>0:
             s = self.itemClass(self,id,l)
-            self[id] = s
+            self._weakValueDict[id] = s
             return s
         raise KeyError('%s not in this database' % id)
 
