@@ -1698,9 +1698,9 @@ See the NLMSA documentation for more details.\n''')
     nseq0=len(self.seqDict) # GET TOTAL #SEQUENCES IN ALL DATABASES
     seqidmap=<SeqIDMap *>calloc(nseq0,sizeof(SeqIDMap)) # ALLOCATE ARRAY
     i=0
-    for pythonStr,j in self.seqDict.seqInfoDict.iteritems():
+    for pythonStr,seqInfo in self.seqDict.seqInfoDict.iteritems():
       seqidmap[i].id=strdup(pythonStr)
-      seqidmap[i].length = j.length
+      seqidmap[i].length = seqInfo.length
       i=i+1
     qsort(seqidmap,nseq0,sizeof(SeqIDMap),seqidmap_qsort_cmp) # SORT BY id
     ns=None
@@ -1822,9 +1822,9 @@ See the NLMSA documentation for more details.\n''')
     nseq0=len(self.seqDict) # GET TOTAL #SEQUENCES IN ALL DATABASES
     seqidmap=<SeqIDMap *>calloc(nseq0,sizeof(SeqIDMap)) # ALLOCATE ARRAY
     i=0
-    for pythonStr,j in self.seqDict.seqInfoDict.iteritems():
+    for pythonStr,seqInfo in self.seqDict.seqInfoDict.iteritems():
       seqidmap[i].id=strdup(pythonStr)
-      seqidmap[i].length = j.length
+      seqidmap[i].length = seqInfo.length
       i=i+1
     qsort(seqidmap,nseq0,sizeof(SeqIDMap),seqidmap_qsort_cmp) # SORT BY id
     ns_src = None
