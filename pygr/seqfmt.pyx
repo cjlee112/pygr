@@ -1,13 +1,14 @@
 
 cdef extern from "stdio.h":
-  ctypedef struct FILE:
-    pass
-  FILE *fopen(char *,char *)
-  int fclose(FILE *)
-  int sscanf(char *str,char *fmt,...)
-  int sprintf(char *str,char *fmt,...)
-  char *fgets(char *str,int size,FILE *ifile)
-  int fputc(int,FILE *)
+    ctypedef struct FILE:
+        pass
+    FILE *fopen(char *,char *)
+    FILE *fdopen(int,char *)
+    int fclose(FILE *)
+    int sscanf(char *str,char *fmt,...)
+    int sprintf(char *str,char *fmt,...)
+    char *fgets(char *str,int size,FILE *ifile)
+    int fputc(int,FILE *)
 
 cdef extern from "ctype.h":
     int isspace(int)
@@ -18,13 +19,14 @@ cdef extern from "string.h":
 
 
 
-def read_fasta_lengths(d,filename):
+def read_fasta_lengths(d, pyfile, filename):
+    'read seq lengths from python file object, save into dictionary d'
     cdef int i
     cdef long long seqLength,ipos,offset # MUST USE 64-BIT INT!!!
     cdef char tmp[32768],fastastart[4],*p
     cdef FILE *ifile,*ifile2
 
-    ifile=fopen(filename,'r')
+    ifile = fdopen(pyfile.fileno(),'r') # get FILE * from python file object
     if ifile==NULL:
         raise IOError('unable to open %s' % filename)
     outfile=filename+'.pureseq'
@@ -54,6 +56,5 @@ def read_fasta_lengths(d,filename):
         p=fgets(tmp,32767,ifile) # READ THE FIRST LINE OF THE MAF FILE
     if id is not None and seqLength>0:
         d[id]=seqLength,offset # SAVE THIS SEQ LENGTH
-    fclose(ifile)
     fclose(ifile2)
     

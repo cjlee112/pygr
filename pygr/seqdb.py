@@ -140,13 +140,36 @@ class SeqLenDictWrapper(object,UserDict.DictMixin):
     def keys(self):
         return self.seqDB.seqLenDict.keys()
 
-def store_seqlen_dict(d,ifile,filename,idFilter=None):
+
+class SeqLenDictSaver(object):
+    'support for generic reading function'
+    def __init__(self, reader):
+        self.reader = reader
+    def __call__(self, d, ifile, filename):
+        offset = 0L
+        ifile2 = file(filename+'.pureseq', 'w')
+        try:
+            for o in reader(ifile, filename): # run the reader as iterator
+                d[o.id] = o.length,offset # save to seqlendict
+                offset += o.length
+                if o.length!=len(o.sequence):
+                    raise ValueError('length does not match sequence: %s,%d'
+                                     %(o.id,o.length))
+                ifile2.write(o.sequence) # save to pureseq file
+        finally:
+            ifile2.close()
+
+def store_seqlen_dict(d, filename, ifile=None, idFilter=None, reader=None):
     "store sequence lengths in a dictionary"
-    try: # TRY TO USE OUR FAST COMPILED PARSER
-        import seqfmt
-    except ImportError:
-        import sys
-        raise ImportError('''
+    if reader is not None: # run the user's custom reader() function.
+        builder = SeqLenDictSaver(reader)
+    else:
+        try: # TRY TO USE OUR FAST COMPILED PARSER
+            import seqfmt
+            builder = seqfmt.read_fasta_lengths
+        except ImportError:
+            import sys
+            raise ImportError('''
 Unable to import extension module pygr.seqfmt that should be part of this package.
 Either you are working with an incomplete install, or an installation of pygr
 compiled with an incompatible Python version.  Please check your PYTHONPATH
@@ -154,17 +177,23 @@ setting and make sure it is compatible with this Python version (%d.%d).
 When in doubt, rebuild your pygr installation using the
 python setup.py build --force
 option to force a clean install''' % sys.version_info[:2])
-    if idFilter is None: # LET C FUNC WRITE DIRECTLY TO d
-        return seqfmt.read_fasta_lengths(d,filename)
-    class dictwrapper(object):
-        def __init__(self,idFilter,d):
-            self.d=d
-            self.idFilter=idFilter
-        def __setitem__(self,k,v):
-            id=self.idFilter(k)
-            self.d[id]=v
-    dw=dictwrapper(idFilter,d) # FORCE C FUNC TO WRITE TO WRAPPER...
-    return seqfmt.read_fasta_lengths(dw,filename)
+    if idFilter is not None: # need to wrap seqlendict to apply filter...
+        class dictwrapper(object):
+            def __init__(self, idFilter, d):
+                self.d = d
+                self.idFilter = idFilter
+            def __setitem__(self, k, v):
+                id = self.idFilter(k)
+                self.d[id] = v
+        d = dictwrapper(idFilter, d) # force builder to write to wrapper...
+    if ifile is not None:
+        builder(d, ifile, filename) # run the builder on our sequence set
+    else:
+        ifile = file(filename)
+        try:
+            builder(d, ifile, filename) # run the builder on our sequence set
+        finally:
+            ifile.close()
     
 class FileDBSeqDescriptor(object):
     "Get sequence from a concatenated pureseq database for obj.id"
@@ -175,17 +204,16 @@ class FileDBSequence(SequenceBase):
     seq=FileDBSeqDescriptor()
     __reduce__ = classutil.item_reducer
     @classmethod
-    def _init_subclass(cls, db, filepath, ifile=None, idFilter=None):
+    def _init_subclass(cls, db, filepath, **kwargs):
         'open or build seqLenDict if needed'
         from dbfile import NoSuchFileError
         try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
             db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
         except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
             db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
-            ifile,idFilter = db.raw_fasta_stream(ifile,idFilter)
             import sys
             print >>sys.stderr,'Building sequence length index...'
-            store_seqlen_dict(db.seqLenDict, ifile, filepath, idFilter)
+            store_seqlen_dict(db.seqLenDict, filepath, **kwargs)
             db.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
             db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
         db.seqInfoDict = SeqLenDictWrapper(db) # standard interface
@@ -349,10 +377,11 @@ class SequenceDB(object, UserDict.DictMixin):
         try: # signal that we're done constructing, by closing the file object
             kwargs['ifile'].close()
         except (KeyError, AttributeError): pass
-    def __reduce__(self): ############################# SUPPORT FOR PICKLING
-        return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
-    def __setstate__(self,state):
-        self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
+
+    __getstate__ = classutil.standard_getstate ############### pickling methods
+    __setstate__ = classutil.standard_setstate
+    _pickleAttrs = dict(filepath=0)
+
     __invert__ = classutil.standard_invert
     _inverseClass = SequenceDBInverse
     def __hash__(self):
@@ -449,8 +478,8 @@ class BlastDBbase(SequenceDB):
     def __repr__(self):
         return "<BlastDBbase '%s'>" % (self.filepath)
 
-    __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
-    _pickleAttrs = dict(filepath=0,skipSeqLenDict=0,blastIndexPath=0)
+    _pickleAttrs = SequenceDB._pickleAttrs.copy()
+    _pickleAttrs['blastIndexPath'] = 0
 
     def test_db_location(self,filepath):
         'check whether BLAST index files ready for use; return self.blastReady status'
@@ -1406,7 +1435,7 @@ class XMLRPCSequenceDB(SequenceDB):
     itemClass = XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     itemSliceClass = SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
     seqLenDict = XMLRPCSeqLenDict('seqLenDict') # INTERFACE TO SEQLENDICT
-    def __init__(self, url=None, name=None, autoGC=True):
+    def __init__(self, url=None, name=None, autoGC=True, **kwargs):
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = weakref.WeakValueDictionary()
         else:
