@@ -48,6 +48,38 @@ class BlastDB_Test(object):
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii
+    def readonly_test(self):
+        try:
+            self.db.copy()              # what should 'copy' do on BlastDB?
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.clear()
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.setdefault('foo')
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.pop()
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.popitem()
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.update({})
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+            
     # test some things other than dict behavior
     def keyerror_test(self):
         "Make sure that the BlastDB KeyError is informative."
@@ -117,6 +149,37 @@ class PrefixUnionDict_Test(object):
             self.db['foo']
         except KeyError, e:
             assert "invalid id format; no prefix: foo" in str(e), str(e)
+    def readonly_test(self):
+        try:
+            self.db.copy()              # what should 'copy' do on PUD?
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:                           # what should 'setdefault' do on PUD?
+            self.db.setdefault('foo')
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:                           # what should 'update' do on PUD?
+            self.db.update({})
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.clear()
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.pop()
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.popitem()
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
 
 class AnnotationDB_Test(object):
     """
@@ -164,7 +227,6 @@ class AnnotationDB_Test(object):
         kv.sort()
         iv = list(self.db.itervalues())
         iv.sort()
-        print repr(kv[0]), repr(iv[0])
         assert kv[0] == iv[0]
         assert kv == iv, (kv, iv)
     def iteritems_test(self):

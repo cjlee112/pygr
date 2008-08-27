@@ -491,17 +491,19 @@ class SeqDBbase(UserDict.DictMixin, dict):
         raise NotImplementedError
     def keys(self):
         raise NotImplementedError
+
+    # not clear what this should do for SeqDBs
+    def copy(self):
+        raise NotImplementedError, "read only dict"
     
     # these methods should not be implemented for read-only database.
     def clear(self):
         raise NotImplementedError, "read only dict"
-    def setdefault(self):
+    def setdefault(self, k, d=None):
         raise NotImplementedError, "read only dict"
     def pop(self):
         raise NotImplementedError, "read only dict"
     def popitem(self):
-        raise NotImplementedError, "read only dict"
-    def copy(self):
         raise NotImplementedError, "read only dict"
     def update(self, other):
         raise NotImplementedError, "read only dict"
@@ -1452,6 +1454,21 @@ Set trypath to give a list of directories to search.'''
             else:
                 m(owner,seqDict) # PASS CACHE HINT DOWN TO SUBDICTIONARY
 
+    # not clear what this should do for PrefixUnionDict
+    def copy(self):
+        raise NotImplementedError, "nonsensical in PrefixUnionDict"
+    def setdefault(self, k, d=None):
+        raise NotImplementedError, "nonsensical in PrefixUnionDict"
+    def update(self, other):
+        raise NotImplementedError, "nonsensical in PrefixUnionDict"
+    
+    # these methods should not be implemented for read-only database.
+    def clear(self):
+        raise NotImplementedError, "no deletions allowed"
+    def pop(self):
+        raise NotImplementedError, "no deletions allowed"
+    def popitem(self):
+        raise NotImplementedError, "no deletions allowed"
 
 class PrefixDictInverseAdder(PrefixDictInverse):
     def getName(self,seq):
