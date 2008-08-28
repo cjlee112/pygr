@@ -1,8 +1,7 @@
 from __future__ import generators
 import os
-from sequence import SeqPath, NOT_ON_SAME_PATH
+from sequence import *
 from sqlgraph import *
-from poa import *
 from parse_blast import *
 import classutil
 import UserDict
