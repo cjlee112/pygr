@@ -46,18 +46,19 @@ def select_from_row(row, what):
                        % (row.db.name,str(row.id),what))
     return row.db.cursor.fetchall()[0][0] #return the single field we requested
 
-def init_row_subclass(cls):
+def init_row_subclass(cls, db):
     'add descriptors for db attributes'
-    for attr in cls.db.data: # bind all database columns
+    cls.db = db # all instances of this class are now bound to this database
+    for attr in db.data: # bind all database columns
         if attr == 'id': # handle ID attribute specially
-            setattr(cls, attr, cls._idDescriptor(cls.db, attr))
+            setattr(cls, attr, cls._idDescriptor(db, attr))
             continue
         try: # check if this attr maps to an SQL column
-            cls.db._attrSQL(attr, columnNumber=True)
+            db._attrSQL(attr, columnNumber=True)
         except AttributeError: # treat as SQL expression
-            setattr(cls, attr, cls._sqlDescriptor(cls.db, attr))
+            setattr(cls, attr, cls._sqlDescriptor(db, attr))
         else: # treat as interface to our stored tuple
-            setattr(cls, attr, cls._columnDescriptor(cls.db, attr))
+            setattr(cls, attr, cls._columnDescriptor(db, attr))
 
 
 class TupleO(object):
@@ -348,7 +349,7 @@ class SQLTableBase(dict):
         if oclass is not None: # use this as our base itemClass
             self.itemClass = oclass
         oclass = get_bound_subclass(self, 'itemClass', self.name,
-                                    attrDict=dict(db=self)) # SET NEW itemClass
+                                    subclassArgs=dict(db=self)) # bind itemClass
         if issubclass(oclass, TupleO):
             oclass._attrcol = self.data # BIND ATTRIBUTE LIST TO TUPLEO INTERFACE
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):

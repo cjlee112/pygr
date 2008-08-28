@@ -9,9 +9,15 @@ import weakref
 
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
+    def _init_subclass(cls, db, **kwargs):
+        db.seqInfoDict = db # db will act as its own seqInfoDict
+        SQLRow._init_subclass(db=db, **kwargs)
     def __init__(self, id):
         SQLRow.__init__(self, id)
         SequenceBase.__init__(self)
+    def __len__(self):
+        'simply returns self.length; use attrAlias dict to provide this attr!'
+        return self.length
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return self._select('substring(%s FROM %d FOR %d)'
@@ -206,6 +212,7 @@ class FileDBSequence(SequenceBase):
     @classmethod
     def _init_subclass(cls, db, filepath, **kwargs):
         'open or build seqLenDict if needed'
+        cls.db = db # all instances of this class are now bound to this database
         from dbfile import NoSuchFileError
         try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
             db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
@@ -218,7 +225,6 @@ class FileDBSequence(SequenceBase):
             db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
         db.seqInfoDict = SeqLenDictWrapper(db) # standard interface
     def __init__(self,db,id):
-        self.db=db
         self.id=id
         SequenceBase.__init__(self)
         self.checkID() # RAISE KeyError IF THIS SEQ NOT IN db
@@ -437,7 +443,6 @@ class SequenceDB(object, UserDict.DictMixin):
             return self._weakValueDict[seqID]
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
             s = self.itemClass(self, seqID)
-            s.db = self # LET IT KNOW WHAT DATABASE IT'S FROM...
             self._weakValueDict[seqID] = s # CACHE IT
             return s
     def keys(self):
