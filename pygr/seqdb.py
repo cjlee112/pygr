@@ -1381,7 +1381,8 @@ cacheProxyDict=DummyProxyDict()
 
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
-    xmlrpc_methods={"getSeqLen":0,"strslice":0,"getSeqLenDict":0}
+    xmlrpc_methods = dict(getSeqLen=0, strslice=0, getSeqLenDict=0,
+                          get_db_size=0)
     def getSeqLen(self,id):
         'get sequence length, or -1 if not found'
         try:
@@ -1394,6 +1395,8 @@ class BlastDBXMLRPC(BlastDB):
         for k,v in self.seqLenDict.items():
             d[k] = v[0],str(v[1]) # CONVERT TO STR TO ALLOW OFFSET>2GB
         return d # XML-RPC CANNOT HANDLE INT > 2 GB, SO FORCED TO CONVERT...
+    def get_db_size(self):
+        return len(self)
     def strslice(self,id,start,stop):
         'return string sequence for specified interval in the specified sequence'
         if start<0: # HANDLE NEGATIVE ORIENTATION
@@ -1449,6 +1452,13 @@ class XMLRPCSequenceDB(SequenceDB):
     seqLenDict = XMLRPCSeqLenDescr('seqLenDict') # INTERFACE TO SEQLENDICT
     def __getstate__(self): # DO NOT pickle self.itemClass! We provide our own.
         return dict(url=self.url, name=self.name) # just need XMLRPC info
+    def __len__(self):
+        return self.server.get_db_size()
+    def __contains__(self, k):
+        if self.server.getSeqLen(k)>0:
+            return True
+        else:
+            return False
 
 
 def fastaDB_unpickler(klass,srcfile,kwargs):
