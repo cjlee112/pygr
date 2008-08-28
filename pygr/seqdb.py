@@ -352,35 +352,24 @@ class SeqDBSlice(SeqPath):
     db=SeqDBDescriptor('db')
 
 class SequenceDB(object, UserDict.DictMixin):
-    itemClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
     itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
-    def __init__(self, filepath=None, autoGC=True, **kwargs):
+    def __init__(self, autoGC=True, dbname='generic', **kwargs):
         "Initialize seq db from filepath or ifile"
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = weakref.WeakValueDictionary() # object cache
         else:
             self._weakValueDict = {}
+        self.autoGC = autoGC
         kwargs = kwargs.copy() # get a copy we can modify w/o side effects
-        if filepath is None:
-            try:
-                filepath = kwargs['ifile'].name
-            except (KeyError, AttributeError):
-                raise TypeError("unable to obtain a filename")
-        self.filepath = classutil.SourceFileName(str(filepath))
         classutil.apply_itemclass(self, kwargs)
         kwargs['db'] = self
-        kwargs['filepath'] = filepath
-        classutil.get_bound_subclass(self, 'itemClass',
-                                     os.path.basename(filepath),
+        classutil.get_bound_subclass(self, 'itemClass', dbname,
                                      subclassArgs=kwargs)
         self.set_seqtype()
-        try: # signal that we're done constructing, by closing the file object
-            kwargs['ifile'].close()
-        except (KeyError, AttributeError): pass
 
     __getstate__ = classutil.standard_getstate ############### pickling methods
     __setstate__ = classutil.standard_setstate
-    _pickleAttrs = dict(filepath=0)
+    _pickleAttrs = dict(autoGC=0)
 
     __invert__ = classutil.standard_invert
     _inverseClass = SequenceDBInverse
@@ -434,8 +423,6 @@ class SequenceDB(object, UserDict.DictMixin):
         raise IndexError('interval not found in cache')
 
     # these methods should all be implemented on all SeqDBs.
-    ## __len__ = __getitem__ = __iter__ = __contains__ = keys = \
-    ##           classutil.method_not_implemented
     def __iter__(self):
         return iter(self.seqInfoDict)
     def iteritems(self):
@@ -462,12 +449,29 @@ class SequenceDB(object, UserDict.DictMixin):
     clear = setdefault = pop = popitem = copy = update = \
             classutil.read_only_error
 
-class BlastDBbase(SequenceDB):
+class SequenceFileDB(SequenceDB):
+    itemClass = FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
+    _pickleAttrs = SequenceDB._pickleAttrs.copy()
+    _pickleAttrs['filepath'] = 0
+    def __init__(self, filepath=None, **kwargs):
+        if filepath is None:
+            try: # get filepath from ifile arg
+                filepath = kwargs['ifile'].name
+            except (KeyError, AttributeError):
+                raise TypeError("unable to obtain a filename")
+        self.filepath = classutil.SourceFileName(str(filepath))
+        SequenceDB.__init__(self, filepath=filepath,
+                            dbname=os.path.basename(filepath), **kwargs)
+        try: # signal that we're done constructing, by closing the file object
+            kwargs['ifile'].close()
+        except (KeyError, AttributeError): pass
+
+class BlastDBbase(SequenceFileDB):
     "Container representing Blast database"
     def __init__(self, filepath=None, blastReady=False, blastIndexPath=None,
                  blastIndexDirs=None, **kwargs):
         "format database and build indexes if needed. Provide filepath or file object"
-        SequenceDB.__init__(self, filepath, **kwargs)
+        SequenceFileDB.__init__(self, filepath, **kwargs)
         if blastIndexPath is not None:
             self.blastIndexPath = blastIndexPath
         if blastIndexDirs is not None:
@@ -478,7 +482,7 @@ class BlastDBbase(SequenceDB):
     def __repr__(self):
         return "<BlastDBbase '%s'>" % (self.filepath)
 
-    _pickleAttrs = SequenceDB._pickleAttrs.copy()
+    _pickleAttrs = SequenceFileDB._pickleAttrs.copy()
     _pickleAttrs['blastIndexPath'] = 0
 
     def test_db_location(self,filepath):
@@ -1402,10 +1406,19 @@ class BlastDBXMLRPC(BlastDB):
     
 class XMLRPCSequence(SequenceBase):
     "Represents a sequence in a blast database, accessed via XMLRPC"
-    def __init__(self,db,id,length):
-        self.db=db
-        self.id=id
-        self.length=length
+    @classmethod
+    def _init_subclass(cls, db, url, name, **kwargs):
+        import coordinator
+        db.server = coordinator.get_connection(url,name)
+        db.url = url
+        db.name = name
+        db.seqInfoDict = SeqLenDictWrapper(db)
+    def __init__(self, db, id):
+        self.length = db.server.getSeqLen(id)
+        if self.length<=0:
+            raise KeyError('%s not in this database' % id)
+        self.db = db
+        self.id = id
         SequenceBase.__init__(self)
     def strslice(self,start,end,useCache=True):
         "XMLRPC access to slice of a sequence"
@@ -1418,7 +1431,7 @@ class XMLRPCSequence(SequenceBase):
     def __len__(self):
         return self.length
 
-class XMLRPCSeqLenDict(object):
+class XMLRPCSeqLenDescr(object):
     'descriptor that returns dictionary of remote server seqLenDict'
     def __init__(self,attr):
         self.attr = attr
@@ -1432,32 +1445,10 @@ class XMLRPCSeqLenDict(object):
 
 class XMLRPCSequenceDB(SequenceDB):
     'XMLRPC client: access sequence database over XMLRPC'
-    itemClass = XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
-    itemSliceClass = SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
-    seqLenDict = XMLRPCSeqLenDict('seqLenDict') # INTERFACE TO SEQLENDICT
-    def __init__(self, url=None, name=None, autoGC=True, **kwargs):
-        if autoGC: # automatically garbage collect unused objects
-            self._weakValueDict = weakref.WeakValueDictionary()
-        else:
-            self._weakValueDict = {}
-        import coordinator
-        self.server = coordinator.get_connection(url,name)
-        self.url = url
-        self.name = name
-        self.seqInfoDict = SeqLenDictWrapper(self)
-    def __getstate__(self): ################ SUPPORT FOR UNPICKLING
-        return dict(url=self.url,name=self.name)
-    def __getitem__(self,id):
-        try:
-            return self._weakValueDict[id]
-        except:
-            pass
-        l = self.server.getSeqLen(id)
-        if l>0:
-            s = self.itemClass(self,id,l)
-            self._weakValueDict[id] = s
-            return s
-        raise KeyError('%s not in this database' % id)
+    itemClass = XMLRPCSequence # sequence storage interface
+    seqLenDict = XMLRPCSeqLenDescr('seqLenDict') # INTERFACE TO SEQLENDICT
+    def __getstate__(self): # DO NOT pickle self.itemClass! We provide our own.
+        return dict(url=self.url, name=self.name) # just need XMLRPC info
 
 
 def fastaDB_unpickler(klass,srcfile,kwargs):
