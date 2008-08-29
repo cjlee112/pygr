@@ -235,3 +235,10 @@ class AnnotationDB_Test(object):
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii, (ki, ii)
+    def equality_test(self):
+        key = 'annot1'
+        db = self.db
+        
+        x = db.sliceAnnotation(key, db.sliceDB[key])
+        y = db.sliceAnnotation(key, db.sliceDB[key])
+        assert x == y
