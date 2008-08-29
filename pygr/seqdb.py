@@ -1,40 +1,23 @@
 from __future__ import generators
 import os
-from sequence import SeqPath, NOT_ON_SAME_PATH
+from sequence import *
 from sqlgraph import *
-from poa import *
 from parse_blast import *
 import classutil
 import UserDict
-
-def tryPathList(filepath,pathlist,mode='r'):
-    'return successful path based on trying pathlist locations'
-    def tryopen(mypath):
-        myfile=file(mypath,mode)
-        myfile.close()
-        return mypath
-    try: # JUST TRY filepath
-        return tryopen(filepath)
-    except IOError:
-        pass
-    if pathlist is None: # TREAT AS EMPTY LIST
-        pathlist=[]
-    import os.path
-    b=os.path.basename(filepath)
-    for s in pathlist: # NOW TRY EACH DIRECTORY IN pathlist
-        try:
-            return tryopen(os.path.join(s,b))
-        except IOError:
-            pass
-    raise IOError('unable to open %s from any location in %s'
-                  %(filepath,pathlist))
-
+import weakref
 
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
+    def _init_subclass(cls, db, **kwargs):
+        db.seqInfoDict = db # db will act as its own seqInfoDict
+        SQLRow._init_subclass(db=db, **kwargs)
     def __init__(self, id):
         SQLRow.__init__(self, id)
         SequenceBase.__init__(self)
+    def __len__(self):
+        'simply returns self.length; use attrAlias dict to provide this attr!'
+        return self.length
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
         return self._select('substring(%s FROM %d FOR %d)'
@@ -142,14 +125,57 @@ def read_fasta_lengths(ifile):
     elif isEmpty:
         raise IOError('no readable sequence in FASTA file!')
 
+class SeqLenObject(object):
+    def __init__(self, seqID, seqDB):
+        self.id = seqID
+        self.db = seqDB
+        t = seqDB.seqLenDict[seqID]
+        self.length = t[0]
+        self.offset = t[1]
 
-def store_seqlen_dict(d,ifile,filename,idFilter=None):
+class SeqLenDictWrapper(object,UserDict.DictMixin):
+    'seqInfoDict interface based on SequenceDB.seqLenDict'
+    def __init__(self, db):
+        self.seqDB = db
+    def __getitem__(self, k):
+        return SeqLenObject(k, self.seqDB)
+    def __len__(self):
+        return len(self.seqDB.seqLenDict)
+    def __iter__(self):
+        return iter(self.seqDB.seqLenDict)
+    def keys(self):
+        return self.seqDB.seqLenDict.keys()
+
+
+class SeqLenDictSaver(object):
+    'support for generic reading function'
+    def __init__(self, reader):
+        self.reader = reader
+    def __call__(self, d, ifile, filename):
+        offset = 0L
+        ifile2 = file(filename+'.pureseq', 'w')
+        try:
+            for o in reader(ifile, filename): # run the reader as iterator
+                d[o.id] = o.length,offset # save to seqlendict
+                offset += o.length
+                if o.length!=len(o.sequence):
+                    raise ValueError('length does not match sequence: %s,%d'
+                                     %(o.id,o.length))
+                ifile2.write(o.sequence) # save to pureseq file
+        finally:
+            ifile2.close()
+
+def store_seqlen_dict(d, filename, ifile=None, idFilter=None, reader=None):
     "store sequence lengths in a dictionary"
-    try: # TRY TO USE OUR FAST COMPILED PARSER
-        import seqfmt
-    except ImportError:
-        import sys
-        raise ImportError('''
+    if reader is not None: # run the user's custom reader() function.
+        builder = SeqLenDictSaver(reader)
+    else:
+        try: # TRY TO USE OUR FAST COMPILED PARSER
+            import seqfmt
+            builder = seqfmt.read_fasta_lengths
+        except ImportError:
+            import sys
+            raise ImportError('''
 Unable to import extension module pygr.seqfmt that should be part of this package.
 Either you are working with an incomplete install, or an installation of pygr
 compiled with an incompatible Python version.  Please check your PYTHONPATH
@@ -157,136 +183,57 @@ setting and make sure it is compatible with this Python version (%d.%d).
 When in doubt, rebuild your pygr installation using the
 python setup.py build --force
 option to force a clean install''' % sys.version_info[:2])
-    if idFilter is None: # LET C FUNC WRITE DIRECTLY TO d
-        return seqfmt.read_fasta_lengths(d,filename)
-    class dictwrapper(object):
-        def __init__(self,idFilter,d):
-            self.d=d
-            self.idFilter=idFilter
-        def __setitem__(self,k,v):
-            id=self.idFilter(k)
-            self.d[id]=v
-    dw=dictwrapper(idFilter,d) # FORCE C FUNC TO WRITE TO WRAPPER...
-    return seqfmt.read_fasta_lengths(dw,filename)
-    
-##     if idFilter is not None: # HAVE TO CLEAN UP BLAST'S MESSY IDs
-##         for id,seqLength in read_fasta_lengths(ifile):
-##             d[idFilter(id)] = (seqLength,) # SAVE TO DICTIONARY
-##     else: # JUST USE id AS-IS
-##         for id,seqLength in read_fasta_lengths(ifile):
-##             d[id] = (seqLength,) # SAVE TO DICTIONARY
-        
-
-def fastacmd_seq(filepath,id,start=None,end=None):
-    "Get complete sequence or slice from a BLAST formatted database"
-    maxlen=None
-    if start is not None: # USE ABILITY TO GRAB A SLICE OF THE SEQUENCE
-        if start==0 and end==1: # fastacmd FAILS ON -L 1,1: RETURNS WHOLE SEQ! UGH!
-            cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end+1)
-            maxlen=1 # GOT 2 LETTERS, SO HAVE TO SLICE DOWN TO 1... UGH!
-        else: # NORMAL USAGE... AT LEAST fastacmd WORKS SOME OF THE TIME...
-            cmd='fastacmd -d %s -s "%s" -L %d,%d' % (filepath,id,start+1,end)
+    if idFilter is not None: # need to wrap seqlendict to apply filter...
+        class dictwrapper(object):
+            def __init__(self, idFilter, d):
+                self.d = d
+                self.idFilter = idFilter
+            def __setitem__(self, k, v):
+                id = self.idFilter(k)
+                self.d[id] = v
+        d = dictwrapper(idFilter, d) # force builder to write to wrapper...
+    if ifile is not None:
+        builder(d, ifile, filename) # run the builder on our sequence set
     else:
-        cmd='fastacmd -d %s -s "%s"' % (filepath,id)
-    ofile=os.popen(cmd)
-    ofile.readline() # SKIP TITLE LINE
-    s=''
-    for line in ofile:
-        for word in line.split(): # GET RID OF WHITESPACE...
-            s += word
-    exitstatus=ofile.close()
-    if exitstatus==768:
-        raise KeyError('sequence %s not found in %s' %(id,filepath))
-    elif exitstatus is not None:
-        raise OSError('command %s failed. Not in PATH?' % cmd)
-    if maxlen is None:
-        return s
-    else: # PROTECT AGAINST fastacmd SCREWUPS
-        return s[:maxlen]
-
-
-class FastacmdIntervalCache(object):
-    """caches a single interval of sequence:
-       expandable by self+=slice
-       get sequence strslice by self[slice]"""
-    maxlen=20000 # DEFAULT MAXIMUM WIDTH
-    def __init__(self,start,end,strslice,path):
-        "strslice must be callable as strslice(i,j) to get seq[i:j]"
-        self.start=start
-        self.end=end
-        self.strslice=strslice # SAVE METHOD FOR GETTING SUBSEQUENCE
-        self.path=path
-
-    def delseq(self):
-        "drop our cached sequence"
+        ifile = file(filename)
         try:
-            del self.seq
-        except AttributeError:
-            pass
-
-    def __iadd__(self,k):
-        "expand our interval by merging with slice k"
-        if k.stop-self.start>self.maxlen or self.end-k.start>self.maxlen:
-            raise ValueError('interval is beyond max extension radius')
-        if k.start<self.start:
-            self.start=k.start
-            self.delseq() # IF INTERVAL CHANGED, BETTER REFRESH CACHED SEQ
-        if k.stop>self.end:
-            self.end=k.stop
-            self.delseq() # IF INTERVAL CHANGED, BETTER REFRESH CACHED SEQ
-        return self # iadd METHOD MUST ALWAYS RETURN self!!!
-
-    def __getitem__(self,k):
-        "return seq slice corresponding to slice given by argument k"
-        if k.start<self.start or k.stop>self.end:
-            self+=k # TRY EXTENDING OUR INTERVAL TO CONTAIN k
-        if not hasattr(self,'seq'):
-            self.seq=self.strslice(self.start,self.end) # USE SAVED METHOD
-        return self.seq[k.start-self.start:k.stop-self.start]
-
-
-class BlastSeqDescriptor(object):
-    "Get sequence from a blast formatted database for obj.id"
+            builder(d, ifile, filename) # run the builder on our sequence set
+        finally:
+            ifile.close()
+    
+class FileDBSeqDescriptor(object):
+    "Get sequence from a concatenated pureseq database for obj.id"
     def __get__(self,obj,objtype):
-        return fastacmd_seq(obj.db.filepath,obj.id)
+        return obj.strslice(0,obj.db.seqLenDict[obj.id][0])
 
-class BlastSequenceBase(SequenceBase):
-    "Represents a sequence in a blast database, w/o keeping seq in memory"
-    seq=BlastSeqDescriptor()
+class FileDBSequence(SequenceBase):
+    seq=FileDBSeqDescriptor()
+    __reduce__ = classutil.item_reducer
+    @classmethod
+    def _init_subclass(cls, db, filepath, **kwargs):
+        'open or build seqLenDict if needed'
+        cls.db = db # all instances of this class are now bound to this database
+        from dbfile import NoSuchFileError
+        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
+            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
+            import sys
+            print >>sys.stderr,'Building sequence length index...'
+            store_seqlen_dict(db.seqLenDict, filepath, **kwargs)
+            db.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
+            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        db.seqInfoDict = SeqLenDictWrapper(db) # standard interface
     def __init__(self,db,id):
-        self.db=db
         self.id=id
         SequenceBase.__init__(self)
         self.checkID() # RAISE KeyError IF THIS SEQ NOT IN db
-    def checkID(self):
-        'check whether this seq ID actually present in the DB, KeyError if not'
-        return self.strslice(0,2) # TRY TO GET TINY PIECE OF SEQUENCE
-    def strslice(self,start,end,useCache=True):
-        "Efficient access to slice of a sequence, useful for huge contigs"
-        if useCache:
-            try:
-                return self.db.strsliceCache(self,start,end)
-            except IndexError: # NOT FOUND IN CACHE
-                pass # JUST USE OUR REGULAR METHOD
-        return fastacmd_seq(self.db.filepath,self.id,start,end)
-
-class BlastSequence(BlastSequenceBase):
-    "Rely on seqLenDict to give fast access to sequence lengths"
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
         return self.db.seqLenDict[self.id][0]
     def checkID(self):
         'check whether this seq ID actually present in the DB, KeyError if not'
         return self.db.seqLenDict[self.id][0]
-
-class FileDBSeqDescriptor(object):
-    "Get sequence from a concatenated pureseq database for obj.id"
-    def __get__(self,obj,objtype):
-        return obj.strslice(0,obj.db.seqLenDict[obj.id][0])
-
-class FileDBSequence(BlastSequence):
-    seq=FileDBSeqDescriptor()
-    __reduce__ = classutil.item_reducer
     def strslice(self,start,end,useCache=True):
         "Efficient access to slice of a sequence, useful for huge contigs"
         if useCache:
@@ -302,37 +249,6 @@ class FileDBSequence(BlastSequence):
         ifile.seek(self.db.seqLenDict[self.id][1]+start)
         return ifile.read(end-start)
     
-
-class BlastSequenceCache(BlastSequence):
-    """represents a sequence, with interval caching
-    slicing operations are recorded, and merged into one or more cache intervals
-    Subsequent requests for subsequence will use these cached intervals."""
-    def __init__(self,db,id):
-        super(BlastSequenceCache,self).__init__(db,id)
-        self.cache=[]
-    def __getitem__(self,k):
-        "record all slices taken of this sequence, constructing a cache for fast access"
-        ival=super(BlastSequenceCache,self).__getitem__(k) # GET THE INTERVAL OBJECT AS USUAL
-        for i in self.cache:
-            try:
-                i+=ival # TRY TO EXTEND THIS INTERVAL CACHE TO CONTAIN ival
-                return ival # SUCCESS.  JUST RETURN ival AS USUAL
-            except ValueError:
-                pass
-        # HAVE TO ADD ival AS A NEW INTERVAL CACHE OBJECT
-        self.cache.append(FastacmdIntervalCache(ival.start,ival.stop,
-                                                super(BlastSequenceCache,self).strslice,self))
-        return ival
-    def strslice(self,start,end):
-        "get sequence from our interval cache"
-        s=slice(start,end)
-        for i in self.cache:
-            try:
-                return i[s] # TRY TO GET SEQUENCE FROM INTERVAL CACHE
-            except ValueError: # NOT IN THIS CACHE ITEM, SO KEEP TRYING
-                pass
-        return str(self[s]) # FORCE __getitem__ TO LOAD s INTO THE CACHE
-
 
 def blast_program(query_type,db_type):
     progs= {DNA_SEQTYPE:{DNA_SEQTYPE:'blastn', PROTEIN_SEQTYPE:'blastx'},
@@ -417,7 +333,7 @@ def repeat_mask(seq,progname='RepeatMasker',opts=''):
     return seq_masked # ONLY THE REPEATS ARE IN LOWERCASE NOW
 
 
-class BlastDBinverse(object):
+class SequenceDBInverse(object):
     'implements trivial inverse mapping seq --> id'
     def __init__(self,db):
         self.db=db
@@ -429,21 +345,53 @@ class BlastDBinverse(object):
         except AttributeError:
             return False
 
-class SeqDBbase(UserDict.DictMixin, dict):
-    def __reduce__(self): ############################# SUPPORT FOR PICKLING
-        return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
-    def __setstate__(self,state):
-        self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
-    def __invert__(self):
-        'keep a reference to an inverse mapping'
-        try:
-            return self._inverse
-        except AttributeError:
-            self._inverse=BlastDBinverse(self)
-            return self._inverse
+class SeqDBDescriptor(object):
+    'forwards attribute requests to self.pathForward'
+    def __init__(self,attr):
+        self.attr=attr
+    def __get__(self,obj,objtype):
+        return getattr(obj.pathForward,self.attr) # RAISES AttributeError IF NONE
+
+class SeqDBSlice(SeqPath):
+    'JUST A WRAPPER FOR SCHEMA TO HANG SHADOW ATTRIBUTES ON...'
+    id=SeqDBDescriptor('id')
+    db=SeqDBDescriptor('db')
+
+class SequenceDB(object, UserDict.DictMixin):
+    itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
+    def __init__(self, autoGC=True, dbname='generic', **kwargs):
+        "Initialize seq db from filepath or ifile"
+        if autoGC: # automatically garbage collect unused objects
+            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+        else:
+            self._weakValueDict = {}
+        self.autoGC = autoGC
+        kwargs = kwargs.copy() # get a copy we can modify w/o side effects
+        classutil.apply_itemclass(self, kwargs)
+        kwargs['db'] = self
+        classutil.get_bound_subclass(self, 'itemClass', dbname,
+                                     subclassArgs=kwargs)
+        self.set_seqtype()
+
+    __getstate__ = classutil.standard_getstate ############### pickling methods
+    __setstate__ = classutil.standard_setstate
+    _pickleAttrs = dict(autoGC=0)
+
+    __invert__ = classutil.standard_invert
+    _inverseClass = SequenceDBInverse
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
+    def set_seqtype(self):
+        'guess seqtype from 100 res of 1st seq if not already known'
+        try: # if already known, no need to do anything
+            return self._seqtype
+        except AttributeError:
+            pass
+        for seqID in self:
+            seq = self[seqID] # get the 1st sequence
+            self._seqtype = guess_seqtype(str(seq[:100]))
+            break
     _cache_max=10000
     def cacheHint(self,owner,ivalDict):
         'save a cache hint dict of {id:(start,stop)} associated with owner'
@@ -481,92 +429,66 @@ class SeqDBbase(UserDict.DictMixin, dict):
         raise IndexError('interval not found in cache')
 
     # these methods should all be implemented on all SeqDBs.
-    def __len__(self):
-        raise NotImplementedError
-    def __getitem__(self, key):
-        raise NotImplementedError
     def __iter__(self):
-        raise NotImplementedError
-    def __contains__(self, key):
-        raise NotImplementedError
+        return iter(self.seqInfoDict)
+    def iteritems(self):
+        for seqID in self:
+            yield seqID,self[seqID]
+    def __len__(self):
+        "number of total entries in this database"
+        return len(self.seqInfoDict)
+    def __getitem__(self, seqID):
+        "Get sequence matching this ID, using dict as local cache"
+        try:
+            return self._weakValueDict[seqID]
+        except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
+            s = self.itemClass(self, seqID)
+            self._weakValueDict[seqID] = s # CACHE IT
+            return s
     def keys(self):
-        raise NotImplementedError
+        return self.seqInfoDict.keys()
+    def __contains__(self, key):
+        return key in self.seqInfoDict
 
-    # not clear what this should do for SeqDBs
-    def copy(self):
-        raise NotImplementedError, "read only dict"
-    
     # these methods should not be implemented for read-only database.
-    def clear(self):
-        raise NotImplementedError, "read only dict"
-    def setdefault(self, k, d=None):
-        raise NotImplementedError, "read only dict"
-    def pop(self):
-        raise NotImplementedError, "read only dict"
-    def popitem(self):
-        raise NotImplementedError, "read only dict"
-    def update(self, other):
-        raise NotImplementedError, "read only dict"
+    clear = setdefault = pop = popitem = copy = update = \
+            classutil.read_only_error
 
-class SeqDBDescriptor(object):
-    'forwards attribute requests to self.pathForward'
-    def __init__(self,attr):
-        self.attr=attr
-    def __get__(self,obj,objtype):
-        return getattr(obj.pathForward,self.attr) # RAISES AttributeError IF NONE
-
-class SeqDBSlice(SeqPath):
-    'JUST A WRAPPER FOR SCHEMA TO HANG SHADOW ATTRIBUTES ON...'
-    id=SeqDBDescriptor('id')
-    db=SeqDBDescriptor('db')
-
-class BlastDBbase(SeqDBbase):
-    "Container representing Blast database"
-    itemClass=FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
-    itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
-    def __init__(self,filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
-                 blastReady=False,blastIndexPath=None,blastIndexDirs=None,**kwargs):
-        "format database and build indexes if needed. Provide filepath or file object"
+class SequenceFileDB(SequenceDB):
+    itemClass = FileDBSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
+    _pickleAttrs = SequenceDB._pickleAttrs.copy()
+    _pickleAttrs['filepath'] = 0
+    def __init__(self, filepath=None, **kwargs):
         if filepath is None:
-            try:
-                filepath=ifile.name
-            except AttributeError:
-                raise  TypeError("unable to obtain a filename")
-        self.filepath = classutil.SourceFileName(str(filepath)) # MARKS AS A FILE PATH
-        dict.__init__(self)
-        self.set_seqtype()
-        self.skipSeqLenDict=skipSeqLenDict
+            try: # get filepath from ifile arg
+                filepath = kwargs['ifile'].name
+            except (KeyError, AttributeError):
+                raise TypeError("unable to obtain a filename")
+        self.filepath = classutil.SourceFileName(str(filepath))
+        SequenceDB.__init__(self, filepath=filepath,
+                            dbname=os.path.basename(filepath), **kwargs)
+        try: # signal that we're done constructing, by closing the file object
+            kwargs['ifile'].close()
+        except (KeyError, AttributeError): pass
+
+class BlastDBbase(SequenceFileDB):
+    "Container representing Blast database"
+    def __init__(self, filepath=None, blastReady=False, blastIndexPath=None,
+                 blastIndexDirs=None, **kwargs):
+        "format database and build indexes if needed. Provide filepath or file object"
+        SequenceFileDB.__init__(self, filepath, **kwargs)
         if blastIndexPath is not None:
             self.blastIndexPath = blastIndexPath
         if blastIndexDirs is not None:
             self.blastIndexDirs = blastIndexDirs
-        if skipSeqLenDict:
-            self.itemClass=BlastSequenceBase # DON'T USE seqLenDict
-        else:
-            from dbfile import NoSuchFileError
-            try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
-                self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
-            except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
-                self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
-                ifile,idFilter=self.raw_fasta_stream(ifile,idFilter)
-                import sys
-                print >>sys.stderr,'Building sequence length index...'
-                store_seqlen_dict(self.seqLenDict,ifile,filepath,idFilter)
-                self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
-                self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
-        
         self.checkdb() # CHECK WHETHER BLAST INDEX FILE IS PRESENT...
         if not self.blastReady and blastReady: # FORCE CONSTRUCTION OF BLAST DB
             self.formatdb()
-        if ifile is not None: # NOW THAT WE'RE DONE CONSTRUCTING, CLOSE THE FILE OBJECT
-            ifile.close() # THIS SIGNALS WE'RE COMPLETELY DONE CONSTRUCTING THIS RESOURCE
-        classutil.apply_itemclass(self,kwargs)
-
     def __repr__(self):
         return "<BlastDBbase '%s'>" % (self.filepath)
 
-    __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
-    _pickleAttrs = dict(filepath=0,skipSeqLenDict=0,blastIndexPath=0)
+    _pickleAttrs = SequenceFileDB._pickleAttrs.copy()
+    _pickleAttrs['blastIndexPath'] = 0
 
     def test_db_location(self,filepath):
         'check whether BLAST index files ready for use; return self.blastReady status'
@@ -642,24 +564,6 @@ class BlastDBbase(SeqDBbase):
             except (IOError,OSError): # BUILD FAILED 
                 classutil.report_exception() # REPORT IT AND CONTINUE
             
-    def set_seqtype(self):
-        "Determine whether this database is DNA or protein"
-        if os.path.isfile(self.get_blast_index_path()+'.psd') \
-               or os.path.isfile(self.get_blast_index_path()+'.00.psd'):
-            self._seqtype=PROTEIN_SEQTYPE
-            return
-        elif os.path.isfile(self.get_blast_index_path()+'.nsd') \
-                 or os.path.isfile(self.get_blast_index_path()+'.00.nsd'):
-            self._seqtype=DNA_SEQTYPE
-            return
-        else:
-            ifile = file(self.filepath) # READ ONE SEQUENCE TO CHECK ITS TYPE
-            try:
-                id,title,seq = read_fasta_one_line(ifile)
-                self._seqtype = guess_seqtype(seq) # RECORD PROTEIN VS. DNA...
-            finally:
-                ifile.close()
-
     def raw_fasta_stream(self,ifile=None,idFilter=None):
         'return a stream of fasta-formatted sequences, and ID filter function if needed'
         if ifile is not None: # JUST USE THE STREAM WE ALREADY HAVE OPEN
@@ -669,37 +573,6 @@ class BlastDBbase(SeqDBbase):
         except IOError: # TRY READING FROM FORMATTED BLAST DATABASE
             cmd='fastacmd -D -d "%s"' % self.get_blast_index_path()
             return os.popen(cmd),NCBI_ID_PARSER #BLAST ADDS lcl| TO id
-
-
-    def __iter__(self):
-        'generate all IDs in this database'
-        for id in self.seqLenDict:
-            yield id
-
-    def iteritems(self):
-        'generate all IDs in this database'
-        for id in self.seqLenDict:
-            yield id,self[id]
-
-    def __len__(self):
-        "number of total entries in this database"
-        return len(self.seqLenDict)
-
-    def __getitem__(self,id):
-        "Get sequence matching this ID, using dict as local cache"
-        try:
-            return dict.__getitem__(self,id)
-        except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
-            s=self.itemClass(self,id)
-            s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
-            dict.__setitem__(self,id,s) # CACHE IT
-            return s
-
-    def keys(self):
-        return self.seqLenDict.keys()
-
-    def __contains__(self, key):
-        return key in self.seqLenDict
 
     def warn_about_self_masking(self,seq,methodname='blast'):
         try:
@@ -824,7 +697,7 @@ class BlastDB(BlastDBbase):
             except KeyError:
                 pass
         try:
-            return dict.__getitem__(self,id)
+            return self._weakValueDict[id]
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
             try:
                 s=self.itemClass(self,id)
@@ -832,7 +705,7 @@ class BlastDB(BlastDBbase):
                 id=self.get_real_id(id)
                 s=self.itemClass(self,id)
             s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
-            dict.__setitem__(self,id,s) # CACHE IT
+            self._weakValueDict[id] = s # CACHE IT
             return s
 
     def __repr__(self):
@@ -886,7 +759,7 @@ class AnnotationSeq(SeqPath):
         if not isinstance(other, AnnotationSeq):
             return -1
         if cmp(self.sequence, other.sequence) == 0:
-            if self.id is other.id and self.db is other.db:
+            if self.id == other.id and self.db is other.db:
                 return cmp((self.start,self.stop),(other.start,other.stop))
         return NOT_ON_SAME_PATH
     
@@ -1187,31 +1060,6 @@ class SliceDB(dict):
 
 
 
-"""
-class SliceDB(dict):
-    'associates an ID with a specific slice of a specific db sequence'
-    def __init__(self,sliceDB,seqDB):
-        '''sliceDB must map identifier to a sliceInfo object;
-        sliceInfo must have name,start,stop,ori attributes;
-        seqDB must map sequence ID to a sliceable sequence object'''
-        dict.__init__(self)
-        self.sliceDB=sliceDB
-        self.seqDB=seqDB
-    def __getitem__(self,k):
-        try:
-            return dict.__getitem__(self,k)
-        except KeyError:
-            sliceInfo=self.sliceDB[k]
-            seq=self.seqDB[sliceInfo.name]
-            myslice=seq[sliceInfo.start:sliceInfo.stop]
-            if sliceInfo.ori<0:
-                myslice= -myslice
-            self[k]=myslice
-            return myslice
-
-"""
-
-
 class VirtualSeq(SeqPath):
     """Empty sequence object acts purely as a reference system.
     Automatically elongates if slice extends beyond current stop.
@@ -1245,21 +1093,6 @@ class VirtualSeqDB(dict):
             s=VirtualSeq(k)
             self[k]=s
             return s
-
-
-class KeepUniqueDict(dict):
-    'dict that blocks attempts to overwrite an existing key'
-    def __setitem__(self,k,v):
-        try:
-            if self[k] is v:
-                return # ALREADY SAVED.  NOTHING TO DO!
-        except KeyError: # NOT PRESENT, SO JUST SAVE THE VALUE
-            dict.__setitem__(self,k,v)
-            return
-        raise KeyError('attempt to overwrite existing key!')
-    def __hash__(self):
-        'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
-        return id(self)
 
 
 class PrefixDictInverse(object):
@@ -1310,6 +1143,24 @@ class PrefixUnionMemberDict(dict):
             except AttributeError:
                 raise KeyError('key not a member of this union!')
 
+class PUDSeqInfoDict(object,UserDict.DictMixin):
+    'seqInfoDict interface based on SequenceDB.seqLenDict'
+    def __init__(self, db):
+        self.seqDB = db
+    def __iter__(self):
+        return iter(self.seqDB)
+    def keys(self): return list(iter(self.seqDB))
+    def iteritems(self):
+        for p,d in self.seqDB.prefixDict.items():
+            for seqID,info in d.seqInfoDict.iteritems():
+                yield self.seqDB.format_id(p,seqID),info
+    def __getitem__(self, k):
+        prefix,seqID = self.seqDB.get_prefix_id(k)
+        return self.seqDB.get_subitem(self.seqDB.prefixDict[prefix].seqInfoDict,
+                                      seqID)
+    def has_key(self, k):
+        return k in self.seqDB
+
 class PrefixUnionDict(object, UserDict.DictMixin):
     """union interface to a series of dicts, each assigned a unique prefix
        ID 'foo.bar' --> ID 'bar' in dict f associated with prefix 'foo'."""
@@ -1327,7 +1178,8 @@ class PrefixUnionDict(object, UserDict.DictMixin):
             for line in it:
                 prefix,filepath=line.strip().split('\t')[:2]
                 try:
-                    prefixDict[prefix]=dbClass(tryPathList(filepath,trypath))
+                    prefixDict[prefix] = \
+                      dbClass(classutil.search_dirs_for_file(filepath, trypath))
                 except IOError:
                     raise IOError('''unable to open database %s: check path or privileges.
 Set trypath to give a list of directories to search.'''
@@ -1342,34 +1194,49 @@ Set trypath to give a list of directories to search.'''
         for k,v in self.prefixDict.items():
             d[v]=k # CREATE A REVERSE MAPPING
         self.dicts=d
-
-    def __getitem__(self,k):
-        "for ID 'foo.bar', return item 'bar' in dict f associated with prefix 'foo'"
+        self.seqInfoDict = PUDSeqInfoDict(self) # standard interface
+    def format_id(self, prefix, seqID):
+        return prefix + self.separator + seqID
+    def get_prefix_id(self, k):
+        'subdivide key into prefix, id using separator'
         try:
-            (prefix,id) = k.split(self.separator)
-        except ValueError: # id CONTAINS separator CHARACTER?
             t = k.split(self.separator)
-            if len(t)<2:
-                raise KeyError('invalid id format; no prefix: '+k)
+        except AttributeError:
+            raise KeyError('key should be string! ' + repr(k))
+        l = len(t)
+        if l == 2:
+            return t
+        elif l<2:
+            raise KeyError('invalid id format; no prefix: '+k)
+        else: # id CONTAINS separator CHARACTER?
             prefix = t[0] # ASSUME PREFIX DOESN'T CONTAIN separator
             id = k[len(prefix)+1:] # SKIP PAST PREFIX
-        d=self.prefixDict[prefix]
+            return prefix,id
+    def get_subitem(self, d, seqID):
         try: # TRY TO USE int KEY FIRST
-            return d[int(id)]
+            return d[int(seqID)]
         except (ValueError,KeyError,TypeError): # USE DEFAULT str KEY
             try:
-                return d[id]
+                return d[seqID]
             except KeyError:
-                raise KeyError, "no key '%s' in %s" % (k, repr(self),)
+                raise KeyError, "no key '%s' in %s" % (seqID, repr(d))
+    def __getitem__(self,k):
+        "for ID 'foo.bar', return item 'bar' in dict f associated with prefix 'foo'"
+        prefix,seqID = self.get_prefix_id(k)
+        try:
+            return self.get_subitem(self.prefixDict[prefix], seqID)
+        except KeyError, e:
+            #msg = ("no key '%s' in %s because " % (k,repr(self))) + str(e)
+            raise KeyError("no key '%s' in %s" % (k,repr(self)))
 
     def __contains__(self,k):
         "test whether ID in union; also check whether seq key in one of our DBs"
         if isinstance(k,str):
             try:
-                (prefix,id) = k.split(self.separator)
-            except ValueError:
+                (prefix,id) = self.get_prefix_id(k)
+                return id in self.prefixDict[prefix]
+            except KeyError:
                 return False
-            return id in self.prefixDict[prefix]
         else: # TREAT KEY AS A SEQ, CHECK IF IT IS FROM ONE OF OUR DB
             try:
                 db=k.pathForward.db
@@ -1384,7 +1251,7 @@ Set trypath to give a list of directories to search.'''
         "generate union of all dicts IDs, each with appropriate prefix."
         for p,d in self.prefixDict.items():
             for id in d:
-                yield p+self.separator+id
+                yield self.format_id(p, id)
 
     def keys(self):
         return list(self.iterkeys())
@@ -1396,13 +1263,7 @@ Set trypath to give a list of directories to search.'''
         "generate union of all dicts items, each id with appropriate prefix."
         for p,d in self.prefixDict.items():
             for id,seq in d.iteritems():
-                yield p+self.separator+id,seq
-
-    def iteritemlen(self):
-        "generate union of all dicts item lengths, each id with appropriate prefix."
-        for p,d in self.prefixDict.items():
-            for id,l in d.seqLenDict.iteritems():
-                yield p+self.separator+id,l[0]
+                yield self.format_id(p, id),seq
 
     def getName(self,path):
         "return fully qualified ID i.e. 'foo.bar'"
@@ -1423,13 +1284,8 @@ Set trypath to give a list of directories to search.'''
             except AttributeError:
                 raise AttributeError('seq db %s has no filepath; you can save this to pygr.Data but not to a text HeaderFile!' % k)
         ifile.close()
-
-    def __invert__(self):
-        try:
-            return self._inverse
-        except AttributeError:
-            self._inverse=PrefixDictInverse(self)
-            return self._inverse
+    __invert__ = classutil.standard_invert
+    _inverseClass = PrefixDictInverse
     def __len__(self):
         "number of total entries in this database"
         n=0
@@ -1557,7 +1413,8 @@ cacheProxyDict=DummyProxyDict()
 
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
-    xmlrpc_methods={"getSeqLen":0,"strslice":0,"getSeqLenDict":0}
+    xmlrpc_methods = dict(getSeqLen=0, strslice=0, getSeqLenDict=0,
+                          get_db_size=0)
     def getSeqLen(self,id):
         'get sequence length, or -1 if not found'
         try:
@@ -1570,6 +1427,8 @@ class BlastDBXMLRPC(BlastDB):
         for k,v in self.seqLenDict.items():
             d[k] = v[0],str(v[1]) # CONVERT TO STR TO ALLOW OFFSET>2GB
         return d # XML-RPC CANNOT HANDLE INT > 2 GB, SO FORCED TO CONVERT...
+    def get_db_size(self):
+        return len(self)
     def strslice(self,id,start,stop):
         'return string sequence for specified interval in the specified sequence'
         if start<0: # HANDLE NEGATIVE ORIENTATION
@@ -1582,10 +1441,19 @@ class BlastDBXMLRPC(BlastDB):
     
 class XMLRPCSequence(SequenceBase):
     "Represents a sequence in a blast database, accessed via XMLRPC"
-    def __init__(self,db,id,length):
-        self.db=db
-        self.id=id
-        self.length=length
+    @classmethod
+    def _init_subclass(cls, db, url, name, **kwargs):
+        import coordinator
+        db.server = coordinator.get_connection(url,name)
+        db.url = url
+        db.name = name
+        db.seqInfoDict = SeqLenDictWrapper(db)
+    def __init__(self, db, id):
+        self.length = db.server.getSeqLen(id)
+        if self.length<=0:
+            raise KeyError('%s not in this database' % id)
+        self.db = db
+        self.id = id
         SequenceBase.__init__(self)
     def strslice(self,start,end,useCache=True):
         "XMLRPC access to slice of a sequence"
@@ -1598,7 +1466,7 @@ class XMLRPCSequence(SequenceBase):
     def __len__(self):
         return self.length
 
-class XMLRPCSeqLenDict(object):
+class XMLRPCSeqLenDescr(object):
     'descriptor that returns dictionary of remote server seqLenDict'
     def __init__(self,attr):
         self.attr = attr
@@ -1610,47 +1478,26 @@ class XMLRPCSeqLenDict(object):
         obj.__dict__[self.attr] = d # PROVIDE DIRECTLY TO THE __dict__
         return d
 
-
-class XMLRPCSequenceDB(SeqDBbase):
+class XMLRPCSequenceDB(SequenceDB):
     'XMLRPC client: access sequence database over XMLRPC'
-    itemClass = XMLRPCSequence # CLASS TO USE FOR SAVING EACH SEQUENCE
-    itemSliceClass = SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
-    seqLenDict = XMLRPCSeqLenDict('seqLenDict') # INTERFACE TO SEQLENDICT
-    def __init__(self,url=None,name=None):
-        dict.__init__(self)
-        import coordinator
-        self.server = coordinator.get_connection(url,name)
-        self.url = url
-        self.name = name
-    def __getstate__(self): ################ SUPPORT FOR UNPICKLING
-        return dict(url=self.url,name=self.name)
-    def __getitem__(self,id):
-        try:
-            return dict.__getitem__(self,id)
-        except:
-            pass
-        l = self.server.getSeqLen(id)
-        if l>0:
-            s = self.itemClass(self,id,l)
-            self[id] = s
-            return s
-        raise KeyError('%s not in this database' % id)
-    def __iter__(self):
-        'generate all IDs in this database'
-        for id in self.seqLenDict:
-            yield id
-
-    def iteritems(self):
-        'generate all IDs in this database'
-        for id in self.seqLenDict:
-            yield id,self[id]
-
+    itemClass = XMLRPCSequence # sequence storage interface
+    seqLenDict = XMLRPCSeqLenDescr('seqLenDict') # INTERFACE TO SEQLENDICT
+    def __getstate__(self): # DO NOT pickle self.itemClass! We provide our own.
+        return dict(url=self.url, name=self.name) # just need XMLRPC info
     def __len__(self):
-        "number of total entries in this database"
-        return len(self.seqLenDict)
+        return self.server.get_db_size()
+    def __contains__(self, k):
+        if self.server.getSeqLen(k)>0:
+            return True
+        else:
+            return False
 
 
 def fastaDB_unpickler(klass,srcfile,kwargs):
+    if klass is BlastDB or klass == 'BlastDB':
+        klass = BlastDB
+    else:
+        raise ValueError('Caught attempt to unpickle untrusted class %s' %klass)
     o = klass(srcfile,**kwargs) # INITIALIZE, BUILD INDEXES, ETC.
     o._saveLocalBuild = True # MARK FOR LOCAL PYGR.DATA SAVE
     return o
