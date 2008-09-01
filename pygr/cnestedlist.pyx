@@ -460,6 +460,7 @@ cdef class NLMSASlice:
     self.stop=stop
     self.offset=offset # ALWAYS STORE offset IN POSITIVE ORIENTATION
     self.deallocID= -1
+    self.cache_dicts = []
     self.seq=seq
     try: # USE PYTHON METHOD TO DO QUERY
       id,ivals=ns.nlmsaLetters.doSlice(seq) # doSlice() RETURNS RAW INTERVALS
@@ -567,20 +568,13 @@ cdef class NLMSASlice:
       for i from 0 <= i < self.nseqBounds: # ONLY SAVE NON-LPO SEQUENCES
         if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].target_id):
           cacheDict[ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
-      saveCache(cacheProxy,cacheDict) # SAVE COVERING IVALS AS CACHE HINT
+
+      if cacheDict:
+        saveCache(cacheProxy,cacheDict) # SAVE COVERING IVALS AS CACHE HINT
+        self.cache_dicts.append(cacheProxy)
 
   def __dealloc__(self):
     'remember: dealloc cannot call other methods!'
-    if self.deallocID>=0: # REMOVE OUR ENTRY FROM CACHE...
-      from seqdb import cacheProxyDict
-      try: # WORKAROUND weakref - PYREX PROBLEMS...
-        del cacheProxyDict[self.deallocID] # FAILS, cannot call python code.
-      except KeyError:
-        pass
-      except:
-        import traceback
-        traceback.print_exc()
-        raise
     if self.im:
       free(self.im)
       self.im=NULL

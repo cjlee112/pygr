@@ -282,7 +282,6 @@ class SeqDBCache_Test(object):
 
         # now, eliminate all references to the cache proxy dict
         del ival, seq1, v, cacheDict, cacheProxy
-        del cacheProxyDict[deallocID]
 
         # trash unused objects - not strictly necessary, because there are no
         # islands of circular references & so all objects are already

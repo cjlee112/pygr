@@ -1398,14 +1398,17 @@ directly as the seqDict argument to the NLMSA constructor.''' % id)
         
 
 class DummyProxy(object):
-    pass
-class DummyProxyDict(dict):
+    def __init__(self, n):
+        self.n = n
+    def __repr__(self):
+        return "<pygr.seqdb.DummyProxy object #%d>" % (self.n,)
+class DummyProxyDict(weakref.WeakValueDictionary):
     def __init__(self):
-        dict.__init__(self)
+        weakref.WeakValueDictionary.__init__(self)
         self.n=0
     def __call__(self):
-        a=DummyProxy()
         i=self.n
+        a=DummyProxy(i)
         self[i]=a
         self.n+=1
         return i,a
