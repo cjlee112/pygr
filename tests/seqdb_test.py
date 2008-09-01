@@ -245,13 +245,6 @@ class AnnotationDB_Test(object):
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii, (ki, ii)
-    def equality_test(self):
-        key = 'annot1'
-        db = self.db
-        
-        x = db.sliceAnnotation(key, db.sliceDB[key])
-        y = db.sliceAnnotation(key, db.sliceDB[key])
-        assert x == y
     def readonly_test(self):
         try:
             self.db.copy()              # what should 'copy' do on AD?
@@ -283,7 +276,14 @@ class AnnotationDB_Test(object):
             assert 0, 'this method should raise NotImplementedError'
         except NotImplementedError:
             pass
-
+    def equality_test(self):
+        "Check that separately generated annotation objects test equal"
+        key = 'annot1'
+        db = self.db
+        x = db.sliceAnnotation(key, db.sliceDB[key])
+        y = db.sliceAnnotation(key, db.sliceDB[key])
+        assert x == y
+                                                
 class SeqDBCache_Test(object):
     def cache_test(self):
         "Test basic sequence slice cache mechanics."
@@ -360,4 +360,3 @@ class SeqDBCache_Test(object):
         assert n2 == 0, '%d objects remain; cache memory leak!' % \
                (n2, db._cache.values())
         # FAIL because of __dealloc__ error in cnestedlist.NLMSASlice.
->>>>>>> 7ff89ee32f4cc2e8c1f6cf9c3a5887eb75365bda:tests/seqdb_test.py
