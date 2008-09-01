@@ -1,6 +1,5 @@
 import pygrtest_common
-from pygr.seqdb import BlastDB, PrefixUnionDict, AnnotationDB, \
-     cacheProxyDict
+from pygr.seqdb import BlastDB, PrefixUnionDict, AnnotationDB
 from pygr.sequence import Sequence
 from pygr.cnestedlist import NLMSA
 import gc
@@ -253,7 +252,6 @@ class SeqDBCache_Test(object):
         db = BlastDB('dnaseq')
 
         # create cache components
-        deallocID, cacheProxy = cacheProxyDict()
         cacheDict = {}
         cacheHint = db.cacheHint
 
@@ -265,11 +263,13 @@ class SeqDBCache_Test(object):
 
         # save seq1 in cache
         cacheDict['seq1'] = (seq1.start, seq1.stop)
-        cacheHint(cacheProxy, cacheDict)
+        owner = cacheHint(cacheDict)
+        del cacheDict                   # 'owner' now holds reference
 
         # peek into _cache and assert that only the ival coordinates are stored
         v = db._cache.values()[0]
         assert len(v['seq1']) == 2
+        del v
 
         # force a cache access & check that now we've stored actual string
         ival = str(seq1[5:10])
@@ -281,7 +281,7 @@ class SeqDBCache_Test(object):
         ival = str(seq1[5:10])
 
         # now, eliminate all references to the cache proxy dict
-        del ival, seq1, v, cacheDict, cacheProxy
+        del owner
 
         # trash unused objects - not strictly necessary, because there are no
         # islands of circular references & so all objects are already
@@ -304,22 +304,21 @@ class SeqDBCache_Test(object):
         map[seq1] += seq2
         map.build()
 
-        # check: nothing in the cache
-        n0 = len(cacheProxyDict)
-        assert n0 == 0, "should be exactly zero cache entries, not %d" % (n0,)
+        # check: no cache
+        assert not hasattr(db, '_cache'), 'should be no cache yet'
 
         # now retrieve a NLMSASlice, forcing entry of seq into cache
         ival = seq1[5:10]
         x = map[ival]
         print 'this should not be empty:', db._cache.values()
-        n1 = len(cacheProxyDict)
+        n1 = len(db._cache)
         assert n1 == 1, "should be exactly one cache entry, not %d" % (n1,)
 
         # ok, now trash referencing arguments & make sure of cleanup
         del x
         gc.collect()
         print 'this should be empty:', db._cache.values()
-        n2 = len(cacheProxyDict)
-        assert n0 == n2, '%d objects remain; cache memory leak: %s' % \
-               (n2 - n0, db._cache.values())
+        n2 = len(db._cache)
+        assert n2 == 0, '%d objects remain; cache memory leak!' % \
+               (n2, db._cache.values())
         # FAIL because of __dealloc__ error in cnestedlist.NLMSASlice.

@@ -357,6 +357,12 @@ class SeqDBSlice(SeqPath):
     id=SeqDBDescriptor('id')
     db=SeqDBDescriptor('db')
 
+class _CacheDictOwnerObject(object):
+    """
+    Dummy object to hold ownership of weakref'd cache dictionaries.
+    """
+    pass
+
 class SequenceDB(object, UserDict.DictMixin):
     itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
     def __init__(self, autoGC=True, dbname='generic', **kwargs):
@@ -393,8 +399,8 @@ class SequenceDB(object, UserDict.DictMixin):
             self._seqtype = guess_seqtype(str(seq[:100]))
             break
     _cache_max=10000
-    def cacheHint(self,owner,ivalDict):
-        'save a cache hint dict of {id:(start,stop)} associated with owner'
+    def cacheHint(self, ivalDict, owner=None):
+        'save a cache hint dict of {id:(start,stop)}; return reference owner'
         d={}
         for id,ival in ivalDict.items(): # BUILD THE CACHE DICTIONARY FOR owner
             if ival[0]<0: # FORCE IVAL INTO POSITIVE ORIENTATION
@@ -402,12 +408,16 @@ class SequenceDB(object, UserDict.DictMixin):
             if ival[1]-ival[0]>self._cache_max: # TRUNCATE EXCESSIVE LENGTH
                 ival=(ival[0],ival[0]+self._cache_max)
             d[id]=[ival[0],ival[1]]
+        if owner is None:
+            # create an object to "own" weak ref            
+            owner = _CacheDictOwnerObject()
         try:
             self._cache[owner]=d # ADD TO EXISTING CACHE
         except AttributeError:
             import weakref # AUTOMATICALLY REMOVE FROM CACHE IF owner
             self._cache=weakref.WeakKeyDictionary() # GOES OUT OF SCOPE
             self._cache[owner]=d
+        return owner
     def strsliceCache(self,seq,start,stop):
         'get strslice using cache hints, if any'
         try:
@@ -1292,8 +1302,8 @@ Set trypath to give a list of directories to search.'''
         for db in self.dicts:
             n+=len(db)
         return n
-    def cacheHint(self,owner,ivalDict):
-        'save a cache hint dict of {id:(start,stop)} associated with owner'
+    def cacheHint(self, ivalDict, owner=None):
+        'save a cache hint dict of {id:(start,stop)}; return reference owner'
         d={}
         for id,ival in ivalDict.items(): # EXTRACT SEPARATE SUBDICT FOR EACH prefix
             prefix=id.split(self.separator)[0] # EXTRACT PREFIX, SEQID
@@ -1308,7 +1318,8 @@ Set trypath to give a list of directories to search.'''
             except AttributeError: # CAN'T cacheHint, SO JUST IGNORE
                 pass
             else:
-                m(owner,seqDict) # PASS CACHE HINT DOWN TO SUBDICTIONARY
+                # pass cache hint down to subdictionary
+                return m(seqDict, owner)
 
     # not clear what this should do for PrefixUnionDict
     def copy(self):
@@ -1396,23 +1407,6 @@ directly as the seqDict argument to the NLMSA constructor.''' % id)
         self.dicts[db]=id
         return self # IADD MUST RETURN SELF!
         
-
-class DummyProxy(object):
-    def __init__(self, n):
-        self.n = n
-    def __repr__(self):
-        return "<pygr.seqdb.DummyProxy object #%d>" % (self.n,)
-class DummyProxyDict(weakref.WeakValueDictionary):
-    def __init__(self):
-        weakref.WeakValueDictionary.__init__(self)
-        self.n=0
-    def __call__(self):
-        i=self.n
-        a=DummyProxy(i)
-        self[i]=a
-        self.n+=1
-        return i,a
-cacheProxyDict=DummyProxyDict()
 
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'

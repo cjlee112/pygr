@@ -195,7 +195,7 @@ cdef class NLMSASequence:
 
 cdef class NLMSASlice:
   cdef readonly int start,stop,id
-  cdef int n,nseqBounds,nrealseq,offset,deallocID
+  cdef int n,nseqBounds,nrealseq,offset
   cdef IntervalMap *im
   cdef IntervalMap *seqBounds
   cdef readonly NLMSASequence nlmsaSequence
