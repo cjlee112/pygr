@@ -459,7 +459,7 @@ cdef class NLMSASlice:
     self.start=start
     self.stop=stop
     self.offset=offset # ALWAYS STORE offset IN POSITIVE ORIENTATION
-    self.deallocID= -1
+    self.cache_dicts = []
     self.seq=seq
     try: # USE PYTHON METHOD TO DO QUERY
       id,ivals=ns.nlmsaLetters.doSlice(seq) # doSlice() RETURNS RAW INTERVALS
@@ -556,8 +556,6 @@ cdef class NLMSASlice:
     except AttributeError:
       cacheMax=0 # TURN OFF CACHING
     if cacheMax>0: # CONSTRUCT & SAVE DICT OF CACHE HINTS: COVERING INTERVALS
-      from seqdb import cacheProxyDict
-      self.deallocID,cacheProxy=cacheProxyDict()
       cacheDict={}
       try: # ADD A CACHE HINT FOR QUERY SEQ IVAL
         seqID=ns.nlmsaLetters.seqs.getSeqID(seq) # GET FULL-LENGTH ID
@@ -567,16 +565,13 @@ cdef class NLMSASlice:
       for i from 0 <= i < self.nseqBounds: # ONLY SAVE NON-LPO SEQUENCES
         if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].target_id):
           cacheDict[ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
-      saveCache(cacheProxy,cacheDict) # SAVE COVERING IVALS AS CACHE HINT
+
+      if cacheDict:
+        owner = saveCache(cacheDict) # SAVE COVERING IVALS AS CACHE HINT
+        self.cache_dicts.append(owner)
 
   def __dealloc__(self):
     'remember: dealloc cannot call other methods!'
-    if self.deallocID>=0: # REMOVE OUR ENTRY FROM CACHE...
-      from seqdb import cacheProxyDict
-      try: # WORKAROUND weakref - PYREX PROBLEMS...
-        del cacheProxyDict[self.deallocID]
-      except KeyError:
-        pass
     if self.im:
       free(self.im)
       self.im=NULL
