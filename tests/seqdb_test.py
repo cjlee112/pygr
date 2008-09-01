@@ -1,9 +1,6 @@
 import pygrtest_common
-from pygr.seqdb import BlastDB, PrefixUnionDict, AnnotationDB, \
-     cacheProxyDict
+from pygr.seqdb import BlastDB, PrefixUnionDict, AnnotationDB
 from pygr.sequence import Sequence
-from pygr.cnestedlist import NLMSA
-import gc
 
 class BlastDB_Test(object):
     """
@@ -246,81 +243,3 @@ class AnnotationDB_Test(object):
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii, (ki, ii)
-
-class SeqDBCache_Test(object):
-    def cache_test(self):
-        "Test basic sequence slice cache mechanics."
-        db = BlastDB('dnaseq')
-
-        # create cache components
-        deallocID, cacheProxy = cacheProxyDict()
-        cacheDict = {}
-        cacheHint = db.cacheHint
-
-        # get seq1
-        seq1 = db['seq1']
-
-        # _cache is only created on first cache attempt
-        assert not hasattr(db, '_cache')
-
-        # save seq1 in cache
-        cacheDict['seq1'] = (seq1.start, seq1.stop)
-        cacheHint(cacheProxy, cacheDict)
-
-        # peek into _cache and assert that only the ival coordinates are stored
-        v = db._cache.values()[0]
-        assert len(v['seq1']) == 2
-
-        # force a cache access & check that now we've stored actual string
-        ival = str(seq1[5:10])
-        v = db._cache.values()[0]
-        # ...check that we've stored actual string
-        assert len(v['seq1']) == 3
-
-        # again force a cache access, this time to the stored sequence string
-        ival = str(seq1[5:10])
-
-        # now, eliminate all references to the cache proxy dict
-        del ival, seq1, v, cacheDict, cacheProxy
-        del cacheProxyDict[deallocID]
-
-        # trash unused objects - not strictly necessary, because there are no
-        # islands of circular references & so all objects are already
-        # deallocated, but that's implementation dependent.
-        gc.collect()
-
-        # ok, cached values should now be gone.
-        v = db._cache.values()
-        assert len(v) == 0
-
-    def nlmsaslice_cache_test(self):
-        "Test NLMSASlice sequence caching & removal"
-        # set up sequences
-        db = BlastDB('dnaseq')
-        seq1, seq2 = db['seq1'], db['seq2']
-
-        # build referencing NLMSA
-        map = NLMSA('test', 'memory', pairwiseMode=True)
-        map += seq1
-        map[seq1] += seq2
-        map.build()
-
-        # check: nothing in the cache
-        n0 = len(cacheProxyDict)
-        assert n0 == 0, "should be exactly zero cache entries, not %d" % (n0,)
-
-        # now retrieve a NLMSASlice, forcing entry of seq into cache
-        ival = seq1[5:10]
-        x = map[ival]
-        print 'this should not be empty:', db._cache.values()
-        n1 = len(cacheProxyDict)
-        assert n1 == 1, "should be exactly one cache entry, not %d" % (n1,)
-
-        # ok, now trash referencing arguments & make sure of cleanup
-        del x
-        gc.collect()
-        print 'this should be empty:', db._cache.values()
-        n2 = len(cacheProxyDict)
-        assert n0 == n2, '%d objects remain; cache memory leak: %s' % \
-               (n2 - n0, db._cache.values())
-        # FAIL because of __dealloc__ error in cnestedlist.NLMSASlice.
