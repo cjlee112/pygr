@@ -959,6 +959,23 @@ store the data in the associated disk file.  To avoid this, we
 have automatically called AnnotationDB.sliceDB.close() to write the data
 for you, when the AnnotationDB was deleted.'''
 
+    # not clear what this should do for AnnotationDB
+    def copy(self):
+        raise NotImplementedError, "nonsensical in AnnotationDB"
+    def setdefault(self, k, d=None):
+        raise NotImplementedError, "nonsensical in AnnotationDB"
+    def update(self, other):
+        raise NotImplementedError, "nonsensical in AnnotationDB"
+    
+    # these methods should not be implemented for read-only database.
+    def clear(self):
+        raise NotImplementedError, "no deletions allowed"
+    def pop(self):
+        raise NotImplementedError, "no deletions allowed"
+    def popitem(self):
+        raise NotImplementedError, "no deletions allowed"
+            
+
 class AnnotationServer(AnnotationDB):
     'XMLRPC-ready server for AnnotationDB'
     xmlrpc_methods={'get_slice_tuple':0,'get_slice_items':0,

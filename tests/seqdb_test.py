@@ -245,6 +245,37 @@ class AnnotationDB_Test(object):
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii, (ki, ii)
+    def readonly_test(self):
+        try:
+            self.db.copy()              # what should 'copy' do on AD?
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:                           # what should 'setdefault' do on AD?
+            self.db.setdefault('foo')
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:                           # what should 'update' do on AD?
+            self.db.update({})
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.clear()
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.pop()
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
+        try:
+            self.db.popitem()
+            assert 0, 'this method should raise NotImplementedError'
+        except NotImplementedError:
+            pass
 
 class SeqDBCache_Test(object):
     def cache_test(self):
