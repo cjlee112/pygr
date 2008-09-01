@@ -811,6 +811,12 @@ maxCache specfies the maximum number of annotation objects to keep in the cache.
         self.sliceAttrDict=sliceAttrDict # USER-PROVIDED ALIASES
         if maxCache is not None:
             self.maxCache = maxCache
+        try:
+            sample_value = self.itervalues().next()
+        except KeyError:
+            raise KeyError('''\
+ cannot create annotation object; sequence database %s may not be correct''' %\
+                           (repr(seqDB),))
     def __reduce__(self): ############################# SUPPORT FOR PICKLING
         return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS

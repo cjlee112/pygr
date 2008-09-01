@@ -283,6 +283,18 @@ class AnnotationDB_Test(object):
         x = db.sliceAnnotation(key, db.sliceDB[key])
         y = db.sliceAnnotation(key, db.sliceDB[key])
         assert x == y
+    def bad_seqdict_test(self):
+        class Annotation(object):
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+        slicedb = dict(annot1=Annotation(id='seq', start=0, stop=10),
+                       annot2=Annotation(id='seq', start=5, stop=9))
+        foo_dict = dict(foo=Sequence('ATGGGGCCGATTG', 'foo'))
+        try:
+            db = AnnotationDB(slicedb, foo_dict)
+            assert 0, "incorrect seqdb; key error should be raised"
+        except KeyError:
+            pass
                                                 
 class SeqDBCache_Test(object):
     def cache_test(self):
