@@ -574,9 +574,13 @@ cdef class NLMSASlice:
     if self.deallocID>=0: # REMOVE OUR ENTRY FROM CACHE...
       from seqdb import cacheProxyDict
       try: # WORKAROUND weakref - PYREX PROBLEMS...
-        del cacheProxyDict[self.deallocID]
+        del cacheProxyDict[self.deallocID] # FAILS, cannot call python code.
       except KeyError:
         pass
+      except:
+        import traceback
+        traceback.print_exc()
+        raise
     if self.im:
       free(self.im)
       self.im=NULL
