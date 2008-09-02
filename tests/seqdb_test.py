@@ -311,9 +311,14 @@ class SeqDBCache_Test(object):
         # _cache is only created on first cache attempt
         assert not hasattr(db, '_cache')
 
+        # build an 'owner' object
+        class AnonymousOwner(object):
+            pass
+        owner = AnonymousOwner()
+
         # save seq1 in cache
         cacheDict['seq1'] = (seq1.start, seq1.stop)
-        owner = cacheHint(cacheDict)
+        cacheHint(cacheDict, owner)
         del cacheDict                   # 'owner' now holds reference
 
         # peek into _cache and assert that only the ival coordinates are stored

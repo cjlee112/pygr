@@ -459,7 +459,6 @@ cdef class NLMSASlice:
     self.start=start
     self.stop=stop
     self.offset=offset # ALWAYS STORE offset IN POSITIVE ORIENTATION
-    self.cache_dicts = []
     self.seq=seq
     try: # USE PYTHON METHOD TO DO QUERY
       id,ivals=ns.nlmsaLetters.doSlice(seq) # doSlice() RETURNS RAW INTERVALS
@@ -567,8 +566,10 @@ cdef class NLMSASlice:
           cacheDict[ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
 
       if cacheDict:
-        owner = saveCache(cacheDict) # SAVE COVERING IVALS AS CACHE HINT
-        self.cache_dicts.append(owner)
+        saveCache(cacheDict, self) # SAVE COVERING IVALS AS CACHE HINT
+
+  def __hash__(self):
+    return id(self)
 
   def __dealloc__(self):
     'remember: dealloc cannot call other methods!'

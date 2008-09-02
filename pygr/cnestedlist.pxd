@@ -200,7 +200,7 @@ cdef class NLMSASlice:
   cdef IntervalMap *seqBounds
   cdef readonly NLMSASequence nlmsaSequence
   cdef readonly object seq
-  cdef list cache_dicts
+  cdef object __weakref__
 
   cdef int findSeqBounds(self,int id,int ori)
 

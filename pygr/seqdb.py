@@ -357,12 +357,6 @@ class SeqDBSlice(SeqPath):
     id=SeqDBDescriptor('id')
     db=SeqDBDescriptor('db')
 
-class _CacheDictOwnerObject(object):
-    """
-    Dummy object to hold ownership of weakref'd cache dictionaries.
-    """
-    pass
-
 class SequenceDB(object, UserDict.DictMixin):
     itemSliceClass=SeqDBSlice # CLASS TO USE FOR SLICES OF SEQUENCE
     def __init__(self, autoGC=True, dbname='generic', **kwargs):
@@ -399,7 +393,7 @@ class SequenceDB(object, UserDict.DictMixin):
             self._seqtype = guess_seqtype(str(seq[:100]))
             break
     _cache_max=10000
-    def cacheHint(self, ivalDict, owner=None):
+    def cacheHint(self, ivalDict, owner):
         'save a cache hint dict of {id:(start,stop)}; return reference owner'
         d={}
         for id,ival in ivalDict.items(): # BUILD THE CACHE DICTIONARY FOR owner
@@ -408,16 +402,12 @@ class SequenceDB(object, UserDict.DictMixin):
             if ival[1]-ival[0]>self._cache_max: # TRUNCATE EXCESSIVE LENGTH
                 ival=(ival[0],ival[0]+self._cache_max)
             d[id]=[ival[0],ival[1]]
-        if owner is None:
-            # create an object to "own" weak ref            
-            owner = _CacheDictOwnerObject()
         try:
             self._cache[owner]=d # ADD TO EXISTING CACHE
         except AttributeError:
             import weakref # AUTOMATICALLY REMOVE FROM CACHE IF owner
             self._cache=weakref.WeakKeyDictionary() # GOES OUT OF SCOPE
             self._cache[owner]=d
-        return owner
     def strsliceCache(self,seq,start,stop):
         'get strslice using cache hints, if any'
         try:
