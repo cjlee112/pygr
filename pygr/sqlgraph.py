@@ -8,6 +8,7 @@ from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
      get_valid_path,standard_invert
 import os
 import platform 
+import UserDict
     
 class TupleDescriptor(object):
     'return tuple entry corresponding to named attribute'
@@ -213,7 +214,7 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
     return name,cursor
 
 
-class SQLTableBase(dict):
+class SQLTableBase(UserDict.DictMixin, dict):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
@@ -414,10 +415,12 @@ class SQLTableBase(dict):
                 self.clear()
         except AttributeError:
             pass
-    def generic_iterator(self,fetch_f=None,cache_f=cache_items,map_f=iter):
+    def generic_iterator(self,fetch_f=None,cache_f=None,map_f=iter):
         'generic iterator that runs fetch, cache and map functions'
         if fetch_f is None: # JUST USE CURSOR'S PREFERRED CHUNK SIZE
             fetch_f = self.cursor.fetchmany
+        if cache_f is None:
+            cache_f = self.cache_items
         while True:
             self.limit_cache()
             rows = fetch_f() # FETCH THE NEXT SET OF ROWS
