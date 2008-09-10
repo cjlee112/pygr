@@ -374,6 +374,5 @@ class SeqDBCache_Test(object):
         gc.collect()
         print 'this should be empty:', db._cache.values()
         n2 = len(db._cache)
-        assert n2 == 0, '%d objects remain; cache memory leak!' % \
-               (n2, db._cache.values())
+        assert n2 == 0, '%d objects remain; cache memory leak!' % n2
         # FAIL because of __dealloc__ error in cnestedlist.NLMSASlice.

@@ -1,6 +1,6 @@
-#from lpo import POMSANodeRef
 import sequence
 import nlmsa_utils
+from classutil import WeakestLink
 
 cdef class IntervalDBIterator:
   def __new__(self,int start,int end,IntervalDB db not None):
@@ -566,7 +566,8 @@ cdef class NLMSASlice:
           cacheDict[ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
 
       if cacheDict:
-        saveCache(cacheDict, self) # SAVE COVERING IVALS AS CACHE HINT
+        self.weakestLink = WeakestLink()
+        saveCache(cacheDict, self.weakestLink) # SAVE COVERING IVALS AS CACHE HINT
 
   def __hash__(self):
     return id(self)

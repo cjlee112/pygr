@@ -316,3 +316,7 @@ def get_env_or_cwd(envname):
         return os.environ[envname] # USER-SPECIFIED DIRECTORY
     except KeyError:
         return os.getcwd() # DEFAULT: SAVE IN CURRENT DIRECTORY
+
+class WeakestLink(object):
+    'weak referenceable object: workaround for pyrex extension classes'
+    pass
