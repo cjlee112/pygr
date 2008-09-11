@@ -9,6 +9,7 @@ from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
 import os
 import platform 
 import UserDict
+import weakref
     
 class TupleDescriptor(object):
     'return tuple entry corresponding to named attribute'
@@ -214,13 +215,17 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
     return name,cursor
 
 
-class SQLTableBase(UserDict.DictMixin, dict):
+class SQLTableBase(object, UserDict.DictMixin):
     "Store information about an SQL table as dict keyed by primary key"
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
-                 serverInfo=None, **kwargs):
-        dict.__init__(self) # INITIALIZE EMPTY DICTIONARY
+                 serverInfo=None, autoGC=True, **kwargs):
+        if autoGC: # automatically garbage collect unused objects
+            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+        else:
+            self._weakValueDict = {}
+        self.autoGC = autoGC
         if cursor is None:
             if serverInfo is not None: # get cursor from serverInfo
                 cursor = serverInfo.cursor()
@@ -281,10 +286,8 @@ class SQLTableBase(UserDict.DictMixin, dict):
 
     def __hash__(self):
         return id(self)
-    def __reduce__(self): ############################# SUPPORT FOR PICKLING
-        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
-    _pickleAttrs = dict(name=0,clusterKey=0,maxCache=0,arraysize=0,attrAlias=0,
-                        serverInfo=0)
+    _pickleAttrs = dict(name=0, clusterKey=0, maxCache=0, arraysize=0,
+                        attrAlias=0, serverInfo=0, autoGC=0)
     __getstate__ = standard_getstate
     def __setstate__(self,state):
         if 'serverInfo' not in state: # hmm, no address for db server?
@@ -394,11 +397,11 @@ class SQLTableBase(UserDict.DictMixin, dict):
         except KeyError: # NO PRIMARY KEY?  IGNORE THE CACHE.
             return oclass(t)
         try: # IF ALREADY LOADED IN OUR DICTIONARY, JUST RETURN THAT ENTRY
-            return dict.__getitem__(self,id)
+            return self._weakValueDict[id]
         except KeyError:
             pass
         o = oclass(t)
-        dict.__setitem__(self,id,o)   # CACHE THIS ITEM IN OUR DICTIONARY
+        self._weakValueDict[id] = o   # CACHE THIS ITEM IN OUR DICTIONARY
         return o
     def cache_items(self,rows,oclass=None):
         if oclass is None:
@@ -411,8 +414,8 @@ class SQLTableBase(UserDict.DictMixin, dict):
     def limit_cache(self):
         'APPLY maxCache LIMIT TO CACHE SIZE'
         try:
-            if self.maxCache<dict.__len__(self):
-                self.clear()
+            if self.maxCache<len(self._weakValueDict):
+                self._weakValueDict.clear()
         except AttributeError:
             pass
     def generic_iterator(self,fetch_f=None,cache_f=None,map_f=iter):
@@ -461,7 +464,7 @@ You must directly assign obj an ID, i.e. db[new_id] = obj''')
             which your DB lacks''')
         if auto_id > 0: # CACHE AUTO_INCREMENT ID IN LOCAL OBJECT
             obj.cache_id(auto_id)
-        dict.__setitem__(self,obj.id,obj) # AND SAVE TO OUR LOCAL DICT CACHE
+        self._weakValueDict[obj.id] = obj # AND SAVE TO OUR LOCAL DICT CACHE
         return obj
 
 def getKeys(self,queryOption=''):
@@ -486,13 +489,14 @@ class SQLTable(SQLTableBase):
             oclass=self.itemClass
         self.cursor.execute('select * from %s' % self.name)
         l=self.cursor.fetchall()
+        self._weakValueDict = {} # just store the whole dataset in memory
         for t in l:
             self.cacheItem(t,oclass) # CACHE IT IN LOCAL DICTIONARY
         self._isLoaded=True # MARK THIS CONTAINER AS FULLY LOADED
 
     def __getitem__(self,k): # FIRST TRY LOCAL INDEX, THEN TRY DATABASE
         try:
-            return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
+            return self._weakValueDict[k] # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
             self.cursor.execute('select * from %s where %s=%%s'
                                 % (self.name,self.primary_key),(k,))
@@ -509,15 +513,18 @@ class SQLTable(SQLTableBase):
         except AttributeError:
             v.db = self
         self.insert(v) # SAVE TO THE RELATIONAL DB SERVER
-        dict.__setitem__(self,v.id,v)   # CACHE THIS ITEM IN OUR DICTIONARY
+        self._weakValueDict[v.id] = v   # CACHE THIS ITEM IN OUR DICTIONARY
     def __delitem__(self,k):
         self.cursor.execute('delete from %s where %s=%%s'
                             % (self.name,self.primary_key),(k,))
-        dict.__delitem__(self,k)
+        try:
+            del self._weakValueDict[k]
+        except KeyError:
+            pass
     def items(self):
         'forces load of entire table into memory'
         self.load()
-        return dict.items(self)
+        return self._weakValueDict.items()
     def iteritems(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
         self._select()
@@ -525,7 +532,7 @@ class SQLTable(SQLTableBase):
     def values(self):
         'forces load of entire table into memory'
         self.load()
-        return dict.values(self)
+        return self._weakValueDict.values()
     def itervalues(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
         self._select()
@@ -541,13 +548,17 @@ def getClusterKeys(self,queryOption=''):
 class SQLTableClustered(SQLTable):
     '''use clusterKey to load a whole cluster of rows at once,
        specifically, all rows that share the same clusterKey value.'''
+    def __init__(self, *args, **kwargs):
+        kwargs = kwargs.copy() # get a copy we can alter
+        kwargs['autoGC'] = False # don't use WeakValueDictionary
+        SQLTable.__init__(self, *args, **kwargs)
     def keys(self):
         return getKeys(self,'order by %s' %self.clusterKey)
     def clusterkeys(self):
         return getClusterKeys(self, 'order by %s' %self.clusterKey)
     def __getitem__(self,k):
         try:
-            return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
+            return self._weakValueDict[k] # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
             self.cursor.execute('select t2.* from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s'
                                 % (self.name,self.name,self.primary_key,
@@ -556,7 +567,7 @@ class SQLTableClustered(SQLTable):
             self.limit_cache()
             for t in l: # LOAD THE ENTIRE CLUSTER INTO OUR LOCAL CACHE
                 self.cacheItem(t,self.itemClass)
-            return dict.__getitem__(self,k) # SHOULD BE IN CACHE, IF ROW k EXISTS
+            return self._weakValueDict[k] # should be in cache, if row k exists
     def itercluster(self,cluster_id):
         'iterate over all items from the specified cluster'
         self.limit_cache()
@@ -608,7 +619,9 @@ class SQLForeignRelation(object):
 
 
 class SQLTableNoCache(SQLTableBase):
-    "Provide on-the-fly access to rows in the database, but never cache results"
+    '''Provide on-the-fly access to rows in the database;
+    values are simply an object interface (SQLRow) to back-end db query.
+    Row data are not stored locally, but always accessed by querying the db'''
     itemClass=SQLRow # DEFAULT OBJECT CLASS FOR ROWS...
     keys=getKeys
     def __iter__(self): return iter(self.keys())
@@ -618,10 +631,10 @@ class SQLTableNoCache(SQLTableBase):
                                    self._attrSQL('id'))
     def __getitem__(self,k): # FIRST TRY LOCAL INDEX, THEN TRY DATABASE
         try:
-            return dict.__getitem__(self,k) # DIRECTLY RETURN CACHED VALUE
+            return self._weakValueDict[k] # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
             o=self.itemClass(k) # RETURN AN EMPTY CONTAINER FOR ACCESSING THIS ROW
-            dict.__setitem__(self,k,o) # STORE EMPTY CONTAINER IN LOCAL DICTIONARY
+            self._weakValueDict[k] = o # cache the SQLRow object, but no data
             return o
     def addAttrAlias(self,**kwargs):
         self.data.update(kwargs) # ALIAS KEYS TO EXPRESSION VALUES
@@ -1172,23 +1185,25 @@ Adds or deletes edges by setting foreign key values in the table'''
         setattr(dest,self.g.keyColumn,None) # SAVE TO DB ATTRIBUTE
         dict.__delitem__(self,dest) # REMOVE FROM CACHE
 
-class ForeignKeyGraph(dict):
+class ForeignKeyGraph(object, UserDict.DictMixin):
     '''graph interface to a foreign key in an SQL table
 Caches dict of target nodes in itself; provides dict interface.
     '''
-    def __init__(self,sourceDB,targetDB,keyColumn,**kwargs):
+    def __init__(self, sourceDB, targetDB, keyColumn, autoGC=True, **kwargs):
         '''sourceDB is any database of source nodes;
 targetDB must be an SQL database of target nodes;
 keyColumn is the foreign key column name in targetDB for looking up sourceDB IDs.'''
-        dict.__init__(self)
+        if autoGC: # automatically garbage collect unused objects
+            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+        else:
+            self._weakValueDict = {}
+        self.autoGC = autoGC
         self.sourceDB = sourceDB
         self.targetDB = targetDB
         self.keyColumn = keyColumn
         self._inverse = ForeignKeyInverse(self)
-    _pickleAttrs = dict(sourceDB=0,targetDB=0,keyColumn=0)
-    def __reduce__(self): ############################# SUPPORT FOR PICKLING
-        return (ClassicUnpickler, (self.__class__,self.__getstate__()))
-    __getstate__ = standard_getstate
+    _pickleAttrs = dict(sourceDB=0, targetDB=0, keyColumn=0, autoGC=0)
+    __getstate__ = standard_getstate ########### SUPPORT FOR PICKLING
     __setstate__ = standard_setstate
     def _inverse_schema(self):
         'provide custom schema rule for inverting this graph... just use keyColumn!'
@@ -1197,12 +1212,20 @@ keyColumn is the foreign key column name in targetDB for looking up sourceDB IDs
         if not hasattr(k,'db') or k.db != self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this graph!')
         try:
-            return dict.__getitem__(self,k.id)
+            return self._weakValueDict[k.id] # get from cache
         except KeyError:
             pass
         d = ForeignKeyEdge(self,k)
-        dict.__setitem__(self,k.id,d)
+        self._weakValueDict[k.id] = d # save in cache
         return d
+    def __setitem__(self, k, v):
+        raise KeyError('''do not save as g[k]=v.  Instead follow a graph
+interface: g[src]+=dest, or g[src][dest]=None (no edge info allowed)''')
+    def __delitem__(self, k):
+        raise KeyError('''Instead of del g[k], follow a graph
+interface: del g[src][dest]''')
+    def keys(self):
+        return self.sourceDB.values()
     __invert__ = standard_invert
 
 def describeDBTables(name,cursor,idDict):
