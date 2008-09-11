@@ -784,19 +784,24 @@ class AnnotationSlice(SeqDBSlice):
     annotationType = classutil.DBAttributeDescr('annotationType')
     __repr__ =  annotation_repr
 
-class AnnotationDB(UserDict.DictMixin, dict):
+class AnnotationDB(object, UserDict.DictMixin):
     'container of annotations as specific slices of db sequences'
-    def __init__(self,sliceDB,seqDB,annotationType=None,itemClass=AnnotationSeq,
+    def __init__(self, sliceDB, seqDB, annotationType=None,
+                 itemClass=AnnotationSeq,
                  itemSliceClass=AnnotationSlice,
                  itemAttrDict=None, # GET RID OF THIS BACKWARDS-COMPATIBILITY KLUGE!!
-                 sliceAttrDict=None,maxCache=None,**kwargs):
+                 sliceAttrDict=None,maxCache=None, autoGC=True, **kwargs):
         '''sliceDB must map identifier to a sliceInfo object;
 sliceInfo must have name,start,stop,ori attributes;
 seqDB must map sequence ID to a sliceable sequence object;
 sliceAttrDict gives optional dict of item attributes that
 should be mapped to sliceDB item attributes.
 maxCache specfies the maximum number of annotation objects to keep in the cache.'''
-        dict.__init__(self)
+        if autoGC: # automatically garbage collect unused objects
+            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+        else:
+            self._weakValueDict = {}
+        self.autoGC = autoGC
         if sliceAttrDict is None:
             sliceAttrDict = {}
         if sliceDB is not None:
@@ -816,11 +821,9 @@ maxCache specfies the maximum number of annotation objects to keep in the cache.
             raise KeyError('''\
  cannot create annotation object; sequence database %s may not be correct''' %\
                            (repr(seqDB),))
-    def __reduce__(self): ############################# SUPPORT FOR PICKLING
-        return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
-    _pickleAttrs = dict(sliceDB=0,seqDB=0,annotationType=0,
+    _pickleAttrs = dict(sliceDB=0,seqDB=0,annotationType=0, autoGC=0,
                         itemClass=0,itemSliceClass=0,sliceAttrDict=0,maxCache=0)
     def __hash__(self):
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
@@ -828,7 +831,7 @@ maxCache specfies the maximum number of annotation objects to keep in the cache.
     def __getitem__(self,k):
         'get annotation object by its ID'
         try: # GET FROM OUR CACHE
-            return dict.__getitem__(self,k)
+            return self._weakValueDict[k]
         except KeyError:
             pass
         return self.sliceAnnotation(k,self.sliceDB[k])
@@ -860,11 +863,11 @@ saved directly to the sliceDB.''')
                              %(k,start,stop))
         a = self.itemClass(k,self,self.seqDB[self.getSliceAttr(sliceInfo,'id')],start,stop)
         try: # APPLY CACHE SIZE LIMIT IF ANY
-            if limitCache and self.maxCache<dict.__len__(self):
-                self.clear()
+            if limitCache and self.maxCache<len(self._weakValueDict):
+                self._weakValueDict.clear()
         except AttributeError:
             pass
-        dict.__setitem__(self,k,a) # CACHE THIS IN OUR DICT
+        self._weakValueDict[k] = a # CACHE THIS IN OUR DICT
         return a
     def new_annotation(self,k,sliceInfo):
         'save sliceInfo to the annotation database and return annotation object'
@@ -872,15 +875,18 @@ saved directly to the sliceDB.''')
         try:
             self.sliceDB[k] = sliceInfo # NOW SAVE IT TO THE SLICE DATABASE
         except:
-            dict.__delitem__(self,k) # DELETE FROM CACHE
+            try:
+                del self._weakValueDict[k] # DELETE FROM CACHE
+            except:
+                pass
             raise
         self._wroteSliceDB = True
         return a
     def foreignKey(self,attr,k):
         'iterate over items matching specified foreign key'
         for t in self.sliceDB.foreignKey(attr,k):
-            try:
-                yield dict.__getitem__(self,t.id)
+            try: # get from cache if exists
+                yield self._weakValueDict[t.id]
             except KeyError:
                 yield self.sliceAnnotation(t.id,t)
     def __contains__(self, k): return k in self.sliceDB
@@ -1042,8 +1048,12 @@ class AnnotationClientSliceDB(dict):
 class AnnotationClient(AnnotationDB):
     'XMLRPC AnnotationDB client'
     def __init__(self, url, name, seqDB,itemClass=AnnotationSeq,
-                 itemSliceClass=AnnotationSlice, **kwargs):
-        dict.__init__(self)
+                 itemSliceClass=AnnotationSlice, autoGC=True, **kwargs):
+        if autoGC: # automatically garbage collect unused objects
+            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+        else:
+            self._weakValueDict = {}
+        self.autoGC = autoGC
         import coordinator
         self.server = coordinator.get_connection(url, name)
         self.url = url
@@ -1053,7 +1063,8 @@ class AnnotationClient(AnnotationDB):
         self.itemClass = itemClass
         self.itemSliceClass = itemSliceClass
     def __getstate__(self):
-        return dict(url=self.url,name=self.name,seqDB=self.seqDB)
+        return dict(url=self.url, name=self.name, seqDB=self.seqDB,
+                    autoGC=self.autoGC)
     def getSliceAttr(self, sliceInfo, attr):
         if attr=='id': return sliceInfo[0]
         elif attr=='start': return sliceInfo[1]
