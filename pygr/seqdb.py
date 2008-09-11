@@ -448,13 +448,19 @@ class SequenceDB(object, UserDict.DictMixin):
         try:
             return self._weakValueDict[seqID]
         except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
-            s = self.itemClass(self, seqID)
+            try:
+                s = self.itemClass(self, seqID)
+            except KeyError:
+                raise KeyError, "no key '%s' in database %s" \
+                      % (seqID, repr(self))
             self._weakValueDict[seqID] = s # CACHE IT
             return s
     def keys(self):
         return self.seqInfoDict.keys()
     def __contains__(self, key):
         return key in self.seqInfoDict
+    def __repr__(self):
+        return "<%s '%s'>" % (self.__class__.__name__, self.filepath)
 
     # these methods should not be implemented for read-only database.
     clear = setdefault = pop = popitem = copy = update = \
@@ -713,9 +719,6 @@ class BlastDB(BlastDBbase):
             s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
             self._weakValueDict[id] = s # CACHE IT
             return s
-
-    def __repr__(self):
-        return "<BlastDB '%s'>" % (self.filepath)
 
 def getAnnotationAttr(self,attr):
     'forward attributes from slice object if available'

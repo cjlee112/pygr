@@ -1,15 +1,15 @@
 import pygrtest_common
-from pygr.seqdb import BlastDB, PrefixUnionDict, AnnotationDB
+from pygr.seqdb import SequenceFileDB, PrefixUnionDict, AnnotationDB
 from pygr.sequence import Sequence
 from pygr.cnestedlist import NLMSA
 import gc
 
-class BlastDB_Test(object):
+class SequenceFileDB_Test(object):
     """
-    Test for all of the basic dictionary functions on 'BlastDB'.
+    Test for all of the basic dictionary functions on 'SequenceFileDB'.
     """
     def setup(self):
-        self.db = BlastDB('dnaseq')     # contains 'seq1', 'seq2'
+        self.db = SequenceFileDB('dnaseq')     # contains 'seq1', 'seq2'
     def keys_test(self):
         k = self.db.keys()
         k.sort()
@@ -60,7 +60,7 @@ class BlastDB_Test(object):
         assert ki == ii
     def readonly_test(self):
         try:
-            self.db.copy()              # what should 'copy' do on BlastDB?
+            self.db.copy()              # what should 'copy' do on SequenceFileDB?
             assert 0, 'this method should raise NotImplementedError'
         except NotImplementedError:
             pass
@@ -92,18 +92,18 @@ class BlastDB_Test(object):
             
     # test some things other than dict behavior
     def keyerror_test(self):
-        "Make sure that the BlastDB KeyError is informative."
+        "Make sure that the SequenceFileDB KeyError is informative."
         try:
             self.db['foo']
         except KeyError, e:
-            assert "no key 'foo' in database <BlastDB" in str(e), str(e)
+            assert "no key 'foo' in database <SequenceFileDB" in str(e), str(e)
 
 class PrefixUnionDict_Test(object):
     """
     Test for all of the basic dictionary functions on 'PrefixUnionDict'.
     """
     def setup(self):
-        blastdb = BlastDB('dnaseq')     # contains 'seq1', 'seq2'
+        blastdb = SequenceFileDB('dnaseq')     # contains 'seq1', 'seq2'
         self.db = PrefixUnionDict({ 'prefix' : blastdb })
     def keys_test(self):
         k = self.db.keys()
@@ -299,7 +299,7 @@ class AnnotationDB_Test(object):
 class SeqDBCache_Test(object):
     def cache_test(self):
         "Test basic sequence slice cache mechanics."
-        db = BlastDB('dnaseq')
+        db = SequenceFileDB('dnaseq')
 
         # create cache components
         cacheDict = {}
@@ -350,21 +350,25 @@ class SeqDBCache_Test(object):
     def nlmsaslice_cache_test(self):
         "Test NLMSASlice sequence caching & removal"
         # set up sequences
-        db = BlastDB('dnaseq')
+        db = SequenceFileDB('dnaseq')
+        gc.collect()
+        assert len(db._weakValueDict)==0, '_weakValueDict should be empty'
         seq1, seq2 = db['seq1'], db['seq2']
+        assert len(db._weakValueDict)==2, '_weakValueDict should have 2 seqs'
 
         # build referencing NLMSA
-        map = NLMSA('test', 'memory', pairwiseMode=True)
-        map += seq1
-        map[seq1] += seq2
-        map.build()
+        mymap = NLMSA('test', 'memory', db, pairwiseMode=True)
+        mymap += seq1
+        mymap[seq1] += seq2
+        mymap.build()
 
         # check: no cache
         assert not hasattr(db, '_cache'), 'should be no cache yet'
 
+        seq1, seq2 = db['seq1'], db['seq2'] # re-retrieve
         # now retrieve a NLMSASlice, forcing entry of seq into cache
         ival = seq1[5:10]
-        x = map[ival]
+        x = mymap[ival]
         print 'this should not be empty:', db._cache.values()
         n1 = len(db._cache)
         assert n1 == 1, "should be exactly one cache entry, not %d" % (n1,)
@@ -376,3 +380,8 @@ class SeqDBCache_Test(object):
         n2 = len(db._cache)
         assert n2 == 0, '%d objects remain; cache memory leak!' % n2
         # FAIL because of __dealloc__ error in cnestedlist.NLMSASlice.
+
+        del mymap, ival, seq1, seq2 # drop our references, cache should empty
+        gc.collect()
+        # check that db._weakValueDict cache is empty
+        assert len(db._weakValueDict)==0, '_weakValueDict should be empty'
