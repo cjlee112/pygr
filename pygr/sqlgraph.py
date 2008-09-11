@@ -20,6 +20,16 @@ class TupleDescriptor(object):
     def __set__(self, obj, val):
         raise AttributeError('this database is read-only!')
 
+class TupleDescriptorRW(TupleDescriptor):
+    'read-write interface to named attribute'
+    def __init__(self, db, attr):
+        self.attr = attr
+        self.icol = db.data[attr] # index of this attribute in the tuple
+        self.attrSQL = db._attrSQL(attr, sqlColumn=True) # SQL column name
+    def __set__(self, obj, val):
+        obj.db._update(obj.id, self.attrSQL, val) # AND UPDATE THE DATABASE
+        obj.save_local(self.attr, val)
+
 class SQLDescriptor(object):
     'return attribute value by querying the database'
     def __init__(self, db, attr):
@@ -92,15 +102,9 @@ class TupleO(object):
 
 class TupleORW(TupleO):
     'read-write version of TupleO'
+    _columnDescriptor = TupleDescriptorRW
     def cache_id(self,row_id):
         self.save_local('id',row_id)
-    def __setattr__(self,attr,val):
-        if attr=='id':
-            raise AttributeError('''you cannot change the ID of a database object by direct
-assignment x.id = new_id.  Instead use del db[x.id]; db[new_id] = x''')
-        col = self.db._attrSQL(attr,sqlColumn=True) # MAP THIS TO SQL COLUMN NAME
-        self.db._update(self.id,col,val) # AND UPDATE THE DATABASE
-        self.save_local(attr,val)
     def save_local(self,attr,val):
         icol = self._attrcol[attr]
         try:
