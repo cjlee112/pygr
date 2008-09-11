@@ -411,10 +411,10 @@ class SequenceDB(object, UserDict.DictMixin):
     def strsliceCache(self,seq,start,stop):
         'get strslice using cache hints, if any'
         try:
-            cacheList=self._cache.values()
+            cacheDict=self._cache
         except AttributeError:
             raise IndexError('no cache present')
-        for d in cacheList:
+        for owner,d in cacheDict.items():
             try:
                 ival=d[seq.id]
             except KeyError:
@@ -425,6 +425,12 @@ class SequenceDB(object, UserDict.DictMixin):
                 except IndexError: # NEED TO CACHE ival SEQ STRING
                     s=seq.strslice(ival[0],ival[1],useCache=False)
                     ival.append(s)
+                    try: # does owner want to reference this cached seq?
+                        save_f = owner.cache_reference
+                    except AttributeError:
+                        pass # no, so nothing to do
+                    else: # let owner control caching in our _weakValueDict
+                        save_f(seq)
                 return s[start-ival[0]:stop-ival[0]]
         raise IndexError('interval not found in cache')
 

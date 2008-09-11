@@ -203,6 +203,7 @@ cdef class NLMSASlice:
   cdef object weakestLink
 
   cdef int findSeqBounds(self,int id,int ori)
+  cdef object get_seq_interval(self, NLMSA nl, int targetID, int start, int stop)
 
 cdef class NLMSASliceLetters:
   cdef readonly NLMSASlice nlmsaSlice

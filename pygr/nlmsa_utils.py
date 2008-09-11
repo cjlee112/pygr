@@ -327,3 +327,11 @@ class NLMSABuilder(object):
   def __reduce__(self):
     return (nlmsa_textdump_unpickler,(self.filepath,self.kwargs))
     
+class SeqCacheOwner(object):
+    'weak referenceable object: workaround for pyrex extension classes'
+    def __init__(self):
+      self.cachedSeqs = {}
+    def cache_reference(self, seq):
+      'keep a ref to seqs cached on our behalf'
+      self.cachedSeqs[seq.id] = seq
+

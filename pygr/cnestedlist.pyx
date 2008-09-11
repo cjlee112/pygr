@@ -1,6 +1,5 @@
 import sequence
 import nlmsa_utils
-from classutil import WeakestLink
 
 cdef class IntervalDBIterator:
   def __new__(self,int start,int end,IntervalDB db not None):
@@ -566,7 +565,7 @@ cdef class NLMSASlice:
           cacheDict[ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
 
       if cacheDict:
-        self.weakestLink = WeakestLink()
+        self.weakestLink = nlmsa_utils.SeqCacheOwner()
         saveCache(cacheDict, self.weakestLink) # SAVE COVERING IVALS AS CACHE HINT
 
   def __hash__(self):
@@ -581,7 +580,19 @@ cdef class NLMSASlice:
       free(self.seqBounds)
       self.seqBounds=NULL
 
-
+  cdef object get_seq_interval(self, NLMSA nl, int targetID,
+                               int start, int stop):
+    'get seq interval and ensure cache owner keeps it in the cache'
+    if start<stop:
+      ival = nl.seqInterval(targetID, start, stop)
+    else:  # GET THE SEQUENCE OBJECT
+      ival = nl.seqlist.getSeq(targetID)
+    try: # tell owner to keep it in the cache
+      self.weakestLink.cache_reference(ival.pathForward)
+    except AttributeError:
+      pass
+    return ival
+  
   ########################################### ITERATOR METHODS
   def edges(self,mergeAll=False,**kwargs):
     'get list of tuples (srcIval,destIval,edge) aligned in this slice'
@@ -671,9 +682,9 @@ alignment intervals to an NLMSA after calling its build() method.''')
     i=self.findSeqBounds(id,seq.orientation) # FIND THIS id,ORIENTATION
     if i<0: # NOT FOUND!
       raise KeyError('seq not aligned in this interval')
-    return nl.seqInterval(self.seqBounds[i].target_id,
-                          self.seqBounds[i].target_start,
-                          self.seqBounds[i].target_end)
+    return self.get_seq_interval(nl, self.seqBounds[i].target_id,
+                                 self.seqBounds[i].target_start,
+                                 self.seqBounds[i].target_end)
 
   def generateSeqEnds(self):
     'get list of tuples (ival1,ival2,edge)'
@@ -686,9 +697,9 @@ alignment intervals to an NLMSA after calling its build() method.''')
         continue  # DON'T RETURN EDGES TO LPO
       #ival1=sequence.absoluteSlice(self.seq,self.seqBounds[i].start,
       #                             self.seqBounds[i].end)
-      ival2=nl.seqInterval(self.seqBounds[i].target_id,
-                           self.seqBounds[i].target_start,
-                           self.seqBounds[i].target_end)
+      ival2 = self.get_seq_interval(nl, self.seqBounds[i].target_id,
+                                    self.seqBounds[i].target_start,
+                                    self.seqBounds[i].target_end)
       #l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
       edge = self[ival2] # LET edge FIGURE OUT sourcePath FOR US
       l.append((edge.sourcePath,ival2,edge))
@@ -756,7 +767,8 @@ alignment intervals to an NLMSA after calling its build() method.''')
           targetEnd = targetEnd+maskEnd-end
           end = MaskEnd
       elif filterSeqs is not None: # CLIP TARGET SEQ INTERVAL
-        target=nl.seqInterval(self.im[i].target_id,targetStart,targetEnd)
+        target = self.get_seq_interval(nl, self.im[i].target_id,
+                                       targetStart, targetEnd)
         try:
           target=filterSeqs[target] # PERFORM CLIPPING
         except KeyError: # NO OVERLAP IN filterSeqs, SO SKIP
@@ -852,7 +864,7 @@ alignment intervals to an NLMSA after calling its build() method.''')
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     pIdentityMin0=pIdentityMin
     for targetID,l in seqIntervals.items(): # MERGE INTERVALS FOR EACH SEQ
-      seq=nl.seqlist.getSeq(targetID) # GET THE SEQUENCE OBJECT
+      seq = self.get_seq_interval(nl, targetID, 0, 0) # GET THE SEQUENCE OBJECT
       if pIdentityMin0 is not None and not isinstance(pIdentityMin0,types.FloatType):
         try:
           pIdentityMin=pIdentityMin0[seq] # LOOK UP DESIRED IDENTITY FOR THIS SEQ
@@ -913,7 +925,7 @@ alignment intervals to an NLMSA after calling its build() method.''')
       for seq in seqs: # CONSTRUCT INTERVAL BOUNDS LIST
         if isinstance(seq,int): # seqIntervals USES INT INDEX VALUES
           id=seq # SAVE THE ID
-          seq=nl.seqlist.getSeq(id) # GET THE SEQUENCE OBJECT
+          seq = self.get_seq_interval(nl, id, 0, 0) # GET THE SEQUENCE OBJECT
         else: # EXPECT USER TO SUPPLY ACTUAL SEQUENCE OBJECTS
           id=nl.seqs.getID(seq)
           seq=seq.pathForward # ENSURE WE HAVE TOP-LEVEL SEQ OBJECT
