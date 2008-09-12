@@ -821,6 +821,8 @@ maxCache specfies the maximum number of annotation objects to keep in the cache.
             raise KeyError('''\
  cannot create annotation object; sequence database %s may not be correct''' %\
                            (repr(seqDB),))
+        except StopIteration:
+            pass # dataset is empty so there is nothing we can check...
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(sliceDB=0,seqDB=0,annotationType=0, autoGC=0,
