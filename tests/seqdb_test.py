@@ -350,7 +350,7 @@ class SeqDBCache_Test(object):
     def nlmsaslice_cache_test(self):
         "Test NLMSASlice sequence caching & removal"
         # set up sequences
-        db = SequenceFileDB('dnaseq')
+        db = SequenceFileDB('dnaseq', autoGC=-1) # use pure WeakValueDict...
         gc.collect()
         assert len(db._weakValueDict)==0, '_weakValueDict should be empty'
         seq1, seq2 = db['seq1'], db['seq2']

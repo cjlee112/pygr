@@ -333,13 +333,16 @@ class RecentValueDictionary(WeakValueDictionary):
     n: the maximum number of objects to keep in the Most Recent queue,
        default value 50.'''
     def __init__(self, n=None):
+        WeakValueDictionary.__init__(self)
+        if n<1: # user doesn't want any Most Recent value queue
+            self.__class__ = WeakValueDictionary # revert to regular WVD
+            return
         if isinstance(n, int):
             self.n = n # size limit
         else:
             self.n = 50
         self.i = 0 # counter
         self._keepDict = {} # most recent queue
-        WeakValueDictionary.__init__(self)
     def __getitem__(self, k):
         v = WeakValueDictionary.__getitem__(self, k) # KeyError if not found
         self.keep_this(v)

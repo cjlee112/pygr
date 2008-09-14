@@ -362,9 +362,9 @@ class SequenceDB(object, UserDict.DictMixin):
     def __init__(self, autoGC=True, dbname='generic', **kwargs):
         "Initialize seq db from filepath or ifile"
         if autoGC: # automatically garbage collect unused objects
-            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+            self._weakValueDict = classutil.RecentValueDictionary(autoGC)
         else:
-            self._weakValueDict = {}
+            self._weakValueDict = {}  # object cache
         self.autoGC = autoGC
         kwargs = kwargs.copy() # get a copy we can modify w/o side effects
         classutil.apply_itemclass(self, kwargs)
@@ -403,11 +403,10 @@ class SequenceDB(object, UserDict.DictMixin):
                 ival=(ival[0],ival[0]+self._cache_max)
             d[id]=[ival[0],ival[1]]
         try:
-            self._cache[owner]=d # ADD TO EXISTING CACHE
+            self._cache[owner] = d # ADD TO EXISTING CACHE
         except AttributeError:
-            import weakref # AUTOMATICALLY REMOVE FROM CACHE IF owner
-            self._cache=weakref.WeakKeyDictionary() # GOES OUT OF SCOPE
-            self._cache[owner]=d
+            self._cache = weakref.WeakKeyDictionary()  # AUTOMATICALLY REMOVE
+            self._cache[owner] = d # FROM CACHE IF owner GOES OUT OF SCOPE
     def strsliceCache(self,seq,start,stop):
         'get strslice using cache hints, if any'
         try:
@@ -798,9 +797,9 @@ sliceAttrDict gives optional dict of item attributes that
 should be mapped to sliceDB item attributes.
 maxCache specfies the maximum number of annotation objects to keep in the cache.'''
         if autoGC: # automatically garbage collect unused objects
-            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+            self._weakValueDict = classutil.RecentValueDictionary(autoGC)
         else:
-            self._weakValueDict = {}
+            self._weakValueDict = {} # object cache
         self.autoGC = autoGC
         if sliceAttrDict is None:
             sliceAttrDict = {}
@@ -1052,9 +1051,9 @@ class AnnotationClient(AnnotationDB):
     def __init__(self, url, name, seqDB,itemClass=AnnotationSeq,
                  itemSliceClass=AnnotationSlice, autoGC=True, **kwargs):
         if autoGC: # automatically garbage collect unused objects
-            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+            self._weakValueDict = classutil.RecentValueDictionary(autoGC)
         else:
-            self._weakValueDict = {}
+            self._weakValueDict = {} # object cache
         self.autoGC = autoGC
         import coordinator
         self.server = coordinator.get_connection(url, name)
