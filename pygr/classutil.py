@@ -1,4 +1,5 @@
 import os,sys
+from weakref import WeakValueDictionary
 
 def ClassicUnpickler(cls, state):
     'standard python unpickling behavior'
@@ -317,3 +318,51 @@ def get_env_or_cwd(envname):
     except KeyError:
         return os.getcwd() # DEFAULT: SAVE IN CURRENT DIRECTORY
 
+
+class RecentValueDictionary(WeakValueDictionary):
+    '''keep the most recent n references in a WeakValueDictionary.
+    This combines the elegant cache behavior of a WeakValueDictionary
+    (only keep an item in cache if the user is still using it),
+    with the most common efficiency pattern: locality, i.e.
+    references to a given thing tend to cluster in time.  Note that
+    this works *even* if the user is not holding a reference to
+    the item between requests for it.  Our Most Recent queue will
+    hold a reference to it, keeping it in the WeakValueDictionary,
+    until it is bumped by more recent requests.
+    
+    n: the maximum number of objects to keep in the Most Recent queue,
+       default value 50.'''
+    def __init__(self, n=None):
+        if isinstance(n, int):
+            self.n = n # size limit
+        else:
+            self.n = 50
+        self.i = 0 # counter
+        self._keepDict = {} # most recent queue
+        WeakValueDictionary.__init__(self)
+    def __getitem__(self, k):
+        v = WeakValueDictionary.__getitem__(self, k) # KeyError if not found
+        self.keep_this(v)
+        return v
+    def keep_this(self, v):
+        'add v as our most recent ref; drop oldest ref if over size limit'
+        self._keepDict[v] = self.i # mark as most recent request
+        self.i += 1
+        if len(self._keepDict)>self.n: # delete oldest entry
+            l = self._keepDict.items()
+            imin = l[0][1]
+            vmin = l[0][0]
+            for v,i in l[1:]:
+                if i<imin:
+                    imin = i
+                    vmin = v
+            del self._keepDict[vmin]
+    def __setitem__(self, k, v):
+        WeakValueDictionary.__setitem__(self, k, v)
+        self.keep_this(v)
+    def clear(self):
+        self._keepDict.clear()
+        WeakValueDictionary.clear(self)
+
+
+            

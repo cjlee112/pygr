@@ -5,11 +5,10 @@ from mapping import *
 import types
 from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
      override_rich_cmp,generate_items,get_bound_subclass,standard_setstate,\
-     get_valid_path,standard_invert
+     get_valid_path,standard_invert,RecentValueDictionary
 import os
 import platform 
 import UserDict
-import weakref
     
 class TupleDescriptor(object):
     'return tuple entry corresponding to named attribute'
@@ -226,7 +225,7 @@ class SQLTableBase(object, UserDict.DictMixin):
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
                  serverInfo=None, autoGC=True, **kwargs):
         if autoGC: # automatically garbage collect unused objects
-            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+            self._weakValueDict = RecentValueDictionary(autoGC) # object cache
         else:
             self._weakValueDict = {}
         self.autoGC = autoGC
@@ -1206,7 +1205,7 @@ Caches dict of target nodes in itself; provides dict interface.
 targetDB must be an SQL database of target nodes;
 keyColumn is the foreign key column name in targetDB for looking up sourceDB IDs.'''
         if autoGC: # automatically garbage collect unused objects
-            self._weakValueDict = weakref.WeakValueDictionary() # object cache
+            self._weakValueDict = RecentValueDictionary(autoGC) # object cache
         else:
             self._weakValueDict = {}
         self.autoGC = autoGC
