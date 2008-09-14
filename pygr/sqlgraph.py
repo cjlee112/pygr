@@ -262,7 +262,13 @@ class SQLTableBase(object, UserDict.DictMixin):
             field=c[0]
             self.colname.append(field)
             if c[3]=="PRI":
-                self.primary_key=field
+                if self.primary_key is None:
+                    self.primary_key = field
+                else:
+                    try:
+                        self.primary_key.append(field)
+                    except AttributeError:
+                        self.primary_key = [self.primary_key,field]
                 if c[1][:3].lower()=='int':
                     self.usesIntID = True
                 else:
@@ -272,8 +278,10 @@ class SQLTableBase(object, UserDict.DictMixin):
             self.data[field]=icol
             self.description[field]=cursor.description[icol]
             self.columnType[field] = c[1] # SQL COLUMN TYPE
-        if self.primary_key != None: # MAKE PRIMARY KEY ALWAYS ACCESSIBLE AS ATTRIBUTE id
+        try:
             self.data['id']=self.data[self.primary_key]
+        except (KeyError,TypeError):
+            pass
         if hasattr(self,'_attr_alias'): # FINALLY, APPLY ANY ATTRIBUTE ALIASES FOR THIS CLASS
             self.addAttrAlias(False,**self._attr_alias)
         self.objclass(itemClass) # NEED TO SUBCLASS OUR ITEM CLASS
@@ -1245,12 +1253,10 @@ def describeDBTables(name,cursor,idDict):
         tname=name+'.'+t
         o=SQLTable(tname,cursor)
         tables[tname]=o
-        if o.primary_key:
-            if o.primary_key not in idDict:
-                idDict[o.primary_key]=[]
-            idDict[o.primary_key].append(o) # KEEP LIST OF TABLES WITH THIS PRIMARY KEY
         for f in o.description:
-            if f[-3:]=='_id' and f not in idDict:
+            if f==o.primary_key:
+                idDict.setdefault(f, []).append(o)
+            elif f[-3:]=='_id' and f not in idDict:
                 idDict[f]=[]
     return tables
 
