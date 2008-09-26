@@ -70,7 +70,7 @@ class BlastHitParser(object):
             if self.query_start < self.query_end:  # handles forward orientation
                 self.query_start -= 1
         self.query_seq+=c[2]
-        self.seq_start_char=line.find(c[2]) # IN CASE BLAST SCREWS UP Sbjct:
+        self.seq_start_char=line.find(c[2], 5) # IN CASE BLAST SCREWS UP Sbjct:
     def save_subject_line(self,line):
         "save a Sbjct: line, attempt to handle various BLAST insanities"
         c=line.split()
