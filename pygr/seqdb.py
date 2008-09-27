@@ -9,6 +9,7 @@ import weakref
 
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
+    @classmethod
     def _init_subclass(cls, db, **kwargs):
         db.seqInfoDict = db # db will act as its own seqInfoDict
         SQLRow._init_subclass(db=db, **kwargs)
