@@ -1,0 +1,26 @@
+Query= BigBadWoof
+
+>ref|NC_007503.1| Carboxydothermus hydrogenoformans Z-2901, complete genome
+         Length = 2401520
+
+ Score = 90.5 bits (223), Expect = 4e-17,   Method: Compositional matrix adjust.
+ Identities = 53/181 (29%), Positives = 97/181 (53%), Gaps = 12/181 (6%)
+ Frame = +2
+
+Query: 13    GKVLWQNLTFTISAGERVGIHAPSGTGKTTLGRVLAGWQKPTAGDVLLDGSPFPLHQYCP 72
+             G+V+   +TFT+  G+ +G+  PSG GK++L R+L     PT+G++   G    + +Y P
+Sbjct: 99509 GQVILDGITFTVEEGDFLGVLGPSGAGKSSLFRLLNRLLSPTSGEIYYRGK--NIKEYDP 99682
+
+Query: 73    VQLVPQHPELTFNPWRSAGDAVRD--------AWQPDPETLRRL----HVQPEWLTRRPM 120
+             ++L  +   +   P+      + D          +PD E + +     +++ E L ++P
+Sbjct: 99683 IKLRREIGYVLQRPYLFGQKVLEDLTYPFRIRQEKPDMELIYKYLAQANLKEEILAKKPT 99862
+
+Query: 121   QLSGGELARIAILRALDPRTRFLIADEMTAQLDPSIQKAIWVYVLEVCRSRSLGMLVISH 180
+             +LSGGE  RI+++R L  + R L+ DE+T+ LD    +AI   +L+    ++L +L I+H
+Sbjct: 99863 ELSGGEAQRISLIRTLLVQPRVLLLDEVTSALDLDTTRAILDLILKEKEEKNLTVLAITH 100042
+
+Query: 181   Q 181
+ 
+Sbjct: 100043N 100045
+
+  Database: foobarU

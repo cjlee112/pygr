@@ -27,7 +27,8 @@ def get_ori_letterunit(start,end,seq,gapchar='-'):
     return ori,letterunit
 
 class BlastIval(object):
-    pass
+    def __repr__(self):
+        return '<BLAST-IVAL: '  + repr(self.__dict__) + '>'
 
 class BlastHitParser(object):
     """reads alignment info from blastall standard output.

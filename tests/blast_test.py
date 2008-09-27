@@ -137,6 +137,22 @@ def all_v_all_blast_save():
 
         return msa
                 
+class Tblastn_Test(object):
+	def bad_subject_test(self):
+		from pygr import parse_blast
+		correctCoords = ((12,63,99508,99661),
+				 (65,96,99661,99754),
+				 (96,108,99778,99814),
+				 (108,181,99826,100045))
+		ifile = file('bad_tblastn.txt')
+		try:
+			p= parse_blast.BlastHitParser()
+			for i,ival in enumerate(p.parse_file(ifile)):
+				assert (ival.src_start,ival.src_end,
+					ival.dest_start,ival.dest_end) \
+					== correctCoords[i]
+		finally:
+			ifile.close()
 
 if __name__ == '__main__':
         a=all_v_all_blast_save()
