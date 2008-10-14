@@ -9,10 +9,11 @@ import weakref
 
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
-    @classmethod
+    #@classmethod # decorators don't work prior to Python 2.4
     def _init_subclass(cls, db, **kwargs):
         db.seqInfoDict = db # db will act as its own seqInfoDict
         SQLRow._init_subclass(db=db, **kwargs)
+    _init_subclass = classmethod(_init_subclass)
     def __init__(self, id):
         SQLRow.__init__(self, id)
         SequenceBase.__init__(self)
@@ -210,7 +211,7 @@ class FileDBSeqDescriptor(object):
 class FileDBSequence(SequenceBase):
     seq=FileDBSeqDescriptor()
     __reduce__ = classutil.item_reducer
-    @classmethod
+    #@classmethod # decorators don't work prior to Python 2.4
     def _init_subclass(cls, db, filepath, **kwargs):
         'open or build seqLenDict if needed'
         cls.db = db # all instances of this class are now bound to this database
@@ -225,6 +226,7 @@ class FileDBSequence(SequenceBase):
             db.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
             db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
         db.seqInfoDict = SeqLenDictWrapper(db) # standard interface
+    _init_subclass = classmethod(_init_subclass)
     def __init__(self,db,id):
         self.id=id
         SequenceBase.__init__(self)
@@ -1473,13 +1475,14 @@ class BlastDBXMLRPC(BlastDB):
     
 class XMLRPCSequence(SequenceBase):
     "Represents a sequence in a blast database, accessed via XMLRPC"
-    @classmethod
+    #@classmethod # decorators don't work prior to Python 2.4
     def _init_subclass(cls, db, url, name, **kwargs):
         import coordinator
         db.server = coordinator.get_connection(url,name)
         db.url = url
         db.name = name
         db.seqInfoDict = SeqLenDictWrapper(db)
+    _init_subclass = classmethod(_init_subclass)
     def __init__(self, db, id):
         self.length = db.server.getSeqLen(id)
         if self.length<=0:
