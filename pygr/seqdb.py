@@ -391,10 +391,20 @@ class SequenceDB(object, UserDict.DictMixin):
             return self._seqtype
         except AttributeError:
             pass
-        for seqID in self:
+        try:
+            ifile = file(self.filepath) # read one sequence to check its type
+            try: # this only works for FASTA file...
+                id,title,seq = read_fasta_one_line(ifile) 
+                self._seqtype = guess_seqtype(seq) # record protein vs. DNA...
+                return self._seqtype
+            finally:
+                ifile.close()
+        except (IOError,AttributeError):
+            pass
+        for seqID in self: # get an iterator
             seq = self[seqID] # get the 1st sequence
             self._seqtype = guess_seqtype(str(seq[:100]))
-            break
+            return self._seqtype
     _cache_max=10000
     def cacheHint(self, ivalDict, owner):
         'save a cache hint dict of {id:(start,stop)}; return reference owner'
