@@ -102,7 +102,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
             exon_slices[row[1]] = row
             exon = exon_db[row[1]] # GET THE ANNOTATION OBJECT FOR THIS EXON
             msa.addAnnotation(exon) # SAVE IT TO GENOME MAPPING
-            exon_db.clear()
+        exon_db.clear_cache() # not really necessary; cache should autoGC
         exon_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         exon_db.__doc__ = 'Exon Annotation Database for dm2'
@@ -127,7 +127,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
             splice_slices[row[1]] = row
             splice = splice_db[row[1]] # GET THE ANNOTATION OBJECT FOR THIS EXON
             msa.addAnnotation(splice) # SAVE IT TO GENOME MAPPING
-            splice_db.clear()
+        splice_db.clear_cache() # not really necessary; cache should autoGC
         splice_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         splice_db.__doc__ = 'Splice Annotation Database for dm2'
@@ -152,7 +152,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
             ucsc_slices[row[1]] = row
             ucsc = ucsc_db[row[1]] # GET THE ANNOTATION OBJECT FOR THIS EXON
             msa.addAnnotation(ucsc) # SAVE IT TO GENOME MAPPING
-            ucsc_db.clear()
+        ucsc_db.clear_cache() # not really necessary; cache should autoGC
         ucsc_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         ucsc_db.__doc__ = 'Most Conserved Elements for dm2'
@@ -313,9 +313,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
             pairwiseMode = True, bidirectional = False)
         for id in exon_db:
             msa.addAnnotation(exon_db[id])
-            exon_db.clear()
-        exon_db.clear()
-        exon_slices.clear()
+        exon_db.clear_cache() # not really necessary; cache should autoGC
+        exon_slices.clear_cache()
         msa.build()
         exon_db.__doc__ = 'SQL Exon Annotation Database for dm2'
         pygr.Data.getResource.addResource('TEST.Annotation.SQL.dm2.exons', exon_db)
@@ -334,9 +333,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
             pairwiseMode = True, bidirectional = False)
         for id in splice_db:
             msa.addAnnotation(splice_db[id])
-            splice_db.clear()
-        splice_db.clear()
-        splice_slices.clear()
+        splice_db.clear_cache() # not really necessary; cache should autoGC
+        splice_slices.clear_cache()
         msa.build()
         splice_db.__doc__ = 'SQL Splice Annotation Database for dm2'
         pygr.Data.getResource.addResource('TEST.Annotation.SQL.dm2.splices', splice_db)
@@ -355,9 +353,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
             pairwiseMode = True, bidirectional = False)
         for id in ucsc_db:
             msa.addAnnotation(ucsc_db[id])
-            ucsc_db.clear()
-        ucsc_db.clear()
-        ucsc_slices.clear()
+        ucsc_db.clear_cache() # not really necessary; cache should autoGC
+        ucsc_slices.clear_cache()
         msa.build()
         ucsc_db.__doc__ = 'SQL Most Conserved Elements for dm2'
         pygr.Data.getResource.addResource('TEST.Annotation.UCSC.SQL.dm2.mostconserved', ucsc_db)

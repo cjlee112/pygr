@@ -117,7 +117,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
             exon_slices[row[1]] = row
             exon = exon_db[row[1]] # GET THE ANNOTATION OBJECT FOR THIS EXON
             msa.addAnnotation(exon) # SAVE IT TO GENOME MAPPING
-            exon_db.clear()
+        exon_db.clear_cache() # not really necessary; cache should autoGC
         exon_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         exon_db.__doc__ = 'Exon Annotation Database for hg18'
@@ -142,7 +142,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
             splice_slices[row[1]] = row
             splice = splice_db[row[1]] # GET THE ANNOTATION OBJECT FOR THIS EXON
             msa.addAnnotation(splice) # SAVE IT TO GENOME MAPPING
-            splice_db.clear()
+        splice_db.clear_cache() # not really necessary; cache should autoGC
         splice_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         splice_db.__doc__ = 'Splice Annotation Database for hg18'
@@ -167,7 +167,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
             cds_slices[row[1]] = row
             cds = cds_db[row[1]] # GET THE ANNOTATION OBJECT FOR THIS EXON
             msa.addAnnotation(cds) # SAVE IT TO GENOME MAPPING
-            cds_db.clear()
+        cds_db.clear_cache() # not really necessary; cache should autoGC
         cds_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         cds_db.__doc__ = 'CDS Annotation Database for hg18'
@@ -192,7 +192,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
             ucsc_slices[row[1]] = row
             ucsc = ucsc_db[row[1]] # GET THE ANNOTATION OBJECT FOR THIS EXON
             msa.addAnnotation(ucsc) # SAVE IT TO GENOME MAPPING
-            ucsc_db.clear()
+        ucsc_db.clear_cache() # not really necessary; cache should autoGC
         ucsc_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         ucsc_db.__doc__ = 'Most Conserved Elements for hg18'
@@ -219,7 +219,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
             snp_slices[row[1]] = row
             snp = snp_db[row[1]] # GET THE ANNOTATION OBJECT FOR THIS EXON
             msa.addAnnotation(snp) # SAVE IT TO GENOME MAPPING
-            snp_db.clear()
+        snp_db.clear_cache() # not really necessary; cache should autoGC
         snp_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         snp_db.__doc__ = 'SNP126 for hg18'
@@ -508,9 +508,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
             pairwiseMode = True, bidirectional = False)
         for id in exon_db:
             msa.addAnnotation(exon_db[id])
-            exon_db.clear()
-        exon_db.clear()
-        exon_slices.clear()
+        exon_db.clear_cache() # not really necessary; cache should autoGC
+        exon_slices.clear_cache()
         msa.build()
         exon_db.__doc__ = 'SQL Exon Annotation Database for hg18'
         pygr.Data.getResource.addResource('TEST.Annotation.SQL.hg18.exons', exon_db)
@@ -529,9 +528,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
             pairwiseMode = True, bidirectional = False)
         for id in splice_db:
             msa.addAnnotation(splice_db[id])
-            splice_db.clear()
-        splice_db.clear()
-        splice_slices.clear()
+        splice_db.clear_cache() # not really necessary; cache should autoGC
+        splice_slices.clear_cache()
         msa.build()
         splice_db.__doc__ = 'SQL Splice Annotation Database for hg18'
         pygr.Data.getResource.addResource('TEST.Annotation.SQL.hg18.splices', splice_db)
@@ -550,9 +548,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
             pairwiseMode = True, bidirectional = False)
         for id in cds_db:
             msa.addAnnotation(cds_db[id])
-            cds_db.clear()
-        cds_db.clear()
-        cds_slices.clear()
+        cds_db.clear_cache() # not really necessary; cache should autoGC
+        cds_slices.clear_cache()
         msa.build()
         cds_db.__doc__ = 'SQL CDS Annotation Database for hg18'
         pygr.Data.getResource.addResource('TEST.Annotation.SQL.hg18.cdss', cds_db)
@@ -571,9 +568,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
             pairwiseMode = True, bidirectional = False)
         for id in ucsc_db:
             msa.addAnnotation(ucsc_db[id])
-            ucsc_db.clear()
-        ucsc_db.clear()
-        ucsc_slices.clear()
+        ucsc_db.clear_cache() # not really necessary; cache should autoGC
+        ucsc_slices.clear_cache()
         msa.build()
         ucsc_db.__doc__ = 'SQL Most Conserved Elements for hg18'
         pygr.Data.getResource.addResource('TEST.Annotation.UCSC.SQL.hg18.mostconserved', ucsc_db)
@@ -595,9 +591,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
             pairwiseMode = True, bidirectional = False)
         for id in snp_db:
             msa.addAnnotation(snp_db[id])
-            snp_db.clear()
-        snp_db.clear()
-        snp_slices.clear()
+        snp_db.clear_cache() # not really necessary; cache should autoGC
+        snp_slices.clear_cache()
         msa.build()
         snp_db.__doc__ = 'SQL SNP126 for hg18'
         pygr.Data.getResource.addResource('TEST.Annotation.UCSC.SQL.hg18.snp126', snp_db)
