@@ -477,6 +477,9 @@ You must directly assign obj an ID, i.e. db[new_id] = obj''')
             obj.cache_id(auto_id)
         self._weakValueDict[obj.id] = obj # AND SAVE TO OUR LOCAL DICT CACHE
         return obj
+    def clear_cache(self):
+        'empty the cache'
+        self._weakValueDict.clear()
 
 def getKeys(self,queryOption=''):
     'uses db select; does not force load'

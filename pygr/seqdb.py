@@ -473,6 +473,9 @@ class SequenceDB(object, UserDict.DictMixin):
         return key in self.seqInfoDict
     def __repr__(self):
         return "<%s '%s'>" % (self.__class__.__name__, self.filepath)
+    def clear_cache(self):
+        'empty the cache'
+        self._weakValueDict.clear()
 
     # these methods should not be implemented for read-only database.
     clear = setdefault = pop = popitem = copy = update = \
@@ -984,6 +987,9 @@ store the data in the associated disk file.  To avoid this, we
 have automatically called AnnotationDB.sliceDB.close() to write the data
 for you, when the AnnotationDB was deleted.'''
 
+    def clear_cache(self):
+        'empty the cache'
+        self._weakValueDict.clear()
     # not clear what this should do for AnnotationDB
     def copy(self):
         raise NotImplementedError, "nonsensical in AnnotationDB"
