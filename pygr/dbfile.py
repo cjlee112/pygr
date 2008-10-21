@@ -54,3 +54,6 @@ class BtreeShelf(shelve.Shelf):
                 raise WrongFormatError('file does not match expected shelve format: '+filename)
                 
         shelve.Shelf.__init__(self, d, protocol, writeback)
+    def __iter__(self):
+        'avoid using iter provided by shelve/DictMixin, which loads all keys!'
+        return iter(self.dict)
