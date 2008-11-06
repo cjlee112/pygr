@@ -1464,7 +1464,7 @@ directly as the seqDict argument to the NLMSA constructor.''' % id)
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
     xmlrpc_methods = dict(getSeqLen=0, strslice=0, getSeqLenDict=0,
-                          get_db_size=0)
+                          get_db_size=0, get_seqtype=0)
     def getSeqLen(self,id):
         'get sequence length, or -1 if not found'
         try:
@@ -1485,6 +1485,8 @@ class BlastDBXMLRPC(BlastDB):
             return str((-(self[id]))[-stop:-start])
         else: # POSITIVE ORIENTATION
             return str(self[id][start:stop])
+    def get_seqtype(self):
+        return self._seqtype
 
 
 
@@ -1542,7 +1544,13 @@ class XMLRPCSequenceDB(SequenceDB):
             return True
         else:
             return False
-
+    def set_seqtype(self):
+        'efficient way to determine sequence type of this database'
+        try: # if already known, no need to do anything
+            return self._seqtype
+        except AttributeError:
+            self._seqtype = self.server.get_seqtype()
+            return self._seqtype
 
 def fastaDB_unpickler(klass,srcfile,kwargs):
     if klass is BlastDB or klass == 'BlastDB':
