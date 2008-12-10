@@ -1,5 +1,5 @@
 import pygrtest_common
-from pygr import cnestedlist
+from pygr import cnestedlist, nlmsa_utils
 
 class NestedList_Test(object):
     'basic cnestedlist class tests'
@@ -25,3 +25,21 @@ class NestedList_Test(object):
         assert fdb.find_overlap_list(-11,-7) == \
                          [(-10, 0, 1, 100, 110), (-20, -5, 2, 300, 315)]
         tmp.__del__() # FORCE IT TO DELETE TEMPORARY DIRECTORY
+
+class NLMSA_Test(object):
+    def setup(self):
+        pass
+    def empty_test(self):
+        msa = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
+        try:
+            msa.build()
+            raise AssertionError('failed to trap empty alignment!')
+        except nlmsa_utils.EmptyAlignmentError:
+            pass
+    def empty2_test(self):
+        msa = cnestedlist.NLMSA('blasthits', 'w', pairwiseMode=True)
+        try:
+            msa.build()
+            raise AssertionError('failed to trap empty alignment!')
+        except nlmsa_utils.EmptyAlignmentError:
+            pass

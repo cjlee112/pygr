@@ -43,6 +43,8 @@ Topic :: Scientific/Engineering
 Topic :: Scientific/Engineering :: Bioinformatics
 """
 
+pyrexc = 'pyrexc' # pyrex compiler to use
+
 def ppath(*args):
    'return path in form pygr/arg1/arg2... using os.path.join()'
    l = ['pygr'] + list(args)
@@ -68,9 +70,7 @@ metadata = {
         "pygr.classutil",
         "pygr.dbfile",
         "pygr.nlmsa_utils",
-        "pygr.nestedlist",
         "pygr.xnestedlist",
-	"pygr.poa",
 	"pygr.schema",
 	"pygr.seqdb",
 	"pygr.sequence",
@@ -123,7 +123,7 @@ def compilePyrex(cfile):
    except IOError:
       pass
    
-   cmd = 'pyrexc %s.pyx' % ctarget[:-2]
+   cmd = '%s %s.pyx' % (pyrexc, ctarget[:-2])
    
    print '** Running:', cmd
    exit_status = os.system(cmd) # Try compiling with pyrex
@@ -199,6 +199,8 @@ else:
    if v1 > 2 or v2 > 2 or v3 >= 3: # ONLY ALLOWED IF >=2.2.3
       metadata['download_url'] = "http://prdownloads.sourceforge.net/pygr/pygr-%s.tar.gz" % version
       metadata['classifiers'] = [ c for c in classifiers.split('\n') if c ]
+   if v1 > 2 or (v1 == 2 and v2 >= 5):
+      pyrexc = 'pyrexc2.5' # must use pyrex compiler for 2.5 and above
 
 def try_load_extension(name, modpath):
    "Try to load 'name' module from the given module path."

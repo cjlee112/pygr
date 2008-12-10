@@ -1360,11 +1360,17 @@ cdef class NLMSASequence:
     import os
     os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
     self.db=IntervalFileDB(self.filestem) # NOW OPEN THE IntervalFileDB
+    return self.nbuild # return count of intervals
 
   def buildInMemory(self,verbose=False,**kwargs):
-    if self.buildList is not None:
+    try:
+      n = len(self.buildList)
+    except TypeError:
+      return 0
+    else:
       self.idb.save_tuples(self.buildList,**kwargs)
-    self.buildList=None
+      self.buildList = None
+      return n
 
   cdef int saveInterval(self,IntervalMap im[],int n,int expand_self,FILE *ifile):
     cdef int i
@@ -1924,16 +1930,21 @@ See the NLMSA documentation for more details.\n''')
     'build nestedlist databases on-disk, and .seqDict index if desired'
     cdef NLMSASequence ns
     self.seqs.reopenReadOnly() # SAVE INDEXES AND OPEN READ-ONLY
+    ntotal = 0
     ifile=file(self.pathstem+'.NLMSAindex','w')
-    for ns in self.seqlist: # BUILD EACH IntervalFileDB ONE BY ONE
-      ns.buildFiles(**kwargs)
-      if ns.is_lpo:
-        ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,'NLMSA_LPO_Internal',0,ns.length))
-      elif ns.is_union:
-        ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,'NLMSA_UNION_Internal',1,ns.length))
-      else:
-        ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,ns.name,0,ns.length))
-    ifile.close()
+    try:
+      for ns in self.seqlist: # BUILD EACH IntervalFileDB ONE BY ONE
+        ntotal = ntotal + ns.buildFiles(**kwargs)
+        if ns.is_lpo:
+          ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,'NLMSA_LPO_Internal',0,ns.length))
+        elif ns.is_union:
+          ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,'NLMSA_UNION_Internal',1,ns.length))
+        else:
+          ifile.write('%d\t%s\t%d\t%d\n' %(ns.id,ns.name,0,ns.length))
+    finally:
+      ifile.close()
+    if ntotal==0:
+      raise nlmsa_utils.EmptyAlignmentError('empty alignment!')
     import sys,pickle
     ifile = file(self.pathstem+'.attrDict','w')
     try:
@@ -1967,8 +1978,11 @@ To turn off this message, use the verbose=False option
     except AttributeError: # THAT WAS PURELY OPTIONAL...
       pass
     if self.in_memory_mode:
+      ntotal = 0
       for ns in self.seqlist: # BUILD EACH IntervalDB ONE BY ONE
-        ns.buildInMemory(**kwargs)
+        ntotal = ntotal + ns.buildInMemory(**kwargs)
+      if ntotal==0:
+        raise nlmsa_utils.EmptyAlignmentError('empty alignment!')
     else:
       self.buildFiles(**kwargs)
     self.do_build=0

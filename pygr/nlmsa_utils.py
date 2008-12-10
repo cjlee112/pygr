@@ -30,7 +30,9 @@ class NLMSASeqList(list):
 
 class EmptySliceError(KeyError):
   pass
-  
+
+class EmptyAlignmentError(ValueError):
+  pass
 
 class EmptySlice:
   'Empty slice for use by NLMSASlice'
