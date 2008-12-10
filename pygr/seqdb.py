@@ -263,41 +263,19 @@ def blast_program(query_type,db_type):
     return progs[query_type][db_type]
 
 
-def get_interval(seq,start,end,ori):
-    "trivial function to get the interval seq[start:end] with requested ori"
-    ival=seq[start:end]
-    if ori== -1:
-        ival= -ival
-    return ival
-
-def save_interval_alignment(m, ival, srcSet, destSet=None, edgeClass=None,
-                            ivalXform=get_interval):
-    "Add ival to alignment m, with edge info if requested"
-    if destSet is None:
-        destSet=srcSet
-    srcSeq=srcSet[ival.src_id]
-    srcPath=ivalXform(srcSeq,ival.src_start,ival.src_end,ival.src_ori)
-    destPath=ivalXform(destSet[ival.dest_id],ival.dest_start,ival.dest_end,ival.dest_ori)
-    if edgeClass is not None:
-        m+=srcSeq # MAKE SURE THIS SEQUENCE IS IN THE MAPPING TOP-LEVEL INDEX
-        m[srcPath][destPath]=edgeClass(ival) # SAVE ALIGNMENT WITH EDGE INFO
-    else:
-        m+=srcSeq # MAKE SURE THIS SEQUENCE IS IN THE MAPPING TOP-LEVEL INDEX
-        m[srcPath][destPath]=None # JUST SAVE ALIGNMENT, NO EDGE INFO
-    return srcPath,destPath # HAND BACK IN CASE CALLER WANTS TO KNOW THE INTERVALS
-
-
-def read_interval_alignment(ofile,srcSet,destSet,al=None,edgeClass=None):
+def read_interval_alignment(ofile, srcSet, destSet, al=None):
     "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
-    needToBuild=False
+    needToBuild = False
     if al is None:
         import cnestedlist
-        al=cnestedlist.NLMSA('blasthits','memory',pairwiseMode=True)
-        edgeClass=None
-        needToBuild=True
-    p=BlastHitParser()
-    for ival in p.parse_file(ofile):
-        save_interval_alignment(al, ival, srcSet, destSet, edgeClass)
+        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
+        needToBuild = True
+    p = BlastHitParser()
+    al.add_aligned_intervals(p.parse_file(ofile), srcSet, destSet,
+                             dict(id='src_id', start='src_start',
+                                  stop='src_end', ori='src_ori',
+                                  idDest='dest_id', startDest='dest_start',
+                                  stopDest='dest_end', oriDest='dest_ori'))
     if p.nline==0: # NO BLAST OUTPUT??
         raise IOError('no BLAST output.  Check that blastall is in your PATH')
     if needToBuild:

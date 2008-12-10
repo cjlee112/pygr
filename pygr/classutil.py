@@ -369,3 +369,44 @@ class RecentValueDictionary(WeakValueDictionary):
 
 
             
+class IvalAttr(object):
+  '''getattr interface that can work with objects (if attrDict has string values)
+  or tuples (if attrDict has integer values)'''
+  def __init__(self, attrDict):
+    self.attrDict = attrDict
+    try:
+      if isinstance(attrDict.values()[0], int):
+        self.__class__ = self._tupleClass
+      elif isinstance(attrDict.values()[0], str):
+        self.__class__ = self._objectClass
+    except IndexError:
+      pass
+  def __call__(self, obj, attr):
+    'regular getattr from obj'
+    return getattr(obj, attr)
+
+class IvalAttrTuple(IvalAttr):
+  def __call__(self, obj, attr):
+    'getattr from tuple obj'
+    return obj[self.attrDict[attr]]
+
+class IvalAttrObject(IvalAttr):
+  def __call__(self, obj, attr):
+    'getattr with attribute name aliases'
+    try:
+      return getattr(obj, self.attrDict[attr])
+    except KeyError:
+      return getattr(obj, attr)
+
+IvalAttr._tupleClass = IvalAttrTuple
+IvalAttr._objectClass = IvalAttrObject
+
+def kwargs_filter(kwargs, allowed):
+    'return dictionary of kwargs filtered by list allowed'
+    d = {}
+    for arg in allowed:
+        try:
+            d[arg] = kwargs[arg]
+        except KeyError:
+            pass
+    return d
