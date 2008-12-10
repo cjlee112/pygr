@@ -856,7 +856,7 @@ alignment intervals to an NLMSA after calling its build() method.''')
 
   def filterIvalConservation(self,seqIntervals,pIdentityMin=None,
                              filterFun=None,**kwargs):
-    cdef int i,j,targetID
+    cdef int i,j
     cdef NLMSA nl
     import types
     if filterFun is None:
