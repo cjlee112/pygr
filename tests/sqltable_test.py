@@ -1,6 +1,6 @@
 import pygrtest_common
 from nosebase import skip_errors
-from pygr import sqlgraph
+from pygr.sqlgraph import SQLTable,getNameCursor,MapView
 
 class SQLTable_Test(object):
     @skip_errors(ImportError)
@@ -13,16 +13,16 @@ class SQLTable_Test(object):
         """
         
         try:
-            self.db = sqlgraph.SQLTable('test.sqltable_test',
-                                             dropIfExists=True,
-                                             createTable=createTable)
+            self.db = SQLTable('test.sqltable_test',
+                               dropIfExists=True,
+                               createTable=createTable)
         except MySQLdb.MySQLError:
-            tempcurs = sqlgraph.getNameCursor()[1]
+            tempcurs = getNameCursor()[1]
             try: # hmm, maybe need to create the test database?
                 tempcurs.execute('create database if not exists test')
-                self.db = sqlgraph.SQLTable('test.sqltable_test',
-                                                 dropIfExists=True,
-                                                 createTable=createTable)
+                self.db = SQLTable('test.sqltable_test',
+                                   dropIfExists=True,
+                                   createTable=createTable)
             except MySQLdb.MySQLError: # no server, database or privileges?
                 print """\
                 The MySQL 'test' database doesn't exist and/or can't be
@@ -38,8 +38,32 @@ class SQLTable_Test(object):
         INSERT INTO test.sqltable_test (seq_id, start, stop)
               VALUES ('seq2', 5, 15)
         """)
+        self.sourceDB = SQLTable('test.sqltable_join1',
+                                 dropIfExists=True, createTable="""\
+        CREATE TABLE test.sqltable_join1 (my_id INTEGER PRIMARY KEY,
+              other_id VARCHAR(16))
+        """)
+        self.targetDB = SQLTable('test.sqltable_join2',
+                                 dropIfExists=True, createTable="""\
+        CREATE TABLE test.sqltable_join2 (third_id INTEGER PRIMARY KEY,
+              other_id VARCHAR(16))
+        """)
+        self.db.cursor.execute("""\
+        INSERT INTO test.sqltable_join1 VALUES (2,'seq2')
+        """)
+        self.db.cursor.execute("""\
+        INSERT INTO test.sqltable_join1 VALUES (3,'seq3')
+        """)
+        self.db.cursor.execute("""\
+        INSERT INTO test.sqltable_join2 VALUES (7, 'seq2')
+        """)
+        self.db.cursor.execute("""\
+        INSERT INTO test.sqltable_join2 VALUES (99, 'seq3')
+        """)
     def teardown(self):
         self.db.cursor.execute('drop table if exists test.sqltable_test')
+        self.db.cursor.execute('drop table if exists test.sqltable_join1')
+        self.db.cursor.execute('drop table if exists test.sqltable_join2')
 
     def keys_test(self):
         k = self.db.keys()
@@ -81,3 +105,13 @@ class SQLTable_Test(object):
         assert ki == ii
 
     ### @CTB need to test write access
+    def mapview_test(self):
+        m = MapView(self.sourceDB, self.targetDB,"""\
+        SELECT t2.third_id FROM test.sqltable_join1 t1, test.sqltable_join2 t2
+           WHERE t1.my_id=%s and t1.other_id=t2.other_id
+        """, cursor=self.db.cursor)
+        assert m[self.sourceDB[2]] == self.targetDB[7]
+        assert m[self.sourceDB[3]] == self.targetDB[99]
+        assert self.sourceDB[2] in m
+        
+        

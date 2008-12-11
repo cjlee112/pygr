@@ -5,7 +5,7 @@ from mapping import *
 import types
 from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
      override_rich_cmp,generate_items,get_bound_subclass,standard_setstate,\
-     get_valid_path,standard_invert,RecentValueDictionary
+     get_valid_path,standard_invert,RecentValueDictionary,read_only_error
 import os
 import platform 
 import UserDict
@@ -1407,3 +1407,36 @@ class DBServerInfo(object):
 
 
             
+class MapView(object, UserDict.DictMixin):
+    'general purpose 1:1 mapping defined by any SQL query'
+    def __init__(self, sourceDB, targetDB, viewSQL, cursor=None):
+        self.sourceDB = sourceDB
+        self.targetDB = targetDB
+        self.viewSQL = viewSQL
+        if cursor is None:
+            self.cursor = self.sourceDB.cursor
+        else:
+            self.cursor = cursor
+    def __getitem__(self, k):
+        if not hasattr(k,'db') or k.db != self.sourceDB:
+            raise KeyError('object is not in the sourceDB bound to this map!')
+        if self.cursor.execute(self.viewSQL, (k.id,))!=1:
+            raise KeyError('%s not found in MapView, or not unique'
+                           % str(k))
+        t = self.cursor.fetchone() # get the target ID
+        return self.targetDB[t[0]] # get the corresponding object
+    __setitem__ = __delitem__ = read_only_error
+    def __iter__(self):
+        return self.sourceDB.itervalues()
+    def keys(self):
+        return self.sourceDB.values()
+    def __contains__(self, k):
+        try:
+            return k.db==self.sourceDB
+        except AttributeError:
+            return False
+    def iteritems(self):
+        for k in self:
+            yield k,self[k]
+
+
