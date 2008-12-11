@@ -1425,7 +1425,10 @@ class MapView(object, UserDict.DictMixin):
                            % str(k))
         t = self.cursor.fetchone() # get the target ID
         return self.targetDB[t[0]] # get the corresponding object
-    __setitem__ = __delitem__ = read_only_error
+    __setitem__ = __delitem__ = clear = pop = popitem = update = \
+                  setdefault = read_only_error
+    def __len__(self):
+        return len(self.sourceDB)
     def __iter__(self):
         return self.sourceDB.itervalues()
     def keys(self):
@@ -1439,4 +1442,31 @@ class MapView(object, UserDict.DictMixin):
         for k in self:
             yield k,self[k]
 
+class GraphViewEdgeDict(dict):
+    'edge dictionary for GraphView: just pre-loaded on init'
+    def __init__(self, g, k):
+        dict.__init__(self)
+        self.g = g
+        self.k = k
+        self.g.cursor.execute(self.g.viewSQL, (k.id,)) # run the query
+        l = self.g.cursor.fetchall() # get results
+        if self.g.edgeDB is not None: # save with edge info
+            for t in l:
+                dict.__setitem__(self, self.g.targetDB[t[0]],
+                                 self.g.edgeDB[t[1]])
+        else: # just save the list of targets, no edge info
+            for t in l:
+                dict.__setitem__(self, self.g.targetDB[t[0]], None)
+    __setitem__ = __delitem__ = clear = pop = popitem = update = \
+                  setdefault = read_only_error
 
+class GraphView(MapView):
+    'general purpose graph interface defined by any SQL query'
+    def __init__(self, sourceDB, targetDB, viewSQL, cursor=None, edgeDB=None):
+        'if edgeDB not None, viewSQL query must return (targetID,edgeID) tuples'
+        self.edgeDB = edgeDB
+        MapView.__init__(self, sourceDB, targetDB, viewSQL, cursor)
+    def __getitem__(self, k):
+        if not hasattr(k,'db') or k.db != self.sourceDB:
+            raise KeyError('object is not in the sourceDB bound to this map!')
+        return GraphViewEdgeDict(self, k)

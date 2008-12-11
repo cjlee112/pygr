@@ -1,6 +1,6 @@
 import pygrtest_common
 from nosebase import skip_errors
-from pygr.sqlgraph import SQLTable,getNameCursor,MapView
+from pygr.sqlgraph import SQLTable,getNameCursor,MapView,GraphView
 
 class SQLTable_Test(object):
     @skip_errors(ImportError)
@@ -55,10 +55,19 @@ class SQLTable_Test(object):
         INSERT INTO test.sqltable_join1 VALUES (3,'seq3')
         """)
         self.db.cursor.execute("""\
+        INSERT INTO test.sqltable_join1 VALUES (4,'seq4')
+        """)
+        self.db.cursor.execute("""\
         INSERT INTO test.sqltable_join2 VALUES (7, 'seq2')
         """)
         self.db.cursor.execute("""\
         INSERT INTO test.sqltable_join2 VALUES (99, 'seq3')
+        """)
+        self.db.cursor.execute("""\
+        INSERT INTO test.sqltable_join2 VALUES (6, 'seq4')
+        """)
+        self.db.cursor.execute("""\
+        INSERT INTO test.sqltable_join2 VALUES (8, 'seq4')
         """)
     def teardown(self):
         self.db.cursor.execute('drop table if exists test.sqltable_test')
@@ -112,6 +121,15 @@ class SQLTable_Test(object):
         """, cursor=self.db.cursor)
         assert m[self.sourceDB[2]] == self.targetDB[7]
         assert m[self.sourceDB[3]] == self.targetDB[99]
+        assert self.sourceDB[2] in m
+    def graphview_test(self):
+        m = GraphView(self.sourceDB, self.targetDB,"""\
+        SELECT t2.third_id FROM test.sqltable_join1 t1, test.sqltable_join2 t2
+           WHERE t1.my_id=%s and t1.other_id=t2.other_id
+        """, cursor=self.db.cursor)
+        d = m[self.sourceDB[4]]
+        assert len(d) == 2
+        assert self.targetDB[6] in d and self.targetDB[8] in d
         assert self.sourceDB[2] in m
         
         
