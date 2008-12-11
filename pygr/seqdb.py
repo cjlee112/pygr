@@ -476,7 +476,7 @@ class SequenceFileDB(SequenceDB):
             kwargs['ifile'].close()
         except (KeyError, AttributeError): pass
 
-class BlastDBbase(SequenceFileDB):
+class BlastDB(SequenceFileDB):
     "Container representing Blast database"
     def __init__(self, filepath=None, blastReady=False, blastIndexPath=None,
                  blastIndexDirs=None, **kwargs):
@@ -611,7 +611,7 @@ To turn off this message, use the verbose=False option''' % methodname
               %(blastpath,self.get_blast_index_path(),blastprog,float(expmax),opts)
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd += ' -b %d -v %d' % (maxseq,maxseq)
-        return process_blast(cmd,seq,self,al)
+        return process_blast(cmd, seq, BlastIDIndex(self), al)
 
     def megablast(self,seq,al=None,blastpath='megablast',expmax=1e-20,
                   maxseq=None,minIdentity=None,maskOpts='-U T -F m',
@@ -629,20 +629,24 @@ To turn off this message, use the verbose=False option''' % methodname
             cmd += ' -b %d -v %d' % (maxseq,maxseq)
         if minIdentity is not None:
             cmd += ' -p %f' % float(minIdentity)
-        return process_blast(cmd,seq,self,al,seqString=masked_seq)
+        return process_blast(cmd, seq, BlastIDIndex(self), al,
+                             seqString=masked_seq)
 
 
-class BlastDB(BlastDBbase):
-    """Since NCBI treats FASTA ID as a blob into which they like to stuff
+class BlastIDIndex(object):
+    """This class acts as a wrapper around a regular seqDB, and handles
+    the mangled IDs returned by BLAST to translate them to the correct ID.
+    Since NCBI treats FASTA ID as a blob into which they like to stuff
     many fields... and then NCBI BLAST mangles those IDs when it reports
     hits, so they no longer match the true ID... we are forced into
-    contortions to rescue the true ID from mangled IDs.  If you dont want
-    these extra contortions, use the base class BlastDBbase instead.
+    contortions to rescue the true ID from mangled IDs.  
 
     Our workaround strategy: since NCBI packs the FASTA ID with multiple
     IDs (GI, GB, RefSeq ID etc.), we can use any of these identifiers
     that are found in a mangled ID, by storing a mapping of these
     sub-identifiers to the true FASTA ID."""
+    def __init__(self, seqDB):
+        self.seqDB = seqDB
     id_delimiter='|' # FOR UNPACKING NCBI IDENTIFIERS AS WORKAROUND FOR BLAST ID CRAZINESS
     def unpack_id(self,id):
         "NCBI packs identifier like gi|123456|gb|A12345|other|nonsense. Return as list"
@@ -692,26 +696,15 @@ class BlastDB(BlastDBbase):
             except KeyError:
                 pass # KEEP TRYING...
         # FOUND NO MAPPING, SO RAISE EXCEPTION            
-        raise KeyError, "no key '%s' in database %s" % (bogusID, repr(self),)
+        raise KeyError, "no key '%s' in database %s" % (bogusID,
+                                                        repr(self.seqDB))
 
-    def __getitem__(self,id):
-        "Get sequence matching this ID, using dict as local cache"
-        if hasattr(self,'_unpacked_dict'): # TRY USING ID MAPPING
-            try:
-                id=self.get_real_id(id)
-            except KeyError:
-                pass
-        try:
-            return self._weakValueDict[id]
-        except KeyError: # NOT FOUND IN DICT, SO CREATE A NEW OBJECT
-            try:
-                s=self.itemClass(self,id)
-            except KeyError:
-                id=self.get_real_id(id)
-                s=self.itemClass(self,id)
-            s.db=self # LET IT KNOW WHAT DATABASE IT'S FROM...
-            self._weakValueDict[id] = s # CACHE IT
-            return s
+    def __getitem__(self, seqID):
+        "If seqID is mangled by BLAST, use our index to get correct ID"
+        try: # default: treat as a correct ID
+            return self.seqDB[seqID]
+        except KeyError: # translate to the correct ID
+            return self.seqDB[self.get_real_id(seqID)]
 
 def getAnnotationAttr(self,attr):
     'forward attributes from slice object if available'

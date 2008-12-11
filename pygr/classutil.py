@@ -177,6 +177,10 @@ def shadow_reducer(self):
     shadowClass = self.__class__
     trueClass = shadowClass._shadowParent # super() TOTALLY FAILED ME HERE!
     self.__class__ = trueClass # FORCE IT TO PICKLE USING trueClass
+    keepDB = False
+    if hasattr(shadowClass, 'db') and not hasattr(self, 'db'):
+        keepDB = True
+        self.__dict__['db'] = shadowClass.db # retain this attribute!!
     if hasattr(trueClass,'__reduce__'): # USE trueClass.__reduce__
         result = trueClass.__reduce__(self)
     elif hasattr(trueClass,'__getstate__'): # USE trueClass.__getstate__
@@ -184,6 +188,8 @@ def shadow_reducer(self):
     else: # PICKLE __dict__ AS USUAL PYTHON PRACTICE
         result = (ClassicUnpickler,(trueClass,self.__dict__))
     self.__class__ = shadowClass # RESTORE SHADOW CLASS
+    if keepDB: # now we can drop the temporary db attribute we added
+        del self.__dict__['db']
     return result
 
 
