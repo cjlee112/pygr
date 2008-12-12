@@ -375,7 +375,7 @@ class RecentValueDictionary(WeakValueDictionary):
 
 
             
-class IvalAttr(object):
+class AttributeInterface(object):
   '''getattr interface that can work with objects (if attrDict has string values)
   or tuples (if attrDict has integer values)'''
   def __init__(self, attrDict):
@@ -387,25 +387,37 @@ class IvalAttr(object):
         self.__class__ = self._objectClass
     except IndexError:
       pass
-  def __call__(self, obj, attr):
+  def __call__(self, obj, attr, default=None):
     'regular getattr from obj'
-    return getattr(obj, attr)
+    try:
+        return getattr(obj, attr)
+    except AttributeError:
+        if default is not None:
+            return default
 
-class IvalAttrTuple(IvalAttr):
-  def __call__(self, obj, attr):
+class AttrFromTuple(AttributeInterface):
+  def __call__(self, obj, attr, default=None):
     'getattr from tuple obj'
-    return obj[self.attrDict[attr]]
+    try:
+        return obj[self.attrDict[attr]]
+    except IndexError:
+        if default is not None:
+            return default
 
-class IvalAttrObject(IvalAttr):
-  def __call__(self, obj, attr):
+class AttrFromObject(AttributeInterface):
+  def __call__(self, obj, attr, default=None):
     'getattr with attribute name aliases'
     try:
-      return getattr(obj, self.attrDict[attr])
+        return getattr(obj, self.attrDict[attr])
     except KeyError:
-      return getattr(obj, attr)
+        try:
+            return getattr(obj, attr)
+        except KeyError:
+            if default is not None:
+                return default
 
-IvalAttr._tupleClass = IvalAttrTuple
-IvalAttr._objectClass = IvalAttrObject
+AttributeInterface._tupleClass = AttrFromTuple
+AttributeInterface._objectClass = AttrFromObject
 
 def kwargs_filter(kwargs, allowed):
     'return dictionary of kwargs filtered by list allowed'

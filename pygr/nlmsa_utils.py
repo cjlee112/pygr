@@ -350,8 +350,8 @@ def add_aligned_intervals(al, alignedIvals, alignedIvalsSrc=None,
                           alignedIvalsAttrs=dict(idDest='id', startDest='start',
                                                  stopDest='stop', oriDest='ori')):
   'read ID,start,stop,ori tuples from alignedIvals, and save to alignment'
-  from classutil import IvalAttr
-  getAttr = IvalAttr(alignedIvalsAttrs) # interface to extract desired attrs
+  from classutil import AttributeInterface
+  getAttr = AttributeInterface(alignedIvalsAttrs) # to extract desired attrs
   if alignedIvalsSrc is None: # get all seqs from the existing seqDict
     alignedIvalsSrc = al.seqDict
   if alignedIvalsDest is None: # use same input set as source
@@ -366,11 +366,11 @@ def add_aligned_intervals(al, alignedIvals, alignedIvalsSrc=None,
     srcIval = get_interval(alignedIvalsSrc[getAttr(srcData, 'id')],
                            getAttr(srcData, 'start'),
                            getAttr(srcData, 'stop'),
-                           getAttr(srcData, 'ori'))
+                           getAttr(srcData, 'ori', 1)) # default ori
     al += srcIval
     for destData in destSet: # get the remaining intervals
       destIval = get_interval(alignedIvalsDest[getAttr(destData, 'idDest')],
                               getAttr(destData, 'startDest'),
                               getAttr(destData, 'stopDest'),
-                              getAttr(destData, 'oriDest'))
+                              getAttr(destData, 'oriDest', 1)) # default ori
       al[srcIval][destIval] = None # save their alignment
