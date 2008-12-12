@@ -6681,6 +6681,11 @@ schema rules.
 \item Caching: Pygr persistent database objects perform local caching of objects
 from the database that have been requested by the user.  This guarantees that
 different requests for the same identifier will return the same object.
+By default, Pygr database classes use a \class{WeakValueDictionary}
+as the cache, so when a user drops all references to a given item,
+it will automatically be garbage-collected and eliminated from the cache.
+By convention, the cache for a database object is stored as its
+\code{_weakValueDict} attribute.
 
 \item iteration: Pygr follows a simple logic for allowing users to control
 how data (objects) are loaded into memory.  Iterating over identifiers
@@ -6741,16 +6746,24 @@ object.  So if we want to bind descriptors for a specific object, we need to
 create a subclass.  Pygr.classutil.get_bound_subclass() does this for you.
 The current class is just subclassed, and any desired descriptors are bound
 to the subclass.
+
 \item _init_subclass: if provided by the parent class, this classmethod will be called when
 the subclass is created, to let it do whatever it needs to initialize itself
-and its relation with its target database, such as...
+and its relation with its target database.  For example, when 
+\class{FileDBSequence}._init_subclass() is called, it initializes
+the sequence ID/length index that it uses for fast access to sequences
+stored in its packed format.  It also creates the seqInfoDict that its
+parent database object requires as a general interface for looking up
+information about any sequence.
+
 \item Binding: descriptors for all the relations we want are bound as
 attributes to the subclass.  This makes them appear on all instances of this
 subclass.
 \item Pygr.Data uses this for automatic schema binding.  SQLTable uses this 
 for efficient attribute access on TupleO (values stored locally as a tuple)
 and SQLRow (all requests relayed as queries to the back-end database).
-\item The subclass pickles as its parent class.
+\item The subclass pickles as its parent class, which when unpickled
+will be re-subclassed by get_bound_subclass() as usual.
 \end{itemize}
 
 \subsection{Persistence}
@@ -6777,6 +6790,146 @@ to pickle).
 become at the moment of unpickling, you need to provide a \method{__reduce__}()
 method.  NB: this is always needed if you subclass a built-in class like \class{dict}.
 \end{itemize}
+
+\subsection{Writing New Extensions}
+There are several areas where it should be fairly straightforward
+for a developer to extend Pygr functionality.
+\begin{itemize}
+\item Adding new resources to pygr.Data: you can load data using
+pygr's existing classes, then save them to pygr.Data for easy
+access by yourself or sharing with others worldwide.
+
+\item Creating an interface to existing databases: you can
+use Pygr's sqlgraph classes to model an existing database schema,
+then save it to pygr.Data for easy access from within Python
+or sharing with others.
+
+\item Writing sequence parsers: by supplying an appropriate parser,
+you can make Pygr sequence databases load from any sequence format you
+want.
+
+\item Writing alignment parsers: by suppyling an appropriate parser,
+you can make NLMSA alignment databases load from any alignment
+format.
+
+\item Writing new sequence database storage classes: for special
+applications like Solexa deep-sequencing, you could develop storage
+classes that are especially fast, efficient or scalable for very
+large datasets.  You only to write two capabilities: an index for
+looking up information about a sequence (e.g. its length or other 
+info); an index for looking up the actual letter string for all
+or part of a specified sequence.
+\end{itemize}
+
+\subsubsection{Writing Sequence Parsers}
+By default, the \class{SequenceFileDB} and related sequence
+database classes accept a \code{reader} argument that allows
+you to specify a parser function.  It will be called with 
+two arguments: \code{reader(ifile, filename)}; and it should
+act like a generator that yields one or more objects that
+must each have the following attributes:
+\begin{itemize}
+\item id: the identifier of the sequence
+\item length: the length of the sequence
+\item sequence: the actual letter string for this sequence,
+as a single string (with no extraneous characters like carriage
+returns; just the sequence itself)
+\end{itemize}
+The \code{reader()} function should read the sequence format
+from \code{ifile}, but it should not close \code{ifile};
+that is done by the function that calls it.
+
+\subsubsection{Writing Alignment Parsers}
+Pygr's alignment class, NLMSA, has fast functions in C for reading 
+multigenome alignment formats like MAF and axtnet.  If you want to
+provide your own parser function for reading another format, you can
+do so through the following arguments to the NLMSA constructor or
+\method{add_aligned_intervals()} method.
+\begin{itemize}
+\item alignedIvals: an iterable that yields a series of tuples
+of aligned intervals, or alternatively a series of objects
+that each represent a pair of aligned intervals.  
+If tuples are provided, each tuple is interpreted as a set of two
+or more intervals that should be stored as aligned.  Each interval
+must specify a sequence ID, start coordinate and end coordinate
+(following standard Python conventions), and optionally an
+orientation attribute.  Each interval
+can be specified as either a Python object with named attributes
+providing coordinates; or as a tuple.  For details of how to 
+control this, see the alignedIvalsAttrs argument below.
+
+\item alignedIvalsSrc: the sequence database to look up the source
+interval from (the source interval is the first interval in any tuple).
+Each source interval ID will be looked up in the alignedIvalsSrc
+sequence database.
+
+\item alignedIvalsDest: the sequence database in which to look up destination
+intervals (i.e. the second (or later) intervals in each tuple).
+
+\item alignedIvalsAttrs: a dictionary specifying how to look up
+id and coordinate attributes from each interval "object".  If
+the object is a tuple, provide mappings to the numerical index
+of each attribute in the tuple, e.g.
+\code{alignedIvalsAttrs=dict(id=0, start=1, stop=2, ori=3, 
+idDest=0, startDest=1, stopDest=2, oriDest=3)}
+If the object has named attributes, provide mappings to the correct
+attribute names, e.g.
+\code{alignedIvalsAttrs=dict(id='src_id', start='src_start',
+                                  stop='src_end', ori='src_ori',
+                                  idDest='dest_id', startDest='dest_start',
+                                  stopDest='dest_end', oriDest='dest_ori')}
+The attribute names used for source vs. destination attributes are
+given different names so that they both be extracted from a single
+object if desired: id, start, stop, ori; idDest, startDest, stopDest, oriDest.
+\end{itemize}
+You can write your parser as a generator function, and simply pass its
+return value (an iterator) as the \code{alignedIvals} argument.
+
+If you pass these arguments to the NLMSA constructor, the aligned
+intervals will be read into the NLMSA, and it will be immediately
+initialized (via its build() method), so you can immediately begin
+querying it.
+
+If you pass these arguments to the NLMSA.add_aligned_intervals() method,
+the intervals will simply be loaded into the NLMSA.  You can call
+add_aligned_intervals() repeatedly, if needed.  Finally, you must
+call the NLMSA.build() method to construct its indexes and ready it
+for querying.
+
+\subsubsection{Writing New Sequence Storage Classes}
+Sequence storage functionality is associated with a sequence class;
+different sequence classes representing different types of storage
+can be used with a generic sequence database class, such as
+\class{SequenceFileDB} (for storage in a local file).  A sequence
+class needs to provide just three interfaces for a new kind of storage:
+\begin{itemize}
+\item seqInfoDict: a dictionary-like object that for each valid
+sequence ID returns an object with attributes providing information
+about that sequence.  This allows you, if you wish, to implement an
+efficient mechanism for retrieving information about a sequence
+that does not need to retrieve the sequence string itself.  Alternatively,
+if this doesn't provide any benefit for your specific storage application,
+you could simply use the sequence database itself as the seqInfoDict.
+Since each sequence object has named attributes describing it, the
+sequence object can act as its own "information object".  Regardless,
+this dictionary-like object should be saved as the seqInfoDict
+attribute on the sequence database object.
+
+\item strslice(seqID, start, stop): this method retrieves a specific
+interval of the sequence string.
+
+\item __len__(): implement this standard Python method to let users
+request the length of your sequence via \code{len(s)}.
+\end{itemize}
+
+To initialize storage for a specific sequence database, write an
+_init_subclass classmethod for your sequence class.  This will be
+called by the sequence database constructor when it binds your
+sequence class (see Subclass Binding, above).  This should either
+initialize the storage (if being created for the first time), or
+simply open access to the storage (if the storage on disk is already
+initialized).  For an example, see seqdb.FileDBSequence.
+
 
 \subsection{Examples}
 \subsubsection{Example: SQLTable}
