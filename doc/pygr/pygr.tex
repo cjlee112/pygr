@@ -216,9 +216,9 @@ done using a completely different database mechanism (either Pygr's
 simple \code{pureseq} text format, or (before release 0.5) NCBI's \code{fastacmd}),
 not the \code{cnestedlist} database.  Basically, each genome is being queried
 as a separate sequence database, represented in Pygr by the
-\class{BlastDB} class.  Pygr makes this complex set of multi-database
+\class{SequenceFileDB} class.  Pygr makes this complex set of multi-database
 operations more or less transparent to the user.
-For further information, see the \class{BlastDB} documentation.  
+For further information, see the \class{SequenceFileDB} documentation.  
 
 \item ASAP2.hg17.exons is an annotation database; each object it
 contains (\code{exon}) is an annotation object.  To get the actual
@@ -303,29 +303,30 @@ NEED TO UPDATE THESE RESULTS
 
 Pygr provides a variety of "back-end" implementations of sequence objects, ranging from sequences stored in a relational database table, or a BLAST database, to sequences created by the user in Python (as above).  All of these provide the same consistent interface, and in general try to be efficient.  For example, Pygr sequence objects are just "placeholders" that record what sequence interval you're working with, but if the back-end is an external database, the sequence object itself does not store the sequence, and creating new sequence objects (e.g. taking slices of the object as above) will not require anything to be done on the actual sequence itself (such as copying a portion of it).  Pygr only obtains sequence information when you actually ask for it (e.g. by taking the string value str(s) of a sequence object), and normally only obtains just the portion that you ask for (i.e. str(s[1000000:1000100]) only obtains 100nt of sequence, even if s is a 100 megabase sequence.  By contrast str(s)[1000000:1000100] would force it to obtain the whole sequence from the database, then slice out just the 100 nt you selected). 
 
-Here's an example of working with sequences from a BLAST database:
+Here's an example of working with sequences from a sequence database and
+running a BLAST search:
 
 \begin{verbatim}
 NEED TO UPDATE THESE RESULTS
 >>> from pygr.seqdb import *
->>> db = BlastDB('sp') # open BLAST database associated with FASTA file 'sp'
+>>> db = SequenceFileDB('sp') # open sequence database from FASTA file 'sp'
 >>> s = db['CYGB_HUMAN'][90:150] # get a sequence by ID, and take a slice
 >>> str(s)
 'TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA'
->>> m = db.blast(s) # get alignment to all BLAST hits in db
->>> for src,dest,edge in m[s].edges(): # print out the alignment edges
+>>> from blast import BlastMapping
+>>> blastmap = BlastMapping(db) # create homology mapping to our seq db
+>>> al = blastmap[s] # get alignment to all BLAST hits in db
+>>> for src,dest,edge in al.edges(): # print out the alignment edges
 ...     print src,repr(src),'\n',dest,repr(dest),edge.pIdentity(),'\n'
 ... 
 TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPP CYGB_HUMAN[90:145] 
 TLVENLRDADKLNTIFNQMGKSHALRHKVDPVYFKILAGVILEVLVEAFPQCFSP CYGB_BRARE[87:142] 72
 
 TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150] 
-TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150]
- 120
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150] 120
 
 TVVENLHDPDKVSSVLALVGKAHALKHKVEPVYFKILSGVILEVVAEEFASDFPPETQRA CYGB_HUMAN[90:150] 
-TVVENLHDPDKVSSVLALVGKAHALKHKVEPMYFKILSGVILEVIAEEFANDFPVETQKA CYGB_MOUSE[90:150]
-112 
+TVVENLHDPDKVSSVLALVGKAHALKHKVEPMYFKILSGVILEVIAEEFANDFPVETQKA CYGB_MOUSE[90:150] 112 
 ...
 \end{verbatim}
 
@@ -334,7 +335,8 @@ This example introduces the use of a Pygr alignment object to store the mapping 
 \begin{itemize}
 
 \item
-We can construct a BlastDB object from any FASTA formatted sequence file.  A BlastDB object is just a placeholder that acts as a convenient interface to the BLAST database.  For example, it acts as a Python dictionary mapping sequence IDs to the associated sequence objects (i.e. if 'CYGB_HUMAN' is a sequence ID in sp, then db['CYGB_HUMAN'] is the sequence object for that sequence.  This object is instantiated from class BlastSequence, which provides an interface to the BLAST database.
+We can construct a SequenceFileDB object from any FASTA formatted sequence file.
+It acts as a Python dictionary mapping sequence IDs to the associated sequence objects (i.e. if 'CYGB_HUMAN' is a sequence ID in sp, then db['CYGB_HUMAN'] is the sequence object for that sequence.  
 
 \item 
 When you work with such sequence objects, slicing etc. happens in the usual way, creating new sequence objects.
@@ -343,13 +345,28 @@ When you work with such sequence objects, slicing etc. happens in the usual way,
 Only when you ask for actual sequence (by taking str(s)) does it obtain a sequence string from the database.  This is done using fseek() system call to obtain just the selected slice.  So you can efficiently obtain a substring of a sequence, even if that sequence is an entire chromosome.
 
 \item
-When you first create the BlastDB object, it looks for existing BLAST database files associated with the FASTA file 'sp'.  If present, it uses them.  If not, it will create them automatically if the user actually tries to run a BLAST query.  Pygr builds BLAST database files using the NCBI program formatdb (Pygr figures out whether the sequences are nucleotide or protein, and gives formatdb the appropriate command line options).  
-
-\item 
-When you invoke the db.blast() method on a sequence object, it obtains the actual string of the object, and uses it to run a BLAST search.  It determines the type (nucleotide or protein) of the sequence object, and uses the appropriate search method (in this case blastp).  You can pass optional arguments for controlling BLAST.  It then reads the results into a Pygr multiple sequence alignment object, which stores the alignments as sets of matched intervals.  Specifically, it is a graph, whose nodes are sequence intervals (i.e. sequence objects that typically represent only part of a sequence), and whose edges represent an alignment between a pair of intervals.  To illustrate this, we ran a for-loop over all the "edge relations" in this graph, and printed them out.  This is a tuple of 3 values: \code{src} and \code{dest} are the two aligned sequence intervals, and \code{edge} provides a convenient interface to information about their relationship (e.g. \%identity, etc.).  
+Any sequence database object can be used as a ``target'' for a homology
+search such as BLAST.  In Pygr, BLAST searches are just another kind
+of mapping, that maps a sequence object to similar sequences in the 
+target database.  You instantiate a BlastMapping object to do this by
+simply passing the target database as an argument to the BlastMapping
+constructor.
 
 \item
-Note: print converts its arguments to strings (i.e. calls str() on them), so we used \code{repr(src)} to get a "string representation" of each sequence interval.  When print calls str() on individualBlastSequence interval objects returned by the BLAST search, they invoke fseek() to obtain the specific sequence slice representing that interval.
+When you first create the BlastMapping object, it looks for existing BLAST database files associated with the FASTA file 'sp'.  If present, it uses them.  If not, it will create them automatically if the user actually tries to run a BLAST query.  Pygr builds BLAST database files using the NCBI program formatdb (Pygr figures out whether the sequences are nucleotide or protein, and gives formatdb the appropriate command line options).  
+
+\item 
+When you search the \class{BlastMapping} object with a given query (sequence) object, it obtains the actual string of the object, and uses it to run a BLAST search.  It determines the type (nucleotide or protein) of the sequence object, and uses the appropriate search method (in this case blastp).  You can pass optional arguments for controlling BLAST.  It then reads the results into a Pygr multiple sequence alignment object, which stores the alignments as sets of matched intervals.  Specifically, it is a graph, whose nodes are sequence intervals (i.e. sequence objects that typically represent only part of a sequence), and whose edges represent an alignment between a pair of intervals.  To illustrate this, we ran a for-loop over all the "edge relations" in this graph, and printed them out.  This is a tuple of 3 values: \code{src} and \code{dest} are the two aligned sequence intervals, and \code{edge} provides a convenient interface to information about their relationship (e.g. \%identity, etc.).  
+
+\item
+If we wanted to pass parameters for controlling the BLAST search, we
+can use \code{blastmap} as a function that accepts additional parameters:
+\begin{verbatim}
+>>> al = blastmap(s, expmax=1e-10, maxseq=5) # expectation score cutoff, etc.
+\end{verbatim}
+
+\item
+Note: print converts its arguments to strings (i.e. calls str() on them), so we used \code{repr(src)} to get a "string representation" of each sequence interval.  When print calls str() on individual sequence interval objects returned by the BLAST search, the sequence database will efficiently obtain the specific sequence slice representing that interval (typically, using fseek() and caching).
 \end{itemize}
 
 \subsection{Simplifying the Challenges of Working with Complex Datasets}
@@ -372,7 +389,7 @@ it consistently):
 \begin{verbatim}
 from pygr import seqdb
 import pygr.Data # MODULE PROVIDES ACCESS TO OUR DATA NAMESPACE
-hg17 = seqdb.BlastDB('hg17')
+hg17 = seqdb.SequenceFileDB('hg17')
 hg17.__doc__ = 'human genome sequence draft 17' # REQUIRED!
 pygr.Data.Bio.Seq.Genome.HUMAN.hg17 = hg17 # SAVE AS THIS NAME
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
@@ -393,9 +410,9 @@ hg17=pygr.Data.Bio.Seq.Genome.HUMAN.hg17() # FIND THE RESOURCE
 \end{verbatim}
 The call syntax (\code{hg17()}) emphasizes that this acts like a Python
 constructor: it constructs a Python object for us (in this case, the
-desired seqdb.BlastDB object representing this genome database).
+desired seqdb.SequenceFileDB object representing this genome database).
 Note that we did {\em not} even have to know how to construct the hg17 
-object, e.g. what Python class to use (seqdb.BlastDB), or even to import
+object, e.g. what Python class to use (seqdb.SequenceFileDB), or even to import
 the necessary modules for constructing it.  \code{pygr.Data} uses the
 power of Python pickling to figure out automatically what to import.
 pygr.Data looks at the environment variable PYGRDATAPATH to get a list 
@@ -423,9 +440,9 @@ pygr.Data.Bio.MSA.UCSC.hg17_multiz17way = nlmsa
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 This works, even though using this 17-genome alignment (behind the
-scenes) involves accessing 17 BlastDB sequence databases (one for each
+scenes) involves accessing 17 SequenceFileDB sequence databases (one for each
 of the genomes in the alignment).  Because the alignment object (NLMSA)
-references the 17 BlastDB databases, pygr.Data automatically saves information
+references the 17 SequenceFileDB databases, pygr.Data automatically saves information
 about how to access them too.
 
 However, it would be a lot smarter to give those databases pygr.Data resource
@@ -806,9 +823,10 @@ a file):
 \begin{verbatim}
 from pygr import cnestedlist,seqdb
 msa = cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
-sp = seqdb.BlastDB('sp') # OPEN SWISSPROT DATABASE
+sp = seqdb.SequenceFileDB('sp') # OPEN SWISSPROT DATABASE
+blastmap = blast.BlastMapping(sp) # CREATE BLAST MAPPING OBJECT
 for id,s in sp.iteritems(): # FOR EVERY SEQUENCE IN SWISSPROT
-    sp.blast(s,msa,expmax=1e-10) # GET STRONG HOMOLOGS, SAVE ALIGNMENT IN msa
+    blastmap(s,msa,expmax=1e-10) # GET STRONG HOMOLOGS, SAVE ALIGNMENT IN msa
 msa.build(saveSeqDict=True) # BUILD & SAVE ALIGNMENT + SEQUENCE INDEXES
 # msa READY TO QUERY NOW...
 \end{verbatim}
@@ -853,7 +871,7 @@ mainly makes sense for true multiple sequence alignments (which are guaranteed
 to be symmetric).
 
 \item
-Supplying the BlastDB.blast() method with an alignment object makes it store
+Supplying the \class{BlastMapping} with an alignment object makes it store
 its results into that alignment, rather than creating its own alignment holder
 for us.  In this way we can make it store many different BLAST searches into
 a single alignment database.
@@ -885,7 +903,7 @@ from pygr import cnestedlist,seqdb
 genomes = {'hg17':'hg17','mm5':'mm5', 'rn3':'rn3', 'canFam1':'cf1', 
            'danRer1':'dr1', 'fr1':'fr1','galGal2':'gg2', 'panTro1':'pt1'}
 for k,v in genomes.items(): # PREFIX DICTIONARY FOR UNION OF GENOMES
-    genomes[k] = seqdb.BlastDB(v) # USE v AS FILENAME FOR FASTA FILE
+    genomes[k] = seqdb.SequenceFileDB(v) # USE v AS FILENAME FOR FASTA FILE
 genomeUnion=seqdb.PrefixUnionDict(genomes) # CREATE UNION OF THESE DBs
 # CREATE NLMSA DATABASE ucsc8 ON DISK, FROM MAF FILES IN maf/
 msa = cnestedlist.NLMSA('ucsc8','w',genomeUnion,os.listdir('maf'))
@@ -907,8 +925,8 @@ correct mapping.  Actually building the NLMSA requires just one
 line, but actually a number of steps are happening behind the
 scenes:
 \begin{itemize}
-\item If you have never opened \class{BlastDB} objects for these genome
-databases before, \class{BlastDB} will initialize each one.  This means
+\item If you have never opened \class{SequenceFileDB} objects for these genome
+databases before, \class{SequenceFileDB} will initialize each one.  This means
 two things.  First, it builds an index of all the sequences and their 
 lengths.  This is essential for combining the
 large numbers of sequences in these databases into 
@@ -1141,7 +1159,7 @@ of short sequences representing the exons, rather than actual genomic
 coordinates?  Again, pygr makes this mapping extremely easy to save:
 \begin{verbatim}
 from pygr import seqdb,cnestedlist
-annoDB = seqdb.AnnotationDB(None,genome,'exon', # CREATE THE ANNOTATION DB
+annoDB = seqdb.AnnotationDB(None, genome, 'exon', # CREATE THE ANNOTATION DB
                             filename='exonAnnot',mode='c') # STORE ON DISK
 nlmsa = cnestedlist.NLMSA('exonMap','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
                           pairwiseMode=True,bidirectional=False)
@@ -1155,7 +1173,7 @@ pygr.Data.Bio.Genomics.ASAP2.exons = annoDB # ADD AS A PYGR.DATA RESOURCE
 nlmsa.__doc__ = 'map human genome regions to contained exons'
 pygr.Data.Bio.Genomics.ASAP2.exonmap = nlmsa # NOW SAVE MAPPING AND SCHEMA
 pygr.Data.schema.Bio.Genomics.ASAP2.exonmap = \
-      pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons',))
+      pygr.Data.ManyToManyRelation(genome, annoDB, bindAttrs=('exons',))
 pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
 \end{verbatim}
 
@@ -2898,155 +2916,61 @@ by default on sequence.Sequence objects), that will be used.
 
 The seqdb module provides a simple, consistent interface to sequence databases from a variety of different storage sources such as FASTA, BLAST and relational databases.  Sequence databases are modeled (like other Pygr container classes) as dictionaries, whose keys are sequence IDs and whose values are sequence objects.  Pygr sequence objects use the Python sequence protocol in all the ways you'd expect: a subinterval of a sequence object is just a Python slice (s[0:10]), which just returns a sequence object representing that interval; the reverse complement is just -s; the length of a sequence is just len(s); to obtain the actual string sequence of a sequence object is just str(s).  Pygr sequence objects work intelligently with different types of back-end storage (e.g. relational databases or BLAST databases) to efficiently access just the parts of sequence that are requested, only when an actual sequence string is needed.
 
-\subsubsection{External Requirements}
-This module makes use of several external programs:
-\begin{itemize}
-\item
-{\em NCBI toolkit}: The BLAST database functionality in this module 
-requires that the NCBI toolkit
-be installed on your system.  Specifically, some functions will call the command line
-programs \code{formatdb}, \code{fastacmd}, \code{blastall}, and \code{megablast}.
+\subsubsection{SequenceFileDB}
+Interface to a sequence database, typically initialized from a FASTA sequence file. 
+This class was renamed from ``BlastDB'' in Pygr 0.8.
 
-\item
-{\em RepeatMasker}: the \method{BlastDB.megablast()} method calls the command line
-program \code{RepeatMasker} to mask out repetitive sequences from seeding alignments,
-but to allow extension of alignments into masked regions.
+Options for constructing a SequenceFileDB:
 
-\item
-{\em Python DB-API 2.0}: the \class{SQLTable} class, and dependent classes such as 
-\class{SQLSequence} and \class{StoredPathMapping}, conform to the Python DB-API 2.0.
-Typically you must supply a DB-API 2.0-compliant database cursor to the 
-\class{SQLTable} constructor.  To do so, you must have some DB-API 2.0-compliant
-module (such as \module{MySQLdb}) installed for connecting to a database server.
-\end{itemize} 
-
-If you are lacking one or more of these requirements, you can still install Pygr
-and use all Pygr functionality that does not depend on the missing requirements.
-If you try to use a function for which a requirement is missing, Pygr will raise
-an appropriate exception (e.g. unable to run \code{blastall}).
-
-\subsubsection{BlastDB}
-Interface to an existing BLAST database or FASTA sequence file; in the latter case, it will automatically construct BLAST database files for you using the NCBI tool formatdb. Here's a simple example of opening a BLAST database and searching it for matches to a specific piece of sequence:
-
-\begin{verbatim}
-from pygr.sequence import *
-from pygr.seqdb import *
-db = BlastDB('sp') # OPEN SWISSPROT BLAST DB
-s = Sequence(str(db['CYGB_HUMAN'][40:-40]),'boo')
-m = db.blast(s) # DO BLAST SEARCH
-myg = db['MYG_CHICK']
-for i in m[s][myg]:
-    print repr(i.srcPath),repr(i.destPath),i.blast_score,i.percent_id
-\end{verbatim}
-
-Let's go through this example line by line:
-
-\begin{itemize}
-
-\item    
-construction of a BlastDB object: This looks for either a FASTA file with the path 'sp' or BLAST database formatted files based on this path (e.g. 'sp.psd' for protein sequences, or 'sp.nsd' for nucleotide sequences).
-
-\item
-db['CYGB_HUMAN'] obtains a sequence object representing the SwissProt sequence whose ID is CYGB_HUMAN.  The slice operation [40:-40] behaves just like normal Python slicing: it obtains a sequence object representing the subinterval omitting the first 40 letters and last 40 letters of the sequence.  The str() operation obtains the actual string representation of this subinterval.
-
-\item
-Sequence(letter_string, name) creates a new sequence object whose sequence is letter_string, and whose ID is name.
-
-\item
-Running the db.blast(s) method searches the BLAST database for homologies to s, using NCBI BLAST.  It chooses reasonable parameters based upon the sequence types of the database and supplied query.  However, you can specify extra parameter options if you wish.  It returns a Pygr sequence mapping (multiple alignment) that represents a standard Pygr graph of alignment relationships between s and the homologies that were found.
-
-\item
-The expression m[s][myg] obtains the "edge information" for the graph relationship between the two sequence nodes s and myg.  (if there was no edge in the m graph representing a relationship between these two sequences, this would produce a 
-\code{KeyError}).  This edge information consists of a set of interval alignment relationships (described in detail below), which are printed out in this example.
-
-\end{itemize}
-
-Options for constructing a BlastDB:
-
-\begin{funcdesc}{BlastDB}{filepath=None,skipSeqLenDict=False,ifile=None,idFilter=None,
-                 blastReady=False,blastIndexPath=None,blastIndexDirs=None,**kwargs}
-  Open a sequence file as a ``database'' object, giving the user access to its sequences,
-  easy searching via \code{blast} or \code{megablast}, etc.
-  \var{skipSeqLenDict} prevents construction of a sequence length index file 
-  (which will be named ``{\em filepath}.\code{seqlen}'') and a fast
-  sequence access file (which will be named ``{\em filepath}.\code{pureseq}'').
-  Setting this option to \code{True} can be useful if you either wish to
-  speed up initial opening of the BlastDB (note: construction of these indexes is
-  only a one-time event) or avoid the extra disk space required by these indexes.
-  {\em Explanation}: To facilitate the rapid creation of sequence objects (which requires the length of the sequence), it creates a sequence length index (as a Python shelve).  This enables it to avoid actually loading the sequence string into memory each time a sequence object is created; instead it just looks up the sequence length.  While this speeds up access to genomic sequence databases (where each sequence tends to be extremely long), this initial step may be slow for databases of short sequences.  Setting \var{skipSeqLenDict} option to \code{True}, will prevent construction of this sequence length index.
+\begin{funcdesc}{SequenceFileDB}{filepath=None, itemClass=FileDBSequence,
+                 itemSliceClass=None, reader=None,
+                 autoGC=True, ifile=None, **kwargs}
+  Open a sequence file as a ``database'' object, giving the user access
+  to its sequences.
+  \var{filepath}: path to the text sequence file (typically FASTA).
+  \var{itemClass}: the object class to use for instantiating new sequence
+  objects from this database.  You can set this to create customized
+  sequence behaviors.  
+  This is used by \class{pygr.Data} to propagate correct attribute schemas to
+  items / slices from database containers managed by it.
+  \var{itemSliceClass}: the object class to use for instantiating new
+  sequence slice objects (i.e. subintervals of sequences from this database).
+  You can set this to create customized sequence behaviors.
+  This is used by \class{pygr.Data} to propagate correct attribute schemas to
+  items / slices from database containers managed by it.  
+  \var{reader}: allows you to specify a parser function.
+  It will be called with 
+  two arguments: \code{reader(ifile, filename)}; and it should
+  act like a generator that yields one or more objects that
+  each provide a sequence ID, length and sequence string.  See 
+  the Pygr Developer Guide for details.
+  \var{autoGC}: if True, automatically garbage-collect cache entries
+  for sequence objects.  When you request a sequence object from
+  SequenceFileDB, it keeps it in a cache, both for speeding up future
+  requests, and to ensure that any two requests for the same sequence ID
+  are guaranteed to return the same Python object.  To save memory,
+  when you drop all references to a given sequence object, SequenceFileDB
+  also flushes it from its cache.  This is implemented using a Python
+  WeakValueDictionary.
   \var{ifile} lets you open the database directly from a file object rather
-  than a filename.  If you have a file object, you can pass it directly to BlastDB instead of a filepath.  NB: the BlastDB() constructor will close ifile when it is done reading from the file object.
-  \var{idFilter} allows you to provide a function for re-mapping the FASTA sequence
-  identifiers read from the sequence file.  This can be useful in the case of
-  NCBI FASTA files, since NCBI often treats the sequence ID as a ``blob'' into
-  which any number of database fields can be stuffed, rather than a true ID.
-  \var{blastReady} option specifies whether BLAST index files should be automatically
-  constructed (using \code{formatdb}).  Note, if you attempt to run the \code{blast}()
-  method, it will automatically create the index files for you if they are missing.
-  \var{blastIndexPath}, if not None, specifies the path to the BLAST index
-  files for this database.  For example, if the BLAST index files are
-  \code{/some/path/foo.psd} etc., then \var{blastIndexPath}\code{='/some/path/foo'}.
-  \var{blastIndexDirs}, if not None, specifies a list of directories in which
-  to search for and create BLAST index files.  Entries in the list can be
-  either a string, or a function that takes no parameters and returns 
-  a string path.  A string value ``FILEPATH'' instructs it to use the 
-  filepath of the FASTA file associated with the BlastDB.
-  The default value of this attribute on the \class{BlastDB} class is 
-\begin{verbatim}
-['FILEPATH',os.getcwd,os.path.expanduser,pygr.classutil.default_tmp_path]
-\end{verbatim}
-This corresponds to: self.filepath, current directory, the user's HOME
-directory, and the default temporary directory used by the Python 
-function \method{os.tempnam}().
+  than a filename.  If you have a file object, you can pass it directly to
+  SequenceFileDB instead of a filepath.  NB: the SequenceFileDB()
+  constructor will close \var{ifile} when it is done reading from
+  the file object.
 \end{funcdesc}
 
 Useful methods:
 
+\class{SequenceFileDB} implements a Python dictionary interface,
+so all of the methods you would expect for a dictionary are available.
+For example:
+
 \begin{funcdesc}{iter}{}
-  iterate over all IDs in the BLAST database.
+  iterate over all IDs in the database.
 \end{funcdesc}
 
 \begin{funcdesc}{len}{}
-  returns number of sequences in the BLAST database.
-\end{funcdesc}
-
-\begin{funcdesc}{blast}{seq, al=None, blastpath='blastall', blastprog=None, expmax=0.001,
-maxseq=None, opts='', verbose=True}
-  run a BLAST search on sequence object seq.
-  \var{maxseq} will limit the number of returned hits to the best \var{maxseq} hits. 
-  \var{al} if not None, must be an alignment object in which you want the results
-  to be saved.  Note: in this case, the \method{blast} function will not automatically
-  call the alignment's \method{build}() method; you will have to do that yourself.
-  \var{blastpath} gives the command to run BLAST.
-  \var{blastprog}, if not None, should be a string giving the name of the BLAST
-  program variant you wish to run, e.g. 'blastp' or 'blastn' etc.  If None,
-  this will be figured out automatically based on the sequence type of \var{seq}
-  and of the sequences in this database.
-  \var{expmax} should be a float value giving the largest ``expectation score''
-  you wish to allow homology to be reported for.
-  \var{opts} allows you to specify arbitrary command line arguments to the BLAST
-  program, for controlling its search parameters.
-  \var{verbose=False} allows you to switch off printing of explanatory messages to 
-  stderr.
-\end{funcdesc}
-
-\begin{funcdesc}{megablast}{seq, al=None, blastpath='megablast', expmax=1e-20,
-maxseq=None, minIdentity=None, maskOpts='-U T -F m',
-rmPath='RepeatMasker', rmOpts='-xsmall', opts='', verbose=True}
-  first performs repeat masking on the sequence by converting repeats to lowercase,
-  then runs megablast with command line options to prevent seeding new alignments
-  within repeats, but allowing extension of alignments into repeats.
-  In addition to the blast options (described above),
-  \var{minIdentity} should be a number (maximum value, 100)
-  indicating the minimum percent identity for hits to be returned.
-  \var{rmPath} gives the command to use to run RepeatMasker.
-  \var{rmOpts} allows you to give command line options to RepeatMasker.
-  The default setting causes RepeatMasker to mark repetitive regions in the
-  query in lowercase, which then works in concert with the \var{maskOpts} option, next.
-  \var{maskOpts} gives command line options for controlling the megablast program's
-  masking behavior.  The default value prevents megablast from using repetitive
-  sequence as a seed for starting a hit, but allows it to propagate a regular
-  (non-repetitive hit) through a repetitive region.
+  returns number of sequences in the database.
 \end{funcdesc}
 
 \begin{funcdesc}{__invert__}{}
@@ -3057,100 +2981,15 @@ id = (~db)[seq] # GET IDENTIFIER FOR THIS SEQUENCE FROM ITS DATABASE
 \end{verbatim}
 \end{funcdesc}
 
-\begin{funcdesc}{formatdb}{filepath=None}
-  Forces the BlastDB to construct new BLAST index files, either at the
-  location specified by \var{filepath}, if not None, or in the first
-  directory in the \member{blastIndexDirs} list where the index files
-  can be succesfully built.  Index files are generated using the 
-  \code{formatdb} program provided by NCBI, which must be in your
-  PATH for this method to work.
-\end{funcdesc}
-
 
 
 Useful attributes:
 \begin{itemize}
 
 \item
-\member{itemClass}: the object class to use for instantiating new sequence objects from this BLAST database.  You can set this to create customized sequence behaviors.  
-This is used by \class{pygr.Data} to propagate correct attribute schemas to
-items / slices from database containers managed by it.
-
 \item
-\member{itemSliceClass}: the object class to use for instantiating new sequence slice objects (i.e. subintervals of sequences from this BLAST database).  You can set this to create customized sequence behaviors.
-This is used by \class{pygr.Data} to propagate correct attribute schemas to
-items / slices from database containers managed by it.
-
-\item
-\member{filepath}: the location of the FASTA sequence file upon which
-this \class{BlastDB} is based.
-
-\item
-\member{blastIndexPath}: if present, the location of the BLAST index files
-associated with this \class{BlastDB}.  If not present, the location is assumed
-to be the same as the FASTA file.
-
-\item
-\member{blastIndexDirs}: the list of directories in which to search for
-or build BLAST index files for this \class{BlastDB}.  For details, see
-the explanation for the constructor method, above.
-
-\end{itemize}
-
-\subsubsection{BlastDBXMLRPC}
-A subclass of \class{BlastDB} that adds a couple methods needed to serve
-the data to clients connecting over XMLRPC.  For example, to make an XMLRPC
-server for a blast database, accessible on port 5020:
-\begin{verbatim}
-import coordinator
-server = coordinator.XMLRPCServerBase(name,port=5020)
-db = BlastDBXMLRPC('sp') # OPEN BlastDB AS USUAL, BUT WITH SUBCLASS
-server['sp'] = db # ADD OUR DATABASE TO THE XMLRPC SERVER
-server.serve_forever() # START SERVING XMLRPC REQUESTS, UNTIL KILLED.
-\end{verbatim}
-
-\subsubsection{XMLRPCSequenceDB}
-Class for a client interface that accesses a Blast database over
-XMLRPC (from the the \class{BlastDBXMLRPC} acting as the server).
-\begin{funcdesc}{__init__}{url,name}
-  \var{url} must be the URL (including port number) for accessing the 
-  XMLRPC server; \var{name} must be the key of the BlastDBXMLRPC object
-  in that server's dictionary (in the example above, it would be 'sp').
-  Thus to access the server above (assuming it is running on leelab port 5020):
-\begin{verbatim}
-db = XMLRPCSequenceDB('http://leelab:5020','sp')
-hbb = db['HBB_HUMAN'] # GET A SEQUENCE OBJECT FROM THE DATABASE...
-\end{verbatim}
-\end{funcdesc}
-Currently, this class provides sequence access.  You can work with sequences
-exactly as you would with a \class{BlastDB}, but cannot perform actual BLAST searches
-(i.e. the \method{blast} and \method{megablast} methods don't work over XMLRPC).
-
-\subsubsection{FileDBSequence}
-The default class for sequence objects returned from BlastDB.  It provides efficient,
-fast access to sequence slices (subsequences).  When the BlastDB is initially opened,
-Pygr constructs a length and offset index that enables FileDBSequence to \code{seek()}
-to the correct location for any substring of the sequence.  New in Pygr 0.4.
-
-\subsubsection{BlastSequence}
-
-This was previously the default class for sequence objects returned from BlastDB,
-but has been deprecated because we found that NCBI \code{fastacmd} was much too slow
-and consumed enormous amounts of memory.  \class{BlastSequence} relies on
-\code{fastacmd} for ``fast'' access to individual sequence slices.  The advantage is
-that it only requires BLAST database files (produced by Pygr using \code{formatdb}),
-whereas the new \class{FileDBSequence} requires a specially indexed sequence file
-(constructed by default by BlastDB), which may be a disadvantage if you are low
-on disk space.
-
-\class{BlastSequence} has several optimizations for working with BLAST databases:
-
-\begin{itemize}
-\item
-it uses the NCBI tool fastacmd to retrieve sequence efficiently from a BLAST database, when your program requests an actual string of sequence text.  Moreover, for subintervals (slices) of the sequence, it uses fastacmd's -L option to request just the desired subinterval of the sequence, rather than the whole sequence.  This makes it efficient for requesting specific intervals of large genomic contigs.  Basically, just use Python slicing and str() methods on sequence objects, and subsequences will be obtained in an efficient manner.
-
-\item 
-the len() method is implemented using the seqLenDict, a precalculated index of the sequence lengths.  So again no sequence has to be read by Python.
+\member{filepath}: the location of the raw sequence file (by default, FASTA)
+upon which this \class{SequenceFileDB} is based.
 
 \end{itemize}
 
@@ -3431,35 +3270,6 @@ list of annotation IDs, without loading anything into the cache.
   if you are instead using an in-memory dictionary as storage.
 \end{funcdesc}
 
-\subsubsection{VirtualSeq}
-This class provides an empty sequence object that
-acts purely as a reference system.
-Automatically elongates if slice extends beyond current stop.
-This class avoids setting the {\em stop} attribute, taking advantage
-of SeqPath's mechanism for allowing a sequence to grow in length.
-\begin{verbatim}
-s = VirtualSeq('FOOG_HUMAN')
-len(s) # ONLY 1 LETTER LONG BY DEFAULT
-s1 = s[100:215] # GET A SLICE OF THIS SEQUENCE
-len(s) # NOW IT'S 215
-\end{verbatim}
-
-The associated VirtualSeqDB class provides a ``sequence database''
-that returns a VirtualSeq object for every identifier requested of
-it.  It acts like a Python dictionary:
-\begin{verbatim}
-db = VirtualSeqDB()
-s = db['FOOG_HUMAN'] # ASK FOR A SEQUENCE BY ITS IDENTIFIER
-s1 = s[100:215] # GET A SLICE OF THIS SEQUENCE
-\end{verbatim}
-For a given identifier it always returns the same VirtualSeq
-object (i.e. the object returned from the first request for that identifier).
-In other words, if the identifier was previously requested,
-it returns the VirtualSeq for that identifier; if not, it 
-creates a new one.
-This can be convenient when performing operations that just
-need a coordinate reference system, not actual sequence.
-
 
 \subsubsection{PrefixUnionDict}
 This class acts as a wrapper for a set of dictionaries, each
@@ -3620,26 +3430,23 @@ the standard \method{__getitem__} method:
 
 
 
-\subsubsection{BlastSequenceCache}
-
-This class is deprecated; the \class{FileDBSequence} class and associated
-database container caching mechanisms provide a more powerful mechanism
-that is intended to replace \class{BlastSequenceCache}.
-
-Implements a variant of BlastSequence designed to merge and cache requests for local intervals of sequence so that repeated accesses to these regions are bundled and cached for efficiency.  You work with sequence objects of this type normally, using Python slicing to obtain subintervals, and str() to get the sequence string for a subinterval.  But behind the scenes, it does two things:
-
-\begin{itemize}
-\item
-all slicing operations are recorded, in the form of a cache of superintervals.  Overlapping or adjacent intervals are merged into a superinterval up to a maximum superinterval size (default 20000).  It will automatically create as many superintervals as needed to cover the requested subinterval slices.  Each superinterval is represented by an object of the FastacmdIntervalCache class.
-
-\item 
-when the sequence string of a subinterval is requested, the cache actually retrieves (and caches) the entire superinterval containing that subinterval.  Fastacmd only needs to be called once for this superinterval.  Subsequent subinterval string requests that fall within this cached superinterval are simply returned directly from the cache, without calling fastacmd.
-
-\end{itemize}
+\subsubsection{FileDBSequence}
+The default class for sequence objects returned from SequenceFileDB.  
+It provides efficient, fast access to sequence slices (subsequences).  
+When the SequenceFileDB is initially opened,
+Pygr constructs a length and offset index that enables FileDBSequence to \code{seek()}
+to the correct location for any substring of the sequence.  
 
 \subsubsection{SQLSequence}
 
-Implements a subclass inheriting from SQLRow and SequenceBase, to use a relational database table to obtain the actual sequence.  There are three minor variants DNASQLSequence, RNASQLSequence, ProteinSQLSequence (so that the sequence does not have to analyze itself to determine what kind of sequence it is).  Its constructor takes the same arguments as SQLRow(table, id), where table is the SQLTable object representing the table in which the sequence is stored, and id is the primary key of the row representing this sequence.  However, normally this class is simply passed to the Table object itself so that it will use it to instantiate new row objects whenever they are requested via its dictionary interface.  Here's a simple example:
+Implements a subclass inheriting from SQLRow and SequenceBase, to use a relational database table to obtain the actual sequence.  There are three minor variants DNASQLSequence, RNASQLSequence, ProteinSQLSequence (so that the sequence does not have to analyze itself to determine what kind of sequence it is).  Its constructor takes the same arguments as SQLRow(table, id), where table is the SQLTable object representing the table in which the sequence is stored, and id is the primary key of the row representing this sequence.  However, normally this class is simply passed to the Table object itself so that it will use it to instantiate new row objects whenever they are requested via its dictionary interface.  
+
+{\em Python DB-API 2.0}: this class conforms to the Python DB-API 2.0.
+Typically you must supply a DB-API 2.0-compliant database cursor to the 
+\class{SQLTable} constructor.  To do so, you must have some DB-API 2.0-compliant
+module (such as \module{MySQLdb}) installed for connecting to a database server.
+
+Here's a simple example of customizing SQLSequence for your data:
 
 \begin{verbatim}
 class YiProteinSequence(ProteinSQLSequence): # CREATE A NEW SQL SEQUENCE CLASS
@@ -3660,29 +3467,66 @@ we create a subclass of ProteinSQLSequence to show how Python makes it easy to c
 next we call the protein.objclass() method to inform the table object that it should use our new class for instantiating any row objects for this table.  It will call this class with the usual SQLRow contructor arguments (table, id).
 \end{itemize}
 
-\subsubsection{StoredPathMapping}
-
-Note: This class is deprecated; the \class{NLMSA} alignment database class provides
-a much more powerful interface that is intended to replace older mechanisms
-such as \class{StoredPathMapping}.
-
-A second major area in Pygr is representation and query of multiple sequence alignment databases in a way that is scalable to whole genomes.  We have previously showed (in our work on Partial Order Alignment) that graphs provide both a compact and algorithmically powerful way to store alignments.  Combining this with "interval alignment" makes it scalable and gives a simple interface.  In Pygr, alignments are just another kind of graph, whose nodes are sequence intervals, and edges are alignment relations.  This provides a general-purpose facility for working with sets of sequence intervals, sequence annotation databases, and multiple sequence alignments, all queryable via Pygr graph queries.  We have implemented different container subclasses to work with these data in memory or to work transparently with data stored in relational databases.  The consistency and simplicity of the Pygr framework makes it a good interface both to run external tools like BLAST, and to store or query the results in persistent storage like a MySQL database.
-
+\subsubsection{BlastDBXMLRPC}
+A subclass of \class{SequenceFileDB} that adds a couple methods needed to serve
+the data to clients connecting over XMLRPC.  For example, to make an XMLRPC
+server for a blast database, accessible on port 5020:
 \begin{verbatim}
-hg17 = BlastDB('/data/ucsc/hg17') # GET CONTAINER FOR HUMAN GENOME DATABASE
-bcl2m = hg17['chr22'][16544303:16588541] # GET INTERVAL WITH BCL2L13 GENE
-al = hg17.megablast(mouse_bcl2,maxseq=1) # GET REPEAT-MASKED MEGABLAST ALIGNMENT, ONLY TOP HIT
-al[bcl2m[1000:1100] ] += mrna[210:310] #ADD ALIGNMENT OF A 100nt SEGMENT TO mrna SEGMENT
-al.storeSQL('test.table',db_cursor) # STORE COMPLETE ALIGNMENT IN RELATIONAL DATABASE
-for e in MAFStoredPathMapping(bcl2m,'ucsc_maf8',u).edges(): #GET ITS MULTIGENOMEALIGNMENTS
-   print str(e.srcPath),str(e.destPath) # PRINT THE ACTUAL ALIGNED SEQUENCE INTERVALS
+import coordinator
+server = coordinator.XMLRPCServerBase(name,port=5020)
+db = BlastDBXMLRPC('sp') # OPEN BlastDB AS USUAL, BUT WITH SUBCLASS
+server['sp'] = db # ADD OUR DATABASE TO THE XMLRPC SERVER
+server.serve_forever() # START SERVING XMLRPC REQUESTS, UNTIL KILLED.
 \end{verbatim}
 
-Note: {\em We will be unifying all sequence alignment functionality under the 
-NLMSA interface design sometime in the near future.  Specifically, the
-\class{PathMapping} and related classes, while similar to \class{NLMSA},
-will be replaced with interfaces that are identical to the \class{NLMSA}
-interface.}
+\subsubsection{XMLRPCSequenceDB}
+Class for a client interface that accesses a Blast database over
+XMLRPC (from the the \class{BlastDBXMLRPC} acting as the server).
+\begin{funcdesc}{__init__}{url,name}
+  \var{url} must be the URL (including port number) for accessing the 
+  XMLRPC server; \var{name} must be the key of the BlastDBXMLRPC object
+  in that server's dictionary (in the example above, it would be 'sp').
+  Thus to access the server above (assuming it is running on leelab port 5020):
+\begin{verbatim}
+db = XMLRPCSequenceDB('http://leelab:5020','sp')
+hbb = db['HBB_HUMAN'] # GET A SEQUENCE OBJECT FROM THE DATABASE...
+\end{verbatim}
+\end{funcdesc}
+Currently, this class provides sequence access.  You can work with sequences
+exactly as you would with a \class{BlastDB}, but cannot perform actual BLAST searches
+(i.e. the \method{blast} and \method{megablast} methods don't work over XMLRPC).
+
+\subsubsection{VirtualSeq}
+This class provides an empty sequence object that
+acts purely as a reference system.
+Automatically elongates if slice extends beyond current stop.
+This class avoids setting the {\em stop} attribute, taking advantage
+of SeqPath's mechanism for allowing a sequence to grow in length.
+\begin{verbatim}
+s = VirtualSeq('FOOG_HUMAN')
+len(s) # ONLY 1 LETTER LONG BY DEFAULT
+s1 = s[100:215] # GET A SLICE OF THIS SEQUENCE
+len(s) # NOW IT'S 215
+\end{verbatim}
+
+The associated VirtualSeqDB class provides a ``sequence database''
+that returns a VirtualSeq object for every identifier requested of
+it.  It acts like a Python dictionary:
+\begin{verbatim}
+db = VirtualSeqDB()
+s = db['FOOG_HUMAN'] # ASK FOR A SEQUENCE BY ITS IDENTIFIER
+s1 = s[100:215] # GET A SLICE OF THIS SEQUENCE
+\end{verbatim}
+For a given identifier it always returns the same VirtualSeq
+object (i.e. the object returned from the first request for that identifier).
+In other words, if the identifier was previously requested,
+it returns the VirtualSeq for that identifier; if not, it 
+creates a new one.
+This can be convenient when performing operations that just
+need a coordinate reference system, not actual sequence.
+
+
+
 
 \subsubsection{SliceDB}
 For most applications, \class{AnnotationDB} is a better choice than
@@ -3729,9 +3573,9 @@ gene = db[cluster_id] # USE IT TO GET A GENE SEQUENCE...
 \end{verbatim}
 
 
-
-\subsubsection{Functions}
-The seqdb module also provides several convenience functions:
+\subsection{sequtil Module}
+\subsubsection{Functions for Reading and Writing FASTA format}
+The sequtil module provides several convenience functions:
 
 \begin{funcdesc}{read_fasta}{ifile}
   a generator function
@@ -3744,6 +3588,191 @@ The seqdb module also provides several convenience functions:
   \var{id} can provide an identifier to use instead of the default 
   \code{s.id}.
 \end{funcdesc}
+
+
+
+\subsection{blast Module}
+This module provides two main classes for performing BLAST or MEGABLAST
+searches on a sequence database.
+
+\subsubsection{BlastMapping}
+This class provides a mapping interface for searching a sequence
+database with BLAST.  You simply create the mapping object with the
+target database you want it to search, then use it as a mapping.
+
+Here's a simple example of opening a BLAST database and searching it for matches to a specific piece of sequence:
+
+\begin{verbatim}
+db = SequenceFileDB('sp') # OPEN SWISSPROT SEQUENCE DB
+blastmap = BlastMapping(db) # CREATE A MAPPING OBJECT FOR RUNNING BLAST
+m = blastmap[db['CYGB_HUMAN'][40:-40]] # DO BLAST SEARCH
+try:
+    hit = m[db['MYG_CHICK']] # IS MYG_CHICK HOMOLOGOUS?
+    print 'Identity:', hit.pIdentity()*100, 'Aligned:', hit.pAligned()*100
+    for src,dest in hit.items(): # PRINT MATCHING INTERVALS
+        print src, repr(src), '\n', dest, repr(dest), '\n'
+except KeyError:
+    print 'MYG_CHICK not homologous.'
+\end{verbatim}
+
+Let's go through this example line by line:
+
+\begin{itemize}
+
+\item    
+We can create a BlastMapping for any sequence database.  BlastMapping
+will figure out what type of sequences (nucleotide vs. protein) are
+in the database, in order to construct the BLAST index file properly.
+
+\item
+db['CYGB_HUMAN'] obtains a sequence object representing the SwissProt sequence whose ID is CYGB_HUMAN.  The slice operation [40:-40] behaves just like normal Python slicing: it obtains a sequence object representing the subinterval omitting the first 40 letters and last 40 letters of the sequence.
+
+\item
+Querying the blast mapping object with a sequence object as a key
+searches the BLAST database for homologies to it, using NCBI BLAST.  It chooses reasonable parameters based upon the sequence types of the database and supplied query.  
+
+\item You can specify search parameter options if you wish, by calling
+the blast mapping as a function with the sequence object and
+your extra parameters.  It returns a Pygr sequence mapping (multiple alignment) that represents a standard Pygr graph of alignment relationships between s and the homologies that were found.  Since this mode is designed for being
+able to save alignments for multiple sequences in a single multiple
+sequence alignment, when reading this alignment you need to specify
+which source sequence you want alignment information for, e.g.
+\begin{verbatim}
+msa = blastmap(db['CYGB_HUMAN'][40:-40], expmax=1e-10)
+m = msa[db['CYGB_HUMAN']]
+\end{verbatim}
+The rest of the code would be identical to the example above.
+
+\item
+The expression m[db['MYG_CHICK']] obtains the "edge information" for the graph relationship between the two sequence nodes s and MYG_CHICK.  (if there was no edge in the m graph representing a relationship between these two sequences, this would produce a 
+\code{KeyError}).  This edge information consists of a set of interval alignment relationships, which are printed out in this example.
+
+\end{itemize}
+
+\begin{funcdesc}{BlastMapping}{seqDB, filepath=None,
+                 blastReady=False, blastIndexPath=None, blastIndexDirs=None,
+                 **kwargs}
+  \var{seqDB}: the sequence database to search via BLAST.
+  \var{filepath}: location of a FASTA file to initialize from (optional;
+  if not provided, BlastMapping will try to obtain it from the
+  \var{seqDB} object).
+  \var{blastReady} option specifies whether BLAST index files should
+  be immediately
+  constructed (using \code{formatdb}).  Note, if you ask it to generate
+  BLAST results, it will automatically create the index files for you
+  if they are missing.
+  \var{blastIndexPath}, if not None, specifies the path to the BLAST index
+  files for this database.  For example, if the BLAST index files are
+  \code{/some/path/foo.psd} etc., then \var{blastIndexPath}\code{='/some/path/foo'}.
+  \var{blastIndexDirs}, if not None, specifies a list of directories in which
+  to search for and create BLAST index files.  Entries in the list can be
+  either a string, or a function that takes no parameters and returns 
+  a string path.  A string value ``FILEPATH'' instructs it to use the 
+  filepath of the FASTA file associated with the BlastDB.
+  The default value of this attribute on the \class{BlastDB} class is 
+\begin{verbatim}
+['FILEPATH',os.getcwd,os.path.expanduser,pygr.classutil.default_tmp_path]
+\end{verbatim}
+This corresponds to: self.filepath, current directory, the user's HOME
+directory, and the default temporary directory used by the Python 
+function \method{os.tempnam}().
+\end{funcdesc}
+
+Useful methods:
+\begin{funcdesc}{formatdb}{filepath=None}
+  Triggers the BlastMapping to construct new BLAST index files, either at the
+  location specified by \var{filepath}, if not None, or in the first
+  directory in the \member{blastIndexDirs} list where the index files
+  can be succesfully built.  Index files are generated using the 
+  \code{formatdb} program provided by NCBI, which must be in your
+  PATH for this method to work.
+\end{funcdesc}
+
+\begin{funcdesc}{__call__}{seq, al=None, blastpath='blastall', blastprog=None, expmax=0.001,
+maxseq=None, opts='', verbose=True}
+  run a BLAST search on sequence object seq.
+  \var{maxseq} will limit the number of returned hits to the best \var{maxseq} hits. 
+  \var{al} if not None, must be an alignment object in which you want the results
+  to be saved.  Note: in this case, the \method{blast} function will not automatically
+  call the alignment's \method{build}() method; you will have to do that yourself.
+  \var{blastpath} gives the command to run BLAST.
+  \var{blastprog}, if not None, should be a string giving the name of the BLAST
+  program variant you wish to run, e.g. 'blastp' or 'blastn' etc.  If None,
+  this will be figured out automatically based on the sequence type of \var{seq}
+  and of the sequences in this database.
+  \var{expmax} should be a float value giving the largest ``expectation score''
+  you wish to allow homology to be reported for.
+  \var{opts} allows you to specify arbitrary command line arguments to the BLAST
+  program, for controlling its search parameters.
+  \var{verbose=False} allows you to switch off printing of explanatory messages to 
+  stderr.
+\end{funcdesc}
+
+
+
+Useful attributes:
+\begin{itemize}
+
+\item
+\member{filepath}: the location of the FASTA sequence file upon which
+this \class{BlastDB} is based.
+
+\item
+\member{blastIndexPath}: if present, the location of the BLAST index files
+associated with this \class{BlastDB}.  If not present, the location is assumed
+to be the same as the FASTA file.
+
+\item
+\member{blastIndexDirs}: the list of directories in which to search for
+or build BLAST index files for this \class{BlastDB}.  For details, see
+the explanation for the constructor method, above.
+
+\end{itemize}
+
+
+\subsubsection{MegablastMapping}
+This class provides a mapping interface for searching a sequence
+database with MEGABLAST.  You use it just like a BlastMapping object.
+It accepts some different arguments when you use a megablast mapping
+object as a callable:
+
+\begin{funcdesc}{__call__}{seq, al=None, blastpath='megablast', expmax=1e-20,
+maxseq=None, minIdentity=None, maskOpts='-U T -F m',
+rmPath='RepeatMasker', rmOpts='-xsmall', opts='', verbose=True}
+  first performs repeat masking on the sequence by converting repeats to lowercase,
+  then runs megablast with command line options to prevent seeding new alignments
+  within repeats, but allowing extension of alignments into repeats.
+  In addition to the blast options (described above),
+  \var{minIdentity} should be a number (maximum value, 100)
+  indicating the minimum percent identity for hits to be returned.
+  \var{rmPath} gives the command to use to run RepeatMasker.
+  \var{rmOpts} allows you to give command line options to RepeatMasker.
+  The default setting causes RepeatMasker to mark repetitive regions in the
+  query in lowercase, which then works in concert with the \var{maskOpts} option, next.
+  \var{maskOpts} gives command line options for controlling the megablast program's
+  masking behavior.  The default value prevents megablast from using repetitive
+  sequence as a seed for starting a hit, but allows it to propagate a regular
+  (non-repetitive hit) through a repetitive region.
+\end{funcdesc}
+
+\subsubsection{External Requirements}
+This module makes use of several external programs:
+\begin{itemize}
+\item
+{\em NCBI toolkit}: The BLAST database functionality in this module 
+requires that the NCBI toolkit
+be installed on your system.  Specifically, some functions will call the command line
+programs \code{formatdb}, \code{blastall}, and \code{megablast}.
+
+\item
+{\em RepeatMasker}: \class{MegablastMapping} calls the command line
+program \code{RepeatMasker} to mask out repetitive sequences from seeding alignments,
+but to allow extension of alignments into masked regions.
+
+\end{itemize} 
+
+
+
 
 \subsection{pygr.Data Module}
 \label{pygrData-module}
@@ -3778,8 +3807,8 @@ and \method{__setstate__} methods that save and restore just the
 relevant information for it to be able to access the information
 it needs (e.g. if your class reads a file, \method{__getstate__} must
 save its filename).  If your class inherits from \class{dict}, you
-will also have to define a \method{__reduce__} method.  For a simple
-example, see the classes \class{seqdb.AnnotationDB,seqdb.SeqDBbase,seqdb.XMLRPCSequenceDB}, and the \module{pickle} module documentation.
+will also have to define a \method{__reduce__} method.  See 
+the \module{pickle} module documentation.
 
 \item pygr.Data provides a {\em namespace} for commonly used data resources.
 Once you import pygr.Data, you can save resources into it just as you would into
@@ -4256,7 +4285,8 @@ databases, or in a specific layer:
   this data.  If no value is provided to this option, the current
   default is 
 \begin{verbatim}
-[(seqdb.BlastDB,seqdb.XMLRPCSequenceDB,seqdb.BlastDBXMLRPC),
+[(seqdb.SequenceFileDB,seqdb.XMLRPCSequenceDB,seqdb.BlastDBXMLRPC),
+ (seqdb.BlastDB,seqdb.XMLRPCSequenceDB,seqdb.BlastDBXMLRPC),
  (AnnotationDB,AnnotationClient,AnnotationServer),
  (cnestedlist.NLMSA,xnestedlist.NLMSAClient,xnestedlist.NLMSAServer)] 
 \end{verbatim}
@@ -6747,7 +6777,8 @@ create a subclass.  Pygr.classutil.get_bound_subclass() does this for you.
 The current class is just subclassed, and any desired descriptors are bound
 to the subclass.
 
-\item _init_subclass: if provided by the parent class, this classmethod will be called when
+\item \method{_init_subclass}(): if provided by the parent class, 
+this classmethod will be called when
 the subclass is created, to let it do whatever it needs to initialize itself
 and its relation with its target database.  For example, when 
 \class{FileDBSequence}._init_subclass() is called, it initializes
@@ -6759,9 +6790,11 @@ information about any sequence.
 \item Binding: descriptors for all the relations we want are bound as
 attributes to the subclass.  This makes them appear on all instances of this
 subclass.
+
 \item Pygr.Data uses this for automatic schema binding.  SQLTable uses this 
 for efficient attribute access on TupleO (values stored locally as a tuple)
 and SQLRow (all requests relayed as queries to the back-end database).
+
 \item The subclass pickles as its parent class, which when unpickled
 will be re-subclassed by get_bound_subclass() as usual.
 \end{itemize}
