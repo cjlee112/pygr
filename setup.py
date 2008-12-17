@@ -73,6 +73,7 @@ metadata = {
         "pygr.xnestedlist",
 	"pygr.schema",
 	"pygr.seqdb",
+        "pygr.blast",
 	"pygr.sequence",
 	"pygr.sequtil",
 	"pygr.sqlgraph",

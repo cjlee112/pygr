@@ -199,6 +199,7 @@ cdef class NLMSASlice:
   cdef IntervalMap *im
   cdef IntervalMap *seqBounds
   cdef readonly NLMSASequence nlmsaSequence
+  cdef readonly NLMSA nlmsa
   cdef readonly object seq
   cdef object weakestLink
 

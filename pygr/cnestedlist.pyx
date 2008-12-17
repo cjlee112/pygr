@@ -455,6 +455,7 @@ cdef class NLMSASlice:
     if seq is None: # GET FROM NLMSASequence
       seq=ns.seq
     self.nlmsaSequence=ns # SAVE BASIC INFO
+    self.nlmsa = ns.nlmsaLetters
     self.start=start
     self.stop=stop
     self.offset=offset # ALWAYS STORE offset IN POSITIVE ORIENTATION

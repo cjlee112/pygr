@@ -82,6 +82,7 @@ class Blast_Test(PygrSwissprotBase):
         blastIndexPath = os.path.join(os.path.dirname(self.sp.filepath),'wikiwacky')
         self.sp.formatdb(blastIndexPath)
     def blast_test(self):
+        'test old-style blast() method'
         hbb = self.sp['HBB1_TORMA']
         hits = self.sp.blast(hbb)
         edges = hits[hbb].edges(maxgap=1,maxinsert=1,
@@ -98,6 +99,27 @@ class Blast_Test(PygrSwissprotBase):
         trypsin = self.sp['PRCA_ANASP']
         try:
             hits[trypsin]
+            raise ValueError('failed to catch bad alignment query')
+        except KeyError:
+            pass
+    def new_blast_test(self):
+        'test new-style blast mapping method'
+        hbb = self.sp['HBB1_TORMA']
+        hits = self.sp.blastMap[hbb] # run the blast mapping
+        edges = hits.edges(maxgap=1, maxinsert=1,
+                           minAlignSize=14, pIdentityMin=0.5)
+        for t in edges:
+            assert len(t[0])>=14, 'result shorter than minAlignSize!'
+        result = [(t[0],t[1],t[2].pIdentity()) for t in edges]
+        store = PygrDataTextFile('results/seqdb1.pickle')
+        correct = store['hbb blast 1']
+        assert approximate_cmp(result,correct,.0001)==0, 'blast results should match'
+        result = [(t[0],t[1],t[2].pIdentity()) for t in hits.generateSeqEnds()]
+        correct = store['hbb blast 2']
+        assert approximate_cmp(result,correct,.0001)==0, 'blast results should match'
+        trypsin = self.sp['PRCA_ANASP']
+        try:
+            hits.nlmsa[trypsin]
             raise ValueError('failed to catch bad alignment query')
         except KeyError:
             pass
