@@ -870,9 +870,11 @@ so report the reproducible steps to this error message as a bug report.''' % res
             from sqlgraph import SQLTableBase,SQLGraphClustered
             excludeClasses = [SQLTableBase,SQLGraphClustered]
         if serverClasses is None: # DEFAULT TO ALL CLASSES WE KNOW HOW TO SERVE
-            from seqdb import BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC, \
+            from seqdb import SequenceFileDB,BlastDB, \
+                 XMLRPCSequenceDB,BlastDBXMLRPC, \
                  AnnotationDB, AnnotationClient, AnnotationServer
-            serverClasses=[(BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC),
+            serverClasses=[(SequenceFileDB,XMLRPCSequenceDB,BlastDBXMLRPC),
+                           (BlastDB,XMLRPCSequenceDB,BlastDBXMLRPC),
                            (AnnotationDB,AnnotationClient,AnnotationServer)]
             try:
                 from cnestedlist import NLMSA
