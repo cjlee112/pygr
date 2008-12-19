@@ -4,6 +4,12 @@ from sequtil import *
 from parse_blast import BlastHitParser
 from seqdb import write_fasta, read_fasta
 
+# NCBI HAS THE NASTY HABIT OF TREATING THE IDENTIFIER AS A BLOB INTO
+# WHICH THEY STUFF FIELD AFTER FIELD... E.G. gi|1234567|foobarU|NT_1234567|...
+# THIS JUST YANKS OUT THE SECOND ARGUMENT SEPARATED BY |
+NCBI_ID_PARSER=lambda id:id.split('|')[1]
+
+
 
 def blast_program(query_type,db_type):
     progs= {DNA_SEQTYPE:{DNA_SEQTYPE:'blastn', PROTEIN_SEQTYPE:'blastx'},

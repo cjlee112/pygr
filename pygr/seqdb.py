@@ -34,12 +34,6 @@ class ProteinSQLSequence(SQLSequence):
     _seqtype=PROTEIN_SEQTYPE
 
 
-# NCBI HAS THE NASTY HABIT OF TREATING THE IDENTIFIER AS A BLOB INTO
-# WHICH THEY STUFF FIELD AFTER FIELD... E.G. gi|1234567|foobarU|NT_1234567|...
-# THIS JUST YANKS OUT THE SECOND ARGUMENT SEPARATED BY |
-NCBI_ID_PARSER=lambda id:id.split('|')[1]
-
-
 class SeqLenObject(object):
     def __init__(self, seqID, seqDB):
         self.id = seqID
