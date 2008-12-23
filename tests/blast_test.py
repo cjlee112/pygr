@@ -140,17 +140,21 @@ def all_v_all_blast_save():
 class Tblastn_Test(object):
 	def bad_subject_test(self):
 		from pygr import parse_blast
+		from pygr.nlmsa_utils import CoordsGroupStart,CoordsGroupEnd
 		correctCoords = ((12,63,99508,99661),
 				 (65,96,99661,99754),
 				 (96,108,99778,99814),
 				 (108,181,99826,100045))
 		ifile = file('bad_tblastn.txt')
 		try:
-			p= parse_blast.BlastHitParser()
-			for i,ival in enumerate(p.parse_file(ifile)):
-				assert (ival.src_start,ival.src_end,
-					ival.dest_start,ival.dest_end) \
-					== correctCoords[i]
+			p = parse_blast.BlastHitParser()
+			it = iter(correctCoords)
+			for ival in p.parse_file(ifile):
+				if not isinstance(ival,(CoordsGroupStart,
+							CoordsGroupEnd)):
+					assert (ival.src_start,ival.src_end,
+						ival.dest_start,ival.dest_end) \
+						== it.next()
 		finally:
 			ifile.close()
 
