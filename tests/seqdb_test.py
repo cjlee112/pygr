@@ -1,5 +1,6 @@
 import pygrtest_common
-from pygr.seqdb import SequenceFileDB, PrefixUnionDict, AnnotationDB
+from pygr.seqdb import SequenceFileDB, PrefixUnionDict, AnnotationDB, \
+     TranslationAnnot, TranslationAnnotSlice
 from pygr.sequence import Sequence
 from pygr.cnestedlist import NLMSA
 import gc
@@ -295,6 +296,19 @@ class AnnotationDB_Test(object):
             assert 0, "incorrect seqdb; key error should be raised"
         except KeyError:
             pass
+    def translation_annot_test(self):
+        db = SequenceFileDB('hbb1_mouse.fa')
+        adb = AnnotationDB({1:('gi|171854975|dbj|AB364477.1|',3,441)},
+                           db, itemClass=TranslationAnnot,
+                           itemSliceClass=TranslationAnnotSlice,
+                           sliceAttrDict=dict(id=0,start=1,stop=2))
+        trseq = adb[1]
+        assert len(trseq) == 146, 'wrong translation length!'
+        assert len(trseq.sequence) == 438, 'wrong sequence length!'
+        s = trseq[-10:]
+        assert len(s) == 10, 'wrong translation length!'
+        assert str(s.sequence) == 'GTGGCCACTGCCCTGGCTCACAAGTACCAC'
+        
                                                 
 class SeqDBCache_Test(object):
     def cache_test(self):

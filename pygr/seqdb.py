@@ -437,6 +437,7 @@ class TranslationAnnot(AnnotationSeq):
         self.stop /= 3
         self._anno_stop = stop
     sequence = TranslationAnnotSeqDescr()
+    _seqtype = PROTEIN_SEQTYPE
 
 class TranslationAnnotSliceDescr(object):
     'get the sequence interval corresponding to this annotation'
