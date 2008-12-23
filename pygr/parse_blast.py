@@ -1,5 +1,6 @@
 from __future__ import generators
 import math
+from nlmsa_utils import CoordsGroupStart,CoordsGroupEnd
 
 # AUTHORS: zfierstadt, leec
 
@@ -169,8 +170,10 @@ class BlastHitParser(object):
             if self.is_valid_hit() and \
                (is_line_start('>',line) or is_line_start(' Score =',line) \
                 or is_line_start('  Database:',line)):
+                yield CoordsGroupStart() # bracket with grouping markers
                 for t in self.generate_intervals(): # REPORT THIS ALIGNMENT
                     yield t # GENERATE ALL ITS INTERVAL MATCHES
+                yield CoordsGroupEnd()
                 self.reset() # RESET TO START A NEW ALIGNMENT
             if is_line_start('Query=',line):
                 self.save_query(line)
