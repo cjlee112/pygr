@@ -308,6 +308,7 @@ class AnnotationDB_Test(object):
         s = trseq[-10:]
         assert len(s) == 10, 'wrong translation length!'
         assert str(s.sequence) == 'GTGGCCACTGCCCTGGCTCACAAGTACCAC'
+        assert str(s) == 'VATALAHKYH', 'bad ORF translation!'
         
                                                 
 class SeqDBCache_Test(object):

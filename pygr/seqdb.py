@@ -438,6 +438,13 @@ class TranslationAnnot(AnnotationSeq):
         self._anno_stop = stop
     sequence = TranslationAnnotSeqDescr()
     _seqtype = PROTEIN_SEQTYPE
+    def strslice(self, start, stop):
+        'get the aa translation of our associated ORF'
+        try:
+            aa = self._translation
+        except AttributeError:
+            aa = self._translation = translate_orf(str(self.sequence))
+        return aa[start:stop]
 
 class TranslationAnnotSliceDescr(object):
     'get the sequence interval corresponding to this annotation'

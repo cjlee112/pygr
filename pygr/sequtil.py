@@ -110,3 +110,43 @@ def read_fasta_lengths(ifile):
     elif isEmpty:
         raise IOError('no readable sequence in FASTA file!')
 
+class AATranslation(object):
+    'customizable translation class'
+    geneticCode = dict(TTY='F', TTR='L', TCN='S', TAY='Y', TGY='C', TGG='W',
+                       CTN='L', CCN='P', CAY='H', CAR='Q', CGN='R',
+                       ATY='I', ATA='I', ATG='M', ACN='T', AAY='N', AAR='K',
+                       AGY='S', AGR='R',
+                       GTN='V', GCN='A', GAY='D', GAR='E', GGN='G',
+                       TAR='*', TGA='*')
+    def __init__(self):
+        'initialize our translation dictionary by applying N,Y,R codes'
+        geneticCode = self.geneticCode.copy()
+        for codon,aa in self.geneticCode.items():
+            if codon[2] == 'N':
+                geneticCode[codon[:2]+'A'] = aa
+                geneticCode[codon[:2]+'T'] = aa
+                geneticCode[codon[:2]+'G'] = aa
+                geneticCode[codon[:2]+'C'] = aa
+            elif codon[2] == 'Y':
+                geneticCode[codon[:2]+'T'] = aa
+                geneticCode[codon[:2]+'C'] = aa
+            elif codon[2] == 'R':
+                geneticCode[codon[:2]+'A'] = aa
+                geneticCode[codon[:2]+'G'] = aa
+        self.geneticCode = geneticCode
+    def __call__(self, s):
+        'translate nucleotide string s to amino acid string'
+        s = s.upper()
+        s = s.replace('U', 'T')
+        l = []
+        for i in range(0, len(s), 3):
+            try:
+                l.append(self.geneticCode[s[i:i+3]])
+            except KeyError:
+                l.append('X') # uninterpretable
+        return ''.join(l)
+
+translate_orf = AATranslation() # default translation function
+
+                       
+    
