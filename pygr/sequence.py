@@ -315,10 +315,6 @@ class SeqPath(object):
         absoluteCoords option allows intervals to be created using Pygrs internal
         coordinate convention i.e. -20,-10 --> -(path.pathForward[10:20])
         '''
-        try: # MARK ANNOTATION SLICES
-            self.annot=path.annot # KEEP POINTING AT PARENT ANNOTATION
-        except AttributeError:
-            pass
         if reversePath is not None:
             try: # IF reversePath.stop KNOWN, USE IT
                 start= -(reversePath._stop)

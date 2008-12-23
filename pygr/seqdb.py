@@ -418,13 +418,34 @@ class AnnotationSeq(SeqPath):
         raise ValueError('''this is an annotation, and you cannot get a sequence string from it.
 Use its sequence attribute to get a sequence object representing this interval.''')
 
-
 class AnnotationSlice(SeqDBSlice):
     'represents subslice of an annotation'
     __getattr__=getAnnotationAttr
     sequence = AnnotationSliceDescr()
     annotationType = classutil.DBAttributeDescr('annotationType')
     __repr__ =  annotation_repr
+
+class TranslationAnnotSeqDescr(object):
+    'get the sequence interval corresponding to this annotation'
+    def __get__(self,obj,objtype):
+        return absoluteSlice(obj._anno_seq, obj._anno_start, obj._anno_stop)
+
+class TranslationAnnot(AnnotationSeq):
+    'annotation representing aa translation of a given nucleotide interval'
+    def __init__(self, id, db, parent, start, stop):
+        AnnotationSeq.__init__(self, id, db, parent, start, stop)
+        self.stop /= 3
+        self._anno_stop = stop
+    sequence = TranslationAnnotSeqDescr()
+
+class TranslationAnnotSliceDescr(object):
+    'get the sequence interval corresponding to this annotation'
+    def __get__(self,obj,objtype):
+        return relativeSlice(obj.pathForward.sequence, 3*obj.start, 3*obj.stop)
+
+class TranslationAnnotSlice(AnnotationSlice):
+    sequence = TranslationAnnotSliceDescr()
+
 
 class AnnotationDB(object, UserDict.DictMixin):
     'container of annotations as specific slices of db sequences'
