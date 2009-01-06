@@ -1018,7 +1018,10 @@ so report the reproducible steps to this error message as a bug report.''' % res
     def delSchema(self,id,layer=None):
         'delete schema bindings TO and FROM this resource ID'
         db=self.getLayer(layer)
-        d=db.getschema(id) # GET THE EXISTING SCHEMA
+        try:
+            d=db.getschema(id) # GET THE EXISTING SCHEMA
+        except KeyError:
+            return # no schema stored for this object so nothing to do...
         self.schemaCache.clear() # THIS IS MORE AGGRESSIVE THAN NEEDED... COULD BE REFINED
         for attr,obj in d.items():
             if attr.startswith('-'): # A SCHEMA OBJECT
