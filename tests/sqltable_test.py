@@ -1,6 +1,6 @@
 import pygrtest_common
 from nosebase import skip_errors
-from pygr.sqlgraph import SQLTable,getNameCursor,MapView,GraphView
+from pygr.sqlgraph import SQLTable,getNameCursor,MapView,GraphView,DBServerInfo
 
 class SQLTable_Test(object):
     @skip_errors(ImportError)
@@ -133,3 +133,36 @@ class SQLTable_Test(object):
         assert self.sourceDB[2] in m
         
         
+class GraphView_Test(object):
+    @skip_errors(ImportError)
+    def setup(self):
+        # test will be skipped if mysql module or ensembldb server unavailable
+        import MySQLdb
+        try:
+            conn = DBServerInfo(host='ensembldb.ensembl.org', user='anonymous',
+                                passwd='')
+            translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
+                                     serverInfo=conn)
+            exonDB = SQLTable('homo_sapiens_core_47_36i.exon', serverInfo=conn)
+            sql_statement = '''SELECT t3.exon_id FROM
+homo_sapiens_core_47_36i.translation AS tr,
+homo_sapiens_core_47_36i.exon_transcript AS t1,
+homo_sapiens_core_47_36i.exon_transcript AS t2,
+homo_sapiens_core_47_36i.exon_transcript AS t3 WHERE tr.translation_id = %s
+AND tr.transcript_id = t1.transcript_id AND t1.transcript_id =
+t2.transcript_id AND t2.transcript_id = t3.transcript_id AND t1.exon_id =
+tr.start_exon_id AND t2.exon_id = tr.end_exon_id AND t3.rank >= t1.rank AND
+t3.rank <= t2.rank ORDER BY t3.rank
+            '''
+            self.translationExons = GraphView(translationDB, exonDB,
+                                              sql_statement, serverInfo=conn)
+            self.translation = translationDB[15121]
+        except MySQLdb.MySQLError:
+            raise ImportError
+    def orderBy_test(self):
+        'test issue 53: ensure that the ORDER BY results are correct'
+        exons = self.translationExons[self.translation] # do the query
+        result = [e.id for e in exons]
+        correct = [95160,95020,95035,95050,95059,95069,95081,95088,95101,
+                   95110,95172]
+        assert result == correct # make sure the exact order matches
