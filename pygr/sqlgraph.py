@@ -1457,30 +1457,66 @@ class MapView(object, UserDict.DictMixin):
         for k in self:
             yield k,self[k]
 
-class GraphViewEdgeDict(dict):
+class GraphViewEdgeDict(UserDict.DictMixin):
     'edge dictionary for GraphView: just pre-loaded on init'
     def __init__(self, g, k):
-        dict.__init__(self)
         self.g = g
         self.k = k
         self.g.cursor.execute(self.g.viewSQL, (k.id,)) # run the query
         l = self.g.cursor.fetchall() # get results
+        self.targets = [t[0] for t in l] # preserve order of the results
+        d = {} # also keep targetID:edgeID mapping
         if self.g.edgeDB is not None: # save with edge info
             for t in l:
-                dict.__setitem__(self, self.g.targetDB[t[0]],
-                                 self.g.edgeDB[t[1]])
-        else: # just save the list of targets, no edge info
+                d[t[0]] = t[1]
+        else:
             for t in l:
-                dict.__setitem__(self, self.g.targetDB[t[0]], None)
+                d[t[0]] = None
+        self.targetDict = d
+    def __len__(self):
+        return len(self.targets)
+    def __iter__(self):
+        for k in self.targets:
+            yield self.g.targetDB[k]
+    def keys(self):
+        return list(self)
+    def iteritems(self):
+        if self.g.edgeDB is not None: # save with edge info
+            for k in self.targets:
+                yield (self.g.targetDB[k], self.g.edgeDB[self.targetDict[k]])
+        else: # just save the list of targets, no edge info
+            for k in self.targets:
+                yield (self.g.targetDB[k], None)
+    def __getitem__(self, o, exitIfFound=False):
+        'for the specified target object, return its associated edge object'
+        try:
+            if o.db is not self.g.targetDB:
+                raise KeyError('key is not part of targetDB!')
+            edgeID = self.targetDict[o.id]
+        except AttributeError:
+            raise KeyError('key has no id or db attribute?!')
+        if exitIfFound:
+            return
+        if self.g.edgeDB is not None: # return the edge object
+            return self.g.edgeDB[edgeID]
+        else: # no edge info
+            return None
+    def __contains__(self, o):
+        try:
+            self.__getitem__(o, True) # raise KeyError if not found
+            return True
+        except KeyError:
+            return False
     __setitem__ = __delitem__ = clear = pop = popitem = update = \
                   setdefault = read_only_error
 
 class GraphView(MapView):
     'general purpose graph interface defined by any SQL query'
-    def __init__(self, sourceDB, targetDB, viewSQL, cursor=None, edgeDB=None):
+    def __init__(self, sourceDB, targetDB, viewSQL, cursor=None, edgeDB=None,
+                 **kwargs):
         'if edgeDB not None, viewSQL query must return (targetID,edgeID) tuples'
         self.edgeDB = edgeDB
-        MapView.__init__(self, sourceDB, targetDB, viewSQL, cursor)
+        MapView.__init__(self, sourceDB, targetDB, viewSQL, cursor, **kwargs)
     def __getitem__(self, k):
         if not hasattr(k,'db') or k.db != self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this map!')
