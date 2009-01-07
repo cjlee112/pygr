@@ -486,9 +486,10 @@ maxCache specfies the maximum number of annotation objects to keep in the cache.
         self.sliceAttrDict=sliceAttrDict # USER-PROVIDED ALIASES
         if maxCache is not None:
             self.maxCache = maxCache
-        try:
-            sample_value = self.itervalues().next()
-        except KeyError:
+        try: # don't cache anything now; schema may change itemClass!
+            k = iter(self).next() # get the first ID if any
+            self.get_annot_obj(k, self.sliceDB[k]) # valid annotation object?
+        except KeyError: # a convenient warning to the user...
             raise KeyError('''\
  cannot create annotation object; sequence database %s may not be correct''' %\
                            (repr(seqDB),))
@@ -522,8 +523,8 @@ saved directly to the sliceDB.''')
             return getattr(sliceInfo,k)
         except TypeError: # TREAT AS int INDEX INTO A TUPLE
             return sliceInfo[k]
-    def sliceAnnotation(self,k,sliceInfo,limitCache=True):
-        'create annotation and cache it'
+    def get_annot_obj(self, k, sliceInfo):
+        'create an annotation object based on the input sliceInfo'
         start = int(self.getSliceAttr(sliceInfo,'start'))
         stop = int(self.getSliceAttr(sliceInfo,'stop'))
         try:
@@ -534,7 +535,12 @@ saved directly to the sliceDB.''')
         if start>=stop:
             raise IndexError('annotation %s has zero or negative length [%s:%s]!'
                              %(k,start,stop))
-        a = self.itemClass(k,self,self.seqDB[self.getSliceAttr(sliceInfo,'id')],start,stop)
+        return self.itemClass(k, self,
+                              self.seqDB[self.getSliceAttr(sliceInfo,'id')],
+                              start, stop)
+    def sliceAnnotation(self,k,sliceInfo,limitCache=True):
+        'create annotation and cache it'
+        a = self.get_annot_obj(k, sliceInfo)
         try: # APPLY CACHE SIZE LIMIT IF ANY
             if limitCache and self.maxCache<len(self._weakValueDict):
                 self._weakValueDict.clear()
