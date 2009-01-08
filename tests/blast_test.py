@@ -137,6 +137,26 @@ def all_v_all_blast_save():
 
         return msa
                 
+class Blastx_Test(object):
+	def blastx_test(self):
+		from pygr import seqdb, blast
+		dna = seqdb.SequenceFileDB('hbb1_mouse.fa')
+		prot = seqdb.SequenceFileDB('sp_hbb1')
+		blastmap = blast.BlastxMapping(prot)
+		correct = [(146, 146, 438, '0.979'), (146, 146, 438, '0.911'), (146, 146, 438, '0.747'), (146, 146, 438, '0.664'), (146, 146, 438, '0.623'), (146, 146, 438, '0.596'), (145, 145, 435, '0.510'), (143, 143, 429, '0.531'), (146, 146, 438, '0.473'), (146, 146, 438, '0.473'), (146, 146, 438, '0.486'), (144, 144, 432, '0.451'), (145, 145, 435, '0.455'), (144, 144, 432, '0.451'), (146, 146, 438, '0.466'), (146, 146, 438, '0.459'), (52, 52, 156, '0.442'), (90, 90, 270, '0.322'), (23, 23, 69, '0.435'), (120, 120, 360, '0.283'), (23, 23, 69, '0.435'), (120, 120, 360, '0.258'), (23, 23, 69, '0.435'), (120, 120, 360, '0.275'), (23, 23, 69, '0.435'), (120, 120, 360, '0.267')]
+		results = blastmap[dna['gi|171854975|dbj|AB364477.1|']]
+		l = []
+		for result in results:
+			for src,dest,edge in result.edges():
+				l.append((len(src),len(dest),len(src.sequence),'%0.3f' % edge.pIdentity()))
+		assert l == correct
+		try:
+			results = blastmap[prot['HBB1_MOUSE']]
+			raise AssertionError('failed to trap blastp in BlastxMapping')
+		except ValueError:
+			pass
+				
+
 class Tblastn_Test(object):
 	def tblastn_test(self):
 		from pygr import seqdb, blast
@@ -150,6 +170,12 @@ class Tblastn_Test(object):
 		assert str(dest.sequence) == 'CTGACTGATGCTGAGAAGGCTGCTGTCTCTGGCCTGTGGGGAAAGGTGAACTCCGATGAAGTTGGTGGTGAGGCCCTGGGCAGGCTGCTGGTTGTCTACCCTTGGACCCAGAGGTACTTTGATAGCTTTGGAGACCTATCCTCTGCCTCTGCTATCATGGGTAATGCCAAAGTGAAGGCCCATGGCAAGAAAGTGATAACTGCCTTTAACGAGGGCCTGAATCACTTGGACAGCCTCAAGGGCACCTTTGCCAGCCTCAGTGAGCTCCACTGTGACAAGCTCCATGTGGATCCTGAGAACTTCAGGCTCCTGGGCAATATGATCGTGATTGTGCTGGGCCACCACCTGGGCAAGGATTTCACCCCCGCTGCACAGGCTGCCTTCCAGAAGGTGATGGCTGGAGTGGCCACTGCCCTGGCTCACAAGTACCAC'
 		assert approximate_cmp([[edge.pIdentity()]], [[0.451]],
 				       0.001)==0
+		blastmap = blast.BlastMapping(prot)
+		try:
+			results = blastmap[dna['gi|171854975|dbj|AB364477.1|']]
+			raise AssertionError('failed to trap blastx in BlastMapping')
+		except ValueError:
+			pass
 
 	def bad_subject_test(self):
 		from pygr import parse_blast
