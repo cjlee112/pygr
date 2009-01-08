@@ -111,7 +111,7 @@ def check_pyrex_version():
    except ImportError:
       raise ImportError("""Unable to locate pyrex.  Make sure it's installed
       in your python site-packages or in your PYTHONPATH.""")
-   v = [int(s) for s in pyrexVersion.split('.')]
+   v = [int(s) for s in pyrexVersion.split('.')[:3]]
    if v[0]>0 or (v[1]==9 and v[2]>=5):
       return
    raise ImportError('''Unfortunately, you need Pyrex version >=0.9.5 for
