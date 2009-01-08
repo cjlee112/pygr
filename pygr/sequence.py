@@ -801,6 +801,18 @@ class Seq2SeqEdge(object):
         return x
 
 
+class SeqDBDescriptor(object):
+    'forwards attribute requests to self.pathForward'
+    def __init__(self,attr):
+        self.attr=attr
+    def __get__(self,obj,objtype):
+        return getattr(obj.pathForward,self.attr) # RAISES AttributeError IF NONE
+
+class SeqDBSlice(SeqPath):
+    'JUST A WRAPPER FOR SCHEMA TO HANG SHADOW ATTRIBUTES ON...'
+    id=SeqDBDescriptor('id')
+    db=SeqDBDescriptor('db')
+
 
 
 # CURRENTLY UNUSED

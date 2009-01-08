@@ -1,6 +1,7 @@
 import pygrtest_common
-from pygr.seqdb import SequenceFileDB, PrefixUnionDict, AnnotationDB, \
-     TranslationAnnot, TranslationAnnotSlice
+from pygr.seqdb import SequenceFileDB, PrefixUnionDict
+from pygr.annotation import AnnotationDB, TranslationAnnot, \
+     TranslationAnnotSlice
 from pygr.sequence import Sequence
 from pygr.cnestedlist import NLMSA
 import gc
