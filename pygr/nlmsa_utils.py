@@ -345,17 +345,16 @@ def get_interval(seq,start,end,ori):
     return ival
 
 
-def read_aligned_coords(alignedCoords, alignedIvalsSrc=None,
-                        alignedIvalsDest=None,
+def read_aligned_coords(alignedCoords, srcDB=None, destDB=None,
                         alignedIvalsAttrs=dict(idDest='id', startDest='start',
                                                stopDest='stop', oriDest='ori')):
   'read ID,start,stop,ori tuples from alignedCoords, and generate intervals'
   from classutil import AttributeInterface
   getAttr = AttributeInterface(alignedIvalsAttrs) # to extract desired attrs
-  if alignedIvalsSrc is None: # get all seqs from the existing seqDict
-    alignedIvalsSrc = al.seqDict
-  if alignedIvalsDest is None: # use same input set as source
-    alignedIvalsDest = alignedIvalsSrc
+  if srcDB is None: # get all seqs from the existing seqDict
+    srcDB = al.seqDict
+  if destDB is None: # use same input set as source
+    destDB = srcDB
   for ivals in alignedCoords:
     if isinstance(ivals, (CoordsGroupStart,CoordsGroupEnd)):
       yield ivals # just pass grouping-info through
@@ -366,27 +365,24 @@ def read_aligned_coords(alignedCoords, alignedIvalsSrc=None,
     except TypeError:
       srcData = ivals # extract both src and dest from ivals object
       destSet = [ivals]
-    srcIval = get_interval(alignedIvalsSrc[getAttr(srcData, 'id')],
+    srcIval = get_interval(srcDB[getAttr(srcData, 'id')],
                            getAttr(srcData, 'start'),
                            getAttr(srcData, 'stop'),
                            getAttr(srcData, 'ori', 1)) # default ori
     for destData in destSet: # get the remaining intervals
-      destIval = get_interval(alignedIvalsDest[getAttr(destData, 'idDest')],
+      destIval = get_interval(destDB[getAttr(destData, 'idDest')],
                               getAttr(destData, 'startDest'),
                               getAttr(destData, 'stopDest'),
                               getAttr(destData, 'oriDest', 1)) # default ori
       yield srcIval,destIval,None # generate aligned intervals
 
-def add_aligned_intervals(al, alignedCoords, *args, **kwargs):
-  'save a set of aligned intervals to alignment'
-  alignedIvals = read_aligned_coords(alignedCoords, *args, **kwargs)
-  try:
-    group_intervals = kwargs['group_intervals']
-  except KeyError:
-    pass
-  else: # apply grouping function if present
-    del kwargs['group_intervals']
-    alignedIvals = group_intervals(alignedIvals)
+def add_aligned_intervals(al, alignedCoords, srcDB=None, destDB=None,
+                          groupIntervals=None, **kwargs):
+  '''save a set of aligned intervals to alignment, after applying
+  groupIntervals() function if provided.'''
+  alignedIvals = read_aligned_coords(alignedCoords, srcDB, destDB, **kwargs)
+  if groupIntervals is not None: # apply grouping function if present
+    alignedIvals = groupIntervals(alignedIvals, **kwargs)
   for t in alignedIvals: # typically a srcIval,destIval tuple
     if isinstance(t, (CoordsGroupStart,CoordsGroupEnd)):
       continue # ignore grouping markers

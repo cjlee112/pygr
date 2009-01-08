@@ -3,6 +3,8 @@ import classutil
 from sequtil import *
 from parse_blast import BlastHitParser
 from seqdb import write_fasta, read_fasta
+from nlmsa_utils import CoordsGroupStart, CoordsGroupEnd
+from annotation import AnnotationDB, TranslationAnnot, TranslationAnnotSlice
 
 # NCBI HAS THE NASTY HABIT OF TREATING THE IDENTIFIER AS A BLOB INTO
 # WHICH THEY STUFF FIELD AFTER FIELD... E.G. gi|1234567|foobarU|NT_1234567|...
@@ -21,7 +23,7 @@ def blast_program(query_type,db_type):
     return progs[query_type][db_type]
 
 
-def read_interval_alignment(ofile, srcSet, destSet, al=None):
+def read_interval_alignment(ofile, srcDB, destDB, al=None, **kwargs):
     "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
     needToBuild = False
     if al is None:
@@ -29,25 +31,27 @@ def read_interval_alignment(ofile, srcSet, destSet, al=None):
         al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
         needToBuild = True
     p = BlastHitParser()
-    al.add_aligned_intervals(p.parse_file(ofile), srcSet, destSet,
+    al.add_aligned_intervals(p.parse_file(ofile), srcDB, destDB,
+                             alignedIvalsAttrs=
                              dict(id='src_id', start='src_start',
                                   stop='src_end', ori='src_ori',
                                   idDest='dest_id', startDest='dest_start',
-                                  stopDest='dest_end', oriDest='dest_ori'))
+                                  stopDest='dest_end', oriDest='dest_ori'),
+                             **kwargs)
     if p.nline == 0: # NO BLAST OUTPUT??
         raise IOError('no BLAST output.  Check that blastall is in your PATH')
     if needToBuild:
         al.build()
     return al
 
-def process_blast(cmd, seq, seqDB, al=None, seqString=None):
+def process_blast(cmd, seq, seqDB, al=None, seqString=None, **kwargs):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
     ifile,ofile = os.popen2(cmd)
     if seqString is None:
         seqString = seq
     id = write_fasta(ifile, seqString)
     ifile.close()
-    al = read_interval_alignment(ofile, {id:seq}, seqDB, al)
+    al = read_interval_alignment(ofile, {id:seq}, seqDB, al, **kwargs)
     if ofile.close() is not None:
         raise OSError('command %s failed' % cmd)
     return al
@@ -220,7 +224,13 @@ To turn off this message, use the verbose=False option''' % methodname
                 float(expmax), opts)
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd += ' -b %d -v %d' % (maxseq,maxseq)
-        return process_blast(cmd, seq, self.idIndex, al)
+        if blastprog=='tblastn': # apply ORF transformation to results
+            return process_blast(cmd, seq, self.idIndex, al,
+                                 groupIntervals=generate_tblastn_ivals)
+        elif blastprog=='blastx':
+            raise NotImplementedError("pygr currently lacks blastx support")
+        else:
+            return process_blast(cmd, seq, self.idIndex, al)
 
 class MegablastMapping(BlastMapping):
     def __call__(self, seq, al=None, blastpath='megablast', expmax=1e-20,
@@ -276,7 +286,7 @@ class BlastIDIndex(object):
         if unpack_f is None:
             unpack_f=self.unpack_id
         t={}
-        for id in self:
+        for id in self.seqDB:
             for s in unpack_f(id):
                 if s==id: continue # DON'T STORE TRIVIAL MAPPINGS!!
                 s=s.upper() # NCBI FORCES ID TO UPPERCASE?!?!
@@ -315,3 +325,44 @@ class BlastIDIndex(object):
             return self.seqDB[seqID]
         except KeyError: # translate to the correct ID
             return self.seqDB[self.get_real_id(seqID)]
+
+def get_orf_slices(ivals, **kwargs):
+    'create list of TranslationAnnotation slices from union of seq ivals'
+    it = iter(ivals)
+    try:
+        region = it.next()
+    except StopIteration:
+        raise ValueError('empty ivals list!')
+    seqDB = region.db
+    for ival in it:
+        region += ival # get total union of all intervals
+    try:
+        translationDB = seqDB.translationDB
+    except AttributeError: # create a new TranslationAnnot DB
+        translationDB = AnnotationDB({}, seqDB, itemClass=TranslationAnnot,
+                                     itemSliceClass=TranslationAnnotSlice,
+                                     sliceAttrDict=dict(id=0,start=1,stop=2))
+        seqDB.translationDB = translationDB
+    a = translationDB.new_annotation(str(len(translationDB)),
+                                     (region.id, region.start, region.stop))
+    l = []
+    for ival in ivals: # transform to slices of our ORF annotation
+        l.append(a[ival.start - region.start : ival.stop - region.start])
+    return l
+
+def generate_tblastn_ivals(alignedIvals, **kwargs):
+    'process target nucleotide ivals into TranslationAnnot slices'
+    for t in alignedIvals: # read aligned protein:nucleotide ival pairs
+        if isinstance(t, CoordsGroupStart):
+            yield t # pass through grouping marker in case anyone cares
+            srcIvals = []
+            destIvals = []
+        elif isinstance(t, CoordsGroupEnd): # process all ivals in this hit
+            results = get_orf_slices(destIvals, **kwargs) # transform
+            it = iter(srcIvals)
+            for dest in results: # recombine src,dest pairs
+                yield (it.next(),dest,None) # no edge info
+            yield t # pass through grouping marker in case anyone cares
+        else: # just keep accumulating all the ivals for this hit
+            srcIvals.append(t[0])
+            destIvals.append(t[1])

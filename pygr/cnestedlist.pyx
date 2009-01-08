@@ -1687,11 +1687,7 @@ See the NLMSA documentation for more details.\n''')
     self[ival].__iadd__(a) # ADD ALIGNMENT BETWEEN ival AND ANNOTATION
   def add_aligned_intervals(self, alignedIvals, *args, **kwargs):
     'add ID/coords in alignedIvals to this alignment'
-    from classutil import kwargs_filter
-    nlmsa_utils.add_aligned_intervals(self, alignedIvals, *args,
-                                      **kwargs_filter(kwargs,
-                                         ('alignedIvalsSrc', 'alignedIvalsDest',
-                                          'alignedIvalsAttrs')))
+    nlmsa_utils.add_aligned_intervals(self, alignedIvals, *args, **kwargs)
 
   cdef void free_seqidmap(self,int nseq0,SeqIDMap *seqidmap):
     cdef int i
