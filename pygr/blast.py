@@ -387,6 +387,9 @@ def generate_tblastn_ivals(alignedIvals, xformSrc=False, xformDest=True,
 
 
 class BlastxResults(object):
+    '''holds blastx or tblastx results.  Iterate over it to get hits one by one
+    Each hit is returned as the usual NLMSASlice interface (e.g.
+    use its edges() method to get src,dest,edgeInfo tuples'''
     def __init__(self, ofile, srcDB, destDB, xformSrc=True, xformDest=False,
                  **kwargs):
         import cnestedlist
@@ -416,9 +419,20 @@ class BlastxResults(object):
         return len(self.hits)
 
 class BlastxMapping(BlastMapping):
+    '''use this mapping class for blastx or tblastx queries.
+    Note that its interface is a little different than BlastMapping
+    in that it returns a list of hits, one for each hit returned by
+    blastx, in the same order as returned by blastx (whereas BlastMapping
+    consolidates all the hits into a single alignment object).
+    BlastxMapping does this because blastx may find multiple ORFs
+    in the query sequence; due to this complication it is simplest
+    to simply return the hits one at a time exactly as blastx reports them.
+    Running a query on this class returns a BlastxResults object
+    which provides an interface to iterate through the hits one by one.'''
     def __call__(self, seq, blastpath='blastall',
                  blastprog=None, expmax=0.001, maxseq=None, verbose=True,
                  opts='', xformSrc=True, xformDest=False, **kwargs):
+        'perform blastx or tblastx query'
         if verbose:
             self.warn_about_self_masking(seq)
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
@@ -426,13 +440,13 @@ class BlastxMapping(BlastMapping):
         blastprog = self.blast_program(seq, blastprog)
         if blastprog=='blastn':
             blastprog = 'tblastx'
-            xformDest = True
+            xformDest = True # must also transform the destDB sequence to ORF
         elif blastprog != 'blastx':
             raise ValueError('Use BlastMapping for ' + blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
-        seqID,ofile = start_blast(cmd, seq)
+        seqID,ofile = start_blast(cmd, seq) # run the command
         results = BlastxResults(ofile, {seqID:seq}, self.idIndex, xformSrc,
-                                xformDest, **kwargs)
+                                xformDest, **kwargs) # save the results
         if ofile.close() is not None:
             raise OSError('command %s failed' % cmd)
         return results
