@@ -102,9 +102,25 @@ pyrexTargetDict = {ppath('cdict.c'):
                              sources = [ppath('seqfmt.c')])}
 
 
-
+def check_pyrex_version():
+   'must check pyrex compiler version for python 2.5 and above'
+   if v1 == 2 and v2 < 5:
+      return # python 2.4 or earlier, nothing further to do
+   try: # find out pyrex version...
+      from Pyrex.Compiler.Version import version as pyrexVersion
+   except ImportError:
+      raise ImportError("""Unable to locate pyrex.  Make sure it's installed
+      in your python site-packages or in your PYTHONPATH.""")
+   v = [int(s) for s in pyrexVersion.split('.')]
+   if v[0]>0 or (v[1]==9 and v[2]>=5):
+      return
+   raise ImportError('''Unfortunately, you need Pyrex version >=0.9.5 for
+   compatibility with Python 2.5 or above.  You only have version %s!'''
+                     % pyrexVersion)
 
 def compilePyrex(cfile):
+   'run pyrexc to compile the specified target C file'
+   check_pyrex_version()
    # for proper class pickling, pyrexc needs full-dotted-module-path
    # filename format
    
@@ -201,8 +217,6 @@ else:
    if v1 > 2 or v2 > 2 or v3 >= 3: # ONLY ALLOWED IF >=2.2.3
       metadata['download_url'] = "http://prdownloads.sourceforge.net/pygr/pygr-%s.tar.gz" % version
       metadata['classifiers'] = [ c for c in classifiers.split('\n') if c ]
-   if v1 > 2 or (v1 == 2 and v2 >= 5):
-      pyrexc = 'pyrexc2.5' # must use pyrex compiler for 2.5 and above
 
 def try_load_extension(name, modpath):
    "Try to load 'name' module from the given module path."
