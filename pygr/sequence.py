@@ -202,17 +202,6 @@ def sumSliceIndex(i, myslice, relativeToStart):
         return i + myslice.stop
 
 
-class ShadowAttribute(object):
-    '''get an attribute if it exists, but if not, do NOT trigger
-    getattr on it (as hasattr does), just raise AttributeError.'''
-    def __init__(self,attr):
-        self.attr=attr
-    def __get__(self,obj,klass):
-        try: # 1ST LOOK IN THE OBJECT __dict__
-            return obj.__dict__[self.attr]
-        except (AttributeError,KeyError): # NOW TRY CLASS ATTRIBUTE...
-            return getattr(klass,self.attr)
-
 class SeqOriDescriptor(object):
     "Get orientation of sequence interval"
     def __get__(self, seq, objtype):
