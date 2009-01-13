@@ -186,34 +186,20 @@ def relativeSlice(seq,start,stop):
     else: # FORWARD ORIENTATION
         return seq[start:stop]
 
-def sumSliceIndex(i,myslice,relativeToStart):
+def sumSliceIndex(i, myslice, relativeToStart):
     '''Adjust index value either relative to myslice.start (positive indexes)
     or relative to myslice.stop (negative indexes).  Handle the case where
-    index value is None or myslice is None appropriately.
+    i is None or myslice is None appropriately.
     '''
     if myslice is None: # NO OBJECT, SO NOTHING TO DO...
         return i
+    if i is None:
+        i = 0
+    i *= myslice.step
     if relativeToStart:
-        attr='start'
+        return i + myslice.start
     else:
-        attr='stop'
-    _attr='_'+attr
-    if i is not None:
-        i *= myslice.step
-    try:
-        return i+getattr(myslice,_attr)
-    except AttributeError: # attr MUST NOT EXIST...
-        if i is None:
-            if hasattr(myslice,'_raw_'+attr): # FORCE getattr
-                return getattr(myslice,attr)
-            else:
-                return None
-        else: # FORCE getattr
-            return i+getattr(myslice,attr)
-    except TypeError:
-        if i is None:
-            return getattr(myslice,_attr)
-        raise
+        return i + myslice.stop
 
 
 class ShadowAttribute(object):
@@ -229,17 +215,11 @@ class ShadowAttribute(object):
 
 class SeqOriDescriptor(object):
     "Get orientation of sequence interval"
-    def __get__(self,seq,objtype):
-        try:
-            if seq._start>=0:
-                return 1 # FORWARD ORIENTATION
-        except AttributeError:
-            try:
-                if seq._stop>0:
-                    return 1 # FORWARD ORIENTATION
-            except AttributeError: # BOTH ATTRIBUTES MISSING!
-                raise AttributeError('SeqPath object has no start or stop!')
-        return -1 # REVERSE ORIENTATION
+    def __get__(self, seq, objtype):
+        if seq.start>=0:
+            return 1 # FORWARD ORIENTATION
+        else:
+            return -1 # REVERSE ORIENTATION
 
 class PathForwardDescr(object):
     'get the top-level forward sequence object'
@@ -258,47 +238,11 @@ class AbsIntervalDescr(object):
             return -(seq.stop),-(seq.start)
 
 
-class SeqStartDescr(object):
-    'implements deferred bounds checking -- only checked when needed'
-    def __init__(self, attr):
-        self.attr = attr
-    def __get__(self, seq, objtype):
-        if seq.path is seq: # TOP-LEVEL SEQUENCE OBJECT
-            if self.attr=='start':
-                if seq.orientation>0:
-                    return 0 # FORWARD ORI
-                else:
-                    return -len(seq._reverse) # REVERSE ORI
-            elif self.attr=='stop': 
-                if seq.orientation<0:
-                    return 0 # REVERSE ORI
-                else:
-                    return len(seq) # FORWARD ORI
-        else: # A SEQUENCE SLICE
-            try:
-                rawVal = getattr(seq, '_raw_'+self.attr)
-            except AttributeError:
-                return getattr(seq.path, self.attr) #GET FROM TOP-LEVEL SEQUENCE
-            # HAVE A RAW VALUE, MUST CHECK IT!
-            i = seq.check_bounds(rawVal, seq.path, self.attr, True)
-            setattr(seq, self.attr, i) # SAVE THE TRUNCATED VALUE
-            try: # SEE IF NEW INTERVAL BOUNDS ARE EMPTY...
-                if seq._start>=seq._stop: # AVOIDS INFINITE getattr LOOP!
-                    raise IndexError('caught empty sequence interval!')
-            except AttributeError: pass # OTHER ATTRIBUTE MISSING... IGNORE.
-            delattr(seq, '_raw_'+self.attr) # GET RID OF THE RAW VALUE
-            return i
-
-
 class SeqPath(object):
     '''Base class for specifying a path, ie. sequence interval.
     This implementation takes a sequence object as initializer
     and simply represents the interval as a slice of the sequence.'''
     orientation=SeqOriDescriptor()  # COMPUTE ORIENTATION AUTOMATICALLY
-    _start=ShadowAttribute('start') # SHADOW start, stop WITHOUT TRIGGERING
-    _stop=ShadowAttribute('stop')   #  getattr IF THEY ARE ABSENT
-    start = SeqStartDescr('start')
-    stop = SeqStartDescr('stop')
     pathForward=PathForwardDescr()  # GET THE TOP-LEVEL FORWARD SEQUENCE OBJ
     _abs_interval=AbsIntervalDescr()
     def __init__(self,path,start=0,stop=None,step=None,reversePath=None,
@@ -316,58 +260,39 @@ class SeqPath(object):
         coordinate convention i.e. -20,-10 --> -(path.pathForward[10:20])
         '''
         if reversePath is not None:
-            try: # IF reversePath.stop KNOWN, USE IT
-                start= -(reversePath._stop)
-            except AttributeError: pass
+            start = -(reversePath.stop)
         if absoluteCoords: # THIS OPTION PROVIDES TRANSPARENT WAY TO CREATE
-            if start>=0:   # INTERVALS USING start,stop PAIRS THAT FOLLOW
-                path=path.pathForward # OUR INTERNAL SIGN CONVENTION
+            if start >= 0:   # INTERVALS USING start,stop PAIRS THAT FOLLOW
+                path = path.pathForward # OUR INTERNAL SIGN CONVENTION
             else: # i.e. start<0 MEANS REVERSE ORIENTATION!
-                path= - (path.pathForward)
+                path = - (path.pathForward)
         else: # ADJUST start,stop ACCORDING TO path.start / path.stop
-            start=sumSliceIndex(start,path,relativeToStart or start is None or start>=0)
-            stop=sumSliceIndex(stop,path,relativeToStart or (stop is not None and stop>=0))
+            start = sumSliceIndex(start, path, relativeToStart or start is None
+                                  or start>=0)
+            stop = sumSliceIndex(stop, path, relativeToStart or
+                                 (stop is not None and stop>=0))
         if start is not None and stop is not None and start>stop:
-            start= -start # start>stop MEANS REVERSE ORIENTATION!
-            stop= -stop
+            start = -start # start>stop MEANS REVERSE ORIENTATION!
+            stop = -stop
             if path is not None:
-                path= -path
-        start=self.check_bounds(start,path) # PERFORM BOUNDS CHECKING
-        stop=self.check_bounds(stop,path,'stop') # IF POSSIBLE...
-        if start is not None and stop is not None and start>=stop:
+                path = -path
+        if path is not None: # perform bounds checking
+            if start < path.path.start:
+                start = path.path.start
+            if stop > path.path.stop:
+                stop = path.path.stop
+        if start is None or stop is None or start>=stop:
             raise IndexError('cannot create empty sequence interval!')
-        if start is not None:
-            self.start=start
-        if stop is not None:
-            self.stop=stop
+        self.start = start
+        self.stop = stop
         if step is None:
-            step=1
+            step = 1
         if path is None:
-            self.path=self
-            self.step=step
+            self.path = self
+            self.step = step
         else: # STORE TOP-LEVEL SEQUENCE PATH...
-            self.path=path.path
-            self.step=step*path.step
-
-    def check_bounds(self,start,path,attr='start',forceBounds=False,
-                     direction= -1,prefix='_'):
-        '''check that the specified attribute is in bounds.
-        If that cant be checked now (due to missing path.start or path.stop)
-        save the attribute as _raw_attr to force a check later on.'''
-        if attr=='stop':
-            direction= -direction
-        if not forceBounds:
-            attr=prefix+attr
-        if path is not None: # CHECK IF start OR stop GOES OUT OF BOUNDS.
-            try: # ONLY USE BOUNDS IF PRESENT
-                if start is not None and \
-                       cmp(start,getattr(path.path,attr))*direction>0:
-                    start=getattr(path.path,attr)
-            except AttributeError: # start>stop CHECK DONE BELOW...
-                setattr(self,'_raw'+attr,start)
-                start=None
-        return start # RETURN THE PROPERLY CHECKED VALUE...
-
+            self.path = path.path
+            self.step = step * path.step
     def classySlice(self,path,*l,**kwargs):
         'create a subslice using appropriate class based on container'
         if path is not None:
@@ -589,12 +514,17 @@ class SeqPath(object):
         return {'id':id,'start':self.start,'end':self.stop,'ori':self.orientation}
 
 
+class LengthDescriptor(object):
+    'property that just returns length of object'
+    def __get__(self, seq, klass):
+        return len(seq)
 
 
 # BASIC WRAPPER FOR A SEQUENCE.  LETS US ATTACH A NAME TO IT...
 class SequenceBase(SeqPath):
     'base sequence type assumes there will be a seq attribute providing sequence'
     start=0
+    stop = LengthDescriptor()
     step=1
     orientation=1
     def __init__(self):
@@ -616,7 +546,6 @@ class Sequence(SequenceBase):
         SequenceBase.__init__(self)
         self.id=id
         self.seq=s
-        self.stop=len(self)
 
 class SeqFilterDict(dict):
     '''stores a set of intervals, either on init or via self[ival]=junk;

@@ -9,7 +9,7 @@ S"(dp0\nS'HBB1_MOUSE[0:146]'\np1\n(lp2\n(S'ALGRLLVVYPWTQRYFDSFGDLSSASAIMGNAKVKAH
 p4
 sS'hbb1 fragment'
 p5
-S"ccopy_reg\n_reconstructor\np0\n(cpygr.seqdb\nSeqDBSlice\np1\nc__builtin__\nobject\np2\nNtp3\nRp4\n(dp5\nS'start'\np6\nI10\nsS'path'\np7\ncpygr.classutil\nitem_unpickler\np8\n(PPYGR_ID:Bio.Seq.Swissprot.sp42\nS'HBB1_TORMA'\np9\ntp10\nRp11\nsS'step'\np12\nI1\nsS'_raw_stop'\np13\nI35\nsb."
+S"ccopy_reg\n_reconstructor\np0\n(cpygr.sequence\nSeqDBSlice\np1\nc__builtin__\nobject\np2\nNtp3\nRp4\n(dp5\nS'start'\np6\nI10\nsS'step'\np7\nI1\nsS'stop'\np8\nI35\nsS'path'\np9\ncpygr.classutil\nitem_unpickler\np10\n(PPYGR_ID:Bio.Seq.Swissprot.sp42\nS'HBB1_TORMA'\np11\ntp12\nRp13\nsb."
 p6
 sS'hbb blast 2'
 p7
