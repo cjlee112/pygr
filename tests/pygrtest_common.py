@@ -18,7 +18,11 @@ pygrdir = os.path.abspath(os.path.join(testdir, '..'))
 sys.path.insert(0, pygrdir)
 
 os_info = distutils.util.get_platform()
-ver = ".".join(platform.python_version_tuple()[:2])
+
+py_ver_tup = platform.python_version_tuple()
+# NOTE: py_ver_tup contains ints in Python 2.6
+py_ver_tup = [ str(x) for x in py_ver_tup[:2] ]  
+ver = ".".join(py_ver_tup)
 
 build_dir = 'build/lib.%s-%s/' % (os_info, ver,)
 pygr_build_dir = os.path.abspath(os.path.join(pygrdir, build_dir))
