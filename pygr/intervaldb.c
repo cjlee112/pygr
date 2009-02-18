@@ -763,13 +763,13 @@ char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
     return err_msg;
   }
   sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
-  ifile_subheader=fopen(path,"w");
+  ifile_subheader=fopen(path,"wb"); /* binary file */
   if (!ifile_subheader) {
     sprintf(err_msg,"unable to open file %s for writing",path);
     return err_msg;
   }
   sprintf(path,"%s.idb",filestem); /* SAVE THE DATABASE */
-  ifile=fopen(path,"w");
+  ifile=fopen(path,"wb"); /* binary file */
   if (!ifile) {
     sprintf(err_msg,"unable to open file %s for writing",path);
     return err_msg;
@@ -790,7 +790,7 @@ char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
   fclose(ifile_subheader);
 
   sprintf(path,"%s.index",filestem); /* SAVE THE COMPACTED INDEX */
-  ifile=fopen(path,"w");
+  ifile=fopen(path,"wb"); /* binary file */
   if (!ifile) {
     sprintf(err_msg,"unable to open file %s for writing",path);
     return err_msg;
@@ -802,7 +802,7 @@ char *write_binary_files(IntervalMap im[],int n,int ntop,int div,
   fclose(ifile);
 
   sprintf(path,"%s.size",filestem); /* SAVE BASIC SIZE INFO*/
-  ifile=fopen(path,"w");
+  ifile=fopen(path,"w"); /* text file */
   if (!ifile) {
     sprintf(err_msg,"unable to open file %s for writing",path);
     return err_msg;
@@ -825,8 +825,8 @@ IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
   IntervalDBFile *idb_file=NULL;
   FILE *ifile=NULL;
 
-  sprintf(path,"%s.size",filestem); /* SAVE BASIC SIZE INFO*/
-  ifile=fopen(path,"r");
+  sprintf(path,"%s.size",filestem); /* READ BASIC SIZE INFO*/
+  ifile=fopen(path,"r"); /* text file */
   if (!ifile) {
     if (err_msg)
       sprintf(err_msg,"unable to open file %s",path);
@@ -837,8 +837,8 @@ IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
 
   CALLOC(ii,nii+1,IntervalIndex);
   if (nii>0) {
-    sprintf(path,"%s.index",filestem); /* SAVE BASIC SIZE INFO*/
-    ifile=fopen(path,"r");
+    sprintf(path,"%s.index",filestem); /* READ THE COMPACTED INDEX */
+    ifile=fopen(path,"rb"); /* binary file */
     if (!ifile) {
       if (err_msg)
 	sprintf(err_msg,"unable to open file %s",path);
@@ -851,7 +851,7 @@ IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
   CALLOC(idb_file,1,IntervalDBFile);
   if(nlists>0){
     sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
-    ifile=fopen(path,"r");
+    ifile=fopen(path,"rb"); /* binary file */
     if (!ifile) {
       if (err_msg)
 	sprintf(err_msg,"unable to open file %s",path);
@@ -879,8 +879,8 @@ IntervalDBFile *read_binary_files(char filestem[],char err_msg[],
     idb_file->nii++; /* ONE EXTRA ENTRY FOR PARTIAL BLOCK */
   idb_file->ii=ii;
   idb_file->subheader=subheader;
-  sprintf(path,"%s.idb",filestem); /* SAVE BASIC SIZE INFO*/
-  idb_file->ifile_idb=fopen(path,"r");
+  sprintf(path,"%s.idb",filestem); /* OPEN THE DATABASE */
+  idb_file->ifile_idb=fopen(path,"rb"); /* binary file */
   if (!idb_file->ifile_idb) {
     if (err_msg)
       sprintf(err_msg,"unable to open file %s",path);
@@ -924,8 +924,8 @@ int save_text_file(char filestem[],char basestem[],
   SublistHeader subheader;
   FILE *ifile=NULL;
 
-  sprintf(path,"%s.size",filestem); /* SAVE BASIC SIZE INFO*/
-  ifile=fopen(path,"r");
+  sprintf(path,"%s.size",filestem); /* READ BASIC SIZE INFO*/
+  ifile=fopen(path,"r"); /* text file */
   if (!ifile) 
     goto unable_to_open_file;
   if (5!=fscanf(ifile,"%d %d %d %d %d",&n,&ntop,&div,&nlists,&nii))
@@ -942,8 +942,8 @@ int save_text_file(char filestem[],char basestem[],
     goto write_error_occurred;
 
   if (nii>0) {
-    sprintf(path,"%s.index",filestem); /* SAVE BASIC SIZE INFO*/
-    ifile=fopen(path,"r");
+    sprintf(path,"%s.index",filestem); /* READ THE COMPACTED INDEX */
+    ifile=fopen(path,"rb"); /* binary file */
     if (!ifile) 
       goto unable_to_open_file;
     for (i=0;i<nii;i++) {
@@ -956,8 +956,8 @@ int save_text_file(char filestem[],char basestem[],
   }
 
   if(nlists>0){
-    sprintf(path,"%s.subhead",filestem); /* SAVE THE SUBHEADER LIST */
-    ifile=fopen(path,"r");
+    sprintf(path,"%s.subhead",filestem); /* READ THE SUBHEADER LIST */
+    ifile=fopen(path,"rb"); /* binary file */
     if (!ifile) 
       goto unable_to_open_file;
     for (i=0;i<nlists;i++) {
@@ -971,8 +971,8 @@ int save_text_file(char filestem[],char basestem[],
   }
 
   if (npad>0) {
-    sprintf(path,"%s.idb",filestem); /* SAVE BASIC SIZE INFO*/
-    ifile=fopen(path,"r");
+    sprintf(path,"%s.idb",filestem); /* READ THE DATABASE */
+    ifile=fopen(path,"rb"); /* binary file */
     if (!ifile) 
       goto unable_to_open_file;
     for (i=0;i<npad;i++) {
@@ -1017,7 +1017,7 @@ int text_file_to_binaries(FILE *infile,char buildpath[],char err_msg[])
 		filestem,&n,&ntop,&div,&nlists,&nii))
     goto fread_error_occurred;
   sprintf(path,"%s%s.size",buildpath,filestem); /* SAVE BASIC SIZE INFO*/
-  ifile=fopen(path,"w");
+  ifile=fopen(path,"w"); /* text file */
   if (!ifile) 
     goto unable_to_open_file;
   if (fprintf(ifile,"%d %d %d %d %d\n",n,ntop,div,nlists,nii)<0)
@@ -1031,7 +1031,7 @@ int text_file_to_binaries(FILE *infile,char buildpath[],char err_msg[])
 
   if (nii>0) {
     sprintf(path,"%s%s.index",buildpath,filestem); /* SAVE INDEX INFO*/
-    ifile=fopen(path,"w");
+    ifile=fopen(path,"wb"); /* binary file */
     if (!ifile) 
       goto unable_to_open_file;
     for (i=0;i<nii;i++) {
@@ -1047,7 +1047,7 @@ int text_file_to_binaries(FILE *infile,char buildpath[],char err_msg[])
 
   if(nlists>0){
     sprintf(path,"%s%s.subhead",buildpath,filestem); /* SAVE THE SUBHEADER LIST */
-    ifile=fopen(path,"w");
+    ifile=fopen(path,"wb"); /* binary file */
     if (!ifile) 
       goto unable_to_open_file;
     for (i=0;i<nlists;i++) {
@@ -1063,7 +1063,7 @@ int text_file_to_binaries(FILE *infile,char buildpath[],char err_msg[])
   }
 
   sprintf(path,"%s%s.idb",buildpath,filestem); /* SAVE THE ACTUAL INTERVAL DB*/
-  ifile=fopen(path,"w");
+  ifile=fopen(path,"wb"); /* binary file */
   if (!ifile) 
     goto unable_to_open_file;
   for (i=0;i<npad;i++) {
