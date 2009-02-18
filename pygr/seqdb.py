@@ -161,8 +161,8 @@ class FileDBSequence(SequenceBase):
         try:
             ifile=self.db._pureseq
         except AttributeError:
-            ifile=file(self.db.filepath+'.pureseq')
-            self.db._pureseq=ifile
+            ifile = file(self.db.filepath + '.pureseq', 'rb') # binary mode
+            self.db._pureseq = ifile # but text mode probably also OK...
         ifile.seek(self.db.seqLenDict[self.id][1]+start)
         return ifile.read(end-start)
     
