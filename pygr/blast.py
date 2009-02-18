@@ -65,16 +65,16 @@ def process_blast(cmd, seq, seqDB, al=None, seqString=None, **kwargs):
 def repeat_mask(seq, progname='RepeatMasker', opts=''):
     'Run RepeatMasker on a sequence, return lowercase-masked string'
     temppath = os.tempnam()
-    ofile = file(temppath,'w')
+    ofile = file(temppath,'w') # text file
     write_fasta(ofile, seq, reformatter=lambda x:x.upper()) # SAVE IN UPPERCASE!
     ofile.close()
     cmd = progname + ' ' + opts + ' ' + temppath
     if os.system(cmd) != 0:
         raise OSError('command %s failed' % cmd)
-    ofile = file(temppath+'.masked')
-    for id,title,seq_masked in read_fasta(ofile):
+    ifile = file(temppath+'.masked', 'rU') # text file
+    for id,title,seq_masked in read_fasta(ifile):
         break # JUST READ ONE SEQUENCE
-    ofile.close()
+    ifile.close()
     cmd = 'rm -f %s %s.*' % (temppath,temppath)
     if os.system(cmd) != 0:
         raise OSError('command ' + cmd + ' failed')
@@ -190,7 +190,7 @@ class BlastMapping(object):
         if ifile is not None: # JUST USE THE STREAM WE ALREADY HAVE OPEN
             return ifile,idFilter
         try: # DEFAULT: JUST READ THE FASTA FILE, IF IT EXISTS
-            return file(self.filepath),idFilter
+            return file(self.filepath, 'rU'),idFilter
         except IOError: # TRY READING FROM FORMATTED BLAST DATABASE
             cmd='fastacmd -D -d "%s"' % self.get_blast_index_path()
             return os.popen(cmd),NCBI_ID_PARSER #BLAST ADDS lcl| TO id

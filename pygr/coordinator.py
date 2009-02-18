@@ -143,7 +143,7 @@ class FileDict(dict):
     "read key,value pairs as WS-separated lines, with objclass(value) conversion"
     def __init__(self,filename,objclass=str):
         dict.__init__(self)
-        f=file(filename)
+        f=file(filename, 'rU') # text file
         for line in f:
             key=line.split()[0] # GET THE 1ST ARGUMENT
             val=line[len(key):].lstrip().rstrip() # GET THE REST, STRIP OUTER WS
@@ -693,7 +693,7 @@ class Coordinator(object):
         self.clients_initializing={}
         self.initialization_errors={}
         try: # LOAD LIST OF IDs ALREADY SUCCESSFULLY PROCESSED, IF ANY
-            f=file(name+'.success','r')
+            f=file(name+'.success','rU') # text file
             for line in f:
                 self.already_done[line.strip()]=None
             f.close()

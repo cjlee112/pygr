@@ -274,7 +274,7 @@ def read_seq_dict(pathstem,trypath=None):
   import seqdb,os
   if os.access(pathstem+'.seqDictP',os.R_OK):
     from pygr.Data import loads
-    ifile = file(pathstem+'.seqDictP')
+    ifile = file(pathstem+'.seqDictP', 'rb') # pickle is binary file!
     try: # LOAD FROM pygr.Data-AWARE PICKLE FILE
       seqDict = loads(ifile.read())
     finally:
@@ -292,7 +292,7 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
 def save_seq_dict(pathstem,seqDict):
   'save seqDict to a pygr.Data-aware pickle file'
   from pygr.Data import dumps
-  ofile = file(pathstem+'.seqDictP','w')
+  ofile = file(pathstem+'.seqDictP','wb') # pickle is binary file!
   try:
     ofile.write(dumps(seqDict))
   finally:
