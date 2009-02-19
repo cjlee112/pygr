@@ -218,8 +218,36 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
     return name,cursor
 
 
+def mysql_table_schema(self):
+    'retrieve table schema from a MySQL database, save on self'
+    self.clear_schema() # reset settings and dictionaries
+    self.cursor.execute('describe %s' % self.name) # get info about columns
+    columns = self.cursor.fetchall()
+    self.cursor.execute('select * from %s limit 1' % self.name) # descriptions
+    for icol,c in enumerate(columns):
+        field = c[0]
+        self.colname.append(field) # list of columns in same order as table
+        if c[3] == "PRI": # record as primary key
+            if self.primary_key is None:
+                self.primary_key = field
+            else:
+                try:
+                    self.primary_key.append(field)
+                except AttributeError:
+                    self.primary_key = [self.primary_key,field]
+            if c[1][:3].lower() == 'int':
+                self.usesIntID = True
+            else:
+                self.usesIntID = False
+        elif c[3] == "MUL":
+            self.indexed[field] = icol
+        self.description[field] = self.cursor.description[icol]
+        self.columnType[field] = c[1] # SQL COLUMN TYPE
+
+
 class SQLTableBase(object, UserDict.DictMixin):
     "Store information about an SQL table as dict keyed by primary key"
+    _schemaModuleDict = {'MySQLdb.cursors':mysql_table_schema}
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
@@ -234,22 +262,13 @@ class SQLTableBase(object, UserDict.DictMixin):
             if serverInfo is not None: # get cursor from serverInfo
                 cursor = serverInfo.cursor()
             else: # try to read connection info from name or config file
-                name,cursor=getNameCursor(name,**kwargs)
+                name,cursor = getNameCursor(name,**kwargs)
         if createTable is not None: # RUN COMMAND TO CREATE THIS TABLE
             if dropIfExists: # get rid of any existing table
                 cursor.execute('drop table if exists ' + name)
             cursor.execute(createTable)
-        cursor.execute('describe %s' % name)
-        columns=cursor.fetchall()
-        self.cursor=cursor
-        self.name=name
-        self.primary_key=None
-        self.indexed={}
-        self.data={}
-        self.description={}
-        self.colname = []
-        self.columnType = {}
-        self.usesIntID = None
+        self.cursor = cursor
+        self.name = name
         if graph is not None:
             self.graph = graph
         if maxCache is not None:
@@ -257,32 +276,15 @@ class SQLTableBase(object, UserDict.DictMixin):
         if arraysize is not None:
             self.arraysize = arraysize
             cursor.arraysize = arraysize
-        cursor.execute('select * from %s limit 1' % name)
-        for icol,c in enumerate(columns):
-            field=c[0]
-            self.colname.append(field)
-            if c[3]=="PRI":
-                if self.primary_key is None:
-                    self.primary_key = field
-                else:
-                    try:
-                        self.primary_key.append(field)
-                    except AttributeError:
-                        self.primary_key = [self.primary_key,field]
-                if c[1][:3].lower()=='int':
-                    self.usesIntID = True
-                else:
-                    self.usesIntID = False
-            elif c[3]=="MUL":
-                self.indexed[field]=icol
-            self.data[field]=icol
-            self.description[field]=cursor.description[icol]
-            self.columnType[field] = c[1] # SQL COLUMN TYPE
+        self.get_table_schema() # get schema of columns to serve as attrs
+        self.data = {} # map of all attributes, including aliases
+        for icol,field in enumerate(self.colname):
+            self.data[field] = icol # 1st add mappings to columns
         try:
             self.data['id']=self.data[self.primary_key]
         except (KeyError,TypeError):
             pass
-        if hasattr(self,'_attr_alias'): # FINALLY, APPLY ANY ATTRIBUTE ALIASES FOR THIS CLASS
+        if hasattr(self,'_attr_alias'): # apply attribute aliases for this class
             self.addAttrAlias(False,**self._attr_alias)
         self.objclass(itemClass) # NEED TO SUBCLASS OUR ITEM CLASS
         if itemSliceClass is not None:
@@ -312,6 +314,27 @@ class SQLTableBase(object, UserDict.DictMixin):
     def __repr__(self):
         return '<SQL table '+self.name+'>'
 
+    def clear_schema(self):
+        'reset all schema information for this table'
+        self.description={}
+        self.colname = []
+        self.columnType = {}
+        self.usesIntID = None
+        self.primary_key = None
+        self.indexed = {}
+    def get_table_schema(self):
+        'run the right schema function based on type of db server connection'
+        try:
+            modname = self.cursor.__class__.__module__
+        except AttributeError:
+            raise ValueError('no cursor object or module information!')
+        try:
+            schema_func = self._schemaModuleDict[modname]
+        except KeyError:
+            raise KeyError('''unknown db module: %s. Use _schemaModuleDict
+            attribute to supply a method for obtaining table schema
+            for this module''' % modname)
+        schema_func(self) # run the schema function
     def _attrSQL(self,attr,sqlColumn=False,columnNumber=False):
         "Translate python attribute name to appropriate SQL expression"
         try: # MAKE SURE THIS ATTRIBUTE CAN BE MAPPED TO DATABASE EXPRESSION
