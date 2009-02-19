@@ -226,7 +226,7 @@ def mysql_table_schema(self):
     self.cursor.execute('select * from %s limit 1' % self.name) # descriptions
     for icol,c in enumerate(columns):
         field = c[0]
-        self.colname.append(field) # list of columns in same order as table
+        self.columnName.append(field) # list of columns in same order as table
         if c[3] == "PRI": # record as primary key
             if self.primary_key is None:
                 self.primary_key = field
@@ -244,10 +244,33 @@ def mysql_table_schema(self):
         self.description[field] = self.cursor.description[icol]
         self.columnType[field] = c[1] # SQL COLUMN TYPE
 
+def sqlite_table_schema(self):
+    'retrieve table schema from a sqlite3 database, save on self'
+    self.clear_schema() # reset settings and dictionaries
+    self.cursor.execute('PRAGMA table_info("%s")' % self.name)
+    columns = self.cursor.fetchall()
+    self.cursor.execute('select * from %s limit 1' % self.name) # descriptions
+    for icol,c in enumerate(columns):
+        field = c[1]
+        self.columnName.append(field) # list of columns in same order as table
+        self.description[field] = self.cursor.description[icol]
+        self.columnType[field] = c[2] # SQL COLUMN TYPE
+    self.cursor.execute('select name from sqlite_master where tbl_name="%s" and type="index" and sql is null' % self.name) # get primary key / unique indexes
+    for indexname in self.cursor.fetchall(): # search indexes for primary key
+        self.cursor.execute('PRAGMA index_info("%s")' % indexname)
+        l = self.cursor.fetchall() # get list of columns in this index
+        if len(l) == 1: # assume 1st single-column unique index is primary key!
+            self.primary_key = l[0][2]
+            if self.columnType[self.primary_key] == 'int':
+                self.usesIntID = True
+            else:
+                self.usesIntID = False
+            break # done searching for primary key!
 
 class SQLTableBase(object, UserDict.DictMixin):
     "Store information about an SQL table as dict keyed by primary key"
-    _schemaModuleDict = {'MySQLdb.cursors':mysql_table_schema}
+    _schemaModuleDict = {'MySQLdb.cursors':mysql_table_schema,
+                         'sqlite3':sqlite_table_schema}
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
@@ -278,7 +301,7 @@ class SQLTableBase(object, UserDict.DictMixin):
             cursor.arraysize = arraysize
         self.get_table_schema() # get schema of columns to serve as attrs
         self.data = {} # map of all attributes, including aliases
-        for icol,field in enumerate(self.colname):
+        for icol,field in enumerate(self.columnName):
             self.data[field] = icol # 1st add mappings to columns
         try:
             self.data['id']=self.data[self.primary_key]
@@ -317,7 +340,7 @@ class SQLTableBase(object, UserDict.DictMixin):
     def clear_schema(self):
         'reset all schema information for this table'
         self.description={}
-        self.colname = []
+        self.columnName = []
         self.columnType = {}
         self.usesIntID = None
         self.primary_key = None
@@ -344,10 +367,10 @@ class SQLTableBase(object, UserDict.DictMixin):
                                  % (attr,self.name))
         if sqlColumn: # ENSURE THAT THIS TRULY MAPS TO A COLUMN NAME IN THE DB
             try: # CHECK IF field IS COLUMN NUMBER
-                return self.colname[field] # RETURN SQL COLUMN NAME
+                return self.columnName[field] # RETURN SQL COLUMN NAME
             except TypeError:
                 try: # CHECK IF field IS SQL COLUMN NAME
-                    return self.colname[self.data[field]] # THIS WILL JUST RETURN field...
+                    return self.columnName[self.data[field]] # THIS WILL JUST RETURN field...
                 except (KeyError,TypeError):
                     raise AttributeError('attribute %s does not map to an SQL column in %s'
                                          % (attr,self.name))
