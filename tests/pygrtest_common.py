@@ -21,7 +21,7 @@ os_info = distutils.util.get_platform()
 
 py_ver_tup = platform.python_version_tuple()
 # NOTE: py_ver_tup contains ints in Python 2.6
-py_ver_tup = [ str(x) for x in py_ver_tup[:2] ]  
+py_ver_tup = [ str(x) for x in py_ver_tup[:2] ]
 ver = ".".join(py_ver_tup)
 
 build_dir = 'build/lib.%s-%s/' % (os_info, ver,)

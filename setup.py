@@ -25,8 +25,8 @@ import pygr
 PYGR_NAME = "pygr"
 PYGR_VERSION = pygr.__version__
 
-if sys.version_info < (2, 4):
-    error( 'pygr requires python 2.4 or higher' )
+if sys.version_info < (2, 3):
+    error( 'pygr requires python 2.3 or higher' )
 
 CLASSIFIERS = """
 Development Status :: 5 - Production/Stable
@@ -78,10 +78,6 @@ def main():
             Extension( 'pygr.cdict',  cdict_src ),
             Extension( 'pygr.cnestedlist', nested_src), 
         ],
-
-        # this is present in python 2.4 only
-        package_data = { 'pygr': ['data/library.zip', 'data/fetch-sources.txt' ] },
-
 
         cmdclass = cmdclass,
      )
