@@ -1,8 +1,19 @@
 
-import sys, os, string
+import ConfigParser, sys, os, string
 
-seqDir = '/result/pygr_megatest/seq_data' # SEQDB.BLASTDB
-msaDir = '/result/pygr_megatest/maf_test' # PRE BUILT NLMSA
+config = ConfigParser.ConfigParser({'testOutputBaseDir' : '.', 'smallSampleKey': ''})
+config.read([ os.path.expanduser('~/.pygrrc'), os.path.expanduser('~/pygr.cfg'), 'pygrrc', 'pygr.cfg' ])	# FIXME: make this OS-dependent?
+msaDir = config.get('megatests_dm2', 'msaDir')
+seqDir = config.get('megatests_dm2', 'seqDir')
+smallSampleKey = config.get('megatests_dm2', 'smallSampleKey')
+testInputDB = config.get('megatests', 'testInputDB')
+testInputDir = config.get('megatests', 'testInputDir')
+testOutputBaseDir = config.get('megatests', 'testOutputBaseDir')
+
+if smallSampleKey:
+    smallSamplePostfix = '_' + smallSampleKey
+else:
+    smallSamplePostfix = ''
 
 ## msaDir CONTAINS PRE-BUILT NLMSA
 ## seqDir CONTAINS GENOME ASSEMBLIES AND THEIR SEQDB FILES
@@ -10,7 +21,7 @@ msaDir = '/result/pygr_megatest/maf_test' # PRE BUILT NLMSA
 ##        exonAnnotFileName = 'Annotation_ConservedElement_Exons_dm2.txt'
 ##        intronAnnotFileName = 'Annotation_ConservedElement_Introns_dm2.txt'
 ##        stopAnnotFileName = 'Annotation_ConservedElement_Stop_dm2.txt'
-## testDir = os.path.join('/usr/tmp/deepreds', 'TEST_' + ''.join(tmpList)) SHOULD BE DELETED IF YOU WANT TO RUN IN '.'
+## testDir = os.path.join(testOutputBaseDir, 'TEST_' + ''.join(tmpList)) SHOULD BE DELETED IF YOU WANT TO RUN IN '.'
 
 # DIRECTIONARY FOR DOC STRING OF SEQDB
 docStringDict = {
@@ -41,7 +52,7 @@ class PygrBuildNLMSAMegabase(object):
         import random
         tmpList = [c for c in 'PygrBuildNLMSAMegabase']
         random.shuffle(tmpList)
-        testDir = os.path.join('/usr/tmp/deepreds', 'TEST_' + ''.join(tmpList)) # FOR TEST, SHOULD BE DELETED
+        testDir = os.path.join(testOutputBaseDir, 'TEST_' + ''.join(tmpList)) # FOR TEST, SHOULD BE DELETED
         if testDir is None: testDir = 'TEST_' + ''.join(tmpList) # NOT SPECIFIED, USE CURRENT DIRECTORY
         try:
             os.mkdir(testDir)
@@ -95,8 +106,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                                   gene_id = 3, start = 4, stop = 5))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'refGene_exonAnnot_dm2'), 'w', \
             pairwiseMode = True, bidirectional = False)
-        #for lines in open('refGene_exonAnnot_dm2.txt', 'r').xreadlines():
-        for lines in open('refGene_exonAnnot_chrYh_dm2.txt', 'r').xreadlines():
+        for lines in open(os.path.join(testInputDir, 'refGene_exonAnnot%s_dm2.txt' % smallSamplePostfix), 'r').xreadlines():
             row = [x for x in lines.split('\t')] # CONVERT TO LIST SO MUTABLE
             row[1] = int(row[1]) # CONVERT FROM STRING TO INTEGER
             exon_slices[row[1]] = row
@@ -120,8 +130,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                                   gene_id = 3, start = 4, stop = 5))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'refGene_spliceAnnot_dm2'), 'w', \
             pairwiseMode = True, bidirectional = False)
-        #for lines in open('refGene_spliceAnnot_dm2.txt', 'r').xreadlines():
-        for lines in open('refGene_spliceAnnot_chrYh_dm2.txt', 'r').xreadlines():
+        for lines in open(os.path.join(testInputDir, 'refGene_spliceAnnot%s_dm2.txt' % smallSamplePostfix), 'r').xreadlines():
             row = [x for x in lines.split('\t')] # CONVERT TO LIST SO MUTABLE
             row[1] = int(row[1]) # CONVERT FROM STRING TO INTEGER
             splice_slices[row[1]] = row
@@ -145,8 +154,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                                   gene_id = 3, start = 4, stop = 5))
         msa = cnestedlist.NLMSA(os.path.join(self.path, 'phastConsElements15way_dm2'), 'w', \
             pairwiseMode = True, bidirectional = False)
-        #for lines in open('phastConsElements15way_dm2.txt', 'r').xreadlines():
-        for lines in open('phastConsElements15way_chrYh_dm2.txt', 'r').xreadlines():
+        for lines in open(os.path.join(testInputDir, 'phastConsElements15way%s_dm2.txt' % smallSamplePostfix), 'r').xreadlines():
             row = [x for x in lines.split('\t')] # CONVERT TO LIST SO MUTABLE
             row[1] = int(row[1]) # CONVERT FROM STRING TO INTEGER
             ucsc_slices[row[1]] = row
@@ -177,18 +185,18 @@ class Build_Test(PygrBuildNLMSAMegabase):
         # OPEN DM2_MULTIZ15WAY NLMSA
         msa = cnestedlist.NLMSA(os.path.join(msaDir, 'dm2_multiz15way'), 'r', trypath = [seqDir])
 
-        #exonAnnotFileName = 'Annotation_ConservedElement_Exons_dm2.txt'
-        #intronAnnotFileName = 'Annotation_ConservedElement_Introns_dm2.txt'
-        exonAnnotFileName = 'Annotation_ConservedElement_Exons_chrYh_dm2.txt' # FOR TESTING
-        intronAnnotFileName = 'Annotation_ConservedElement_Introns_chrYh_dm2.txt' # FOR TESTING
+        exonAnnotFileName = os.path.join(testInputDir, 'Annotation_ConservedElement_Exons%s_dm2.txt' % smallSamplePostfix)
+        intronAnnotFileName = os.path.join(testInputDir, 'Annotation_ConservedElement_Introns%s_dm2.txt' % smallSamplePostfix)
         newexonAnnotFileName = os.path.join(self.path, 'new_Exons_dm2.txt')
         newintronAnnotFileName = os.path.join(self.path, 'new_Introns_dm2.txt')
         tmpexonAnnotFileName = self.copyFile(exonAnnotFileName)
         tmpintronAnnotFileName = self.copyFile(intronAnnotFileName)
 
-        chrList = dm2.seqLenDict.keys()
-        chrList.sort()
-        chrList = ['chrYh'] # FOR TESTING
+        if smallSampleKey:
+            chrList = [ smallSampleKey ]
+        else:
+            chrList = dm2.seqLenDict.keys()
+            chrList.sort()
 
         outfile = open(newexonAnnotFileName, 'w')
         for chrid in chrList:
@@ -304,8 +312,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         from pygr import seqdb, cnestedlist, sqlgraph
         dm2 = pygr.Data.getResource('TEST.Seq.Genome.dm2')
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS: MYSQL VERSION
-        #exon_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_exonAnnot_dm2',
-        exon_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_exonAnnot_chrYh_dm2',
+        exon_slices = sqlgraph.SQLTableClustered('%s.pygr_refGene_exonAnnot%s_dm2' % ( testInputDB, smallSamplePostfix ),
             clusterKey = 'chromosome', maxCache = 0)
         exon_db = seqdb.AnnotationDB(exon_slices, dm2, sliceAttrDict = dict(id = 'chromosome', \
             gene_id = 'name', exon_id = 'exon_id'))
@@ -324,8 +331,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         exon_schema.__doc__ = 'SQL Exon Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.SQL.dm2.exons', exon_schema)
         # BUILD ANNOTATION DATABASE FOR REFSEQ SPLICES: MYSQL VERSION
-        #splice_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_spliceAnnot_dm2',
-        splice_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_refGene_spliceAnnot_chrYh_dm2',
+        splice_slices = sqlgraph.SQLTableClustered('%s.pygr_refGene_spliceAnnot%s_dm2' % ( testInputDB, smallSamplePostfix ),
             clusterKey = 'chromosome', maxCache = 0)
         splice_db = seqdb.AnnotationDB(splice_slices, dm2, sliceAttrDict = dict(id = 'chromosome', \
             gene_id = 'name', splice_id = 'splice_id'))
@@ -344,8 +350,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         splice_schema.__doc__ = 'SQL Splice Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.SQL.dm2.splices', splice_schema)
         # BUILD ANNOTATION DATABASE FOR MOST CONSERVED ELEMENTS FROM UCSC: MYSQL VERSION
-        #ucsc_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_phastConsElements15way_dm2',
-        ucsc_slices = sqlgraph.SQLTableClustered('PYGRDB_JAN06.pygr_phastConsElements15way_chrYh_dm2',
+        ucsc_slices = sqlgraph.SQLTableClustered('%s.pygr_phastConsElements15way%s_dm2' % ( testInputDB, smallSamplePostfix ),
             clusterKey = 'chromosome', maxCache = 0)
         ucsc_db = seqdb.AnnotationDB(ucsc_slices, dm2, sliceAttrDict = dict(id = 'chromosome', \
             gene_id = 'name', ucsc_id = 'ucsc_id'))
@@ -378,18 +383,18 @@ class Build_Test(PygrBuildNLMSAMegabase):
         # OPEN DM2_MULTIZ15WAY NLMSA
         msa = cnestedlist.NLMSA(os.path.join(msaDir, 'dm2_multiz15way'), 'r', trypath = [seqDir])
 
-        #exonAnnotFileName = 'Annotation_ConservedElement_Exons_dm2.txt'
-        #intronAnnotFileName = 'Annotation_ConservedElement_Introns_dm2.txt'
-        exonAnnotFileName = 'Annotation_ConservedElement_Exons_chrYh_dm2.txt' # FOR TESTING
-        intronAnnotFileName = 'Annotation_ConservedElement_Introns_chrYh_dm2.txt' # FOR TESTING
+        exonAnnotFileName = os.path.join(testInputDir, 'Annotation_ConservedElement_Exons%s_dm2.txt' % smallSamplePostfix)
+        intronAnnotFileName = os.path.join(testInputDir, 'Annotation_ConservedElement_Introns%s_dm2.txt' % smallSamplePostfix)
         newexonAnnotFileName = os.path.join(self.path, 'new_Exons_dm2.txt')
         newintronAnnotFileName = os.path.join(self.path, 'new_Introns_dm2.txt')
         tmpexonAnnotFileName = self.copyFile(exonAnnotFileName)
         tmpintronAnnotFileName = self.copyFile(intronAnnotFileName)
 
-        chrList = dm2.seqLenDict.keys()
-        chrList.sort()
-        chrList = ['chrYh'] # FOR TESTING
+        if smallSampleKey:
+            chrList = [ smallSampleKey ]
+        else:
+            chrList = dm2.seqLenDict.keys()
+            chrList.sort()
 
         outfile = open(newexonAnnotFileName, 'w')
         for chrid in chrList:

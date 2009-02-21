@@ -1,0 +1,18 @@
+[megatests]
+testInputDB = PYGRDB_JAN06
+testInputDir = /result/pygr_megatest
+testOutputBaseDir = /usr/tmp/deepreds
+
+[megatests_dm2]
+smallSampleKey = chrYh
+mafDir = /result/pygr_megatest/maf_data
+msaDir = /result/pygr_megatest/maf_test
+seqDir = /result/pygr_megatest/seq_data
+
+[megatests_hg18]
+smallSampleKey = chrY
+axtDir = /result/pygr_megatest/axt_data
+mafDir = /result/pygr_megatest/maf_data3
+msaDir = /result/pygr_megatest/maf_test3
+seqDir = /result/pygr_megatest/seq_data3
+
