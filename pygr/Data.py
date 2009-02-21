@@ -5,7 +5,6 @@ import shelve
 from mapping import Collection,Mapping,Graph
 from classutil import standard_invert
 import re
-import string
 
 
 class OneTimeDescriptor(object):
@@ -426,14 +425,8 @@ where <LAYERNAME> is the layer name you want to assign it.
         'return list or dict of resources matching the specified string'
 
         if matchType == 'r':
-            pattern = re.compile(pattern)
-            self.cursor.execute('select distinct pygr_id from %s' % self.tablename)
-            ids=[] 
-            for l in self.cursor.fetchall():
-                if pattern.search(l[0]):
-                    ids.append(l[0])
-            self.cursor.execute('select pygr_id,docstring,user,creation_time,pickle_size from %s where pygr_id in (%s)'
-                           % (self.tablename, "'" + string.join(ids, "','") + "'" ))
+            self.cursor.execute('select pygr_id,docstring,user,creation_time,pickle_size from %s where pygr_id regexp %%s'
+                            % self.tablename, (pattern, ))
         elif matchType == 'p':
             self.cursor.execute('select pygr_id,docstring,user,creation_time,pickle_size from %s where pygr_id like %%s'
                             % self.tablename,(pattern+'%',))
