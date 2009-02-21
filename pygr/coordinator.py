@@ -1,6 +1,7 @@
 from __future__ import generators
 import os
 import time
+import thread
 import sys
 import xmlrpclib
 import traceback
@@ -283,10 +284,17 @@ class XMLRPCServerBase(object):
         except (KeyError,AttributeError):
             return '' # RETURN FAILURE CODE
         return m(*args) # RUN THE OBJECT METHOD
-    def serve_forever(self):
-        'launch the XMLRPC service.  Never exits.'
-        detach_as_demon_process(self)
-        serve_forever(self)
+    def serve_forever(self, demonize = True):
+        'launch the XMLRPC service.  Never exits if demonize == True.'
+        if demonize == True:
+            print "Running as a daemon"
+            detach_as_demon_process(self)
+            serve_forever(self)
+        else:
+            print "Running in the background of active session"
+            if not hasattr(sys, 'ps1'):		# FIXME: check if -i has been given to python
+                print "Warning: Running non-interactively without daemonising means the server will die right after starting. This is probably not what you want."
+            thread.start_new_thread(serve_forever, (self, ))
     def register(self,url=None,name='index',server=None):
         'register our server with the designated index server'
         data=self.registrationData # RAISE ERROR IF NO DATA TO REGISTER...
