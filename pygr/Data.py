@@ -4,6 +4,8 @@ from StringIO import StringIO
 import shelve
 from mapping import Collection,Mapping,Graph
 from classutil import standard_invert
+import re
+import string
 
 
 class OneTimeDescriptor(object):
@@ -229,12 +231,14 @@ class ResourceDBServer(object):
         except KeyError:
             pass
         return ''  # DUMMY RETURN VALUE FOR XMLRPC
-    def dir(self,prefix,asDict=False,download=False):
-        'return list or dict of resources beginning with the specified prefix'
+    def dir(self,pattern,matchType,asDict=False,download=False):
+        'return list or dict of resources matching the specified string'
         db,docs = self.get_db(download)
+        if matchType == 'r':
+            pattern = re.compile(pattern)
         l=[]
         for name in db: # FIND ALL ITEMS WITH MATCHING NAME
-            if name.startswith(prefix):
+            if matchType == 'p' and name.startswith(pattern) or matchType == 'r' and pattern.search(name):
                 l.append(name)
         if asDict: # RETURN INFO DICT FOR EACH ITEM
             d = {}
@@ -292,12 +296,12 @@ class ResourceDBClient(object):
         for schemaDict in d.values():
             return schemaDict # HAND BACK FIRST SCHEMA WE FIND
         raise KeyError
-    def dir(self,prefix,asDict=False,download=False):
-        'return list or dict of resources starting with prefix'
+    def dir(self,pattern,matchType,asDict=False,download=False):
+        'return list or dict of resources matching the specified string'
         if download:
-            return self.server.dir(prefix,asDict,download)
+            return self.server.dir(pattern,matchType,asDict,download)
         else:
-            return self.server.dir(prefix,asDict)
+            return self.server.dir(pattern,matchType,asDict)
     __setitem__ = raise_illegal_save # RAISE USEFUL EXPLANATORY ERROR MESSAGE
     __delitem__ = raise_illegal_save
     setschema = raise_illegal_save
@@ -418,9 +422,28 @@ where <LAYERNAME> is the layer name you want to assign it.
         for attr,objData in self.cursor.fetchall():
             d[attr]=self.finder.loads(objData)
         return d
-    def dir(self,prefix,asDict=False,download=False):
-        self.cursor.execute('select pygr_id,docstring,user,creation_time,pickle_size from %s where pygr_id like %%s'
-                            % self.tablename,(prefix+'%',))
+    def dir(self,pattern,matchType,asDict=False,download=False):
+        'return list or dict of resources matching the specified string'
+
+        if matchType == 'r':
+            pattern = re.compile(pattern)
+            self.cursor.execute('select distinct pygr_id from %s' % self.tablename)
+            ids=[] 
+            for l in self.cursor.fetchall():
+                if pattern.search(l[0]):
+                    ids.append(l[0])
+            self.cursor.execute('select pygr_id,docstring,user,creation_time,pickle_size from %s where pygr_id in (%s)'
+                           % (self.tablename, "'" + string.join(ids, "','") + "'" ))
+        elif matchType == 'p':
+            self.cursor.execute('select pygr_id,docstring,user,creation_time,pickle_size from %s where pygr_id like %%s'
+                            % self.tablename,(pattern+'%',))
+        else:
+            # Exit now to avoid fetching rows with no query executed
+            if asDict:
+                return {}
+            else:
+                return []
+
         d={}
         for l in self.cursor.fetchall():
             d[l[0]] = dict(__doc__=l[1],user=l[2],creation_time=l[3],pickle_size=l[4])
@@ -510,11 +533,13 @@ class ResourceDBShelve(object):
                 pass
         finally:
             self.reopen('r') # REOPEN READ-ONLY
-    def dir(self,prefix,asDict=False,download=False):
-        'generate all item IDs starting with this prefix'
+    def dir(self,pattern,matchType,asDict=False,download=False):
+        'generate all item IDs matching the specified pattern'
+        if matchType == 'r':
+            pattern = re.compile(pattern)
         l=[]
         for name in self.db:
-            if name.startswith(prefix):
+            if matchType == 'p' and name.startswith(pattern) or matchType == 'r' and pattern.search(name):
                 l.append(name)
         if asDict:
             d={}
@@ -1027,11 +1052,11 @@ so report the reproducible steps to this error message as a bug report.''' % res
             if attr.startswith('-'): # A SCHEMA OBJECT
                 obj.delschema(db) # DELETE ITS SCHEMA RELATIONS
             db.delschema(id,attr) # DELETE THIS ATTRIBUTE SCHEMA RULE
-    def dir(self,prefix,layer=None,asDict=False,download=False):
-        'get list or dict of resources beginning with the specified string'
+    def dir(self,pattern='',matchType='p',layer=None,asDict=False,download=False):
+        'get list or dict of resources matching the specified string'
         if layer is not None:
             db=self.getLayer(layer)
-            return db.dir(prefix,asDict=asDict,download=download)
+            return db.dir(pattern,matchType,asDict=asDict,download=download)
         d={}
         def iteritems(s):
             try:
@@ -1039,7 +1064,7 @@ so report the reproducible steps to this error message as a bug report.''' % res
             except AttributeError:
                 return iter([(x,None) for x in s])
         for db in self.resourceDBiter():
-            for k,v in iteritems(db.dir(prefix,asDict=asDict,download=download)):
+            for k,v in iteritems(db.dir(pattern,matchType,asDict=asDict,download=download)):
                 if k[0].isalpha() and k not in d: # ALLOW EARLIER DB TO TAKE PRECEDENCE
                     d[k]=v
         if asDict:
