@@ -50,12 +50,15 @@ class ReadOnlyDescriptor(object):
 
 def select_from_row(row, what):
     "return value from SQL expression applied to this row"
-    if row.db.cursor.execute('select %s from %s where %s=%%s'
-                             % (what,row.db.name,row.db.primary_key),
-                             (row.id,)) != 1:
+    sql,params = row.db._format_query('select %s from %s where %s=%%s limit 2'
+                                      % (what,row.db.name,row.db.primary_key),
+                                      (row.id,))
+    row.db.cursor.execute(sql, params)
+    t = row.db.cursor.fetchmany(2) # get at most two rows
+    if len(t) != 1:
         raise KeyError('%s[%s].%s not found, or not unique'
                        % (row.db.name,str(row.id),what))
-    return row.db.cursor.fetchall()[0][0] #return the single field we requested
+    return t[0][0] #return the single field we requested
 
 def init_row_subclass(cls, db):
     'add descriptors for db attributes'
@@ -217,9 +220,14 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
     cursor = connect(**kwargs).cursor()
     return name,cursor
 
+_mysqlMacros = dict(IGNORE='ignore')
 
-def mysql_table_schema(self):
+def mysql_table_schema(self, analyzeSchema=True):
     'retrieve table schema from a MySQL database, save on self'
+    import MySQLdb
+    self._format_query = SQLFormatDict(MySQLdb.paramstyle, _mysqlMacros)
+    if not analyzeSchema:
+        return
     self.clear_schema() # reset settings and dictionaries
     self.cursor.execute('describe %s' % self.name) # get info about columns
     columns = self.cursor.fetchall()
@@ -244,8 +252,14 @@ def mysql_table_schema(self):
         self.description[field] = self.cursor.description[icol]
         self.columnType[field] = c[1] # SQL COLUMN TYPE
 
-def sqlite_table_schema(self):
+_sqliteMacros = dict(IGNORE='or ignore')
+
+def sqlite_table_schema(self, analyzeSchema=True):
     'retrieve table schema from a sqlite3 database, save on self'
+    import sqlite3
+    self._format_query = SQLFormatDict(sqlite3.paramstyle, _sqliteMacros)
+    if not analyzeSchema:
+        return
     self.clear_schema() # reset settings and dictionaries
     self.cursor.execute('PRAGMA table_info("%s")' % self.name)
     columns = self.cursor.fetchall()
@@ -261,16 +275,95 @@ def sqlite_table_schema(self):
         l = self.cursor.fetchall() # get list of columns in this index
         if len(l) == 1: # assume 1st single-column unique index is primary key!
             self.primary_key = l[0][2]
-            if self.columnType[self.primary_key] == 'int':
-                self.usesIntID = True
-            else:
-                self.usesIntID = False
             break # done searching for primary key!
+    if self.primary_key is None: # grrr, INTEGER PRIMARY KEY handled differently
+        self.cursor.execute('select sql from sqlite_master where tbl_name="%s" and type="table"' % self.name)
+        sql = self.cursor.fetchall()[0][0]
+        for columnSQL in sql[sql.index('(') + 1 :].split(','):
+            if 'primary key' in columnSQL.lower(): # must be the primary key!
+                col = columnSQL.split()[0] # get column name
+                if col in self.columnType:
+                    self.primary_key = col
+                    break # done searching for primary key!
+                else:
+                    raise ValueError('unknown primary key %s in table %s'
+                                     % (col,self.name))
+    if self.primary_key is not None: # check its type
+        if self.columnType[self.primary_key] == 'int' or \
+               self.columnType[self.primary_key] == 'integer':
+            self.usesIntID = True
+        else:
+            self.usesIntID = False
+
+class SQLFormatDict(object):
+    '''Perform SQL keyword replacements for maintaining compatibility across
+    a wide range of SQL backends.  Uses Python dict-based string format
+    function to do simple string replacements, and also to convert
+    params list to the paramstyle required for this interface.
+    Create by passing a dict of macros and the db-api paramstyle:
+    sfd = SQLFormatDict("qmark", substitutionDict)
+
+    Then transform queries+params as follows; input should be "format" style:
+    sql,params = sfd("select * from foo where id=%s and val=%s", (myID,myVal))
+    cursor.execute(sql, params)
+    '''
+    _paramFormats = dict(pyformat='%%(%d)s', numeric=':%d', named=':%d',
+                         qmark='(ignore)', format='(ignore)')
+    def __init__(self, paramstyle, substitutionDict={}):
+        self.substitutionDict = substitutionDict.copy()
+        self.paramstyle = paramstyle
+        self.paramFormat = self._paramFormats[paramstyle]
+        self.makeDict = (paramstyle == 'pyformat' or paramstyle == 'named')
+        if paramstyle == 'qmark': # handle these as simple substitution
+            self.substitutionDict['?'] = '?'
+        elif paramstyle == 'format':
+            self.substitutionDict['?'] = '%s'
+    def __getitem__(self, k):
+        'apply correct substitution for this SQL interface'
+        try:
+            return self.substitutionDict[k] # apply our substitutions
+        except KeyError:
+            pass
+        if k == '?': # sequential parameter
+            s = self.paramFormat % self.iparam
+            self.iparam += 1 # advance to the next parameter
+            return s
+        raise KeyError('unknown macro: %s' % k)
+    def __call__(self, sql, paramList):
+        'returns corrected sql,params for this interface'
+        self.iparam = 1 # DB-ABI param indexing begins at 1
+        sql = sql.replace('%s', '%(?)s') # convert format into pyformat
+        s = sql % self # apply all %(x)s replacements in sql
+        if self.makeDict: # construct a params dict
+            paramDict = {}
+            for i,param in enumerate(paramList):
+                paramDict[str(i + 1)] = param #DB-ABI param indexing begins at 1
+            return s,paramDict
+        else: # just return the original params list
+            return s,paramList
+
+def get_table_schema(self, analyzeSchema=True):
+    'run the right schema function based on type of db server connection'
+    try:
+        modname = self.cursor.__class__.__module__
+    except AttributeError:
+        raise ValueError('no cursor object or module information!')
+    try:
+        schema_func = self._schemaModuleDict[modname]
+    except KeyError:
+        raise KeyError('''unknown db module: %s. Use _schemaModuleDict
+        attribute to supply a method for obtaining table schema
+        for this module''' % modname)
+    schema_func(self, analyzeSchema) # run the schema function
+
+
+_schemaModuleDict = {'MySQLdb.cursors':mysql_table_schema,
+                     'sqlite3':sqlite_table_schema}
 
 class SQLTableBase(object, UserDict.DictMixin):
     "Store information about an SQL table as dict keyed by primary key"
-    _schemaModuleDict = {'MySQLdb.cursors':mysql_table_schema,
-                         'sqlite3':sqlite_table_schema}
+    _schemaModuleDict = _schemaModuleDict # default module list
+    get_table_schema = get_table_schema
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
@@ -345,19 +438,6 @@ class SQLTableBase(object, UserDict.DictMixin):
         self.usesIntID = None
         self.primary_key = None
         self.indexed = {}
-    def get_table_schema(self):
-        'run the right schema function based on type of db server connection'
-        try:
-            modname = self.cursor.__class__.__module__
-        except AttributeError:
-            raise ValueError('no cursor object or module information!')
-        try:
-            schema_func = self._schemaModuleDict[modname]
-        except KeyError:
-            raise KeyError('''unknown db module: %s. Use _schemaModuleDict
-            attribute to supply a method for obtaining table schema
-            for this module''' % modname)
-        schema_func(self) # run the schema function
     def _attrSQL(self,attr,sqlColumn=False,columnNumber=False):
         "Translate python attribute name to appropriate SQL expression"
         try: # MAKE SURE THIS ATTRIBUTE CAN BE MAPPED TO DATABASE EXPRESSION
@@ -416,10 +496,11 @@ class SQLTableBase(object, UserDict.DictMixin):
             oclass._attrcol = self.data # BIND ATTRIBUTE LIST TO TUPLEO INTERFACE
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
-    def _select(self, whereClause='', params=None, selectCols='t1.*'):
+    def _select(self, whereClause='', params=(), selectCols='t1.*'):
         'execute the specified query but do not fetch'
-        self.cursor.execute('select %s from %s t1 %s'
-                            % (selectCols,self.name,whereClause),params)
+        sql,params = self._format_query('select %s from %s t1 %s'
+                            % (selectCols,self.name,whereClause), params)
+        self.cursor.execute(sql, params)
     def select(self,whereClause,params=None,oclass=None,selectCols='t1.*'):
         "Generate the list of objects that satisfy the database SELECT"
         if oclass is None:
@@ -441,8 +522,10 @@ class SQLTableBase(object, UserDict.DictMixin):
         return self.select('where '+' and '.join(criteria),params)
     def _update(self,row_id,col,val):
         'update a single field in the specified row to the specified value'
-        self.cursor.execute('update %s set %s=%%s where %s=%%s' %(self.name,col,self.primary_key),
-                            (val,row_id))
+        sql,params = self._format_query('update %s set %s=%%s where %s=%%s'
+                                        %(self.name,col,self.primary_key),
+                                        (val,row_id))
+        self.cursor.execute(sql, params)
     def getID(self,t):
         try:
             return t[self.data['id']] # GET ID FROM TUPLE
@@ -499,7 +582,8 @@ class SQLTableBase(object, UserDict.DictMixin):
             except (AttributeError,TypeError):
                 pass
         s = 'replace into '+self.name+' values ('+ ','.join(['%s']*len(l))+')'
-        self.cursor.execute(s,l)
+        sql,params = self._format_query(s, l)
+        self.cursor.execute(sql, params)
     def get_next_id(self): # DEPRECATED
         'add obj to the database with auto_increment integer ID'
         if not self.usesIntID:
@@ -561,10 +645,11 @@ class SQLTable(SQLTableBase):
         try:
             return self._weakValueDict[k] # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
-            self.cursor.execute('select * from %s where %s=%%s'
-                                % (self.name,self.primary_key),(k,))
-            l=self.cursor.fetchall()
-            if len(l)!=1:
+            sql,params = self._format_query('select * from %s where %s=%%s limit 2'
+                                            % (self.name,self.primary_key),(k,))
+            self.cursor.execute(sql, params)
+            l = self.cursor.fetchmany(2) # get at most 2 rows
+            if len(l) != 1:
                 raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
             self.limit_cache()
             return self.cacheItem(l[0],self.itemClass) # CACHE IT IN LOCAL DICTIONARY
@@ -578,8 +663,9 @@ class SQLTable(SQLTableBase):
         self.insert(v) # SAVE TO THE RELATIONAL DB SERVER
         self._weakValueDict[v.id] = v   # CACHE THIS ITEM IN OUR DICTIONARY
     def __delitem__(self,k):
-        self.cursor.execute('delete from %s where %s=%%s'
-                            % (self.name,self.primary_key),(k,))
+        sql,params = self._format_query('delete from %s where %s=%%s'
+                                        % (self.name,self.primary_key),(k,))
+        self.cursor.execute(sql, params)
         try:
             del self._weakValueDict[k]
         except KeyError:
@@ -623,9 +709,10 @@ class SQLTableClustered(SQLTable):
         try:
             return self._weakValueDict[k] # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
-            self.cursor.execute('select t2.* from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s'
+            sql,params = self._format_query('select t2.* from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s'
                                 % (self.name,self.name,self.primary_key,
                                    self.clusterKey,self.clusterKey),(k,))
+            self.cursor.execute(sql, params)
             l=self.cursor.fetchall()
             self.limit_cache()
             for t in l: # LOAD THE ENTIRE CLUSTER INTO OUR LOCAL CACHE
@@ -715,10 +802,10 @@ class SQLTableMultiNoCache(SQLTableBase):
         l=self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
         for row in l:
             yield row[0]
-
     def __getitem__(self,id):
-        self.cursor.execute('select * from %s where %s=%%s'
-                            %(self.name,self._attrSQL(self._distinct_key)),(id,))
+        sql,params = self._format_query('select * from %s where %s=%%s'
+                           %(self.name,self._attrSQL(self._distinct_key)),(id,))
+        self.cursor.execute(sql, params)
         l=self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
         for row in l:
             yield self.itemClass(row)
@@ -749,11 +836,13 @@ class SQLEdges(SQLTableMultiNoCache):
     def __iter__(self):
         return iter(self.keys())
     def __getitem__(self,edge):
-        self.cursor.execute('select %s,%s from %s where %s=%%s'
-                            %(self._attrSQL('source_id'),
-                              self._attrSQL('target_id'),
-                              self.name,self._attrSQL(self._distinct_key)),
-                            (self.graph.pack_edge(edge),))
+        sql,params = self._format_query('select %s,%s from %s where %s=%%s'
+                                        %(self._attrSQL('source_id'),
+                                          self._attrSQL('target_id'),
+                                          self.name,
+                                          self._attrSQL(self._distinct_key)),
+                                        (self.graph.pack_edge(edge),))
+        self.cursor.execute(sql, params)
         l = [] # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
         for source_id,target_id in self.cursor.fetchall():
             l.append((self.graph.unpack_source(source_id),
@@ -766,32 +855,39 @@ class SQLEdgeDict(object):
     def __init__(self,fromNode,table):
         self.fromNode=fromNode
         self.table=table
-        if not hasattr(self.table,'allowMissingNodes') and \
-               self.table.cursor.execute('select %s from %s where %s=%%s limit 1'
-                                         %(self.table.sourceSQL,
-                                           self.table.name,
-                                           self.table.sourceSQL),
-                                         (self.fromNode,))<1:
-            raise KeyError('node not in graph!')
+        if not hasattr(self.table,'allowMissingNodes'):
+            sql,params = self.table._format_query('select %s from %s where %s=%%s limit 1'
+                                                  %(self.table.sourceSQL,
+                                                    self.table.name,
+                                                    self.table.sourceSQL),
+                                                  (self.fromNode,))
+            self.table.cursor.execute(sql, params)
+            if len(self.table.cursor.fetchall())<1:
+                raise KeyError('node not in graph!')
 
     def __getitem__(self,target):
-        if self.table.cursor.execute('select %s from %s where %s=%%s and %s=%%s'
-                                     %(self.table.edgeSQL,
-                                       self.table.name,self.table.sourceSQL,
-                                       self.table.targetSQL),
-                                     (self.fromNode,
-                                      self.table.pack_target(target))) != 1:
+        sql,params = self.table._format_query('select %s from %s where %s=%%s and %s=%%s limit 2'
+                                              %(self.table.edgeSQL,
+                                                self.table.name,
+                                                self.table.sourceSQL,
+                                                self.table.targetSQL),
+                                              (self.fromNode,
+                                               self.table.pack_target(target)))
+        self.table.cursor.execute(sql, params)
+        l = self.table.cursor.fetchmany(2) # get at most two rows
+        if len(l) != 1:
             raise KeyError('either no edge from source to target or not unique!')
-        l=self.table.cursor.fetchall()
         try:
             return self.table.unpack_edge(l[0][0]) # RETURN EDGE
         except IndexError:
             raise KeyError('no edge from node to target')
     def __setitem__(self,target,edge):
-        self.table.cursor.execute('replace into %s values (%%s,%%s,%%s)'
-                                  %self.table.name,
-                                  (self.fromNode,self.table.pack_target(target),
-                                   self.table.pack_edge(edge)))
+        sql,params = self.table._format_query('replace into %s values (%%s,%%s,%%s)'
+                                              %self.table.name,
+                                              (self.fromNode,
+                                               self.table.pack_target(target),
+                                               self.table.pack_edge(edge)))
+        self.table.cursor.execute(sql, params)
         if not hasattr(self.table,'sourceDB') or \
            (hasattr(self.table,'targetDB') and self.table.sourceDB==self.table.targetDB):
             self.table += target # ADD AS NODE TO GRAPH
@@ -799,20 +895,25 @@ class SQLEdgeDict(object):
         self[target] = None
         return self # iadd MUST RETURN self!
     def __delitem__(self,target):
-        if self.table.cursor.execute('delete from %s where %s=%%s and %s=%%s'
-                                     %(self.table.name,self.table.sourceSQL,
-                                       self.table.targetSQL),
-                                     (self.fromNode,self.table.pack_target(target)))<1:
+        sql,params = self.table._format_query('delete from %s where %s=%%s and %s=%%s'
+                                              %(self.table.name,
+                                                self.table.sourceSQL,
+                                                self.table.targetSQL),
+                                              (self.fromNode,
+                                               self.table.pack_target(target)))
+        self.table.cursor.execute(sql, params) 
+        if self.table.cursor.rowcount < 1: # no rows deleted?
             raise KeyError('no edge from node to target')
         
     def iterator_query(self):
-        self.table.cursor.execute('select %s,%s from %s where %s=%%s and %s is not null'
-                                  %(self.table.targetSQL,
-                                    self.table.edgeSQL,
-                                    self.table.name,
-                                    self.table.sourceSQL,
-                                    self.table.targetSQL),
-                                  (self.fromNode,))
+        sql,params = self.table._format_query('select %s,%s from %s where %s=%%s and %s is not null'
+                                              %(self.table.targetSQL,
+                                                self.table.edgeSQL,
+                                                self.table.name,
+                                                self.table.sourceSQL,
+                                                self.table.targetSQL),
+                                              (self.fromNode,))
+        self.table.cursor.execute(sql, params)
         return self.table.cursor.fetchall()
     def keys(self):
         return [self.table.unpack_target(target_id)
@@ -837,21 +938,26 @@ class SQLEdgeDict(object):
 class SQLEdgelessDict(SQLEdgeDict):
     'for SQLGraph tables that lack edge_id column'
     def __getitem__(self,target):
-        if self.table.cursor.execute('select %s from %s where %s=%%s and %s=%%s'
-                                     %(self.table.targetSQL,
-                                       self.table.name,self.table.sourceSQL,
-                                       self.table.targetSQL),
-                                     (self.fromNode,
-                                      self.table.pack_target(target))) != 1:
+        sql,params = self.table._format_query('select %s from %s where %s=%%s and %s=%%s limit 2'
+                                              %(self.table.targetSQL,
+                                                self.table.name,
+                                                self.table.sourceSQL,
+                                                self.table.targetSQL),
+                                              (self.fromNode,
+                                               self.table.pack_target(target)))
+        self.table.cursor.execute(sql, params)
+        l = self.table.cursor.fetchmany(2)
+        if len(l) != 1:
             raise KeyError('either no edge from source to target or not unique!')
         return None # no edge info!
     def iterator_query(self):
-        self.table.cursor.execute('select %s from %s where %s=%%s and %s is not null'
-                                  %(self.table.targetSQL,
-                                    self.table.name,
-                                    self.table.sourceSQL,
-                                    self.table.targetSQL),
-                                  (self.fromNode,))
+        sql,params = self.table._format_query('select %s from %s where %s=%%s and %s is not null'
+                                              %(self.table.targetSQL,
+                                                self.table.name,
+                                                self.table.sourceSQL,
+                                                self.table.targetSQL),
+                                              (self.fromNode,))
+        self.table.cursor.execute(sql, params)
         return [(t[0],None) for t in self.table.cursor.fetchall()]
 
 SQLEdgeDict._edgelessClass = SQLEdgelessDict
@@ -935,23 +1041,30 @@ class SQLGraph(SQLTableMultiNoCache):
     def __getitem__(self,k):
         return self._edgeClass(self.pack_source(k),self)
     def __iadd__(self,k):
-        self.cursor.execute('delete from %s where %s=%%s and %s is null'
+        sql,params = self._format_query('delete from %s where %s=%%s and %s is null'
                             % (self.name,self.sourceSQL,self.targetSQL),
                             (self.pack_source(k),))
-        self.cursor.execute('insert ignore into %s values (%%s,NULL,NULL)'
-                            % self.name,(self.pack_source(k),))
+        self.cursor.execute(sql, params)
+        sql,params = self._format_query('insert %%(IGNORE)s into %s values (%%s,NULL,NULL)'
+                                        % self.name,(self.pack_source(k),))
+        self.cursor.execute(sql, params)
         return self # iadd MUST RETURN SELF!
     def __isub__(self,k):
-        if self.cursor.execute('delete from %s where %s=%%s'
-                               % (self.name,self.sourceSQL),
-                               (self.pack_source(k),))==0:
+        sql,params = self._format_query('delete from %s where %s=%%s'
+                                        % (self.name,self.sourceSQL),
+                                        (self.pack_source(k),))
+        self.cursor.execute(sql, params)
+        if self.cursor.rowcount == 0:
             raise KeyError('node not found in graph')
         return self # iadd MUST RETURN SELF!
     __setitem__ = graph_setitem
     def __contains__(self,k):
-        return self.cursor.execute('select * from %s where %s=%%s'
-                                   %(self.name,self.sourceSQL),
-                                   (self.pack_source(k),))>0
+        sql,params = self._format_query('select * from %s where %s=%%s limit 1'
+                                        %(self.name,self.sourceSQL),
+                                        (self.pack_source(k),))
+        self.cursor.execute(sql, params)
+        l = self.cursor.fetchmany(2) 
+        return len(l) > 0
     def __invert__(self):
         'get an interface to the inverse graph mapping'
         try: # CACHED
@@ -978,9 +1091,10 @@ class SQLGraph(SQLTableMultiNoCache):
     edges=SQLGraphEdgeDescriptor()
     update = update_graph
     def __len__(self):
-        'get number of nodes in graph'
-        return self.cursor.execute('select distinct(%s) from %s'
-                                   %(self.sourceSQL,self.name))
+        'get number of source nodes in graph'
+        self.cursor.execute('select count(distinct %s) from %s'
+                            %(self.sourceSQL,self.name))
+        return self.cursor.fetchone()[0]
     __cmp__ = graph_cmp
     override_rich_cmp(locals()) # MUST OVERRIDE __eq__ ETC. TO USE OUR __cmp__!
 ##     def __cmp__(self,other):
@@ -1081,13 +1195,14 @@ class SQLGraphClustered(object):
             if hasattr(self,'_isLoaded'):
                 raise # ENTIRE GRAPH LOADED, SO k REALLY NOT IN THIS GRAPH
         # HAVE TO LOAD THE ENTIRE CLUSTER CONTAINING THIS NODE
-        self.table.cursor.execute('select t2.%s,t2.%s,t2.%s from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s group by t2.%s'
+        sql,params = self.table._format_query('select t2.%s,t2.%s,t2.%s from %s t1,%s t2 where t1.%s=%%s and t1.%s=t2.%s group by t2.%s'
                                   %(self.source_id,self.target_id,
                                     self.edge_id,self.table.name,
                                     self.table.name,self.source_id,
                                     self.table.clusterKey,self.table.clusterKey,
                                     self.table.primary_key),
                                   (self.pack_source(k),))
+        self.table.cursor.execute(sql, params)
         self.load(self.table.cursor.fetchall()) # CACHE THIS CLUSTER
         return self.d[k] # RETURN EDGE DICT FOR THIS NODE
     def load(self,l=None,unpack=True):
@@ -1475,14 +1590,19 @@ class MapView(object, UserDict.DictMixin):
                     cursor = serverInfo.cursor()
         self.cursor = cursor
         self.serverInfo = serverInfo
+        self.get_sql_format(False) # get sql formatter for this db interface
+    _schemaModuleDict = _schemaModuleDict # default module list
+    get_sql_format = get_table_schema
     def __getitem__(self, k):
         if not hasattr(k,'db') or k.db != self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this map!')
-        if self.cursor.execute(self.viewSQL, (k.id,))!=1:
+        sql,params = self._format_query(self.viewSQL, (k.id,))
+        self.cursor.execute(sql, params) # formatted for this db interface
+        t = self.cursor.fetchmany(2) # get at most two rows
+        if len(t) != 1:
             raise KeyError('%s not found in MapView, or not unique'
                            % str(k))
-        t = self.cursor.fetchone() # get the target ID
-        return self.targetDB[t[0]] # get the corresponding object
+        return self.targetDB[t[0][0]] # get the corresponding object
     _pickleAttrs = dict(sourceDB=0, targetDB=0, viewSQL=0, serverInfo=0)
     __getstate__ = standard_getstate
     __setstate__ = standard_setstate
@@ -1508,7 +1628,8 @@ class GraphViewEdgeDict(UserDict.DictMixin):
     def __init__(self, g, k):
         self.g = g
         self.k = k
-        self.g.cursor.execute(self.g.viewSQL, (k.id,)) # run the query
+        sql,params = self.g._format_query(self.g.viewSQL, (k.id,))
+        self.g.cursor.execute(sql, params) # run the query
         l = self.g.cursor.fetchall() # get results
         self.targets = [t[0] for t in l] # preserve order of the results
         d = {} # also keep targetID:edgeID mapping

@@ -1,7 +1,7 @@
 import pygrtest_common
 from nosebase import skip_errors
 from pygr import mapping,graphquery
-
+import os
 
 class Query_Test(object):
     "Pygr Query tests..."
@@ -153,6 +153,28 @@ class SQLGraph_Test(Mapping_Test):
                 raise ImportError #  skip tests.
     def teardown(self):
         self.datagraph.cursor.execute('drop table if exists test.dumbo_foo_test')
+
+
+class SQLiteGraph_Test(Mapping_Test):
+    'run same tests on mapping.SQLGraph class'
+    @skip_errors(ImportError)
+    def setup(self):
+        from pygr import sqlgraph
+        import sqlite3 # test will be skipped if unavailable
+        self.dbfile = 'sqlitegraph_test.db'
+        self.teardown() # make sure db file not already present
+        db = sqlite3.connect(self.dbfile)
+        cursor = db.cursor()
+        createOpts = dict(source_id='int', target_id='int', edge_id='int')
+        self.datagraph = sqlgraph.SQLGraph('testgraph',
+                                           cursor=cursor,
+                                           dropIfExists=True,
+                                           createTable=createOpts)
+    def teardown(self):
+        try:
+            os.remove(self.dbfile)
+        except OSError:
+            pass
 
 
 class Splicegraph_Test(object):
