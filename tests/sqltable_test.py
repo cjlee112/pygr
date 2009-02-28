@@ -1,15 +1,18 @@
 import pygrtest_common
 from nosebase import skip_errors
-from pygr.sqlgraph import SQLTable,getNameCursor,MapView,GraphView,DBServerInfo
+from pygr.sqlgraph import SQLTable,SQLTableNoCache,getNameCursor,\
+     MapView,GraphView,DBServerInfo
 
-class SQLTable_Test(object):
+class SQLTable_Setup(object):
+    tableClass = SQLTable
     @skip_errors(ImportError)
     def setup(self):
         # test will be skipped if unavailable
         import MySQLdb
-        self.load_data(dbError=MySQLdb.MySQLError)
+        self.load_data(dbError=MySQLdb.MySQLError, writeable=self.writeable)
     def load_data(self, cursor=None, tableName='test.sqltable_test',
-                  dbError=NotImplementedError, autoInc='AUTO_INCREMENT'):
+                  dbError=NotImplementedError, autoInc='AUTO_INCREMENT',
+                  writeable=False):
         joinTable1 = tableName + '1'
         joinTable2 = tableName + '2'
         self.tableName = tableName
@@ -20,14 +23,17 @@ class SQLTable_Test(object):
         """ % (tableName,autoInc)
         
         try:
-            self.db = SQLTable(tableName, cursor, dropIfExists=True,
-                               createTable=createTable)
+            self.db = self.tableClass(tableName, cursor, dropIfExists=True,
+                                      createTable=createTable,
+                                      writeable=writeable)
         except dbError:
             tempcurs = getNameCursor()[1]
             try: # hmm, maybe need to create the test database?
                 tempcurs.execute('create database if not exists test')
-                self.db = SQLTable(tableName, cursor, dropIfExists=True,
-                                   createTable=createTable)
+                self.db = self.tableClass(tableName, cursor,
+                                          dropIfExists=True,
+                                          createTable=createTable,
+                                          writeable=writeable)
             except dbError: # no server, database or privileges?
                 print """\
                 The MySQL 'test' database doesn't exist and/or can't be
@@ -43,13 +49,13 @@ class SQLTable_Test(object):
         INSERT INTO %s (seq_id, start, stop)
               VALUES ('seq2', 5, 15)
         """ % tableName)
-        self.sourceDB = SQLTable(joinTable1, cursor,
-                                 dropIfExists=True, createTable="""\
+        self.sourceDB = self.tableClass(joinTable1, cursor,
+                                        dropIfExists=True, createTable="""\
         CREATE TABLE %s (my_id INTEGER PRIMARY KEY,
               other_id VARCHAR(16))
         """ % joinTable1)
-        self.targetDB = SQLTable(joinTable2, cursor,
-                                 dropIfExists=True, createTable="""\
+        self.targetDB = self.tableClass(joinTable2, cursor,
+                                        dropIfExists=True, createTable="""\
         CREATE TABLE %s (third_id INTEGER PRIMARY KEY,
               other_id VARCHAR(16))
         """ % joinTable2)
@@ -79,6 +85,8 @@ class SQLTable_Test(object):
         self.db.cursor.execute('drop table if exists %s' % self.joinTable1)
         self.db.cursor.execute('drop table if exists %s' % self.joinTable2)
 
+class SQLTable_Test(SQLTable_Setup):
+    writeable = False # read-only database interface
     def keys_test(self):
         k = self.db.keys()
         k.sort()
@@ -117,6 +125,23 @@ class SQLTable_Test(object):
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii
+    def readonly_test(self):
+        try:
+            self.db.new(seq_id='freddy', start=3000, stop=4500)
+            raise AssertionError('failed to trap attempt to write to db')
+        except ValueError:
+            pass
+        o = self.db[1]
+        try:
+            self.db[33] = o
+            raise AssertionError('failed to trap attempt to write to db')
+        except ValueError:
+            pass
+        try:
+            del self.db[2]
+            raise AssertionError('failed to trap attempt to write to db')
+        except ValueError:
+            pass
 
     ### @CTB need to test write access
     def mapview_test(self):
@@ -136,15 +161,88 @@ class SQLTable_Test(object):
         assert len(d) == 2
         assert self.targetDB[6] in d and self.targetDB[8] in d
         assert self.sourceDB[2] in m
+
+@skip_errors(ImportError)
+def sqlite_setup(self):
+    # test will be skipped if unavailable
+    import sqlite3
+    db = sqlite3.connect('test_sqlite.db')
+    c = db.cursor()
+    self.load_data(c, 'sqltable_test', autoInc='', writeable=self.writeable)
         
 class SQLiteTable_Test(SQLTable_Test):
-    @skip_errors(ImportError)
-    def setup(self):
-        # test will be skipped if unavailable
-        import sqlite3
-        db = sqlite3.connect('test_sqlite.db')
-        c = db.cursor()
-        self.load_data(c, 'sqltable_test', autoInc='')
+    setup = sqlite_setup
+
+class SQLTableRW_Test(SQLTable_Setup):
+    'test write operations'
+    writeable = True
+    def new_test(self):
+        'test row creation with auto inc ID'
+        n = len(self.db)
+        o = self.db.new(seq_id='freddy', start=3000, stop=4500)
+        assert len(self.db) == n + 1
+        t = self.tableClass(self.tableName, self.db.cursor) # requery the db
+        result = t[o.id]
+        assert result.seq_id == 'freddy' and result.start==3000 \
+               and result.stop==4500
+    def new2_test(self):
+        'check row creation with specified ID'
+        n = len(self.db)
+        o = self.db.new(id=99, seq_id='jeff', start=3000, stop=4500)
+        assert len(self.db) == n + 1
+        assert o.id == 99
+        t = self.tableClass(self.tableName, self.db.cursor) # requery the db
+        result = t[99]
+        assert result.seq_id == 'jeff' and result.start==3000 \
+               and result.stop==4500
+    def attr_test(self):
+        'test changing an attr value'
+        o = self.db[2]
+        assert o.seq_id == 'seq2'
+        o.seq_id = 'newval' # overwrite this attribute
+        assert o.seq_id == 'newval' # check cached value
+        t = self.tableClass(self.tableName, self.db.cursor) # requery the db
+        result = t[2]
+        assert result.seq_id == 'newval'
+    def delitem_test(self):
+        'test deletion of a row'
+        n = len(self.db)
+        del self.db[1]
+        assert len(self.db) == n - 1
+        try:
+            result = self.db[1]
+            raise AssertionError('old ID still exists!')
+        except KeyError:
+            pass
+    def setitem_test(self):
+        'test assigning new ID to existing object'
+        o = self.db.new(id=17, seq_id='bob', start=2000, stop=2500)
+        self.db[13] = o
+        assert o.id == 13
+        try:
+            result = self.db[17]
+            raise AssertionError('old ID still exists!')
+        except KeyError:
+            pass
+        t = self.tableClass(self.tableName, self.db.cursor) # requery the db
+        result = t[13]
+        assert result.seq_id == 'bob' and result.start==2000 \
+               and result.stop==2500
+        try:
+            result = t[17]
+            raise AssertionError('old ID still exists!')
+        except KeyError:
+            pass
+        
+
+class SQLiteTableRW_Test(SQLTableRW_Test):
+    setup = sqlite_setup
+
+class SQLTableRW_NoCache_Test(SQLTableRW_Test):
+    tableClass = SQLTableNoCache
+
+class SQLiteTableRW_NoCache_Test(SQLTableRW_NoCache_Test):
+    setup = sqlite_setup
 
 class GraphView_Test(object):
     @skip_errors(ImportError)

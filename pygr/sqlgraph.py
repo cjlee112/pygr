@@ -19,6 +19,11 @@ class TupleDescriptor(object):
     def __set__(self, obj, val):
         raise AttributeError('this database is read-only!')
 
+class TupleIDDescriptor(TupleDescriptor):
+    def __set__(self, obj, val):
+        raise AttributeError('''You cannot change obj.id directly.
+        Instead, use db[newID] = obj''')
+
 class TupleDescriptorRW(TupleDescriptor):
     'read-write interface to named attribute'
     def __init__(self, db, attr):
@@ -37,6 +42,11 @@ class SQLDescriptor(object):
         return obj._select(self.selectSQL)
     def __set__(self, obj, val):
         raise AttributeError('this database is read-only!')
+
+class SQLDescriptorRW(SQLDescriptor):
+    'writeable proxy to corresponding column in the database'
+    def __set__(self, obj, val):
+        obj.db._update(obj.id, self.selectSQL, val) #just update the database
 
 class ReadOnlyDescriptor(object):
     'enforce read-only policy, e.g. for ID attribute'
@@ -95,16 +105,33 @@ class TupleO(object):
 
     See the Pygr Developer Guide section of the docs for a
     complete discussion of the subclass binding pattern."""
-    _columnDescriptor = _idDescriptor = TupleDescriptor
+    _columnDescriptor = TupleDescriptor
+    _idDescriptor = TupleIDDescriptor
     _sqlDescriptor = SQLDescriptor
     _init_subclass = classmethod(init_row_subclass)
     _select = select_from_row
     def __init__(self, data):
         self._data = data # save our data tuple
 
+def insert_and_cache_id(self, l, **kwargs):
+    'insert tuple into db and cache its rowID on self'
+    self.db._insert(l) # save to database
+    try:
+        rowID = kwargs['id']  # use the ID supplied by user
+    except KeyError:
+        rowID = self.db.get_insert_id() # get auto-inc ID value
+    self.cache_id(rowID) # cache this ID on self
+
 class TupleORW(TupleO):
     'read-write version of TupleO'
     _columnDescriptor = TupleDescriptorRW
+    insert_and_cache_id = insert_and_cache_id
+    def __init__(self, data, newRow=False, **kwargs):
+        if not newRow: # just cache data from the database
+            self._data = data
+            return
+        self._data = self.db.tuple_from_dict(kwargs) # convert to tuple
+        self.insert_and_cache_id(self._data, **kwargs)
     def cache_id(self,row_id):
         self.save_local('id',row_id)
     def save_local(self,attr,val):
@@ -112,8 +139,10 @@ class TupleORW(TupleO):
         try:
             self._data[icol] = val # FINALLY UPDATE OUR LOCAL CACHE
         except TypeError: # TUPLE CAN'T STORE NEW VALUE, SO USE A LIST
-            self.__dict__['_data'] = list(self._data)
+            self._data = list(self._data)
             self._data[icol] = val # FINALLY UPDATE OUR LOCAL CACHE
+
+TupleO._RWClass = TupleORW # record this as writeable interface class
         
 class ColumnDescriptor(object):
     'read-write interface to column in a database, cached in obj.__dict__'
@@ -164,15 +193,23 @@ class SQLRow(object):
     _idDescriptor = ReadOnlyDescriptor
     _init_subclass = classmethod(init_row_subclass)
     _select = select_from_row
-    def __init__(self, id):
-        self._id = id
+    def __init__(self, rowID):
+        self._id = rowID
 
 
-## class SQLRowRW(SQLRow):
-##     'read-write version of SQLRow'
-##     def __setattr__(self,attr,val):
-##         col = self.db._attrSQL(attr,sqlColumn=True)
-##         self.db._update(self.id,col,val)
+class SQLRowRW(SQLRow):
+    'read-write version of SQLRow'
+    _columnDescriptor = SQLDescriptorRW
+    insert_and_cache_id = insert_and_cache_id
+    def __init__(self, rowID, newRow=False, **kwargs):
+        if not newRow: # just cache data from the database
+            return self.cache_id(rowID)
+        l = self.db.tuple_from_dict(kwargs) # convert to tuple
+        self.insert_and_cache_id(l, **kwargs)
+    def cache_id(self, rowID):
+        self._id = rowID
+
+SQLRow._RWClass = SQLRowRW
 
 
 
@@ -220,7 +257,7 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
     cursor = connect(**kwargs).cursor()
     return name,cursor
 
-_mysqlMacros = dict(IGNORE='ignore')
+_mysqlMacros = dict(IGNORE='ignore', REPLACE='replace')
 
 def mysql_table_schema(self, analyzeSchema=True):
     'retrieve table schema from a MySQL database, save on self'
@@ -252,7 +289,7 @@ def mysql_table_schema(self, analyzeSchema=True):
         self.description[field] = self.cursor.description[icol]
         self.columnType[field] = c[1] # SQL COLUMN TYPE
 
-_sqliteMacros = dict(IGNORE='or ignore')
+_sqliteMacros = dict(IGNORE='or ignore', REPLACE='insert or replace')
 
 def sqlite_table_schema(self, analyzeSchema=True):
     'retrieve table schema from a sqlite3 database, save on self'
@@ -367,13 +404,15 @@ class SQLTableBase(object, UserDict.DictMixin):
     def __init__(self,name,cursor=None,itemClass=None,attrAlias=None,
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
-                 serverInfo=None, autoGC=True, orderBy=None, **kwargs):
+                 serverInfo=None, autoGC=True, orderBy=None,
+                 writeable=False, **kwargs):
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = RecentValueDictionary(autoGC) # object cache
         else:
             self._weakValueDict = {}
         self.autoGC = autoGC
         self.orderBy = orderBy
+        self.writeable = writeable
         if cursor is None:
             if serverInfo is not None: # get cursor from serverInfo
                 cursor = serverInfo.cursor()
@@ -417,7 +456,8 @@ class SQLTableBase(object, UserDict.DictMixin):
     def __hash__(self):
         return id(self)
     _pickleAttrs = dict(name=0, clusterKey=0, maxCache=0, arraysize=0,
-                        attrAlias=0, serverInfo=0, autoGC=0, orderBy=0)
+                        attrAlias=0, serverInfo=0, autoGC=0, orderBy=0,
+                        writeable=0)
     __getstate__ = standard_getstate
     def __setstate__(self,state):
         if 'serverInfo' not in state: # hmm, no address for db server?
@@ -490,6 +530,8 @@ class SQLTableBase(object, UserDict.DictMixin):
         "Create class representing a row in this table by subclassing oclass, adding data"
         if oclass is not None: # use this as our base itemClass
             self.itemClass = oclass
+        if self.writeable:
+            self.itemClass = self.itemClass._RWClass # use its writeable version
         oclass = get_bound_subclass(self, 'itemClass', self.name,
                                     subclassArgs=dict(db=self)) # bind itemClass
         if issubclass(oclass, TupleO):
@@ -572,45 +614,64 @@ class SQLTableBase(object, UserDict.DictMixin):
                 break
             for v in map_f(cache_f(rows)): # CACHE AND GENERATE RESULTS
                 yield v
-    def insert(self,obj):
-        '''insert new row by transforming obj to tuple of values for table schema.
-        Note this uses the MySQL extension REPLACE, which overwrites any duplicate key.'''
+    def tuple_from_dict(self, d):
+        'transform kwarg dict into tuple for storing in database'
+        l = [None]*len(self.description) # DEFAULT COLUMN VALUES ARE NULL
+        for col,icol in self.data.items():
+            try:
+                l[icol] = d[col]
+            except (KeyError,TypeError):
+                pass
+        return l
+    def tuple_from_obj(self, obj):
+        'transform object attributes into tuple for storing in database'
         l = [None]*len(self.description) # DEFAULT COLUMN VALUES ARE NULL
         for col,icol in self.data.items():
             try:
                 l[icol] = getattr(obj,col)
             except (AttributeError,TypeError):
                 pass
-        s = 'replace into '+self.name+' values ('+ ','.join(['%s']*len(l))+')'
+        return l
+    def _insert(self, l):
+        '''insert tuple into the database.  Note this uses the MySQL
+        extension REPLACE, which overwrites any duplicate key.'''
+        s = '%(REPLACE)s into ' + self.name + ' values (' \
+            + ','.join(['%s']*len(l)) + ')'
         sql,params = self._format_query(s, l)
         self.cursor.execute(sql, params)
-    def get_next_id(self): # DEPRECATED
-        'add obj to the database with auto_increment integer ID'
-        if not self.usesIntID:
-            raise TypeError('''You cannot use get_next_id() if db has non-numeric primary key!
-You must directly assign obj an ID, i.e. db[new_id] = obj''')
-        self._select(selectCols='max(%s)' % self.primary_key)
-        l = self.cursor.fetchall()
-        try:
-            return l[0][0] + 1
-        except TypeError: # MySQL RETURNS None FOR AN EMPTY TABLE
-            return 1
-    def new(self,**kwargs):
-        'return a new record with the assigned attributes, added to DB'
-        obj = self.itemClass(self,**kwargs) # CONSTRUCT NEW INSTANCE
-        self.insert(obj) # SAVE TO DATABASE: FAILS UNLESS AUTO INCR, OR obj HAS id
+    def insert(self, obj):
+        '''insert new row by transforming obj to tuple of values'''
+        l = self.tuple_from_obj(obj)
+        self._insert(l)
+    def get_insert_id(self):
+        'get the primary key value for the last INSERT'
         try: # ATTEMPT TO GET ASSIGNED ID FROM DB
             auto_id = self.cursor.lastrowid
         except AttributeError: # CURSOR DOESN'T SUPPORT lastrowid
-            raise NotImplementedError('''db.new() currently requires lastrowid extension
-            which your DB lacks''')
-        if auto_id > 0: # CACHE AUTO_INCREMENT ID IN LOCAL OBJECT
-            obj.cache_id(auto_id)
+            raise NotImplementedError('''your db lacks lastrowid support?''')
+        if auto_id is None:
+            raise ValueError('lastrowid is None so cannot get ID from INSERT!')
+        return auto_id
+    def new(self, **kwargs):
+        'return a new record with the assigned attributes, added to DB'
+        if not self.writeable:
+            raise ValueError('this database is read only!')
+        obj = self.itemClass(None, newRow=True, **kwargs) # saves itself to db
         self._weakValueDict[obj.id] = obj # AND SAVE TO OUR LOCAL DICT CACHE
         return obj
     def clear_cache(self):
         'empty the cache'
         self._weakValueDict.clear()
+    def __delitem__(self, k):
+        if not self.writeable:
+            raise ValueError('this database is read only!')
+        sql,params = self._format_query('delete from %s where %s=%%s'
+                                        % (self.name,self.primary_key),(k,))
+        self.cursor.execute(sql, params)
+        try:
+            del self._weakValueDict[k]
+        except KeyError:
+            pass
 
 def getKeys(self,queryOption=''):
     'uses db select; does not force load'
@@ -619,6 +680,7 @@ def getKeys(self,queryOption=''):
     self.cursor.execute('select %s from %s %s' 
                         %(self.primary_key,self.name,queryOption))
     return [t[0] for t in self.cursor.fetchall()] # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
+
 
 
 class SQLTable(SQLTableBase):
@@ -653,23 +715,25 @@ class SQLTable(SQLTableBase):
                 raise KeyError('%s not found in %s, or not unique' %(str(k),self.name))
             self.limit_cache()
             return self.cacheItem(l[0],self.itemClass) # CACHE IT IN LOCAL DICTIONARY
-    def __setitem__(self,k,v):
-        v.cache_id(k) # BIND THIS OBJECT TO DATABASE BY MARKING ITS DB AND ID
+    def __setitem__(self, k, v):
+        if not self.writeable:
+            raise ValueError('this database is read only!')
         try:
             if v.db != self:
                 raise AttributeError
         except AttributeError:
-            v.db = self
-        self.insert(v) # SAVE TO THE RELATIONAL DB SERVER
-        self._weakValueDict[v.id] = v   # CACHE THIS ITEM IN OUR DICTIONARY
-    def __delitem__(self,k):
-        sql,params = self._format_query('delete from %s where %s=%%s'
-                                        % (self.name,self.primary_key),(k,))
-        self.cursor.execute(sql, params)
+            raise ValueError('object not bound to itemClass for this db!')
         try:
-            del self._weakValueDict[k]
-        except KeyError:
+            oldID = v.id
+            if oldID is None:
+                raise AttributeError
+        except AttributeError:
             pass
+        else: # delete row with old ID
+            del self[v.id]
+        v.cache_id(k) # cache the new ID on the object
+        self.insert(v) # SAVE TO THE RELATIONAL DB SERVER
+        self._weakValueDict[k] = v   # CACHE THIS ITEM IN OUR DICTIONARY
     def items(self):
         'forces load of entire table into memory'
         self.load()
@@ -783,9 +847,33 @@ class SQLTableNoCache(SQLTableBase):
         try:
             return self._weakValueDict[k] # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
-            o=self.itemClass(k) # RETURN AN EMPTY CONTAINER FOR ACCESSING THIS ROW
-            self._weakValueDict[k] = o # cache the SQLRow object, but no data
+            self._select('where %s=%%s' % self.primary_key, (k,),
+                         self.primary_key)
+            t = self.cursor.fetchmany(2)
+            if len(t) != 1:
+                raise KeyError('id %s non-existent or not unique' % k)
+            o = self.itemClass(k) # create obj referencing this ID
+            self._weakValueDict[k] = o # cache the SQLRow object
             return o
+    def __setitem__(self, k, v):
+        if not self.writeable:
+            raise ValueError('this database is read only!')
+        try:
+            if v.db != self:
+                raise AttributeError
+        except AttributeError:
+            raise ValueError('object not bound to itemClass for this db!')
+        try:
+            del self[k] # delete row with new ID if any
+        except KeyError:
+            pass
+        try:
+            del self._weakValueDict[v.id] # delete from old cache location
+        except KeyError:
+            pass
+        self._update(v.id, self.primary_key, k) # just change its ID in db
+        v.cache_id(k) # change the cached ID value
+        self._weakValueDict[k] = v # assign to new cache location
     def addAttrAlias(self,**kwargs):
         self.data.update(kwargs) # ALIAS KEYS TO EXPRESSION VALUES
 
