@@ -205,8 +205,6 @@ class TestXMLRPCServer(object):
         s.exit_now() # TELL THE SERVER TO EXIT
         get_pygr_data_path(None) # FORCE IT TO RESTORE STANDARD PYGRDATAPATH
 
-
-
 def approximate_cmp(x,y,delta):
     '''expects two lists of tuples.  Performs comparison as usual,
     except that numeric types are considered equal if they differ by

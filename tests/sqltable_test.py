@@ -1,14 +1,12 @@
 import pygrtest_common
-from nosebase import skip_errors
 from pygr.sqlgraph import SQLTable,SQLTableNoCache,getNameCursor,\
      MapView,GraphView,DBServerInfo
+import MySQLdb
 
-class SQLTable_Setup(object):
+class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTable
-    @skip_errors(ImportError)
     def setup(self):
         # test will be skipped if unavailable
-        import MySQLdb
         self.load_data(dbError=MySQLdb.MySQLError, writeable=self.writeable)
     def load_data(self, cursor=None, tableName='test.sqltable_test',
                   dbError=NotImplementedError, autoInc='AUTO_INCREMENT',
@@ -162,7 +160,6 @@ class SQLTable_Test(SQLTable_Setup):
         assert self.targetDB[6] in d and self.targetDB[8] in d
         assert self.sourceDB[2] in m
 
-@skip_errors(ImportError)
 def sqlite_setup(self):
     # test will be skipped if unavailable
     import sqlite3
@@ -244,18 +241,19 @@ class SQLTableRW_NoCache_Test(SQLTableRW_Test):
 class SQLiteTableRW_NoCache_Test(SQLTableRW_NoCache_Test):
     setup = sqlite_setup
 
-class GraphView_Test(object):
-    @skip_errors(ImportError)
-    def setup(self):
+class Ensembl_Test(unittest.TestCase):
+     
+    def setUp(self):
         # test will be skipped if mysql module or ensembldb server unavailable
-        import MySQLdb
-        try:
-            conn = DBServerInfo(host='ensembldb.ensembl.org', user='anonymous',
-                                passwd='')
-            translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
-                                     serverInfo=conn)
-            exonDB = SQLTable('homo_sapiens_core_47_36i.exon', serverInfo=conn)
-            sql_statement = '''SELECT t3.exon_id FROM
+
+        logger.debug('accessing ensebledb.ensembl.org')
+        conn = DBServerInfo(host='ensembldb.ensembl.org', user='anonymous',
+                            passwd='')
+        translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
+                                 serverInfo=conn)
+        exonDB = SQLTable('homo_sapiens_core_47_36i.exon', serverInfo=conn)
+        
+        sql_statement = '''SELECT t3.exon_id FROM
 homo_sapiens_core_47_36i.translation AS tr,
 homo_sapiens_core_47_36i.exon_transcript AS t1,
 homo_sapiens_core_47_36i.exon_transcript AS t2,
@@ -265,15 +263,38 @@ t2.transcript_id AND t2.transcript_id = t3.transcript_id AND t1.exon_id =
 tr.start_exon_id AND t2.exon_id = tr.end_exon_id AND t3.rank >= t1.rank AND
 t3.rank <= t2.rank ORDER BY t3.rank
             '''
-            self.translationExons = GraphView(translationDB, exonDB,
-                                              sql_statement, serverInfo=conn)
-            self.translation = translationDB[15121]
-        except MySQLdb.MySQLError:
-            raise ImportError
-    def orderBy_test(self):
+        self.translationExons = GraphView(translationDB, exonDB,
+                                          sql_statement, serverInfo=conn)
+        self.translation = translationDB[15121]
+    
+    def test_orderBy(self):
+        "Ensemble access, test order by"
         'test issue 53: ensure that the ORDER BY results are correct'
         exons = self.translationExons[self.translation] # do the query
         result = [e.id for e in exons]
         correct = [95160,95020,95035,95050,95059,95069,95081,95088,95101,
                    95110,95172]
-        assert result == correct # make sure the exact order matches
+        self.assertEqual(result, correct) # make sure the exact order matches
+
+def get_suite():
+    "Returns the testsuite"
+
+    tests = []
+
+    # detect mysql
+    if testutil.mysql_enabled():
+        tests.append(SQLTable_Test)
+        tests.append(SQLiteTable_Test)
+        tests.append(SQLTableRW_Test)
+        tests.append(SQLiteTableRW_Test)
+        tests.append(SQLTableRW_NoCacheTest)
+        tests.append(SQLiteTableRW_NoCacheTest)
+        tests.append(Ensembl_Test) 
+    else:
+        testutil.info('*** skipping SQLTable_Test')
+
+    return testutil.make_suite(tests)
+
+if __name__ == '__main__':
+    suite = get_suite()
+    unittest.TextTestRunner(verbosity=2).run(suite)
