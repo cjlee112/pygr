@@ -1,93 +1,68 @@
-import unittest
-from testlib import testutil
-from pygr.seqdb import SequenceFileDB, PrefixUnionDict, AnnotationDB
+import pygrtest_common
+from pygr.seqdb import SequenceFileDB, PrefixUnionDict
+from pygr.annotation import AnnotationDB, TranslationAnnot, \
+     TranslationAnnotSlice
 from pygr.sequence import Sequence
 from pygr.cnestedlist import NLMSA
 import gc
-from pygr.annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
-    AnnotationServer, AnnotationClient
 
-class SequenceFileDB_Test(unittest.TestCase):
+class SequenceFileDB_Test(object):
     """
     Test for all of the basic dictionary functions on 'SequenceFileDB'.
     """
-    def setUp(self):
-        "Test setup"
-        dnaseq  = testutil.datafile('dnaseq.fasta')
-        self.db = SequenceFileDB(dnaseq) # contains 'seq1', 'seq2'
-
-    def test_keys(self):
-        "SequenceFileDB keys"
+    def setup(self):
+        self.db = SequenceFileDB('dnaseq')     # contains 'seq1', 'seq2'
+    def keys_test(self):
         k = self.db.keys()
         k.sort()
         assert k == ['seq1', 'seq2']
-
-    def test_contains(self):
-        "SequenceFileDB contains"
+    def contains_test(self):
         assert 'seq1' in self.db, self.db.keys()
         assert 'seq2' in self.db
         assert 'foo' not in self.db
-
-    def test_keys_info(self):
-        "SequenceFileDB keys info"
+    def keys_info_test(self):
         k = self.db.seqInfoDict.keys()
         k.sort()
         assert k == ['seq1', 'seq2']
-
-    def test_contains_info(self):
-        "SequenceFileDB contains info"
+    def contains_info_test(self):
         assert 'seq1' in self.db.seqInfoDict
         assert 'seq2' in self.db.seqInfoDict
         assert 'foo' not in self.db.seqInfoDict
-    
-    def test_has_key(self):
-        "SequenceFileDB has key"
+    def has_key_test(self):
         assert self.db.has_key('seq1')
         assert self.db.has_key('seq2')
         assert not self.db.has_key('foo')
-    
-    def test_get(self):
-        "SequenceFileDB get"
+    def get_test(self):
         assert self.db.get('foo') is None
         assert self.db.get('seq1') is not None
         assert str(self.db.get('seq1')).startswith('atggtgtca')
         assert self.db.get('seq2') is not None
         assert str(self.db.get('seq2')).startswith('GTGTTGAA')
-    
-    def test_items(self):
-        "SequenceFileDB items"
+    def items_test(self):
         i = [ k for (k,v) in self.db.items() ]
         i.sort()
         assert i == ['seq1', 'seq2']
-    
-    def test_iterkeys(self):
-        "SequenceFileDB iterkeys"
+    def iterkeys_test(self):
         kk = self.db.keys()
         kk.sort()
         ik = list(self.db.iterkeys())
         ik.sort()
         assert kk == ik
-
-    def test_itervalues(self):
-        "SequenceFileDB itervalues"
+    def itervalues_test(self):
         kv = self.db.values()
         kv.sort()
         iv = list(self.db.itervalues())
         iv.sort()
         assert kv == iv
-
-    def test_iteritems(self):
-        "SequenceFileDB iteritems"
+    def iteritems_test(self):
         ki = self.db.items()
         ki.sort()
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii
-
-    def test_readonly(self):
-        "SequenceFileDB readonly"
+    def readonly_test(self):
         try:
-            self.db.copy()          # what should 'copy' do on SequenceFileDB?
+            self.db.copy()              # what should 'copy' do on SequenceFileDB?
             assert 0, 'this method should raise NotImplementedError'
         except NotImplementedError:
             pass
@@ -118,85 +93,65 @@ class SequenceFileDB_Test(unittest.TestCase):
             pass
             
     # test some things other than dict behavior
-    def test_keyerror(self):
-        "SequenceFileDB keyerror"
+    def keyerror_test(self):
         "Make sure that the SequenceFileDB KeyError is informative."
         try:
             self.db['foo']
         except KeyError, e:
             assert "no key 'foo' in database <SequenceFileDB" in str(e), str(e)
 
-class PrefixUnionDict_Test(unittest.TestCase):
+class PrefixUnionDict_Test(object):
     """
     Test for all of the basic dictionary functions on 'PrefixUnionDict'.
     """
-    def setUp(self):
-        dnaseq  = testutil.datafile('dnaseq.fasta')
-        blastdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
+    def setup(self):
+        blastdb = SequenceFileDB('dnaseq')     # contains 'seq1', 'seq2'
         self.db = PrefixUnionDict({ 'prefix' : blastdb })
-
-    def test_keys(self):
-        "PrefixUnionDict keys"
+    def keys_test(self):
         k = self.db.keys()
         k.sort()
         assert k == ['prefix.seq1', 'prefix.seq2']
-
-    def test_contains(self):
-        "PrefixUnionDict contains"
+    def contains_test(self):
         assert 'prefix.seq1' in self.db
         assert 'prefix.seq2' in self.db
         assert 'foo' not in self.db
         assert 'prefix.foo' not in self.db
-
-    def test_has_key(self):
-        "PrefixUnionDict has key"
+    def has_key_test(self):
         assert self.db.has_key('prefix.seq1')
         assert self.db.has_key('prefix.seq2')
         assert not self.db.has_key('prefix.foo')
         assert not self.db.has_key('foo')
-
-    def test_get(self):
-        "PrefixUnionDict get"
+    def get_test(self):
         assert self.db.get('foo') is None
         assert self.db.get('prefix.foo') is None
         assert self.db.get('prefix.seq1') is not None
         assert str(self.db.get('prefix.seq1')).startswith('atggtgtca')
         assert self.db.get('prefix.seq2') is not None
         assert str(self.db.get('prefix.seq2')).startswith('GTGTTGAA')
-
-    def test_items(self):
-        "PrefixUnionDict items"
+    def items_test(self):
         i = [ k for (k,v) in self.db.items() ]
         i.sort()
         assert i == ['prefix.seq1', 'prefix.seq2']
-
-    def test_iterkeys(self):
-        "PrefixUnionDict iterkeys"
+    def iterkeys_test(self):
         kk = self.db.keys()
         kk.sort()
         ik = list(self.db.iterkeys())
         ik.sort()
         assert kk == ik
-
-    def test_itervalues(self):
-        "PrefixUnionDict itervalues"
+    def itervalues_test(self):
         kv = self.db.values()
         kv.sort()
         iv = list(self.db.itervalues())
         iv.sort()
         assert kv == iv
-
-    def test_iteritems(self):
-        "PrefixUnionDict iteritems"
+    def iteritems_test(self):
         ki = self.db.items()
         ki.sort()
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii
-
     # test some things other than dict behavior
-    def test_keyerror(self):
-        "PrefixUnionDict keyerror"
+    def keyerror_test(self):
         "Make sure that the PrefixUnionDict KeyError is informative."
         try:
             self.db['prefix.foo']
@@ -206,9 +161,7 @@ class PrefixUnionDict_Test(unittest.TestCase):
             self.db['foo']
         except KeyError, e:
             assert "invalid id format; no prefix: foo" in str(e), str(e)
-
-    def test_readonly(self):
-        "PrefixUnionDict readonly"
+    def readonly_test(self):
         try:
             self.db.copy()              # what should 'copy' do on PUD?
             assert 0, 'this method should raise NotImplementedError'
@@ -240,78 +193,61 @@ class PrefixUnionDict_Test(unittest.TestCase):
         except NotImplementedError:
             pass
 
-class AnnotationDB_Test(unittest.TestCase):
+class AnnotationDB_Test(object):
     """
     Test for all of the basic dictionary functions on 'AnnotationDB'.
     """
-    def setUp(self):
+    def setup(self):
         class Annotation(object):
             def __init__(self, **kwargs):
                 self.__dict__.update(kwargs)
         slicedb = dict(annot1=Annotation(id='seq', start=0, stop=10),
                        annot2=Annotation(id='seq', start=5, stop=9))
         sequence_dict = dict(seq = Sequence('ATGGGGCCGATTG', 'seq'))
+        
         self.db = AnnotationDB(slicedb, sequence_dict)
-
-    def test_keys(self):
-        "AnnotationDB keys"
+    def keys_test(self):
         k = self.db.keys()
         k.sort()
         assert k == ['annot1', 'annot2'], k
-
-    def test_contains(self):
-        "AnnotationDB contains"
+    def contains_test(self):
         assert 'annot1' in self.db, self.db.keys()
         assert 'annot2' in self.db
         assert 'foo' not in self.db
-
-    def test_has_key(self):
-        "AnnotationDB has key"
+    def has_key_test(self):
         assert self.db.has_key('annot1')
         assert self.db.has_key('annot2')
         assert not self.db.has_key('foo')
-
-    def test_get(self):
-        "AnnotationDB get"
+    def get_test(self):
         assert self.db.get('foo') is None
         assert self.db.get('annot1') is not None
         assert str(self.db.get('annot1').sequence).startswith('ATGGGGC')
         assert self.db.get('annot2') is not None
         assert str(self.db.get('annot2').sequence).startswith('GCCG')
-    
-    def test_items(self):
-        "AnnotationDB items"
+    def items_test(self):
         i = [ k for (k,v) in self.db.items() ]
         i.sort()
         assert i == ['annot1', 'annot2']
-    
-    def test_iterkeys(self):
-        "AnnotationDB iterkeys"
+    def iterkeys_test(self):
         kk = self.db.keys()
         kk.sort()
         ik = list(self.db.iterkeys())
         ik.sort()
         assert kk == ik
-    
-    def test_itervalues(self):
-        "AnnotationDB itervalues"
+    def itervalues_test(self):
         kv = self.db.values()
         kv.sort()
         iv = list(self.db.itervalues())
         iv.sort()
         assert kv[0] == iv[0]
         assert kv == iv, (kv, iv)
-    
-    def test_iteritems(self):
-        "AnnotationDB iteritems"
+    def iteritems_test(self):
         ki = self.db.items()
         ki.sort()
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii, (ki, ii)
-    
-    def test_readonly(self):
-        "AnnotationDB readonly"
+    def readonly_test(self):
         try:
             self.db.copy()              # what should 'copy' do on AD?
             assert 0, 'this method should raise NotImplementedError'
@@ -342,18 +278,14 @@ class AnnotationDB_Test(unittest.TestCase):
             assert 0, 'this method should raise NotImplementedError'
         except NotImplementedError:
             pass
-    
-    def test_equality(self):
-        "AnnotationDB equality"
-        # Check that separately generated annotation objects test equal"
+    def equality_test(self):
+        "Check that separately generated annotation objects test equal"
         key = 'annot1'
         db = self.db
         x = db.sliceAnnotation(key, db.sliceDB[key])
         y = db.sliceAnnotation(key, db.sliceDB[key])
         assert x == y
-    
-    def test_bad_seqdict(self):
-        "AnnotationDB bad seqdict"
+    def bad_seqdict_test(self):
         class Annotation(object):
             def __init__(self, **kwargs):
                 self.__dict__.update(kwargs)
@@ -365,14 +297,25 @@ class AnnotationDB_Test(unittest.TestCase):
             assert 0, "incorrect seqdb; key error should be raised"
         except KeyError:
             pass
+    def translation_annot_test(self):
+        db = SequenceFileDB('hbb1_mouse.fa')
+        adb = AnnotationDB({1:('gi|171854975|dbj|AB364477.1|',3,441)},
+                           db, itemClass=TranslationAnnot,
+                           itemSliceClass=TranslationAnnotSlice,
+                           sliceAttrDict=dict(id=0,start=1,stop=2))
+        trseq = adb[1]
+        assert len(trseq) == 146, 'wrong translation length!'
+        assert len(trseq.sequence) == 438, 'wrong sequence length!'
+        s = trseq[-10:]
+        assert len(s) == 10, 'wrong translation length!'
+        assert str(s.sequence) == 'GTGGCCACTGCCCTGGCTCACAAGTACCAC'
+        assert str(s) == 'VATALAHKYH', 'bad ORF translation!'
+        
                                                 
-class SeqDBCache_Test(unittest.TestCase):
-    
-    def test_cache(self):
-        "Sequence slice cache mechanics."
-
-        dnaseq  = testutil.datafile('dnaseq.fasta')
-        db = SequenceFileDB(dnaseq)
+class SeqDBCache_Test(object):
+    def cache_test(self):
+        "Test basic sequence slice cache mechanics."
+        db = SequenceFileDB('dnaseq')
 
         # create cache components
         cacheDict = {}
@@ -420,13 +363,10 @@ class SeqDBCache_Test(unittest.TestCase):
         v = db._cache.values()
         assert len(v) == 0
 
-    def test_nlmsaslice_cache(self):
-        "NLMSASlice sequence caching & removal"
-        
+    def nlmsaslice_cache_test(self):
+        "Test NLMSASlice sequence caching & removal"
         # set up sequences
-        dnaseq  = testutil.datafile('dnaseq.fasta')
-
-        db = SequenceFileDB(dnaseq, autoGC=-1) # use pure WeakValueDict...
+        db = SequenceFileDB('dnaseq', autoGC=-1) # use pure WeakValueDict...
         gc.collect()
         assert len(db._weakValueDict)==0, '_weakValueDict should be empty'
         seq1, seq2 = db['seq1'], db['seq2']
@@ -445,19 +385,14 @@ class SeqDBCache_Test(unittest.TestCase):
         # now retrieve a NLMSASlice, forcing entry of seq into cache
         ival = seq1[5:10]
         x = mymap[ival]
-
-        assert len(db._cache.values()) != 0
-
+        print 'this should not be empty:', db._cache.values()
         n1 = len(db._cache)
         assert n1 == 1, "should be exactly one cache entry, not %d" % (n1,)
 
         # ok, now trash referencing arguments & make sure of cleanup
         del x
         gc.collect()
-        
-        assert len(db._cache.values()) == 0
-        
-        
+        print 'this should be empty:', db._cache.values()
         n2 = len(db._cache)
         assert n2 == 0, '%d objects remain; cache memory leak!' % n2
         # FAIL because of __dealloc__ error in cnestedlist.NLMSASlice.
@@ -466,15 +401,3 @@ class SeqDBCache_Test(unittest.TestCase):
         gc.collect()
         # check that db._weakValueDict cache is empty
         assert len(db._weakValueDict)==0, '_weakValueDict should be empty'
-
-def get_suite():
-    "Returns the testsuite"
-    tests  = [ 
-        SequenceFileDB_Test, PrefixUnionDict_Test, 
-        AnnotationDB_Test, SeqDBCache_Test
-    ]
-    return testutil.make_suite(tests)
-
-if __name__ == '__main__':
-    suite = get_suite()
-    unittest.TextTestRunner(verbosity=2).run(suite)
