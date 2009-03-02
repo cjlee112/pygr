@@ -228,6 +228,7 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
     '''get table name and cursor by parsing name or using configFile.
     If neither provided, will try to get via your MySQL config file.
     If connect is None, will use MySQLdb.connect()'''
+
     kwargs = args.copy() # a copy we can modify
     if name is not None:
         argList = name.split() # TREAT AS WS-SEPARATED LIST
@@ -235,9 +236,11 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
             name = argList[0] # USE 1ST ARG AS TABLE NAME
             argnames = ('host','user','passwd') # READ ARGS IN THIS ORDER
             kwargs = list_to_dict(argnames, argList[1:])
+    
+    
     if 'user' not in kwargs and configFile is None: #Find where config file is
-        osname = (platform.platform()).split("-")[0]
-        if osname == 'Windows': #Machine is a Windows box
+        osname = platform.system()
+        if osname in('Microsoft', 'Windows'): # Machine is a Windows box
             windir = os.environ.get('WINDIR')
             sysdrv = os.environ.get('SYSTEMDRIVE')
             configFile = get_valid_path((windir, 'my.ini'),
@@ -246,7 +249,14 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
                                         (sysdrv, os.path.sep + 'my.cnf'))
         else: # treat as normal platform with $HOME defined
             homedir = os.environ.get('HOME')
+            if not homedir:
+                raise Exception('home environment variable not set')
             configFile = os.path.join(homedir, '.my.cnf')
+
+    # allows for a local mysql local configuration file to be read 
+    # from the current directory
+    configFile = configFile or os.path.join( os.getcwd(), 'mysql.cnf' )
+
     if configFile and os.path.exists(configFile):
         kwargs['read_default_file'] = configFile
         connect = None # force it to use MySQLdb
