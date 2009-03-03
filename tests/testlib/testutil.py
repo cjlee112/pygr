@@ -144,6 +144,9 @@ class TestXMLRPCServer(object):
         self.downloadDB = '%s' % kwargs.get('downloadDB', '')
         
         # create temporary directory for its logs
+        currdir = os.path.dirname(__file__)
+        self.server_script = path_join(currdir, 'pygrdata_server.py')
+
         self.outname = path_join(tempdir, 'xmlrcp-out.txt')
         self.errname = path_join(tempdir, 'xmlrcp-err.txt')
     
@@ -176,7 +179,7 @@ class TestXMLRPCServer(object):
         
 
         cmd = '%s %s %s' % \
-              (sys.executable, __file__, flags)
+              (sys.executable, self.server_script, flags)
         logger.debug('Starting XML-RPC server: ')
         logger.debug(cmd)
 
