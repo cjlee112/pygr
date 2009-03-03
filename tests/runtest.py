@@ -25,37 +25,27 @@ def run(targets, options):
     
     success = errors = 0
 
-    entire_suite = unittest.TestSuite()
-    
     # run the tests by importing the module and getting its test suite
     for name in targets:
         try:
-            testutil.debug('loading tests for module %s' % name)
-            mod = __import__(name)
+            testutil.info( 'running tests for module %s' % name )
+            mod = __import__( name )
             suite = mod.get_suite()
 
-            if options.strict:
-                result = unittest.TextTestRunner(verbosity=options.verbosity).\
-                          run(suite)
+            runner = unittest.TextTestRunner(verbosity=options.verbosity)
+            results = runner.run( suite )
             
-                # count tests and errors
-                success += result.testsRun
-                errors  += len(result.errors) + len(result.failures)
+            # count tests and errors
+            success += results.testsRun
+            errors  += len(results.errors) + len(results.failures)
 
-                if errors:
-                    testutil.error("strict mode stops on errors")
-                    break
-            else:
-                entire_suite.addTest(suite)
-        except (ImportError, SyntaxError):
-            testutil.error("unable to import module '%s'" % name)
+            # if we're in strict mode stop on errors
+            if options.strict and errors:
+                testutil.error( "strict mode stops on errors" )
+                break
 
-    if not options.strict:
-        # run all tests at once
-        tr = unittest.TextTestRunner(verbosity=options.verbosity)
-        result = tr.run(entire_suite)
-        success = result.testsRun
-        errors = len(result.errors) + len(result.failures)
+        except ImportError:
+            testutil.error( "unable to import module '%s'" % name )
 
     # each skipped testsuite generates a message
     skipped = len(testutil.SKIP_MESSAGES)
