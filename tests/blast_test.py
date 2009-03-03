@@ -139,7 +139,7 @@ def all_vs_all_blast_save():
     testutil.change_pygrdatapath(tempdir.path)
 
     sp_hbb1 = testutil.datafile('sp_hbb1')
-    all_vs_all = testutil.tempfile('all_vs_all')
+    all_vs_all = testutil.tempdatafile('all_vs_all')
 
     sp = seqdb.BlastDB(sp_hbb1)
     msa = cnestedlist.NLMSA(all_vs_all ,mode='w', pairwiseMode=True, bidirectional=False)

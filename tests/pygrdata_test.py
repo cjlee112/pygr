@@ -81,7 +81,7 @@ class DNAAnnotation_Test(TestBase):
     
     def setUp(self,**kwargs):
         dnaseq = testutil.datafile('dnaseq.fasta')
-        tryannot = testutil.tempfile('tryannot')
+        tryannot = testutil.tempdatafile('tryannot')
 
         db = seqdb.BlastDB(dnaseq)
         db.__doc__ = 'little dna'

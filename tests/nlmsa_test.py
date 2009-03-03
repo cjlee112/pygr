@@ -41,7 +41,7 @@ class NLMSA_Test(unittest.TestCase):
 
     def test_empty(self):
         "NLMSA Empty"
-        blasthits  = testutil.tempfile('blasthits')
+        blasthits  = testutil.tempdatafile('blasthits')
 
         msa = cnestedlist.NLMSA(blasthits , 'memory', pairwiseMode=True)
         try:
@@ -52,7 +52,7 @@ class NLMSA_Test(unittest.TestCase):
 
     def test_empty2(self):
         "NLMSA Empty 2"
-        blasthits = testutil.tempfile('blasthits')
+        blasthits = testutil.tempdatafile('blasthits')
         msa = cnestedlist.NLMSA(blasthits, mode='w', pairwiseMode=True)
         try:
             msa.build()
@@ -63,7 +63,7 @@ class NLMSA_Test(unittest.TestCase):
     def test_build(self):
         "NLMSA build"
         
-        testnlmsa = testutil.tempfile('testnlmsa')
+        testnlmsa = testutil.tempdatafile('testnlmsa')
         msa = cnestedlist.NLMSA(testnlmsa ,mode='w', pairwiseMode=True,
                                 bidirectional=False)
 
