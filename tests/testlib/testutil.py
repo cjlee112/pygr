@@ -79,8 +79,19 @@ class TempDir(object):
     random one
     """
 
-    def __init__(self, path=''):
-        self.path = tempfile_mod.mkdtemp('', path)
+    def __init__(self, name=None, path='tempdir', prefix='', reset=False):
+        self.tempdir = path_join( pathfix.curr_dir, '..', path )
+        
+        # will remove the root directory of all temporary directories
+        # removes content 
+        if reset and os.path.isdir(self.tempdir):
+            logger.info('resetting path %s' % self.tempdir)
+            shutil.rmtree(self.tempdir, ignore_errors=True)
+
+        if not os.path.isdir(self.tempdir):
+            os.mkdir(self.tempdir)
+        
+        self.path = tempfile_mod.mkdtemp(prefix=prefix, dir=self.tempdir)
         atexit.register(self.remove)
 
     def randname(self, prefix='x', size=56):
@@ -98,7 +109,8 @@ class TempDir(object):
 
     def remove(self):
         "Removes the temporary directory"
-        shutil.rmtree(self.path, ignore_errors=True)
+        #shutil.rmtree(self.path, ignore_errors=True)
+        pass
 
 class TestXMLRPCServer(object):
     """
@@ -117,7 +129,7 @@ class TestXMLRPCServer(object):
         import pygr.Data
 
         # point it to a temporary directory
-        tempdir = TempDir('pygrdata')
+        tempdir = TempDir().tempdir
         self.port = kwargs.get('port', 83756)
 
         # check that all resources are available
@@ -127,19 +139,25 @@ class TestXMLRPCServer(object):
         self.pygrDataNames = pygrDataNames
         
         # user specified or default values
-        self.pygrDataPath = kwargs.get('PYGRDATAPATH', tempdir.path)
+        self.pygrDataPath = kwargs.get('PYGRDATAPATH', tempdir)
+
         self.downloadDB = '%s' % kwargs.get('downloadDB', '')
         
+        # create temporary directory for its logs
+        self.outname = path_join(tempdir, 'xmlrcp-out.txt')
+        self.errname = path_join(tempdir, 'xmlrcp-err.txt')
+    
         # start the tread
         thread = threading.Thread(target=self.run_server)
         thread.start()
         
         # wait for it to start for 
         time.sleep(1) 
-    
+
     def run_server(self):
         'this method blocks, so run it in a separate thread'
         logger.debug('starting server on port %s', self.port)
+
         params = dict(
             port=self.port, 
             downloadDB=self.downloadDB, 
@@ -152,26 +170,20 @@ class TestXMLRPCServer(object):
         --pygrdatapath=%(pygrdatapath)s \
         --downloadDB=%(downloadDB)s --resources=%(resources)s""" % params
 
+        flags = ' '.join(flags.split() )
         # CTB -- warning, these could fail when passed to the os.system
         # without quoting, IF weird characters are present in TMP or TMPDIR.
-        (x, outname) = tempfile_mod.mkstemp()
-        os.close(x)
-        (x, errname) = tempfile_mod.mkstemp()
-        os.close(x)
+        
 
-        cmd = '%s testlib%spygrdata_server.py %s > %s 2> %s' % \
-              (sys.executable, os.path.sep, flags, outname, errname)
+        cmd = '%s %s %s' % \
+              (sys.executable, __file__, flags)
         logger.debug('Starting XML-RPC server: ')
         logger.debug(cmd)
 
         try:
             os.system(cmd)
         finally:
-            #print open(outname).read()
-            #print open(errname).read()
-
-            os.unlink(outname)
-            os.unlink(errname)
+            pass
 
         logger.debug('server stopped')
     
@@ -241,7 +253,8 @@ TEMPDIR = TempDir().path
 # shortcuts for creating full paths to files in the data and temporary
 # directories
 datafile = lambda name: path_join(DATADIR, name)
-tempfile = lambda name: path_join(TEMPDIR, name)
+tempdatafile = lambda name: path_join(TEMPDIR, name)
 
 if __name__ == '__main__':
+    #TempDir(reset=True)
     TestXMLRPCServer()
