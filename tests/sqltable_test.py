@@ -1,52 +1,24 @@
-import pygrtest_common
+import os, unittest
+from testlib import testutil, logger
 from pygr.sqlgraph import SQLTable,SQLTableNoCache,getNameCursor,\
      MapView,GraphView,DBServerInfo
-import MySQLdb
 
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTable
-    def setup(self):
-        # test will be skipped if unavailable
-        self.load_data(dbError=MySQLdb.MySQLError, writeable=self.writeable)
+    def setUp(self):
+        self.load_data(writeable=self.writeable)
     def load_data(self, cursor=None, tableName='test.sqltable_test',
-                  dbError=NotImplementedError, autoInc='AUTO_INCREMENT',
-                  writeable=False):
-        joinTable1 = tableName + '1'
-        joinTable2 = tableName + '2'
+                  autoInc='AUTO_INCREMENT', writeable=False):
+        'create 3 tables and load 9 rows for our tests'
         self.tableName = tableName
-        self.joinTable1 = joinTable1
-        self.joinTable2 = joinTable2
+        self.joinTable1 = joinTable1 = tableName + '1'
+        self.joinTable2 = joinTable2 = tableName + '2'
         createTable = """\
         CREATE TABLE %s (primary_id INTEGER PRIMARY KEY %s, seq_id TEXT, start INTEGER, stop INTEGER)
         """ % (tableName,autoInc)
-        
-        try:
-            self.db = self.tableClass(tableName, cursor, dropIfExists=True,
-                                      createTable=createTable,
-                                      writeable=writeable)
-        except dbError:
-            tempcurs = getNameCursor()[1]
-            try: # hmm, maybe need to create the test database?
-                tempcurs.execute('create database if not exists test')
-                self.db = self.tableClass(tableName, cursor,
-                                          dropIfExists=True,
-                                          createTable=createTable,
-                                          writeable=writeable)
-            except dbError: # no server, database or privileges?
-                print """\
-                The MySQL 'test' database doesn't exist and/or can't be
-                created or accessed on this account. This test will be skipped.
-                """
-                raise ImportError #  skip tests.
-
-        self.db.cursor.execute("""\
-        INSERT INTO %s (seq_id, start, stop)
-              VALUES ('seq1', 0, 10)
-        """ % tableName)
-        self.db.cursor.execute("""\
-        INSERT INTO %s (seq_id, start, stop)
-              VALUES ('seq2', 5, 15)
-        """ % tableName)
+        self.db = self.tableClass(tableName, cursor, dropIfExists=True,
+                                  createTable=createTable,
+                                  writeable=writeable)
         self.sourceDB = self.tableClass(joinTable1, cursor,
                                         dropIfExists=True, createTable="""\
         CREATE TABLE %s (my_id INTEGER PRIMARY KEY,
@@ -57,73 +29,66 @@ class SQLTable_Setup(unittest.TestCase):
         CREATE TABLE %s (third_id INTEGER PRIMARY KEY,
               other_id VARCHAR(16))
         """ % joinTable2)
-        self.db.cursor.execute("""\
-        INSERT INTO %s VALUES (2,'seq2')
-        """ % joinTable1)
-        self.db.cursor.execute("""\
-        INSERT INTO %s VALUES (3,'seq3')
-        """ % joinTable1)
-        self.db.cursor.execute("""\
-        INSERT INTO %s VALUES (4,'seq4')
-        """ % joinTable1)
-        self.db.cursor.execute("""\
-        INSERT INTO %s VALUES (7, 'seq2')
-        """ % joinTable2)
-        self.db.cursor.execute("""\
-        INSERT INTO %s VALUES (99, 'seq3')
-        """ % joinTable2)
-        self.db.cursor.execute("""\
-        INSERT INTO %s VALUES (6, 'seq4')
-        """ % joinTable2)
-        self.db.cursor.execute("""\
-        INSERT INTO %s VALUES (8, 'seq4')
-        """ % joinTable2)
-    def teardown(self):
+        sql = """
+            INSERT INTO %s (seq_id, start, stop) VALUES ('seq1', 0, 10)
+            INSERT INTO %s (seq_id, start, stop) VALUES ('seq2', 5, 15)
+            INSERT INTO %s VALUES (2,'seq2')
+            INSERT INTO %s VALUES (3,'seq3')
+            INSERT INTO %s VALUES (4,'seq4')
+            INSERT INTO %s VALUES (7, 'seq2')
+            INSERT INTO %s VALUES (99, 'seq3')
+            INSERT INTO %s VALUES (6, 'seq4')
+            INSERT INTO %s VALUES (8, 'seq4')
+        """ % tuple(([tableName]*2) + ([joinTable1]*3) + ([joinTable2]*4))
+        for line in sql.strip().splitlines(): # insert our test data
+            self.db.cursor.execute(line.strip())
+    def tearDown(self):
         self.db.cursor.execute('drop table if exists %s' % self.tableName)
         self.db.cursor.execute('drop table if exists %s' % self.joinTable1)
         self.db.cursor.execute('drop table if exists %s' % self.joinTable2)
 
 class SQLTable_Test(SQLTable_Setup):
     writeable = False # read-only database interface
-    def keys_test(self):
+    def test_keys(self):
         k = self.db.keys()
         k.sort()
         assert k == [1, 2]
-    def contains_test(self):
+    def test_contains(self):
         assert 1 in self.db
         assert 2 in self.db
         assert 'foo' not in self.db
-    def has_key_test(self):
+    def test_has_key(self):
         assert self.db.has_key(1)
         assert self.db.has_key(2)
         assert not self.db.has_key('foo')
-    def get_test(self):
+    def test_get(self):
         assert self.db.get('foo') is None
         assert self.db.get(1) == self.db[1]
         assert self.db.get(2) == self.db[2]
-    def items_test(self):
+    def test_items(self):
         i = [ k for (k,v) in self.db.items() ]
         i.sort()
         assert i == [1, 2]
-    def iterkeys_test(self):
+    def test_iterkeys(self):
         kk = self.db.keys()
         kk.sort()
         ik = list(self.db.iterkeys())
         ik.sort()
         assert kk == ik
-    def itervalues_test(self):
+    def test_itervalues(self):
         kv = self.db.values()
         kv.sort()
         iv = list(self.db.itervalues())
         iv.sort()
         assert kv == iv
-    def iteritems_test(self):
+    def test_iteritems(self):
         ki = self.db.items()
         ki.sort()
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii
-    def readonly_test(self):
+    def test_readonly(self):
+        'test error handling of write attempts to read-only DB'
         try:
             self.db.new(seq_id='freddy', start=3000, stop=4500)
             raise AssertionError('failed to trap attempt to write to db')
@@ -142,7 +107,8 @@ class SQLTable_Test(SQLTable_Setup):
             pass
 
     ### @CTB need to test write access
-    def mapview_test(self):
+    def test_mapview(self):
+        'test MapView of SQL join'
         m = MapView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -150,7 +116,13 @@ class SQLTable_Test(SQLTable_Setup):
         assert m[self.sourceDB[2]] == self.targetDB[7]
         assert m[self.sourceDB[3]] == self.targetDB[99]
         assert self.sourceDB[2] in m
-    def graphview_test(self):
+        try:
+            d = m[self.sourceDB[4]]
+            raise AssertionError('failed to trap non-unique mapping')
+        except KeyError:
+            pass
+    def test_graphview(self):
+        'test GraphView of SQL join'
         m = GraphView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -160,20 +132,38 @@ class SQLTable_Test(SQLTable_Setup):
         assert self.targetDB[6] in d and self.targetDB[8] in d
         assert self.sourceDB[2] in m
 
-def sqlite_setup(self):
-    # test will be skipped if unavailable
-    import sqlite3
-    db = sqlite3.connect('test_sqlite.db')
-    c = db.cursor()
-    self.load_data(c, 'sqltable_test', autoInc='', writeable=self.writeable)
+class SQLite_Mixin(object):
+    def setUp(self):
+        import sqlite3
+        self.sqlite_file = testutil.tempdatafile('test_sqlite.db')
+        self.tearDown(False) # delete the file if it exists
+        self.sqlite_db = sqlite3.connect(self.sqlite_file)
+        c = self.sqlite_db.cursor()
+        self.load_data(c, 'sqltable_test', autoInc='',
+                       writeable=self.writeable)
+    def tearDown(self, closeConnection=True):
+        'delete the sqlite db file after (optionally) closing connection'
+        if closeConnection:
+            self.db.cursor.close() # close the cursor
+            self.sqlite_db.close() # close the connection
+        try:
+            os.remove(self.sqlite_file)
+        except OSError:
+            pass
         
-class SQLiteTable_Test(SQLTable_Test):
-    setup = sqlite_setup
+class SQLiteTable_Test(SQLite_Mixin, SQLTable_Test):
+    pass
+
+class SQLTable_NoCache_Test(SQLTable_Test):
+    tableClass = SQLTableNoCache
+
+class SQLiteTable_NoCache_Test(SQLiteTable_Test):
+    tableClass = SQLTableNoCache
 
 class SQLTableRW_Test(SQLTable_Setup):
     'test write operations'
     writeable = True
-    def new_test(self):
+    def test_new(self):
         'test row creation with auto inc ID'
         n = len(self.db)
         o = self.db.new(seq_id='freddy', start=3000, stop=4500)
@@ -182,7 +172,7 @@ class SQLTableRW_Test(SQLTable_Setup):
         result = t[o.id]
         assert result.seq_id == 'freddy' and result.start==3000 \
                and result.stop==4500
-    def new2_test(self):
+    def test_new2(self):
         'check row creation with specified ID'
         n = len(self.db)
         o = self.db.new(id=99, seq_id='jeff', start=3000, stop=4500)
@@ -192,7 +182,7 @@ class SQLTableRW_Test(SQLTable_Setup):
         result = t[99]
         assert result.seq_id == 'jeff' and result.start==3000 \
                and result.stop==4500
-    def attr_test(self):
+    def test_attr(self):
         'test changing an attr value'
         o = self.db[2]
         assert o.seq_id == 'seq2'
@@ -201,7 +191,7 @@ class SQLTableRW_Test(SQLTable_Setup):
         t = self.tableClass(self.tableName, self.db.cursor) # requery the db
         result = t[2]
         assert result.seq_id == 'newval'
-    def delitem_test(self):
+    def test_delitem(self):
         'test deletion of a row'
         n = len(self.db)
         del self.db[1]
@@ -211,7 +201,7 @@ class SQLTableRW_Test(SQLTable_Setup):
             raise AssertionError('old ID still exists!')
         except KeyError:
             pass
-    def setitem_test(self):
+    def test_setitem(self):
         'test assigning new ID to existing object'
         o = self.db.new(id=17, seq_id='bob', start=2000, stop=2500)
         self.db[13] = o
@@ -232,21 +222,21 @@ class SQLTableRW_Test(SQLTable_Setup):
             pass
         
 
-class SQLiteTableRW_Test(SQLTableRW_Test):
-    setup = sqlite_setup
+class SQLiteTableRW_Test(SQLite_Mixin, SQLTableRW_Test):
+    pass
 
 class SQLTableRW_NoCache_Test(SQLTableRW_Test):
     tableClass = SQLTableNoCache
 
-class SQLiteTableRW_NoCache_Test(SQLTableRW_NoCache_Test):
-    setup = sqlite_setup
+class SQLiteTableRW_NoCache_Test(SQLiteTableRW_Test):
+    tableClass = SQLTableNoCache
 
 class Ensembl_Test(unittest.TestCase):
      
     def setUp(self):
         # test will be skipped if mysql module or ensembldb server unavailable
 
-        logger.debug('accessing ensebledb.ensembl.org')
+        logger.debug('accessing ensembldb.ensembl.org')
         conn = DBServerInfo(host='ensembldb.ensembl.org', user='anonymous',
                             passwd='')
         translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
@@ -284,14 +274,17 @@ def get_suite():
     # detect mysql
     if testutil.mysql_enabled():
         tests.append(SQLTable_Test)
-        tests.append(SQLiteTable_Test)
         tests.append(SQLTableRW_Test)
-        tests.append(SQLiteTableRW_Test)
-        tests.append(SQLTableRW_NoCacheTest)
-        tests.append(SQLiteTableRW_NoCacheTest)
+        tests.append(SQLTable_NoCache_Test)
+        tests.append(SQLTableRW_NoCache_Test)
         tests.append(Ensembl_Test) 
     else:
-        testutil.info('*** skipping SQLTable_Test')
+        testutil.info('*** skipping MySQL tests')
+    if testutil.sqlite_enabled():
+        tests.append(SQLiteTable_Test)
+        tests.append(SQLiteTableRW_Test)
+        tests.append(SQLiteTable_NoCache_Test)
+        tests.append(SQLiteTableRW_NoCache_Test)
 
     return testutil.make_suite(tests)
 

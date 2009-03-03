@@ -232,6 +232,23 @@ def mysql_enabled():
 
     return True
 
+
+def sqlite_enabled():
+    """
+    Detects whether sqlite3 is functional on the current system
+    """
+    global SKIP_MESSAGES
+
+    try:
+        import sqlite3
+    except ImportError, exc:
+        msg = 'sqlite3 error: %s' % exc
+        SKIP_MESSAGES.append(msg)
+        warn(msg)
+        return False
+    return True
+
+
 def blast_enabled():
     """
     Detects whether the blast suite is functional on the current system
