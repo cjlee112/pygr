@@ -1,4 +1,8 @@
 [megatests]
+logDir = /result/pygr_megatest/src_save
+mailFrom = testrunner@somehost.edu
+mailTo_failed = somethingswrong@pygr.org, logger@pygr.org, dev@bugfix.org
+mailTo_ok = wentokay@pygr.org, logger@pygr.org
 testInputDB = PYGRDB_JAN06
 testInputDir = /result/pygr_megatest
 testOutputBaseDir = /usr/tmp/deepreds
