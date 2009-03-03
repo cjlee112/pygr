@@ -39,6 +39,9 @@ import pygr.Data
 names = filter(None, options.resources.split(':'))
 resources = map(pygr.Data.getResource, names)
 
+# set it to None
+options.downloadDB = options.downloadDB or None
+
 # create a new server that will serve the resources we just loaded
 xmlrpc = pygr.Data.getResource.newServer('testy',
                                          withIndex=True,

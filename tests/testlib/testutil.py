@@ -127,9 +127,9 @@ class TestXMLRPCServer(object):
     def __init__(self,*pygrDataNames,**kwargs):
         'starts server, returns without blocking'
         import pygr.Data
-
+        
         # point it to a temporary directory
-        tempdir = TempDir().tempdir
+        tempdir = TempDir('pygrdata').path
         self.port = kwargs.get('port', 83756)
 
         # check that all resources are available
@@ -259,5 +259,5 @@ datafile = lambda name: path_join(DATADIR, name)
 tempdatafile = lambda name: path_join(TEMPDIR, name)
 
 if __name__ == '__main__':
-    #TempDir(reset=True)
+    TempDir(reset=True)
     TestXMLRPCServer()
