@@ -2,7 +2,7 @@
 Test some of the basics underpinning the graph system.
 """
 
-import unittest
+import os, unittest
 from testlib import testutil
 from pygr import mapping, graphquery, sqlgraph
 import pygr.Data
@@ -182,19 +182,22 @@ class SQLGraph_Test(Mapping_Test):
 
 class SQLiteGraph_Test(Mapping_Test):
     'run same tests on mapping.SQLGraph class'
-    def setup(self):
+    def setUp(self):
         from pygr import sqlgraph
         import sqlite3 # test will be skipped if unavailable
-        self.dbfile = 'sqlitegraph_test.db'
-        self.teardown() # make sure db file not already present
-        db = sqlite3.connect(self.dbfile)
-        cursor = db.cursor()
+        self.dbfile = testutil.tempdatafile('sqlitegraph_test.db')
+        self.tearDown(False) # make sure db file not already present
+        self.sqlite_db = sqlite3.connect(self.dbfile)
+        self.cursor = self.sqlite_db.cursor()
         createOpts = dict(source_id='int', target_id='int', edge_id='int')
         self.datagraph = sqlgraph.SQLGraph('testgraph',
-                                           cursor=cursor,
+                                           cursor=self.cursor,
                                            dropIfExists=True,
                                            createTable=createOpts)
-    def teardown(self):
+    def tearDown(self, closeConnection=True):
+        if closeConnection:
+            self.cursor.close() # close the cursor
+            self.sqlite_db.close() # close the connection
         try:
             os.remove(self.dbfile)
         except OSError:
@@ -228,7 +231,9 @@ def get_suite():
         tests.append(SQLGraph_Test)    
     else:
         testutil.info('*** skipping MySql version of SQLGraph test')
-
+    if testutil.sqlite_enabled():
+        tests.append(SQLiteGraph_Test)
+        
     return testutil.make_suite(tests)
 
 if __name__ == '__main__':
