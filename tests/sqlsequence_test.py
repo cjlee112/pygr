@@ -18,7 +18,7 @@ class SQLSequence_Test(unittest.TestCase):
         """
         
         self.db = sqlgraph.SQLTable('test.sqlsequence_test', dropIfExists=True,
-            createTable=createTable)
+            createTable=createTable, attrAlias=dict(seq='sequence'))
         
         self.db.cursor.execute("""\
         INSERT INTO test.sqlsequence_test (sequence)
