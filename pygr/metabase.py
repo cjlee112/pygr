@@ -3,7 +3,7 @@ import pickle,sys
 from StringIO import StringIO
 import shelve
 from mapping import Collection,Mapping,Graph
-from classutil import standard_invert
+from classutil import standard_invert,get_bound_subclass
 from coordinator import XMLRPCServerBase
 
 class OneTimeDescriptor(object):
@@ -16,7 +16,7 @@ class OneTimeDescriptor(object):
             pygrID = obj._persistent_id # GET ITS RESOURCE ID
         except AttributeError:
             raise AttributeError('attempt to access pygr.Data attr on non-pygr.Data object')
-        target = resourceCache.schemaAttr(pygrID, self.attr, self.mdb) #get from mdb
+        target = self.mdb.get_schema_attr(pygrID, self.attr) #get from mdb
         obj.__dict__[self.attr] = target # save in __dict__ to evade __setattr__
         return target
 
@@ -31,13 +31,13 @@ class ItemDescriptor(object):
         self.mapAttr = mapAttr
         self.targetAttr = targetAttr
         self.uniqueMapping = uniqueMapping
-    def get_target(self,obj):
+    def get_target(self, obj):
         'return the mapping object for this schema relation'
         try:
-            id = obj.db._persistent_id # GET RESOURCE ID OF DATABASE
+            resID = obj.db._persistent_id # GET RESOURCE ID OF DATABASE
         except AttributeError:
             raise AttributeError('attempt to access pygr.Data attr on non-pygr.Data object')
-        targetDict = resourceCache.schemaAttr(id, self.attr, self.mdb) # get from mdb
+        targetDict = self.mdb.get_schema_attr(resID, self.attr)
         if self.invert:
             targetDict = ~targetDict
         if self.getEdges:
@@ -102,7 +102,7 @@ class ResourceDBShelve(object):
     def reopen(self,mode):
         self.db.close()
         self.db=shelve.open(self.dbpath,mode)
-    def __getitem__(self,id,download=False):
+    def find_resource(self,id,download=False):
         'get an item from this resource database'
         objdata = self.db[id] # RAISES KeyError IF NOT PRESENT
         try:
@@ -192,46 +192,122 @@ def get_info_dict(obj, pickleString):
         d['user'] = None
     return d
 
-def persistent_load(self, persid):
-    'check for PYGR_ID:... format and return the requested object'
-    if persid.startswith('PYGR_ID:'):
-        return self(persid[8:]) # RUN OUR STANDARD RESOURCE REQUEST PROCESS
-    else: # UNKNOWN PERSISTENT ID... NOT FROM PYGR!
-        raise pickle.UnpicklingError, 'Invalid persistent ID %s' % persid
+class MetabaseBase(object):
+    def persistent_load(self, persid):
+        'check for PYGR_ID:... format and return the requested object'
+        if persid.startswith('PYGR_ID:'):
+            return self(persid[8:]) # RUN OUR STANDARD RESOURCE REQUEST PROCESS
+        else: # UNKNOWN PERSISTENT ID... NOT FROM PYGR!
+            raise pickle.UnpicklingError, 'Invalid persistent ID %s' % persid
+    def load(self, pygrID, objdata, docstring):
+        'load the pickled data and all its dependencies'
+        obj = self.loads(objdata)
+        obj.__doc__ = docstring
+        if hasattr(obj,'_saveLocalBuild') and obj._saveLocalBuild:
+            saver = self.downloadKeeper.saver # mdb in which to record local copy
+            # SAVE AUTO BUILT RESOURCE TO LOCAL PYGR.DATA
+            hasPending = saver.has_pending() # any pending transaction?
+            saver.addResource(pygrID, obj) # add to queue for commit
+            obj._saveLocalBuild = False # NO NEED TO SAVE THIS AGAIN
+            if hasPending:
+                print >>sys.stderr,'''Saving new resource %s to local pygr.Data...
+You must use pygr.Data.save() to commit!
+You are seeing this message because you appear to be in the
+middle of a pygr.Data transaction.  Ordinarily pygr.Data would
+automatically commit this new downloaded resource, but doing so
+now would also commit your pending transaction, which you may
+not be ready to do!''' % pygrID
+            else: # automatically save new resource
+                saver.save_pending() # commit it
+        else: # NORMAL USAGE
+            obj._persistent_id = pygrID  # MARK WITH ITS PERSISTENT ID
+        self.loader[pygrID] = obj # SAVE TO OUR CACHE
+        self.bind_schema(pygrID, obj) # BIND SHADOW ATTRIBUTES IF ANY
+        return obj
+    def loads(self, data):
+        'unpickle from string, using persistent ID expansion'
+        src = StringIO(data)
+        unpickler = pickle.Unpickler(src)
+        unpickler.persistent_load = self.persistent_load # WE PROVIDE PERSISTENT LOOKUP
+        obj = unpickler.load() # ACTUALLY UNPICKLE THE DATA
+        return obj
+    def __call__(self, resID, debug=None, download=None, *args, **kwargs):
+        'get the requested resource ID by searching all databases'
+        try:
+            return self.loader[resID] # USE OUR CACHED OBJECT
+        except KeyError:
+            pass
+        debug_state = self.debug # SAVE ORIGINAL STATE
+        download_state = self.download
+        if debug is not None:
+            self.debug = debug
+        if download is not None: # apply the specified download mode
+            self.download = download
+        else: # just use our current download mode
+            download = self.download
+        try: # finally... TO RESTORE debug STATE EVEN IF EXCEPTION OCCURS.
+            for objdata,docstr in self.find_resource(resID, download):
+                try:
+                    obj = self.load(resID, objdata, docstr) 
+                    break
+                except (KeyError,IOError): # NOT IN THIS DB, FILES NOT ACCESSIBLE...
+                    if self.debug: # PASS ON THE ACTUAL ERROR IMMEDIATELY
+                        raise
+        finally: # RESTORE STATE BEFORE RAISING ANY EXCEPTION
+            self.debug = debug_state
+            self.download = download_state
+        self.loader[resID] = obj # save to our cache
+        return obj
+    def bind_schema(self, resID, obj):
+        'if this resource ID has any schema, bind its attrs to class'
+        try:
+            schema = self.getschema(resID)
+        except KeyError:
+            return # NO SCHEMA FOR THIS OBJ, SO NOTHING TO DO
+        self.loader.schemaCache[resID] = schema # cache for speed
+        for attr,rules in schema.items():
+            if not attr.startswith('-'): # only bind real attributes
+                self.bind_property(obj, attr, **rules)
+    def bind_property(self, obj, attr, itemRule=False, **kwargs):
+        'create a descriptor for the attr on the appropriate obj class'
+        try: # SEE IF OBJECT TELLS US TO SKIP THIS ATTRIBUTE
+            return obj._ignoreShadowAttr[attr] # IF PRESENT, NOTHING TO DO
+        except (AttributeError,KeyError):
+            pass # PROCEED AS NORMAL
+        if itemRule: # SHOULD BIND TO ITEMS FROM obj DATABASE
+            targetClass = get_bound_subclass(obj,'itemClass') # CLASS USED FOR CONSTRUCTING ITEMS
+            descr = ItemDescriptor(attr, self, **kwargs)
+        else: # SHOULD BIND DIRECTLY TO obj VIA ITS CLASS
+            targetClass = get_bound_subclass(obj)
+            descr = OneTimeDescriptor(attr, self, **kwargs)
+        setattr(targetClass, attr, descr) # BIND descr TO targetClass.attr
+        if itemRule:
+            try: # BIND TO itemSliceClass TOO, IF IT EXISTS...
+                targetClass = get_bound_subclass(obj,'itemSliceClass')
+            except AttributeError:
+                pass # NO itemSliceClass, SO SKIP
+            else: # BIND TO itemSliceClass
+                setattr(targetClass, attr, descr)
+        if attr == 'inverseDB': # ADD SHADOW __invert__ TO ACCESS THIS
+            addSpecialMethod(obj, '__invert__', getInverseDB)
+    def get_schema_attr(self, resID, attr):
+        'actually retrieve the desired schema attribute'
+        try: # GET SCHEMA FROM CACHE
+            schema = self.loader.schemaCache[resID]
+        except KeyError: # HMM, IT SHOULD BE CACHED!
+            schema = self.getschema(resID) # OBTAIN FROM RESOURCE DB
+            self.loader.schemaCache[resID] = schema # KEEP IT IN OUR CACHE
+        try:
+            schema = schema[attr] # GET SCHEMA FOR THIS SPECIFIC ATTRIBUTE
+        except KeyError:
+            raise AttributeError('no pygr.Data schema info for %s.%s' \
+                                 % (resID,attr))
+        targetID = schema['targetID'] # GET THE RESOURCE ID
+        return self(targetID) # actually load the resource
 
-def get_resource(self, resID, debug=None, download=None, *args, **kwargs):
-    'get the requested resource ID by searching all databases'
-    try:
-        return self.loader[id] # USE OUR CACHED OBJECT
-    except KeyError:
-        pass
-    debug_state = self.debug # SAVE ORIGINAL STATE
-    download_state = self.download
-    if debug is not None:
-        self.debug = debug
-    if download is not None: # apply the specified download mode
-        self.download = download
-    else: # just use our current download mode
-        download = self.download
-    try: # finally... TO RESTORE debug STATE EVEN IF EXCEPTION OCCURS.
-        obj = None
-        for mdb in self.iter_mdb(): # SEARCH ALL OF OUR DATABASES
-            try:
-                obj = mdb.rdb.__getitem__(resID, download) # TRY TO OBTAIN FROM THIS DATABASE
-                break # SUCCESS!  NOTHING MORE TO DO
-            except (KeyError,IOError): # NOT IN THIS DB, FILES NOT ACCESSIBLE...
-                if self.debug: # PASS ON THE ACTUAL ERROR IMMEDIATELY
-                    raise
-        if obj is None:
-            raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % id)
-    finally: # RESTORE STATE BEFORE RAISING ANY EXCEPTION
-        self.debug = debug_state
-        self.download = download_state
-    return obj
 
 
-
-class Metabase(object):
+class Metabase(MetabaseBase):
     def __init__(self, dbpath, loader, layer=None):
         '''layer provides a mechanism for the caller to request information
         about what type of metabase this dbpath mapped to.  layer must
@@ -271,10 +347,9 @@ class Metabase(object):
         self.download = False
     def init_saver(self):
         self.saver = ResourceSaver(self)
-    persistent_load = persistent_load
-    __call__ = get_resource
-    def iter_mdb(self):
-        yield self
+        self.downloadKeeper = self # record downloaded resources here
+    def find_resource(self, resID, download=False):
+        yield self.rdb.find_resource(resID, download)
     def add_resource(self, resID, obj):
         self.saver.add_resource(resID, obj)
     def delete_resource(self, resID):
@@ -300,6 +375,9 @@ class Metabase(object):
         except KeyError:
             pass
         return self(resID,**kwargs)
+    def getschema(self, resID):
+        'return dict of {attr:{args}} or KeyError if not found'
+        return self.rdb.getschema(resID)
 
 class ReadOnlyMetabase(Metabase):
     'resource loading but no resource saving'
@@ -312,14 +390,14 @@ class ReadOnlyMetabase(Metabase):
 # __call__()
 # 
 
-class MetabaseList(object):
+class MetabaseList(MetabaseBase):
     '''Primary interface for pygr.Data resource database access.  A single instance
     of this class is created upon import of the pygr.Data module, accessible as
     pygr.Data.getResource.  Users normally will have no need to create additional
     instances of this class themselves.'''
     def __init__(self, loader, separator=',', saveDict=None, PYGRDATAPATH=None):
         self.loader = loader
-        self.db = None
+        self.mdb = None
         self.layer = {}
         self.dbstr = ''
         self.separator = separator
@@ -330,14 +408,20 @@ class MetabaseList(object):
             self.saveDict = saveDict # SAVE NEW LAYER NAMES HERE...
             self.update(PYGRDATAPATH) # LOAD RESOURCE DBs FROM PYGRDATAPATH
             del self.saveDict
-    persistent_load = persistent_load
-    __call__ = get_resource
-    def iter_mdb(self):
-        'iterate over all available databases, read from PYGRDATAPATH env var.'
-        self.update()
-        if self.db is None or len(self.db)==0:
-            raise ValueError('empty PYGRDATAPATH! Please check environment variable.')
-        return iter(self.db)
+    def find_resource(self, resID, download=False):
+        'search our metabases for pickle string and docstr for resID'
+        for mdb in self.mdb:
+            try:
+                yield mdb.find_resource(resID, download)
+            except KeyError: # not in this db
+                pass
+        raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % resID)
+    ## def iter_mdb(self):
+    ##     'iterate over all available databases, read from PYGRDATAPATH env var.'
+    ##     self.update()
+    ##     if self.db is None or len(self.db)==0:
+    ##         raise ValueError('empty PYGRDATAPATH! Please check environment variable.')
+    ##     return iter(self.db)
     def get_pygr_data_path(self):
         'use internal attribute, environment var, or default in that order'
         try:
@@ -361,7 +445,7 @@ class MetabaseList(object):
             PYGRDATAPATH = self.get_pygr_data_path()
         if self.dbstr != PYGRDATAPATH: # LOAD NEW RESOURCE PYGRDATAPATH
             self.dbstr = PYGRDATAPATH
-            self.db = []
+            self.mdb = []
             self.layer = {}
             for dbpath in PYGRDATAPATH.split(self.separator):
                 try: # create metabase
@@ -383,7 +467,7 @@ Continuing with import...'''%dbpath
                     else:
                         raise # JUST PROPAGATE THE ERROR AS USUAL
                 else: # NO PROBLEM, SO ADD TO OUR RESOURCE DB LIST
-                    self.db.append(mdb) # SAVE TO OUR LIST OF RESOURCE DATABASES
+                    self.mdb.append(mdb) # SAVE TO OUR LIST OF RESOURCE DATABASES
     # Not sure this is needed anymore...
     def addLayer(self,layerName,rdb):
         'add resource database as a new named layer'
@@ -401,25 +485,25 @@ Continuing with import...'''%dbpath
             for name in rootNames:
                 if name not in self.saveDict:
                     self.saveDict[name]=ResourcePath(name)
-    def getTableCursor(self,tablename):
-        'try to get the desired table using our current resource database cursor, if any'
-        try:
-            cursor = self.cursors[-1]
-        except IndexError:
-            try:
-                cursor = self.defaultCursor # USE IF WE HAVE ONE...
-            except AttributeError: # TRY TO GET ONE...
-                import sqlgraph
-                try:
-                    basename,cursor = sqlgraph.getNameCursor(tablename)
-                    self.defaultCursor = cursor # SAVE FOR RE-USE
-                except StandardError:
-                    return None
-        try: # MAKE SURE THIS CURSOR CAN PROVIDE tablename
-            cursor.execute('describe %s' % tablename)
-            return cursor # SUCCEEDED IN ACCESSING DESIRED TABLE
-        except StandardError:
-            return None
+    ## def getTableCursor(self,tablename):
+    ##     'try to get the desired table using our current resource database cursor, if any'
+    ##     try:
+    ##         cursor = self.cursors[-1]
+    ##     except IndexError:
+    ##         try:
+    ##             cursor = self.defaultCursor # USE IF WE HAVE ONE...
+    ##         except AttributeError: # TRY TO GET ONE...
+    ##             import sqlgraph
+    ##             try:
+    ##                 basename,cursor = sqlgraph.getNameCursor(tablename)
+    ##                 self.defaultCursor = cursor # SAVE FOR RE-USE
+    ##             except StandardError:
+    ##                 return None
+    ##     try: # MAKE SURE THIS CURSOR CAN PROVIDE tablename
+    ##         cursor.execute('describe %s' % tablename)
+    ##         return cursor # SUCCEEDED IN ACCESSING DESIRED TABLE
+    ##     except StandardError:
+    ##         return None
         
     def get_pending_or_find(self, resID, **kwargs):
         'find resID even if only pending (not actually saved yet)'
@@ -443,14 +527,14 @@ Continuing with import...'''%dbpath
                 if n==len(serviceDict):
                     return n
         raise ValueError('unable to register services.  Check PYGRDATAPATH')
-    def findSchema(self,id):
+    def getschema(self, resID):
         'search our resource databases for schema info for the desired ID'
-        for db in self.resourceDBiter():
+        for mdb in self.mdb:
             try:
-                return db.getschema(id) # TRY TO OBTAIN FROM THIS DATABASE
+                return mdb.getschema(resID) # TRY TO OBTAIN FROM THIS DATABASE
             except KeyError:
                 pass # NOT IN THIS DB
-        raise KeyError('no schema info available for '+id)
+        raise KeyError('no schema info available for ' + resID)
     def dir(self,prefix,layer=None,asDict=False,download=False):
         'get list or dict of resources beginning with the specified string'
         if layer is not None:
@@ -476,107 +560,11 @@ Continuing with import...'''%dbpath
 
 
 
-class ResourceLoader(object):
-    'loads resources from pickle data and schema bindings'
+class ResourceLoader(dict):
+    'provide one central repository of loaded resources & schema info'
     def __init__(self):
-        self.d = {}
+        dict.__init__(self)
         self.schemaCache = {}
-    def __getitem__(self, k):
-        'get cached value or KeyError'
-        return self.d[k]
-    def __setitem__(self, k, v):
-        'set cached value'
-        self.d[k] = v
-    def __delitem__(self, k):
-        'delete item from cache or raise KeyError'
-        del self.d[k]
-    def update(self, d):
-        'add items of d to our cache'
-        self.d.update(d)
-    def clear(self):
-        'clear the cache'
-        self.d.clear()
-    def load(self, pygrID, objdata, docstring, mdb):
-        obj = self.loads(objdata)
-        obj.__doc__ = docstring
-        if hasattr(obj,'_saveLocalBuild') and obj._saveLocalBuild:
-            # SAVE AUTO BUILT RESOURCE TO LOCAL PYGR.DATA
-            hasPending = self.has_pending() # any pending transaction?
-            self.addResource(pygrID, obj) # add to queue for commit
-            obj._saveLocalBuild = False # NO NEED TO SAVE THIS AGAIN
-            if hasPending:
-                print >>sys.stderr,'''Saving new resource %s to local pygr.Data...
-You must use pygr.Data.save() to commit!
-You are seeing this message because you appear to be in the
-middle of a pygr.Data transaction.  Ordinarily pygr.Data would
-automatically commit this new downloaded resource, but doing so
-now would also commit your pending transaction, which you may
-not be ready to do!''' % pygrID
-            else: # automatically save new resource
-                self.save_pending() # commit it
-        else: # NORMAL USAGE
-            obj._persistent_id = pygrID  # MARK WITH ITS PERSISTENT ID
-            self.d[pygrID] = obj # SAVE TO OUR CACHE
-        self.applySchema(pygrID, obj, mdb) # BIND SHADOW ATTRIBUTES IF ANY
-        return obj
-    def loads(self, data, mdb, cursor=None):
-        'unpickle from string, using persistent ID expansion'
-        src = StringIO(data)
-        unpickler = pickle.Unpickler(src)
-        unpickler.persistent_load = mdb.persistent_load # WE PROVIDE PERSISTENT LOOKUP
-        if cursor is not None: # PUSH OUR CURSOR ONTO THE STACK
-            self.cursors.append(cursor)
-        obj = unpickler.load() # ACTUALLY UNPICKLE THE DATA
-        if cursor is not None: # POP OUR CURSOR STACK
-            self.cursors.pop()
-        return obj
-    def schemaAttr(self, resID, attr, mdb):
-        'actually retrieve the desired schema attribute'
-        try: # GET SCHEMA FROM CACHE
-            schema = self.schemaCache[resID]
-        except KeyError: # HMM, IT SHOULD BE CACHED!
-            schema = mdb.findSchema(resID) # OBTAIN FROM RESOURCE DB
-            self.schemaCache[resID] = schema # KEEP IT IN OUR CACHE
-        try:
-            schema = schema[attr] # GET SCHEMA FOR THIS SPECIFIC ATTRIBUTE
-        except KeyError:
-            raise AttributeError('no pygr.Data schema info for %s.%s' \
-                                 % (resID,attr))
-        targetID = schema['targetID'] # GET THE RESOURCE ID
-        return mdb(targetID) # actually get the resource from metabase
-    def applySchema(self, resID, obj, mdb):
-        'if this resource ID has any schema, bind appropriate shadow attrs'
-        try:
-            schema = mdb.findSchema(resID)
-        except KeyError:
-            return # NO SCHEMA FOR THIS OBJ, SO NOTHING TO DO
-        self.schemaCache[resID] = schema # KEEP THIS IN CACHE FOR SPEED
-        for attr,rules in schema.items():
-            if not attr.startswith('-'): # ONLY SHADOW REAL ATTRIBUTES
-                self.shadowAttr(obj, attr, mdb, **rules)
-    def shadowAttr(self, obj, attr, mdb, itemRule=False, **kwargs):
-        'create a descriptor for the attr on the appropriate obj shadow class'
-        try: # SEE IF OBJECT TELLS US TO SKIP THIS ATTRIBUTE
-            return obj._ignoreShadowAttr[attr] # IF PRESENT, NOTHING TO DO
-        except (AttributeError,KeyError):
-            pass # PROCEED AS NORMAL
-        from classutil import get_bound_subclass
-        if itemRule: # SHOULD BIND TO ITEMS FROM obj DATABASE
-            targetClass = get_bound_subclass(obj,'itemClass') # CLASS USED FOR CONSTRUCTING ITEMS
-            descr = ItemDescriptor(attr, mdb, **kwargs)
-        else: # SHOULD BIND DIRECTLY TO obj VIA ITS CLASS
-            targetClass = get_bound_subclass(obj)
-            descr=OneTimeDescriptor(attr, mdb, **kwargs)
-        setattr(targetClass,attr,descr) # BIND descr TO targetClass.attr
-        if itemRule:
-            try: # BIND TO itemSliceClass TOO, IF IT EXISTS...
-                targetClass = get_bound_subclass(obj,'itemSliceClass')
-            except AttributeError:
-                pass # NO itemSliceClass, SO SKIP
-            else: # BIND TO itemSliceClass
-                setattr(targetClass,attr,descr)
-        if attr=='inverseDB': # ADD SHADOW __invert__ TO ACCESS THIS
-            addSpecialMethod(obj,'__invert__',getInverseDB)
 
 
 
