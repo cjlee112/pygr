@@ -161,6 +161,27 @@ def check_dir(self,correct=['Bio.Annotation.annoDB','Bio.Annotation.map',
     print 'dir:',l
     correct.sort()
     assert l == correct
+def check_dir_noargs(self):
+    import pygr.Data
+    found = pygr.Data.dir()
+    found.sort()
+    found2 = pygr.Data.dir('')
+    found2.sort()
+    assert found == found2
+def check_dir_re(self):
+    import pygr.Data
+    expected=['Bio.Annotation.annoDB', 'Bio.Annotation.map',
+                'Bio.Seq.Swissprot.sp42', 'Bio.Seq.frag', 'Bio.Seq.spmap']
+    expected.sort()
+    found = pygr.Data.dir('^Bio', 'r')
+    found.sort()
+    assert found == expected
+
+    expected = ['Bio.Seq.Swissprot.sp42', 'Bio.Seq.spmap']
+    expected.sort()
+    found = pygr.Data.dir('^Bio\..+\.sp', 'r')
+    found.sort()
+    assert found == expected
 def check_bind(self):
     import pygr.Data
     sp = pygr.Data.Bio.Seq.Swissprot.sp42()
@@ -192,6 +213,8 @@ class Seq_Test(PygrSwissprotBase):
         check_match(self)
     def dir_test(self):
         check_dir(self)
+        check_dir_noargs(self)
+        check_dir_re(self)
     def bind_test(self):
         check_bind(self)
         check_bind2(self)

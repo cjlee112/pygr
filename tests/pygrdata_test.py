@@ -373,7 +373,7 @@ class XMLRPC_Test(TestBase):
         'halt the test XMLRPC server'
         self.server.close()
 
-        
+
 def get_suite():
     "Returns the testsuite"
     tests  = [ 

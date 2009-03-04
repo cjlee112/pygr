@@ -12,7 +12,7 @@ import os.path
 
 # get the current directory from __file__
 testdir = os.path.dirname(__file__)
-pygrdir = os.path.abspath(os.path.join(testdir, '..'))
+pygrdir = os.path.abspath(os.path.join(testdir, '..', '..'))
 
 # now put pygr's top-level & build directories in the path
 sys.path.insert(0, pygrdir)
