@@ -201,12 +201,33 @@ def check_dir(self):
     import pygr.Data
     expected=['Bio.Annotation.annoDB', 'Bio.Annotation.map',
                 'Bio.Seq.Swissprot.sp42', 'Bio.Seq.frag', 'Bio.Seq.spmap']
-
+    expected.sort()
     found = pygr.Data.dir('Bio')
-       
-    # none left
-    notfound = len(set(expected) - set(found))
-    assert notfound == 0
+    found.sort()
+    assert found == expected
+
+def check_dir_noargs(self):
+    import pygr.Data
+    found = pygr.Data.dir()
+    found.sort()
+    found2 = pygr.Data.dir('')
+    found2.sort()
+    assert found == found2
+
+def check_dir_re(self):
+    import pygr.Data
+    expected=['Bio.Annotation.annoDB', 'Bio.Annotation.map',
+                'Bio.Seq.Swissprot.sp42', 'Bio.Seq.frag', 'Bio.Seq.spmap']
+    expected.sort()
+    found = pygr.Data.dir('^Bio', 'r')
+    found.sort()
+    assert found == expected
+
+    expected = ['Bio.Seq.Swissprot.sp42', 'Bio.Seq.spmap']
+    expected.sort()
+    found = pygr.Data.dir('^Bio\..+\.sp', 'r')
+    found.sort()
+    assert found == expected
 
 def check_bind(self):
     import pygr.Data
@@ -245,6 +266,8 @@ class Sequence_Test(TestBase):
     def test_dir(self):
         "Test labels"
         check_dir(self)
+        check_dir_noargs(self)
+        check_dir_re(self)
 
     def test_bind(self):
         "Test bind"
@@ -356,10 +379,10 @@ def get_suite():
     tests  = [ 
         Download_Test,
         GenericBuild_Test,
-        DNAAnnotation_Test,
         Sequence_Test,
         InvalidPickle_Test, 
         XMLRPC_Test,
+        DNAAnnotation_Test, # move this to top to test test framework isolation
     ]
     return testutil.make_suite(tests)
 
