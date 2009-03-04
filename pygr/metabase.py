@@ -1,5 +1,5 @@
 
-import pickle,sys
+import os, pickle, sys
 from StringIO import StringIO
 import shelve
 from mapping import Collection,Mapping,Graph
@@ -59,6 +59,110 @@ class ItemDescriptor(object):
 
 
 
+class ItemDescriptorRW(ItemDescriptor):
+    def __set__(self,obj,newTarget):
+        if not self.uniqueMapping:
+            raise PygrDataSchemaError('''You attempted to directly assign to a graph mapping
+(x.graph = y)! Instead, treat the graph like a dictionary: x.graph[y] = edgeInfo''')
+        targetDict = self.get_target(obj)
+        targetDict[obj] = newTarget
+        obj.__dict__[self.attr] = newTarget # CACHE IN THE __dict__
+
+
+class ForwardingDescriptor(object):
+    'forward an attribute request to item from another container'
+    def __init__(self,targetDB,attr):
+        self.targetDB=targetDB # CONTAINER TO GET ITEMS FROM
+        self.attr=attr # ATTRIBUTE TO MAP TO
+    def __get__(self,obj,objtype):
+        target=self.targetDB[obj.id] # GET target FROM CONTAINER
+        return getattr(target,self.attr) # GET DESIRED ATTRIBUTE
+
+class SpecialMethodDescriptor(object):
+    'enables shadowing of special methods like __invert__'
+    def __init__(self,attrName):
+        self.attr=attrName
+    def __get__(self,obj,objtype):
+        try:
+            return obj.__dict__[self.attr]
+        except KeyError:
+            raise AttributeError('%s has no method %s'%(obj,self.attr))
+
+def addSpecialMethod(obj,attr,f):
+    '''bind function f as special method attr on obj.
+       obj cannot be an builtin or extension class
+       (if so, just subclass it)'''
+    import new
+    m=new.instancemethod(f,obj,obj.__class__)
+    try:
+        if getattr(obj,attr) == m: # ALREADY BOUND TO f
+            return # ALREADY BOUND, NOTHING FURTHER TO DO
+    except AttributeError:
+        pass
+    else:
+        raise AttributeError('%s already bound to a different function' %attr)
+    setattr(obj,attr,m) # SAVE BOUND METHOD TO __dict__
+    setattr(obj.__class__,attr,SpecialMethodDescriptor(attr)) # DOES FORWARDING
+
+def getInverseDB(self):
+    'default shadow __invert__ method'
+    return self.inverseDB # TRIGGER CONSTRUCTION OF THE TARGET RESOURCE
+
+
+class PygrDataNotPortableError(ValueError):
+    'indicates that object has a local data dependency and cannnot be transferred to a remote client'
+    pass
+class PygrDataNotFoundError(KeyError):
+    'unable to find a loadable resource for the requested pygr.Data identifier from PYGRDATAPATH'
+    pass
+class PygrDataMismatchError(ValueError):
+    '_persistent_id attr on object no longer matches its assigned pygr.Data ID?!?'
+    pass
+class PygrDataEmptyError(ValueError):
+    "user hasn't queued anything, so trying to save or rollback is an error"
+    pass
+class PygrDataReadOnlyError(ValueError):
+    'attempt to write data to a read-only resource database'
+    pass
+class PygrDataSchemaError(ValueError):
+    "attempt to set attribute to an object not in the database bound by schema"
+    pass
+
+class PygrDataNoModuleError(pickle.PickleError):
+    'attempt to pickle a class from a non-importable module'
+    pass
+
+class PygrPickler(pickle.Pickler):
+    def persistent_id(self,obj):
+        'convert objects with _persistent_id to PYGR_ID strings during pickling'
+        import types
+        try: # check for unpicklable class (i.e. not loaded via a module import)
+            if isinstance(obj, types.TypeType) and obj.__module__ == '__main__':
+                raise PygrDataNoModuleError('''You cannot pickle a class from __main__!
+To make this class (%s) picklable, it must be loaded via a regular import
+statement.''' % obj.__name__)
+        except AttributeError:
+            pass
+        try:
+            if not isinstance(obj,types.TypeType) and obj is not self.root:
+                try:
+                    return 'PYGR_ID:%s' % self.sourceIDs[id(obj)]
+                except KeyError:
+                    if obj._persistent_id is not None:
+                        return 'PYGR_ID:%s' % obj._persistent_id
+        except AttributeError:
+            pass
+        for klass in self.badClasses: # CHECK FOR LOCAL DEPENDENCIES
+            if isinstance(obj,klass):
+                raise PygrDataNotPortableError('this object has a local data dependency and cannnot be transferred to a remote client')
+        return None
+    def setRoot(self,obj,sourceIDs={},badClasses=()):
+        'set obj as root of pickling tree: genuinely pickle it (not just its id)'
+        self.root=obj
+        self.sourceIDs=sourceIDs
+        self.badClasses = badClasses
+
+
 class SchemaEdge(object):
     'provides unpack_edge method for schema graph storage'
     def __init__(self,schemaDB):
@@ -85,14 +189,14 @@ class ResourceDBShelve(object):
     it is automatically created for you.'''
     _pygr_data_version=(0,1,0)
     graph = ResourceDBGraphDescr() # INTERFACE TO SCHEMA GRAPH
-    def __init__(self,dbpath,finder,mode='r'):
+    def __init__(self, dbpath, mdb, mode='r'):
         import anydbm,os
         self.dbpath=os.path.join(dbpath,'.pygr_data') # CONSTRUCT FILENAME
-        self.finder=finder
+        self.mdb = mdb
         try: # OPEN DATABASE FOR READING
             self.db=shelve.open(self.dbpath,mode)
             try:
-                finder.save_root_names(self.db['0root'])
+                mdb.save_root_names(self.db['0root'])
             except KeyError:
                 pass
         except anydbm.error: # CREATE NEW FILE IF NEEDED
@@ -111,11 +215,11 @@ class ResourceDBShelve(object):
             return objdata, None
     def __setitem__(self,id,obj):
         'add an object to this resource database'
-        s=self.finder.dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
+        s = dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
         try:
             self.db[id]=s # SAVE TO OUR SHELVE FILE
-            self.db['__doc__.'+id]=getResource.get_info_dict(obj,s)
+            self.db['__doc__.'+id] = get_info_dict(obj,s)
             root=id.split('.')[0] # SEE IF ROOT NAME IS IN THIS SHELVE
             d = self.db.get('0root',{})
             if root not in d:
@@ -304,6 +408,12 @@ not be ready to do!''' % pygrID
                                  % (resID,attr))
         targetID = schema['targetID'] # GET THE RESOURCE ID
         return self(targetID) # actually load the resource
+    def save_root_names(self,rootNames):
+        'add resource path root to the module dictionary'
+        if hasattr(self,'saveDict'): # ONLY SAVE IF INITIALIZING THE MODULE
+            for name in rootNames:
+                if name not in self.saveDict:
+                    self.saveDict[name]=ResourcePath(name)
 
 
 
@@ -321,22 +431,22 @@ class Metabase(MetabaseBase):
             self.__class__ = ReadOnlyMetabase
         elif dbpath.startswith('mysql:'):
             rdb = ResourceDBMySQL(dbpath[6:], self)
-            if 'MySQL' not in self.layer:
+            if 'MySQL' not in layer:
                 layer['MySQL'] = rdb
         else: # TREAT AS LOCAL FILEPATH
             dbpath = os.path.expanduser(dbpath)
             rdb = ResourceDBShelve(dbpath, self)
             if dbpath == os.path.expanduser('~') \
                    or dbpath.startswith(os.path.expanduser('~')+os.sep):
-                if 'my' not in self.layer:
+                if 'my' not in layer:
                     layer['my'] = rdb
             elif os.path.isabs(dbpath):
-                if 'system' not in self.layer:
+                if 'system' not in layer:
                     layer['system'] = rdb
             elif dbpath.split(os.sep)[0]==os.curdir:
-                if 'here' not in self.layer:
+                if 'here' not in layer:
                     layer['here'] = rdb
-            elif 'subdir' not in self.layer:
+            elif 'subdir' not in layer:
                 layer['subdir'] = rdb
         self.rdb = rdb
         self.init_saver()
@@ -360,6 +470,8 @@ class Metabase(MetabaseBase):
         self.saver.save_pending()
     def rollback(self):
         self.saver.rollback()
+    def queue_schema_obj(self, schemaPath, attr, layer, schemaObj):
+        self.saver.queue_schema_obj(self,schemaPath,attr,layer,schemaObj)
     def clear_all(self):
         'clear all resources from cache'
         self.loader.clear()
@@ -479,12 +591,6 @@ Continuing with import...'''%dbpath
             self.saveDict[layerName]=ResourceLayer(layerName)
         except AttributeError:
             pass
-    def save_root_names(self,rootNames):
-        'add resource path root to the module dictionary'
-        if hasattr(self,'saveDict'): # ONLY SAVE IF INITIALIZING THE MODULE
-            for name in rootNames:
-                if name not in self.saveDict:
-                    self.saveDict[name]=ResourcePath(name)
     ## def getTableCursor(self,tablename):
     ##     'try to get the desired table using our current resource database cursor, if any'
     ##     try:
@@ -671,7 +777,7 @@ so report the reproducible steps to this error message as a bug report.''' % res
             d = rdb.getschema(resID) # GET THE EXISTING SCHEMA
         except KeyError:
             return # no schema stored for this object so nothing to do...
-        self.schemaCache.clear() # THIS IS MORE AGGRESSIVE THAN NEEDED... COULD BE REFINED
+        self.mdb.loader.schemaCache.clear() # THIS IS MORE AGGRESSIVE THAN NEEDED... COULD BE REFINED
         for attr,obj in d.items():
             if attr.startswith('-'): # A SCHEMA OBJECT
                 obj.delschema(rdb) # DELETE ITS SCHEMA RELATIONS
