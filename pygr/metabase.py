@@ -354,7 +354,7 @@ not be ready to do!''' % pygrID
                 try:
                     obj = self.load(resID, objdata, docstr) 
                     break
-                except (KeyError,IOError): # NOT IN THIS DB, FILES NOT ACCESSIBLE...
+                except (KeyError,IOError): # NOT IN THIS DB; FILES NOT ACCESSIBLE...
                     if self.debug: # PASS ON THE ACTUAL ERROR IMMEDIATELY
                         raise
         finally: # RESTORE STATE BEFORE RAISING ANY EXCEPTION
@@ -408,22 +408,24 @@ not be ready to do!''' % pygrID
                                  % (resID,attr))
         targetID = schema['targetID'] # GET THE RESOURCE ID
         return self(targetID) # actually load the resource
-    def save_root_names(self,rootNames):
-        'add resource path root to the module dictionary'
-        if hasattr(self,'saveDict'): # ONLY SAVE IF INITIALIZING THE MODULE
-            for name in rootNames:
-                if name not in self.saveDict:
-                    self.saveDict[name]=ResourcePath(name)
+    def add_root_name(self, name):
+        'add name to the root of our data namespace and schema namespace'
+        getattr(self.Data, name) # forces root object to add name if not present
+        getattr(self.Schema, name) # forces root object to add name if not present
+    def save_root_names(self, rootNames):
+        'add set of names to our namespace root'
+        for name in rootNames:
+            self.add_root_name(name)
 
 
 
 class Metabase(MetabaseBase):
-    def __init__(self, dbpath, loader, layer=None):
+    def __init__(self, dbpath, loader, layer=None, parent=None):
         '''layer provides a mechanism for the caller to request information
         about what type of metabase this dbpath mapped to.  layer must
         be a dict'''
         if layer is None: # user doesn't want layer info
-            layer = {} # save into a dummy dict
+            layer = {} # use a dummy dict, disposable
         if dbpath.startswith('http://'):
             rdb = ResourceDBClient(dbpath, self)
             if 'remote' not in layer:
@@ -451,6 +453,7 @@ class Metabase(MetabaseBase):
         self.rdb = rdb
         self.init_saver()
         self.loader = loader
+        self.parent = parent
         self.Data = ResourcePath(None, self) # root of namespace
         self.Schema = SchemaPath(None, self)
         self.debug = False
@@ -490,6 +493,10 @@ class Metabase(MetabaseBase):
     def getschema(self, resID):
         'return dict of {attr:{args}} or KeyError if not found'
         return self.rdb.getschema(resID)
+    def save_root_names(self, rootNames):
+        if self.parent is not None: # add names to parent's namespace as well
+            self.parent.save_root_names(rootNames)
+        MetabaseBase.save_root_names(self, rootNames) # call the generic method
 
 class ReadOnlyMetabase(Metabase):
     'resource loading but no resource saving'
