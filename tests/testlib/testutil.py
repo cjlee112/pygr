@@ -79,7 +79,7 @@ class TempDir(object):
     random one
     """
 
-    def __init__(self, name=None, path='tempdir', prefix='', reset=False):
+    def __init__(self, prefix, path='tempdir', reset=False):
         self.tempdir = path_join( pathfix.curr_dir, '..', path )
         
         # will remove the root directory of all temporary directories
@@ -268,12 +268,16 @@ def blast_enabled():
 ###
 
 DATADIR = path_join(pathfix.curr_dir, '..', 'data')
-TEMPDIR = TempDir().path
+TEMPDIR = TempDir('tempdata').path
 
 # shortcuts for creating full paths to files in the data and temporary
 # directories
 datafile = lambda name: path_join(DATADIR, name)
-tempdatafile = lambda name: path_join(TEMPDIR, name)
+def tempdatafile(name):
+    filepath = path_join(TEMPDIR, name)
+    if os.path.exists(filepath):
+        raise AssertionError('tempdatafile %s already exists!' % name)
+    return filepath
 
 if __name__ == '__main__':
     TempDir(reset=True)
