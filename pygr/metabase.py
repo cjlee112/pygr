@@ -193,6 +193,7 @@ class ResourceDBShelve(object):
         import anydbm,os
         self.dbpath=os.path.join(dbpath,'.pygr_data') # CONSTRUCT FILENAME
         self.mdb = mdb
+        self.writeable = True # can write to this rdb
         try: # OPEN DATABASE FOR READING
             self.db=shelve.open(self.dbpath,mode)
             try:
@@ -308,7 +309,7 @@ class MetabaseBase(object):
         obj = self.loads(objdata)
         obj.__doc__ = docstring
         if hasattr(obj,'_saveLocalBuild') and obj._saveLocalBuild:
-            saver = self.downloadKeeper.saver # mdb in which to record local copy
+            saver = self.writer.saver # mdb in which to record local copy
             # SAVE AUTO BUILT RESOURCE TO LOCAL PYGR.DATA
             hasPending = saver.has_pending() # any pending transaction?
             saver.addResource(pygrID, obj) # add to queue for commit
@@ -350,6 +351,7 @@ not be ready to do!''' % pygrID
         else: # just use our current download mode
             download = self.download
         try: # finally... TO RESTORE debug STATE EVEN IF EXCEPTION OCCURS.
+            self.update(debug=self.debug, keepCurrentPath=True) # load if empty
             for objdata,docstr in self.find_resource(resID, download):
                 try:
                     obj = self.load(resID, objdata, docstr) 
@@ -416,6 +418,35 @@ not be ready to do!''' % pygrID
         'add set of names to our namespace root'
         for name in rootNames:
             self.add_root_name(name)
+    def clear_cache(self):
+        'clear all resources from cache'
+        self.loader.clear()
+    def get_writer(self):
+        'return writeable mdb if available, or raise exception'
+        try:
+            return self.writer
+        except AttributeError:
+            raise PygrDataReadOnlyError('this metabase is read-only!')
+    def add_resource(self, resID, obj):
+        'assign obj as the specified resource ID to our metabase'
+        self.get_writer().saver.add_resource(resID, obj)
+    def delete_resource(self, resID):
+        'delete specified resource ID from our metabase'
+        self.get_writer().saver.delete_resource(resID)
+    def commit(self):
+        'save any pending resource assignments and schemas'
+        self.get_writer().saver.save_pending()
+    def rollback(self):
+        'discard any pending resource assignments and schemas'
+        self.get_writer().saver.rollback()
+    def queue_schema_obj(self, schemaPath, attr, schemaObj):
+        'add a schema to the list of pending schemas to commit'
+        self.get_writer().saver.queue_schema_obj(schemaPath, attr, schemaObj)
+    def add_schema(self, resID, schemaObj):
+        'assign a schema relation object to a pygr.Data resource name'
+        l = resID.split('.')
+        schemaPath = SchemaPath('.'.join(l[:-1]), self)
+        setattr(schemaPath, l[-1], schemaObj)
 
 
 
@@ -424,13 +455,18 @@ class Metabase(MetabaseBase):
         '''layer provides a mechanism for the caller to request information
         about what type of metabase this dbpath mapped to.  layer must
         be a dict'''
+        self.parent = parent
+        self.Data = ResourcePathRW(None, self) # root of namespace
+        self.Schema = SchemaPath(None, self)
+        self.loader = loader
+        self.debug = True # single mdb should expose all errors 
+        self.download = False
         if layer is None: # user doesn't want layer info
             layer = {} # use a dummy dict, disposable
         if dbpath.startswith('http://'):
             rdb = ResourceDBClient(dbpath, self)
             if 'remote' not in layer:
                 layer['remote'] = rdb
-            self.__class__ = ReadOnlyMetabase
         elif dbpath.startswith('mysql:'):
             rdb = ResourceDBMySQL(dbpath[6:], self)
             if 'MySQL' not in layer:
@@ -451,42 +487,20 @@ class Metabase(MetabaseBase):
             elif 'subdir' not in layer:
                 layer['subdir'] = rdb
         self.rdb = rdb
-        self.init_saver()
-        self.loader = loader
-        self.parent = parent
-        self.Data = ResourcePath(None, self) # root of namespace
-        self.Schema = SchemaPath(None, self)
-        self.debug = False
-        self.download = False
-    def init_saver(self):
-        self.saver = ResourceSaver(self)
-        self.downloadKeeper = self # record downloaded resources here
+        if rdb.writeable:
+            self.writeable = True
+            self.saver = ResourceSaver(self)
+            self.writer = self # record downloaded resources here
+        else:
+            self.writeable = False
+    def update(self, **kwargs):
+        pass # metabase doesn't need to update its db list, so nothing to do
     def find_resource(self, resID, download=False):
         yield self.rdb.find_resource(resID, download)
-    def add_resource(self, resID, obj):
-        self.saver.add_resource(resID, obj)
-    def delete_resource(self, resID):
-        self.saver.delete_resource(resID)
-    def dir(self, prefix, asDict=False, download=False):
-        pass
-    def commit(self):
-        self.saver.save_pending()
-    def rollback(self):
-        self.saver.rollback()
-    def queue_schema_obj(self, schemaPath, attr, layer, schemaObj):
-        self.saver.queue_schema_obj(self,schemaPath,attr,layer,schemaObj)
-    def clear_all(self):
-        'clear all resources from cache'
-        self.loader.clear()
-    def add_schema(self, resID, schemaObj):
-        'use this public method to assign a schema relation object to a pygr.Data resource name'
-        l = resID.split('.')
-        schemaPath = SchemaPath('.'.join(l[:-1]), self)
-        setattr(schemaPath, l[-1], schemaObj)
     def get_pending_or_find(self, resID, **kwargs):
         'find resID even if only pending (not actually saved yet)'
         try: # 1st LOOK IN PENDING QUEUE
-            return self.saver.pendingData[resID][0]
+            return self.saver.pendingData[resID]
         except KeyError:
             pass
         return self(resID,**kwargs)
@@ -497,36 +511,42 @@ class Metabase(MetabaseBase):
         if self.parent is not None: # add names to parent's namespace as well
             self.parent.save_root_names(rootNames)
         MetabaseBase.save_root_names(self, rootNames) # call the generic method
+    def saveSchema(self, resID, attr, args):
+        'save an attribute binding rule to the schema; DO NOT use this internal interface unless you know what you are doing!'
+        self.rdb.setschema(resID, attr, args)
+    def saveSchemaEdge(self, schema):
+        'save schema edge to schema graph'
+        self.saveSchema(schema.name, '-schemaEdge', schema)
+        self.rdb.graph += schema.sourceDB # ADD NODE TO SCHEMA GRAPH
+        self.rdb.graph[schema.sourceDB][schema.targetDB] = schema.name # EDGE
+    def dir(self, prefix, asDict=False, download=False):
+        pass
 
-class ReadOnlyMetabase(Metabase):
-    'resource loading but no resource saving'
-    def init_saver(self):
-        return # do nothing
-
-# public interface
-# dir()
-# update()
-# __call__()
-# 
 
 class MetabaseList(MetabaseBase):
     '''Primary interface for pygr.Data resource database access.  A single instance
     of this class is created upon import of the pygr.Data module, accessible as
     pygr.Data.getResource.  Users normally will have no need to create additional
     instances of this class themselves.'''
-    def __init__(self, loader, separator=',', saveDict=None, PYGRDATAPATH=None):
+    # DEFAULT PYGRDATAPATH: HOME, CURRENT DIR, XMLRPC IN THAT ORDER
+    defaultPath = ['~','.','http://biodb2.bioinformatics.ucla.edu:5000']
+    def __init__(self, loader=None, separator=','):
+        '''initializes attrs; does not connect to metabases'''
+        if loader is None: # create a cache for loaded resources
+            loader = ResourceLoader()
         self.loader = loader
         self.mdb = None
         self.layer = {}
-        self.dbstr = ''
+        self.dbstr = None
         self.separator = separator
-        self.cursors = []
-        self.debug = False
+        self.Data = ResourcePath(None, self) # root of namespace
+        self.Schema = SchemaPath(None, self)
+        self.debug = False # if one load attempt fails, try other metabases
         self.download = False
-        if saveDict is not None:
-            self.saveDict = saveDict # SAVE NEW LAYER NAMES HERE...
-            self.update(PYGRDATAPATH) # LOAD RESOURCE DBs FROM PYGRDATAPATH
-            del self.saveDict
+    def get_writer(self):
+        'ensure that metabases are loaded, before looking for our writer'
+        self.update(keepCurrentPath=True) # make sure metabases loaded
+        return MetabaseBase.get_writer(self) # proceed as usual
     def find_resource(self, resID, download=False):
         'search our metabases for pickle string and docstr for resID'
         for mdb in self.mdb:
@@ -535,103 +555,63 @@ class MetabaseList(MetabaseBase):
             except KeyError: # not in this db
                 pass
         raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % resID)
-    ## def iter_mdb(self):
-    ##     'iterate over all available databases, read from PYGRDATAPATH env var.'
-    ##     self.update()
-    ##     if self.db is None or len(self.db)==0:
-    ##         raise ValueError('empty PYGRDATAPATH! Please check environment variable.')
-    ##     return iter(self.db)
     def get_pygr_data_path(self):
-        'use internal attribute, environment var, or default in that order'
-        try:
-            return self.PYGRDATAPATH
-        except AttributeError:
-            pass
-        import os
+        'get environment var, or default in that order'
         try:
             return os.environ['PYGRDATAPATH']
-        except KeyError: # DEFAULT: HOME, CURRENT DIR, IN THAT ORDER
-            return self.separator.join(['~','.',
-                                        'http://biodb2.bioinformatics.ucla.edu:5000'])
-    def update(self, PYGRDATAPATH=None):
+        except KeyError:
+            return self.separator.join(self.defaultPath)
+    def update(self, PYGRDATAPATH=None, debug=None, keepCurrentPath=False):
         'get the latest list of resource databases'
         import os
-        if PYGRDATAPATH is not None: # USE MANUALLY SUPPLIED SETTING
-            self.PYGRDATAPATH  = PYGRDATAPATH
-            self.loader.clear() # DUMP LOADED RESOURCE CACHE
-            self.dbstr = None # FORCE RELOAD
-        else: # OBTAIN BEST SETTING
+        if keepCurrentPath: # only update if self.dbstr is None
+            PYGRDATAPATH = self.dbstr
+        if PYGRDATAPATH is None: # get environment var or default
             PYGRDATAPATH = self.get_pygr_data_path()
+        if debug is None:
+            debug = self.debug
         if self.dbstr != PYGRDATAPATH: # LOAD NEW RESOURCE PYGRDATAPATH
             self.dbstr = PYGRDATAPATH
             self.mdb = []
+            try: # default: we don't have a writeable mdb to save data in
+                del self.writer
+            except AttributeError:
+                pass
             self.layer = {}
             for dbpath in PYGRDATAPATH.split(self.separator):
-                try: # create metabase
-                    mdb = Metabase(dbpath, self.loader, self.layer)
+                try: # connect to metabase
+                    mdb = Metabase(dbpath, self.loader, self.layer, self)
                 except (KeyboardInterrupt,SystemExit):
                     raise # DON'T TRAP THESE CONDITIONS
                 # FORCED TO ADOPT THIS STRUCTURE BECAUSE xmlrpc RAISES
                 # socket.gaierror WHICH IS NOT A SUBCLASS OF StandardError...
                 # SO I CAN'T JUST TRAP StandardError, UNFORTUNATELY...
-                except: # TRAP ERRORS SO IMPORT OF THIS MODULE WILL NOT DIE!
-                    if hasattr(self,'saveDict'): # IN THE MIDDLE OF MODULE IMPORT
+                except: # trap errors and continue to next metabase 
+                    if debug:
+                        raise # expose the error immediately
+                    else: # warn the user but keep going...
                         import traceback
                         traceback.print_exc(10,sys.stderr) # JUST PRINT TRACEBACK
                         print >>sys.stderr,'''
-error loading resource %s
-NOTE: Just skipping this resource, without halting on this exception.
-This error WILL NOT prevent successful import of this module.
-Continuing with import...'''%dbpath
-                    else:
-                        raise # JUST PROPAGATE THE ERROR AS USUAL
+WARNING: error accessing metabase %s.  Continuing...''' % dbpath
                 else: # NO PROBLEM, SO ADD TO OUR RESOURCE DB LIST
                     self.mdb.append(mdb) # SAVE TO OUR LIST OF RESOURCE DATABASES
-    # Not sure this is needed anymore...
-    def addLayer(self,layerName,rdb):
-        'add resource database as a new named layer'
-        if layerName in self.layer: # FOR SECURITY, DON'T ALLOW OVERWRITING
-            print 'WARNING: ignored duplicate pygr.Data resource layer',layerName
-            return
-        self.layer[layerName]=rdb # INTERNAL DICTIONARY
-        try: # ADD NAME TO THE MODULE TOP-LEVEL DICTIONARY
-            self.saveDict[layerName]=ResourceLayer(layerName)
-        except AttributeError:
-            pass
-    ## def getTableCursor(self,tablename):
-    ##     'try to get the desired table using our current resource database cursor, if any'
-    ##     try:
-    ##         cursor = self.cursors[-1]
-    ##     except IndexError:
-    ##         try:
-    ##             cursor = self.defaultCursor # USE IF WE HAVE ONE...
-    ##         except AttributeError: # TRY TO GET ONE...
-    ##             import sqlgraph
-    ##             try:
-    ##                 basename,cursor = sqlgraph.getNameCursor(tablename)
-    ##                 self.defaultCursor = cursor # SAVE FOR RE-USE
-    ##             except StandardError:
-    ##                 return None
-    ##     try: # MAKE SURE THIS CURSOR CAN PROVIDE tablename
-    ##         cursor.execute('describe %s' % tablename)
-    ##         return cursor # SUCCEEDED IN ACCESSING DESIRED TABLE
-    ##     except StandardError:
-    ##         return None
-        
+                    if mdb.writeable and not hasattr(self, 'writer'):
+                        self.writer = mdb # record as place to save resources
     def get_pending_or_find(self, resID, **kwargs):
         'find resID even if only pending (not actually saved yet)'
-        for mdb in self.db:
+        for mdb in self.mdb:
             try: # 1st LOOK IN PENDING QUEUE
-                return mdb.saver.pendingData[resID][0]
+                return mdb.saver.pendingData[resID]
             except KeyError:
                 pass
         return self(resID, **kwargs)
-    def getLayer(self,layer):
-        self.update() # MAKE SURE WE HAVE LOADED CURRENT DATABASE LIST
+    def getLayer(self,layer): # not sure this is needed anymore...
+        self.update(keepCurrentPath=True) # make sure metabases loaded
         if layer is not None:
             return self.layer[layer]
         else: # JUST USE OUR PRIMARY DATABASE
-            return self.db[0]
+            return self.mdb[0]
     def registerServer(self,locationKey,serviceDict):
         'register the serviceDict with the first index server in PYGRDATAPATH'
         for db in self.resourceDBiter():
@@ -651,8 +631,8 @@ Continuing with import...'''%dbpath
     def dir(self,prefix,layer=None,asDict=False,download=False):
         'get list or dict of resources beginning with the specified string'
         if layer is not None:
-            db=self.getLayer(layer)
-            return db.dir(prefix,asDict=asDict,download=download)
+            mdb = self.getLayer(layer)
+            return mdb.dir(prefix, asDict=asDict, download=download)
         d={}
         def iteritems(s):
             try:
@@ -678,6 +658,9 @@ class ResourceLoader(dict):
     def __init__(self):
         dict.__init__(self)
         self.schemaCache = {}
+    def clear(self):
+        dict.clear(self) # clear our dictionary
+        self.schemaCache.clear() #
 
 
 
@@ -715,10 +698,10 @@ class ResourceSaver(object):
         'queue a dict of name:object pairs for saving to specified db layer'
         for k,v in d.items():
             self.add_resource(k, v)
-    def queue_schema_obj(self,schemaPath,attr,layer,schemaObj):
+    def queue_schema_obj(self, schemaPath, attr, schemaObj):
         'add a schema object to the queue for saving to the specified database layer'
         resID = schemaPath.getPath(attr) # GET STRING ID
-        self.pendingSchema[resID] = (schemaPath,attr,layer,schemaObj)
+        self.pendingSchema[resID] = (schemaPath,attr,schemaObj)
     def save_resource(self, resID, obj):
         'save the object as <id>'
         self.check_docstring(obj)
@@ -736,17 +719,12 @@ so report the reproducible steps to this error message as a bug report.''' % res
         if len(self.pendingData)>0 or len(self.pendingSchema)>0:
             d = self.pendingData
             schemaDict = self.pendingSchema
-        elif len(self.lastData)>0 or len(self.lastSchema)>0:
-            d = self.lastData
-            schemaDict = self.lastSchema
         else:
             raise PygrDataEmptyError('there is no data queued for saving!')
-        # NOW SAVE THE DATA
-        for resID,obj in d.items():
+        for resID,obj in d.items(): # now save the data
             self.save_resource(resID, obj)
-        # NEXT SAVE THE SCHEMA
-        for schemaPath,attr,layerGiven,schemaObj in schemaDict.values():
-            schemaObj.saveSchema(schemaPath, attr, self) # save to mdb
+        for schemaPath,attr,schemaObj in schemaDict.values():# save schema
+            schemaObj.saveSchema(schemaPath, attr, self.mdb) # save each rule
         self.clear_pending() # FINALLY, CLEAN UP...
         self.lastData = d # KEEP IN CASE USER WANTS TO SAVE TO MULTIPLE LAYERS
         self.lastSchema = schemaDict
@@ -767,16 +745,6 @@ so report the reproducible steps to this error message as a bug report.''' % res
         try: del self.pendingData[resID] # delete from queue if exists
         except KeyError: pass
         self.delSchema(resID)
-    def saveSchema(self,id,attr,args,layer=None):
-        'save an attribute binding rule to the schema; DO NOT use this internal interface unless you know what you are doing!'
-        db=self.getLayer(layer)
-        db.setschema(id,attr,args)
-    def saveSchemaEdge(self,schema,layer):
-        'save schema edge to schema graph'
-        self.saveSchema(schema.name,'-schemaEdge',schema,layer)
-        db = self.getLayer(layer)
-        db.graph += schema.sourceDB # ADD NODE TO SCHEMA GRAPH
-        db.graph[schema.sourceDB][schema.targetDB] = schema.name # ADD EDGE TO GRAPH
     def delSchema(self, resID):
         'delete schema bindings TO and FROM this resource ID'
         rdb = self.mdb.rdb
@@ -790,8 +758,6 @@ so report the reproducible steps to this error message as a bug report.''' % res
                 obj.delschema(rdb) # DELETE ITS SCHEMA RELATIONS
             rdb.delschema(resID, attr) # delete attribute schema rule
     def __del__(self):
-        self.lastData = {} # NO NEED TO RESAVE DATA THAT'S ALREADY SAVED
-        self.lastSchema = {}
         try:
             self.save_pending() # SEE WHETHER ANY DATA NEEDS SAVING
             print >>sys.stderr,'''
@@ -898,10 +864,15 @@ class ResourcePath(object):
             return name
     def __getattr__(self, name):
         'extend the resource path by one more attribute'
-        attr = self._pathClass(self.getPath(name), self._mdb)
+        attr = self.__class__(self.getPath(name), self._mdb)
         # MUST NOT USE setattr BECAUSE WE OVERRIDE THIS BELOW!
         self.__dict__[name] = attr # CACHE THIS ATTRIBUTE ON THE OBJECT
         return attr
+    def __call__(self, *args, **kwargs):
+        'construct the requested resource'
+        return self._mdb(self._path, *args, **kwargs)
+
+class ResourcePathRW(ResourcePath):
     def __setattr__(self, name, obj):
         'save obj using the specified resource name'
         self._mdb.add_resource(self.getPath(name), obj)
@@ -911,31 +882,17 @@ class ResourcePath(object):
             del self.__dict__[name]
         except KeyError: # TRY TO DELETE RESOURCE FROM THE DATABASE
             pass # NOTHING TO DO
-    def __call__(self, *args, **kwargs):
-        'construct the requested resource'
-        return self._mdb(self._path, *args, **kwargs)
-ResourcePath._pathClass=ResourcePath
 
 class SchemaPath(ResourcePath):
     'save schema information for a resource'
-    def __setattr__(self,name,schema):
+    def __setattr__(self, name, schema):
         try:
             schema.saveSchema # VERIFY THAT THIS LOOKS LIKE A SCHEMA OBJECT
         except AttributeError:
             raise ValueError('not a valid schema object!')
         self._mdb.queue_schema_obj(self, name, schema) # QUEUE IT
-    def __delattr__(self,attr):
+    def __delattr__(self, attr):
         raise NotImplementedError('schema deletion is not yet implemented.')
-    def set_attr_mapping(self,attr,targetDB,mapAttr=None):
-        'bind attr to targetDB[getattr(self,mapAttr)]; mapAttr default is attr+"_id"'
-        if idAttr is None: # CREATE DEFAULT 
-            mapAttr = attr+'_id'
-        b = ItemRelation(targetDB)
-        b.saveSchema(self._path,attr,self._layer,dict(mapAttr=mapAttr))
-    def del_attr_mapping(self,attr):
-        raise NotImplementedError('schema deletion is not yet implemented.')
-SchemaPath._pathClass=SchemaPath
-
 
 
 class DirectRelation(object):
@@ -995,7 +952,7 @@ class ManyToManyRelation(object):
             bindObj = (self.sourceDB,self.targetDB,self.edgeDB)
             bindArgs = [{},dict(invert=True),dict(getEdges=True)]
             try: # USE CUSTOM INVERSE SCHEMA IF PROVIDED BY TARGET DB
-                bindArgs[1] = getResource.get_pending_or_find(graphDB)._inverse_schema()
+                bindArgs[1] = mdb.get_pending_or_find(graphDB)._inverse_schema()
             except AttributeError:
                 pass
             for i in range(3):
@@ -1023,16 +980,16 @@ class ManyToOneRelation(ManyToManyRelation):
 class InverseRelation(DirectRelation):
     "bind source and target as each other's inverse mappings"
     _relationCode = 'inverse'
-    def saveSchema(self, source, attr, db, **kwargs):
+    def saveSchema(self, source, attr, mdb, **kwargs):
         'save schema bindings associated with this rule'
-        source=source.getPath(attr) # GET STRING ID FOR source
+        source = source.getPath(attr) # GET STRING ID FOR source
         self.name = source
-        getResource.saveSchemaEdge(self,layer) #SAVE THIS RULE
-        DirectRelation.saveSchema(self,source,'inverseDB',
-                                  layer,**kwargs) # source -> target
-        b=DirectRelation(source) # CREATE REVERSE MAPPING
-        b.saveSchema(self.targetID,'inverseDB',
-                     layer,**kwargs) # target -> source
+        mdb.saveSchemaEdge(self) #SAVE THIS RULE
+        DirectRelation.saveSchema(self, source, 'inverseDB',
+                                  mdb, **kwargs) # source -> target
+        b = DirectRelation(source) # CREATE REVERSE MAPPING
+        b.saveSchema(self.targetID, 'inverseDB',
+                     mdb, **kwargs) # target -> source
     def delschema(self,resourceDB):
         resourceDB.delschema(self.targetID,'inverseDB')
         
