@@ -184,10 +184,14 @@ class SQLiteGraph_Test(Mapping_Test):
     'run same tests on mapping.SQLGraph class'
     def setUp(self):
         from pygr import sqlgraph
-        import sqlite3 # test will be skipped if unavailable
+        try:
+            import sqlite3 as sqlite
+        except:
+            from pysqlite2 import dbapi2 as sqlite
+        # test will be skipped if none of the two modules is available
         self.dbfile = testutil.tempdatafile('sqlitegraph_test.db')
         self.tearDown(False) # make sure db file not already present
-        self.sqlite_db = sqlite3.connect(self.dbfile)
+        self.sqlite_db = sqlite.connect(self.dbfile)
         self.cursor = self.sqlite_db.cursor()
         createOpts = dict(source_id='int', target_id='int', edge_id='int')
         self.datagraph = sqlgraph.SQLGraph('testgraph',

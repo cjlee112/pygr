@@ -240,12 +240,15 @@ def sqlite_enabled():
     global SKIP_MESSAGES
 
     try:
-        import sqlite3
-    except ImportError, exc:
-        msg = 'sqlite3 error: %s' % exc
-        SKIP_MESSAGES.append(msg)
-        warn(msg)
-        return False
+        import sqlite3 as sqlite
+    except:
+        try:
+            from pysqlite2 import dbapi2 as sqlite
+        except ImportError, exc:
+            msg = 'sqlite3 error: %s' % exc
+            SKIP_MESSAGES.append(msg)
+            warn(msg)
+            return False
     return True
 
 

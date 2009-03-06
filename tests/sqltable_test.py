@@ -134,10 +134,13 @@ class SQLTable_Test(SQLTable_Setup):
 
 class SQLite_Mixin(object):
     def setUp(self):
-        import sqlite3
+        try:
+            import sqlite3 as sqlite
+        except:
+            from pysqlite2 import dbapi2 as sqlite
         self.sqlite_file = testutil.tempdatafile('test_sqlite.db')
         self.tearDown(False) # delete the file if it exists
-        self.sqlite_db = sqlite3.connect(self.sqlite_file)
+        self.sqlite_db = sqlite.connect(self.sqlite_file)
         c = self.sqlite_db.cursor()
         self.load_data(c, 'sqltable_test', autoInc='',
                        writeable=self.writeable)

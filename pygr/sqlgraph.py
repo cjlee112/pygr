@@ -303,8 +303,11 @@ _sqliteMacros = dict(IGNORE='or ignore', REPLACE='insert or replace')
 
 def sqlite_table_schema(self, analyzeSchema=True):
     'retrieve table schema from a sqlite3 database, save on self'
-    import sqlite3
-    self._format_query = SQLFormatDict(sqlite3.paramstyle, _sqliteMacros)
+    try:
+        import sqlite3 as sqlite
+    except:
+        from pysqlite2 import dbapi2 as sqlite
+    self._format_query = SQLFormatDict(sqlite.paramstyle, _sqliteMacros)
     if not analyzeSchema:
         return
     self.clear_schema() # reset settings and dictionaries
@@ -405,6 +408,7 @@ def get_table_schema(self, analyzeSchema=True):
 
 
 _schemaModuleDict = {'MySQLdb.cursors':mysql_table_schema,
+                     'pysqlite2.dbapi2':sqlite_table_schema,
                      'sqlite3':sqlite_table_schema}
 
 class SQLTableBase(object, UserDict.DictMixin):
