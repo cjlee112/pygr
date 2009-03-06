@@ -9,7 +9,7 @@ debug, info, warn and error
 The default formatters will print out the function the log was triggered from.
 """
 
-import sys, logging, functools
+import sys, logging
 
 # python 2.5 the watershed release that introduced most changes since 2.1
 
