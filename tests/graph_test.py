@@ -180,28 +180,14 @@ class SQLGraph_Test(Mapping_Test):
     def tearDown(self):
         self.datagraph.cursor.execute('drop table if exists %s' % self.dbname)
 
-class SQLiteGraph_Test(Mapping_Test):
+class SQLiteGraph_Test(testutil.SQLite_Mixin, Mapping_Test):
     'run same tests on mapping.SQLGraph class using sqlite'
-    def setUp(self):
-        from pygr import sqlgraph
-        sqlite = sqlgraph.import_sqlite() # import from stdlib or external
-        self.dbfile = testutil.tempdatafile('sqlitegraph_test.db')
-        self.tearDown(False) # make sure db file not already present
-        self.sqlite_db = sqlite.connect(self.dbfile)
-        self.cursor = self.sqlite_db.cursor()
+    def sqlite_load(self):
         createOpts = dict(source_id='int', target_id='int', edge_id='int')
         self.datagraph = sqlgraph.SQLGraph('testgraph',
                                            cursor=self.cursor,
                                            dropIfExists=True,
                                            createTable=createOpts)
-    def tearDown(self, closeConnection=True):
-        if closeConnection:
-            self.cursor.close() # close the cursor
-            self.sqlite_db.close() # close the connection
-        try:
-            os.remove(self.dbfile)
-        except OSError:
-            pass
 
 class Splicegraph_Test(unittest.TestCase):
     

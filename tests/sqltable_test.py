@@ -132,26 +132,12 @@ class SQLTable_Test(SQLTable_Setup):
         assert self.targetDB[6] in d and self.targetDB[8] in d
         assert self.sourceDB[2] in m
 
-class SQLite_Mixin(object):
-    def setUp(self):
-        sqlite = import_sqlite() # from 2.5+ stdlib, or external module
-        self.sqlite_file = testutil.tempdatafile('test_sqlite.db')
-        self.tearDown(False) # delete the file if it exists
-        self.sqlite_db = sqlite.connect(self.sqlite_file)
-        c = self.sqlite_db.cursor()
-        self.load_data(c, 'sqltable_test', autoInc='',
+class SQLiteBase(testutil.SQLite_Mixin):
+    def sqlite_load(self):
+        self.load_data(self.cursor, 'sqltable_test', autoInc='',
                        writeable=self.writeable)
-    def tearDown(self, closeConnection=True):
-        'delete the sqlite db file after (optionally) closing connection'
-        if closeConnection:
-            self.db.cursor.close() # close the cursor
-            self.sqlite_db.close() # close the connection
-        try:
-            os.remove(self.sqlite_file)
-        except OSError:
-            pass
-        
-class SQLiteTable_Test(SQLite_Mixin, SQLTable_Test):
+
+class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
     pass
 
 class SQLTable_NoCache_Test(SQLTable_Test):
@@ -222,7 +208,7 @@ class SQLTableRW_Test(SQLTable_Setup):
             pass
         
 
-class SQLiteTableRW_Test(SQLite_Mixin, SQLTableRW_Test):
+class SQLiteTableRW_Test(SQLiteBase, SQLTableRW_Test):
     pass
 
 class SQLTableRW_NoCache_Test(SQLTableRW_Test):

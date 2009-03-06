@@ -249,6 +249,26 @@ def sqlite_enabled():
     return True
 
 
+class SQLite_Mixin(object):
+    'use this as a base for any test'
+    def setUp(self):
+        from pygr.sqlgraph import import_sqlite
+        sqlite = import_sqlite() # from 2.5+ stdlib, or external module
+        self.sqlite_file = tempdatafile('test_sqlite.db')
+        self.tearDown(False) # delete the file if it exists
+        self.sqlite_db = sqlite.connect(self.sqlite_file)
+        self.cursor = self.sqlite_db.cursor()
+        self.sqlite_load() # load data provided by subclass method
+    def tearDown(self, closeConnection=True):
+        'delete the sqlite db file after (optionally) closing connection'
+        if closeConnection:
+            self.cursor.close() # close the cursor
+            self.sqlite_db.close() # close the connection
+        try:
+            os.remove(self.sqlite_file)
+        except OSError:
+            pass
+        
 def blast_enabled():
     """
     Detects whether the blast suite is functional on the current system
