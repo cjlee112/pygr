@@ -181,14 +181,10 @@ class SQLGraph_Test(Mapping_Test):
         self.datagraph.cursor.execute('drop table if exists %s' % self.dbname)
 
 class SQLiteGraph_Test(Mapping_Test):
-    'run same tests on mapping.SQLGraph class'
+    'run same tests on mapping.SQLGraph class using sqlite'
     def setUp(self):
         from pygr import sqlgraph
-        try:
-            import sqlite3 as sqlite
-        except:
-            from pysqlite2 import dbapi2 as sqlite
-        # test will be skipped if none of the two modules is available
+        sqlite = sqlgraph.import_sqlite() # import from stdlib or external
         self.dbfile = testutil.tempdatafile('sqlitegraph_test.db')
         self.tearDown(False) # make sure db file not already present
         self.sqlite_db = sqlite.connect(self.dbfile)

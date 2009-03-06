@@ -301,12 +301,17 @@ def mysql_table_schema(self, analyzeSchema=True):
 
 _sqliteMacros = dict(IGNORE='or ignore', REPLACE='insert or replace')
 
-def sqlite_table_schema(self, analyzeSchema=True):
-    'retrieve table schema from a sqlite3 database, save on self'
+def import_sqlite():
+    'import sqlite3 (for Python 2.5+) or pysqlite2 for earlier Python versions'
     try:
         import sqlite3 as sqlite
-    except:
+    except ImportError:
         from pysqlite2 import dbapi2 as sqlite
+    return sqlite
+
+def sqlite_table_schema(self, analyzeSchema=True):
+    'retrieve table schema from a sqlite3 database, save on self'
+    sqlite = import_sqlite()
     self._format_query = SQLFormatDict(sqlite.paramstyle, _sqliteMacros)
     if not analyzeSchema:
         return

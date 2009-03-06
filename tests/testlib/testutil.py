@@ -238,17 +238,14 @@ def sqlite_enabled():
     Detects whether sqlite3 is functional on the current system
     """
     global SKIP_MESSAGES
-
+    from pygr.sqlgraph import import_sqlite
     try:
-        import sqlite3 as sqlite
-    except:
-        try:
-            from pysqlite2 import dbapi2 as sqlite
-        except ImportError, exc:
-            msg = 'sqlite3 error: %s' % exc
-            SKIP_MESSAGES.append(msg)
-            warn(msg)
-            return False
+        sqlite = import_sqlite() # from 2.5+ stdlib, or pysqlite2
+    except ImportError, exc:
+        msg = 'sqlite3 error: %s' % exc
+        SKIP_MESSAGES.append(msg)
+        warn(msg)
+        return False
     return True
 
 

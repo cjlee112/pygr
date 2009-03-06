@@ -1,7 +1,7 @@
 import os, unittest
 from testlib import testutil, logger
 from pygr.sqlgraph import SQLTable,SQLTableNoCache,getNameCursor,\
-     MapView,GraphView,DBServerInfo
+     MapView,GraphView,DBServerInfo,import_sqlite
 
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTable
@@ -134,10 +134,7 @@ class SQLTable_Test(SQLTable_Setup):
 
 class SQLite_Mixin(object):
     def setUp(self):
-        try:
-            import sqlite3 as sqlite
-        except:
-            from pysqlite2 import dbapi2 as sqlite
+        sqlite = import_sqlite() # from 2.5+ stdlib, or external module
         self.sqlite_file = testutil.tempdatafile('test_sqlite.db')
         self.tearDown(False) # delete the file if it exists
         self.sqlite_db = sqlite.connect(self.sqlite_file)
