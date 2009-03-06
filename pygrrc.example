@@ -1,3 +1,6 @@
+# This is an example config file for Pygr, listing all sections
+# and keywords supported at the moment.
+
 [megatests]
 logDir = /result/pygr_megatest/src_save
 mailFrom = testrunner@somehost.edu

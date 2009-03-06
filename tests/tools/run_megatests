@@ -15,9 +15,19 @@ PATH='/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:
 #  - if you actually want to use that file;
 #  - if you build Pygr against certain (older?) versions of the MySQL client,
 #      which segfault on startup if $HOME is unset or empty
+# $HOME is also used to locate the Pygr configuration file - while such a file
+# will also be read from the current directory (and in fact override data
+# from the $HOME-based one), this is not particularly useful when the current
+# directory in question comes straight from Git.
 if [ -z "$HOME" ]; then
 	HOME="${mycnfpath}"
 	export HOME
+fi
+
+# Megatests do not run without a config file
+if [ ! -f "$HOME/.pygrrc" ] && [ ! -f "$HOME/pygr.cfg" ]; then
+	echo "Error: Pygr configuration file not found in $HOME, cannot proceed"
+	exit 1
 fi
 
 # Tell Python where Pygr will live.
