@@ -8,14 +8,14 @@ class SQLTable_Setup(unittest.TestCase):
     def setUp(self):
         self.load_data(writeable=self.writeable)
     def load_data(self, cursor=None, tableName='test.sqltable_test',
-                  autoInc='AUTO_INCREMENT', writeable=False):
+                  writeable=False):
         'create 3 tables and load 9 rows for our tests'
         self.tableName = tableName
         self.joinTable1 = joinTable1 = tableName + '1'
         self.joinTable2 = joinTable2 = tableName + '2'
         createTable = """\
-        CREATE TABLE %s (primary_id INTEGER PRIMARY KEY %s, seq_id TEXT, start INTEGER, stop INTEGER)
-        """ % (tableName,autoInc)
+        CREATE TABLE %s (primary_id INTEGER PRIMARY KEY %%(AUTO_INCREMENT)s, seq_id TEXT, start INTEGER, stop INTEGER)
+        """ % tableName
         self.db = self.tableClass(tableName, cursor, dropIfExists=True,
                                   createTable=createTable,
                                   writeable=writeable)
@@ -134,8 +134,7 @@ class SQLTable_Test(SQLTable_Setup):
 
 class SQLiteBase(testutil.SQLite_Mixin):
     def sqlite_load(self):
-        self.load_data(self.cursor, 'sqltable_test', autoInc='',
-                       writeable=self.writeable)
+        self.load_data(self.cursor, 'sqltable_test', writeable=self.writeable)
 
 class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
     pass

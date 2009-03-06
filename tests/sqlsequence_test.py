@@ -11,24 +11,24 @@ class SQLSequence_Test(unittest.TestCase):
     SQLSequence objects created by a SQLTable object rather than
     instantiating the SQLSequence objects directly.
     '''
-    def setUp(self):
+    def setUp(self, cursor=None, dbname='test.sqlsequence_test'):
         createTable = """\
-        CREATE TABLE test.sqlsequence_test
-             (primary_id INTEGER PRIMARY KEY AUTO_INCREMENT, sequence TEXT)
-        """
+        CREATE TABLE %s
+             (primary_id INTEGER PRIMARY KEY %%(AUTO_INCREMENT)s, sequence TEXT)
+        """ % dbname
         
-        self.db = sqlgraph.SQLTable('test.sqlsequence_test', dropIfExists=True,
+        self.db = sqlgraph.SQLTable(dbname, cursor, dropIfExists=True,
             createTable=createTable, attrAlias=dict(seq='sequence'))
         
         self.db.cursor.execute("""\
-        INSERT INTO test.sqlsequence_test (sequence)
+        INSERT INTO %s (sequence)
               VALUES ('CACCCTGCCCCATCTCCCCAGCCTGGCCCCTCGTGTCTCAGAACCCTCGGGGGGAGGCACAGAAGCCTTCGGGG')
-        """)
+        """ % dbname)
 
         self.db.cursor.execute("""\
-        INSERT INTO test.sqlsequence_test (sequence)
+        INSERT INTO %s (sequence)
               VALUES ('GAAAGAAAGAAAGAAAGAAAGAAAGAGAGAGAGAGAGACAGAAG')
-        """)
+        """ % dbname)
         
         class DNASeqRow(seqdb.DNASQLSequence):
             def __len__(self): # just speed optimization
@@ -61,6 +61,10 @@ class SQLSequence_Test(unittest.TestCase):
         "Testing subclassing"
         self.row2._init_subclass(self.db)
 
+class SQLiteSequence_Test(testutil.SQLite_Mixin, SQLSequence_Test):
+    def sqlite_load(self):
+        SQLSequence_Test.setUp(self, self.cursor, 'sqlsequence_test')
+
 def get_suite():
     "Returns the testsuite"
     tests = []
@@ -68,6 +72,10 @@ def get_suite():
     # detect mysql
     if testutil.mysql_enabled():
         tests.append(SQLSequence_Test) 
+    else:
+        testutil.info('*** skipping SQLSequence_Test')
+    if testutil.sqlite_enabled():
+        tests.append(SQLiteSequence_Test) 
     else:
         testutil.info('*** skipping SQLSequence_Test')
 

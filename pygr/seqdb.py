@@ -23,7 +23,7 @@ class SQLSequence(SQLRow,SequenceBase):
         return self.length
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
-        return self._select('substring(%s FROM %d FOR %d)'
+        return self._select('%%(SUBSTRING)s(%s %%(SUBSTR_FROM)s %d %%(SUBSTR_FOR)s %d)'
                             %(self.db._attrSQL('seq'),start+1,end-start))
 
 class DNASQLSequence(SQLSequence):

@@ -254,7 +254,7 @@ class SQLite_Mixin(object):
     def setUp(self):
         from pygr.sqlgraph import import_sqlite
         sqlite = import_sqlite() # from 2.5+ stdlib, or external module
-        self.sqlite_file = tempdatafile('test_sqlite.db')
+        self.sqlite_file = tempdatafile('test_sqlite.db', False)
         self.tearDown(False) # delete the file if it exists
         self.sqlite_db = sqlite.connect(self.sqlite_file)
         self.cursor = self.sqlite_db.cursor()
@@ -293,9 +293,9 @@ TEMPDIR = TempDir('tempdata').path
 # shortcuts for creating full paths to files in the data and temporary
 # directories
 datafile = lambda name: path_join(DATADIR, name)
-def tempdatafile(name):
+def tempdatafile(name, errorIfExists=True):
     filepath = path_join(TEMPDIR, name)
-    if os.path.exists(filepath):
+    if errorIfExists and os.path.exists(filepath):
         raise AssertionError('tempdatafile %s already exists!' % name)
     return filepath
 
