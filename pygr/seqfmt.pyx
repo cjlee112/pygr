@@ -30,14 +30,14 @@ def read_fasta_lengths(d, pyfile, filename):
     if ifile==NULL:
         raise IOError('unable to open %s' % filename)
     outfile=filename+'.pureseq'
-    ifile2=fopen(outfile,'w')
+    ifile2=fopen(outfile,'wb') # save in binary mode, though shouldn't matter
     if ifile2==NULL:
         raise IOError('unable to create %s' % (filename+'.pureseq'))
     id=None
     ipos=0
     seqLength=0
     strcpy(fastastart,'>')
-    p=fgets(tmp,32767,ifile) # READ THE FIRST LINE OF THE MAF FILE
+    p=fgets(tmp,32767,ifile) # read the first line of the FASTA file
     while p:
         if fastastart[0]==p[0]: #NEW SEQUENCE
             if id is not None and seqLength>0:
@@ -53,7 +53,7 @@ def read_fasta_lengths(d, pyfile, filename):
                     fputc(p[i],ifile2)
                     ipos=ipos+1
                 i=i+1
-        p=fgets(tmp,32767,ifile) # READ THE FIRST LINE OF THE MAF FILE
+        p=fgets(tmp,32767,ifile) # read the next line of the FASTA file
     if id is not None and seqLength>0:
         d[id]=seqLength,offset # SAVE THIS SEQ LENGTH
     fclose(ifile2)

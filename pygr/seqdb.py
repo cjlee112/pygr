@@ -23,7 +23,7 @@ class SQLSequence(SQLRow,SequenceBase):
         return self.length
     def strslice(self,start,end):
         "Efficient access to slice of a sequence, useful for huge contigs"
-        return self._select('substring(%s FROM %d FOR %d)'
+        return self._select('%%(SUBSTRING)s(%s %%(SUBSTR_FROM)s %d %%(SUBSTR_FOR)s %d)'
                             %(self.db._attrSQL('seq'),start+1,end-start))
 
 class DNASQLSequence(SQLSequence):
@@ -64,7 +64,7 @@ class SeqLenDictSaver(object):
         self.reader = reader
     def __call__(self, d, ifile, filename):
         offset = 0L
-        ifile2 = file(filename+'.pureseq', 'w')
+        ifile2 = file(filename+'.pureseq', 'wb') # binary file
         try:
             for o in reader(ifile, filename): # run the reader as iterator
                 d[o.id] = o.length,offset # save to seqlendict
@@ -76,7 +76,8 @@ class SeqLenDictSaver(object):
         finally:
             ifile2.close()
 
-def store_seqlen_dict(d, filename, ifile=None, idFilter=None, reader=None):
+def store_seqlen_dict(d, filename, ifile=None, idFilter=None, reader=None,
+                      mode='rU'):
     "store sequence lengths in a dictionary"
     if reader is not None: # run the user's custom reader() function.
         builder = SeqLenDictSaver(reader)
@@ -106,7 +107,7 @@ option to force a clean install''' % sys.version_info[:2])
     if ifile is not None:
         builder(d, ifile, filename) # run the builder on our sequence set
     else:
-        ifile = file(filename)
+        ifile = file(filename, mode)
         try:
             builder(d, ifile, filename) # run the builder on our sequence set
         finally:
@@ -161,8 +162,8 @@ class FileDBSequence(SequenceBase):
         try:
             ifile=self.db._pureseq
         except AttributeError:
-            ifile=file(self.db.filepath+'.pureseq')
-            self.db._pureseq=ifile
+            ifile = file(self.db.filepath + '.pureseq', 'rb') # binary mode
+            self.db._pureseq = ifile # but text mode probably also OK...
         ifile.seek(self.db.seqLenDict[self.id][1]+start)
         return ifile.read(end-start)
     
@@ -218,7 +219,7 @@ class SequenceDB(object, UserDict.DictMixin):
         except AttributeError:
             pass
         try:
-            ifile = file(self.filepath) # read one sequence to check its type
+            ifile = file(self.filepath, 'rU') # read one sequence to check type
             try: # this only works for FASTA file...
                 id,title,seq = read_fasta_one_line(ifile) 
                 self._seqtype = guess_seqtype(seq) # record protein vs. DNA...
@@ -508,7 +509,7 @@ class PrefixUnionDict(object, UserDict.DictMixin):
         if filename is not None: # READ UNION HEADER FILE
             if trypath is None: # DEFAULT: LOOK IN SAME DIRECTORY AS UNION HEADER
                 trypath=[os.path.dirname(filename)]
-            ifile=file(filename)
+            ifile=file(filename, 'rU') # text file
             it=iter(ifile)
             separator=it.next().strip('\r\n') # DROP TRAILING CR
             prefixDict={}
@@ -613,7 +614,7 @@ Set trypath to give a list of directories to search.'''
 
     def writeHeaderFile(self,filename):
         'save a header file for this union, to reopen later'
-        ifile=file(filename,'w')
+        ifile=file(filename,'w') # text file
         print >>ifile,self.separator
         for k,v in self.prefixDict.items():
             try:

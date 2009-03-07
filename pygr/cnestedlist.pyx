@@ -51,7 +51,7 @@ cdef class IntervalDB:
     cdef FILE *ifile
     self.n=nsize
     if nsize>0:
-      ifile=fopen(filename,"r")
+      ifile=fopen(filename,"r") # text file, one interval per line
       if ifile:
         self.im=read_intervals(self.n,ifile)
         fclose(ifile)
@@ -93,7 +93,7 @@ cdef class IntervalDB:
     cdef int i
     cdef IntervalMap *im_new
     self.close()
-    ifile=fopen(filename,'r')
+    ifile=fopen(filename,'rb') # binary file
     if ifile==NULL:
       raise IOError('unable to open '+filename)
     im_new=interval_map_alloc(n)
@@ -1318,7 +1318,7 @@ cdef class NLMSASequence:
       self.idb=IntervalDB()
     elif mode=='w': # WRITE .build FILE
       filename=filestem+'.build'
-      self.build_ifile=fopen(filename,'w')
+      self.build_ifile=fopen(filename,'wb') # binary file
       if self.build_ifile==NULL:
         errmsg='unable to open in write mode: '+filename
         raise IOError(errmsg)
@@ -1548,9 +1548,9 @@ cdef class NLMSA:
     'open all nestedlist indexes in this LPO database for immediate use'
     cdef NLMSASequence ns
     try:
-      ifile=file(self.pathstem+'.NLMSAindex')
+      ifile=file(self.pathstem+'.NLMSAindex', 'rU') # text file
     except IOError:
-      ifile=file(self.pathstem+'NLMSAindex') # FOR BACKWARDS COMPATIBILITY
+      ifile=file(self.pathstem+'NLMSAindex', 'rU') # FOR BACKWARDS COMPATIBILITY
     try:
       for line in ifile:
         id,name,is_union,length=line.strip().split('\t')
@@ -1577,7 +1577,7 @@ cdef class NLMSA:
     'read pickled attribute dictionary from file and apply to self'
     import pickle
     try:
-      ifile = file(self.pathstem+'.attrDict')
+      ifile = file(self.pathstem+'.attrDict', 'rb') # pickle is binary file!
     except IOError: # BACKWARDS COMPATIBILITY: OLD NLMSA HAS NOT ATTRDICT
       return
     try:
@@ -1734,16 +1734,16 @@ See the NLMSA documentation for more details.\n''')
     strcpy(a_header,"a ") # MAKE C STRING 
     for filename in mafFiles:
       print 'Processing MAF file:',filename
-      ifile=fopen(filename,'r')
+      ifile=fopen(filename,'r') # text file
       if ifile==NULL:
         self.free_seqidmap(nseq0,seqidmap)
         self.save_nbuild(nbuild)
         raise IOError('unable to open file %s' % filename)
-      if fgets(tmp,32767,ifile)==NULL or strncmp(tmp,"##maf",4):
+      if fgets(tmp,32767,ifile)==NULL or strncmp(tmp,"##maf",4): # HEADER LINE
         self.free_seqidmap(nseq0,seqidmap)
         self.save_nbuild(nbuild)
         raise IOError('%s: not a MAF file? Bad format.' % filename)
-      p=fgets(tmp,32767,ifile) # READ THE FIRST LINE OF THE MAF FILE
+      p=fgets(tmp,32767,ifile) # READ 1ST DATA LINE OF THE MAF FILE
       while p: # GOT ANOTHER LINE TO PROCESS
         if has_continuation or 0==strncmp(tmp,a_header,2): # ALIGNMENT HEADER: READ ALIGNMENT
           n=readMAFrecord(im,0,seqidmap,nseq0,ns_lpo.length, # READ ONE MAF BLOCK
@@ -1874,7 +1874,7 @@ See the NLMSA documentation for more details.\n''')
         is_bidirectional = bidirectionalRule(t[0],t[1],self.is_bidirectional)
       strcpy(src_prefix,t[0]) # KEEP THEM IN STATIC C STRINGS FOR SPEED
       strcpy(dest_prefix,t[1])
-      ifile=fopen(filename,'r')
+      ifile=fopen(filename,'r') # text file
       if ifile==NULL:
         self.free_seqidmap(nseq0,seqidmap)
         self.save_nbuild(nbuild)
@@ -1941,7 +1941,7 @@ See the NLMSA documentation for more details.\n''')
     cdef NLMSASequence ns
     self.seqs.reopenReadOnly() # SAVE INDEXES AND OPEN READ-ONLY
     ntotal = 0
-    ifile=file(self.pathstem+'.NLMSAindex','w')
+    ifile=file(self.pathstem+'.NLMSAindex','w') # text file
     try:
       for ns in self.seqlist: # BUILD EACH IntervalFileDB ONE BY ONE
         ntotal = ntotal + ns.buildFiles(**kwargs)
@@ -1956,7 +1956,7 @@ See the NLMSA documentation for more details.\n''')
     if ntotal==0:
       raise nlmsa_utils.EmptyAlignmentError('empty alignment!')
     import sys,pickle
-    ifile = file(self.pathstem+'.attrDict','w')
+    ifile = file(self.pathstem+'.attrDict','wb') # pickle is binary file!
     try:
       pickle.dump(dict(is_bidirectional=self.is_bidirectional,
                        pairwiseMode=self.pairwiseMode),ifile)
@@ -2042,14 +2042,14 @@ to another machine.  Therefore, when loading this textfile
 on the destination machine, you will have to provide the
 seqDict argument to textfile_to_binaries() on the destination machine.''')
   try:
-    ifile = file(pathstem+'.attrDict')
+    ifile = file(pathstem+'.attrDict', 'rb') # pickle is binary file!
     d = pickle.load(ifile)
     ifile.close()
   except IOError:
     d = {}
   is_bidirectional = d.get('is_bidirectional',-1)
   pairwiseMode = d.get('pairwiseMode',-1)
-  outfile=fopen(outfilename,"w")
+  outfile=fopen(outfilename,"w") # text file
   import os.path
   basestem=os.path.basename(pathstem) # GET RID OF PATH INFO
   strcpy(tmp,basestem) # COPY TO C STRING SO WE CAN fprintf
@@ -2086,14 +2086,14 @@ to textfile_to_binaries() on the destination machine.''')
                  nlmsaID,nsID,offset)<0:
         raise IOError('error writing to file %s' %outfilename)
     try:
-      ifile = file(pathstem+'.NLMSAindex') # NOW SAVE THE NLMSA DATA
+      ifile = file(pathstem+'.NLMSAindex', 'rU') # text file
     except IOError:
-      ifile = file(pathstem+'NLMSAindex') # NOW SAVE THE NLMSA DATA
+      ifile = file(pathstem+'NLMSAindex', 'rU')
   except:
     fclose(outfile)
     raise
   try:
-    for line in ifile:
+    for line in ifile:  # NOW SAVE THE NLMSA DATA
       id,name,is_union,length=line.strip().split('\t')
       strcpy(tmp,line) # COPY TO C STRING SO WE CAN fprintf
       if fprintf(outfile,"NLMSASequence\t%s",tmp)<0:
@@ -2117,7 +2117,7 @@ def textfile_to_binaries(filename,seqDict=None,prefixDict=None,buildpath=''):
   else:
     ignorePrefix = False
   err_msg[0]=0 # ENSURE STRING IS EMPTY
-  infile=fopen(filename,"r")
+  infile=fopen(filename,"r") # text file
   if infile==NULL:
     raise IOError('unable to open file %s' %filename)
   try:
@@ -2150,7 +2150,7 @@ def textfile_to_binaries(filename,seqDict=None,prefixDict=None,buildpath=''):
       d['is_bidirectional'] = is_bidirectional
     if pairwiseMode != -1:
       d['pairwiseMode'] = pairwiseMode
-    ifile = file(basestem+'.attrDict',"w")
+    ifile = file(basestem+'.attrDict',"wb") # pickle is binary file!
     try:
       pickle.dump(d,ifile)
     finally:
@@ -2206,8 +2206,8 @@ dictionary argument: %s''' % missing)
       sys.stderr.write('Saving NLMSA binary index: '+s[14:]+'...\n')
       if text_file_to_binaries(infile,basestem,err_msg)<0:
         raise IOError(err_msg)
-    ifile = file(buildpath1+'.NLMSAindex',"w") # LAST, WRITE TOP INDEX FILE
-    ifile.write(NLMSAindexText)
+    ifile = file(buildpath1+'.NLMSAindex',"w") # text file
+    ifile.write(NLMSAindexText) # LAST, WRITE TOP INDEX FILE
     ifile.close()
   finally:
     fclose(infile)

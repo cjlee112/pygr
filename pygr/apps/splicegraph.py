@@ -1,6 +1,6 @@
 
 from pygr.sqlgraph import *
-from pygr.poa import *
+from pygr.sequence import *
 from pygr.seqdb import *
 
 
