@@ -456,7 +456,7 @@ class Metabase(MetabaseBase):
         about what type of metabase this dbpath mapped to.  layer must
         be a dict'''
         self.parent = parent
-        self.Data = ResourcePathRW(None, self) # root of namespace
+        self.Data = ResourcePath(None, self) # root of namespace
         self.Schema = SchemaPath(None, self)
         self.loader = loader
         self.debug = True # single mdb should expose all errors 
@@ -530,19 +530,20 @@ class MetabaseList(MetabaseBase):
     instances of this class themselves.'''
     # DEFAULT PYGRDATAPATH: HOME, CURRENT DIR, XMLRPC IN THAT ORDER
     defaultPath = ['~','.','http://biodb2.bioinformatics.ucla.edu:5000']
-    def __init__(self, loader=None, separator=','):
+    def __init__(self, pygrDataPath=None, loader=None, separator=','):
         '''initializes attrs; does not connect to metabases'''
         if loader is None: # create a cache for loaded resources
             loader = ResourceLoader()
         self.loader = loader
         self.mdb = None
         self.layer = {}
-        self.dbstr = None
+        self.pygrDataPath = pygrDataPath
         self.separator = separator
         self.Data = ResourcePath(None, self) # root of namespace
         self.Schema = SchemaPath(None, self)
         self.debug = False # if one load attempt fails, try other metabases
         self.download = False
+        self.ready = False
     def get_writer(self):
         'ensure that metabases are loaded, before looking for our writer'
         self.update(keepCurrentPath=True) # make sure metabases loaded
@@ -551,7 +552,7 @@ class MetabaseList(MetabaseBase):
         'search our metabases for pickle string and docstr for resID'
         for mdb in self.mdb:
             try:
-                yield mdb.find_resource(resID, download)
+                yield mdb.find_resource(resID, download).next()
             except KeyError: # not in this db
                 pass
         raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % resID)
@@ -561,24 +562,24 @@ class MetabaseList(MetabaseBase):
             return os.environ['PYGRDATAPATH']
         except KeyError:
             return self.separator.join(self.defaultPath)
-    def update(self, PYGRDATAPATH=None, debug=None, keepCurrentPath=False):
+    def update(self, pygrDataPath=None, debug=None, keepCurrentPath=False):
         'get the latest list of resource databases'
         import os
-        if keepCurrentPath: # only update if self.dbstr is None
-            PYGRDATAPATH = self.dbstr
-        if PYGRDATAPATH is None: # get environment var or default
-            PYGRDATAPATH = self.get_pygr_data_path()
+        if keepCurrentPath: # only update if self.pygrDataPath is None
+            pygrDataPath = self.pygrDataPath
+        if pygrDataPath is None: # get environment var or default
+            pygrDataPath = self.get_pygr_data_path()
         if debug is None:
             debug = self.debug
-        if self.dbstr != PYGRDATAPATH: # LOAD NEW RESOURCE PYGRDATAPATH
-            self.dbstr = PYGRDATAPATH
+        if not self.ready or self.pygrDataPath != pygrDataPath: # reload
+            self.pygrDataPath = pygrDataPath
             self.mdb = []
             try: # default: we don't have a writeable mdb to save data in
                 del self.writer
             except AttributeError:
                 pass
             self.layer = {}
-            for dbpath in PYGRDATAPATH.split(self.separator):
+            for dbpath in pygrDataPath.split(self.separator):
                 try: # connect to metabase
                     mdb = Metabase(dbpath, self.loader, self.layer, self)
                 except (KeyboardInterrupt,SystemExit):
@@ -598,6 +599,7 @@ WARNING: error accessing metabase %s.  Continuing...''' % dbpath
                     self.mdb.append(mdb) # SAVE TO OUR LIST OF RESOURCE DATABASES
                     if mdb.writeable and not hasattr(self, 'writer'):
                         self.writer = mdb # record as place to save resources
+            self.ready = True # metabases successfully loaded
     def get_pending_or_find(self, resID, **kwargs):
         'find resID even if only pending (not actually saved yet)'
         for mdb in self.mdb:
@@ -871,8 +873,6 @@ class ResourcePath(object):
     def __call__(self, *args, **kwargs):
         'construct the requested resource'
         return self._mdb(self._path, *args, **kwargs)
-
-class ResourcePathRW(ResourcePath):
     def __setattr__(self, name, obj):
         'save obj using the specified resource name'
         self._mdb.add_resource(self.getPath(name), obj)
