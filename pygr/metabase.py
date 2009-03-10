@@ -1,5 +1,5 @@
 
-import os, pickle, sys, re
+import os, pickle, sys, re, datetime
 from StringIO import StringIO
 import shelve
 from mapping import Collection,Mapping,Graph
@@ -326,8 +326,7 @@ table you want to create, and LAYERNAME is the layer name you want to assign it'
         self.rootNames={}
         schemaTable = self.tablename+'_schema' # SEPARATE TABLE FOR SCHEMA GRAPH
         if createLayer is not None: # CREATE DATABASE FROM SCRATCH
-            from datetime import datetime
-            creation_time = datetime.now()
+            creation_time = datetime.datetime.now()
             self.cursor.execute('drop table if exists %s' % self.tablename)
             self.cursor.execute('create table %s (pygr_id varchar(255) not null,location varchar(255) not null,docstring varchar(255),user varchar(255),creation_time datetime,pickle_size int,security_code bigint,info_blob text,objdata text not null,unique(pygr_id,location))'%self.tablename)
             self.cursor.execute('insert into %s (pygr_id,location,creation_time,objdata) values (%%s,%%s,%%s,%%s)'
@@ -467,54 +466,55 @@ class ShelveMetabase(object):
     _pygr_data_version=(0,1,0)
     graph = ResourceDBGraphDescr() # INTERFACE TO SCHEMA GRAPH
     def __init__(self, dbpath, mdb, mode='r', **kwargs):
-        import anydbm,os
-        self.dbpath=os.path.join(dbpath,'.pygr_data') # CONSTRUCT FILENAME
+        import anydbm
+        self.dbpath = os.path.join(dbpath, '.pygr_data') # CONSTRUCT FILENAME
         self.mdb = mdb
         self.writeable = True # can write to this storage
         try: # OPEN DATABASE FOR READING
-            self.db=shelve.open(self.dbpath,mode)
+            self.db = shelve.open(self.dbpath, mode)
             try:
                 mdb.save_root_names(self.db['0root'])
             except KeyError:
                 pass
         except anydbm.error: # CREATE NEW FILE IF NEEDED
-            self.db=shelve.open(self.dbpath,'c')
-            self.db['0version']=self._pygr_data_version # SAVE VERSION STAMP
-            self.db['0root']={}
-    def reopen(self,mode):
+            self.db = shelve.open(self.dbpath, 'c')
+            self.db['0version'] = self._pygr_data_version # SAVE VERSION STAMP
+            self.db['0root'] = {}
+    def reopen(self, mode):
         self.db.close()
-        self.db=shelve.open(self.dbpath,mode)
-    def find_resource(self,id,download=False):
+        self.db = shelve.open(self.dbpath, mode)
+    def find_resource(self, resID, download=False):
         'get an item from this resource database'
-        objdata = self.db[id] # RAISES KeyError IF NOT PRESENT
+        objdata = self.db[resID] # RAISES KeyError IF NOT PRESENT
         try:
-            return objdata, self.db['__doc__.'+id]['__doc__']
+            return objdata, self.db['__doc__.' + resID]['__doc__']
         except KeyError:
             return objdata, None
-    def __setitem__(self,id,obj):
+    def __setitem__(self, resID, obj):
         'add an object to this resource database'
         s = dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
         try:
-            self.db[id]=s # SAVE TO OUR SHELVE FILE
-            self.db['__doc__.'+id] = get_info_dict(obj,s)
-            root=id.split('.')[0] # SEE IF ROOT NAME IS IN THIS SHELVE
-            d = self.db.get('0root',{})
+            self.db[resID] = s # SAVE TO OUR SHELVE FILE
+            self.db['__doc__.' + resID] = get_info_dict(obj, s)
+            root = resID.split('.')[0] # SEE IF ROOT NAME IS IN THIS SHELVE
+            d = self.db.get('0root', {})
             if root not in d:
-                d[root]=None # ADD NEW ENTRY
-                self.db['0root']=d # SAVE BACK TO SHELVE
+                d[root] = None # ADD NEW ENTRY
+                self.db['0root'] = d # SAVE BACK TO SHELVE
         finally:
             self.reopen('r') # REOPEN READ-ONLY
-    def __delitem__(self,id):
+    def __delitem__(self, resID):
         'delete this item from the database, with a modicum of safety'
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
         try:
             try:
-                del self.db[id] # DELETE THE SPECIFIED RULE
+                del self.db[resID] # DELETE THE SPECIFIED RULE
             except KeyError:
-                raise PygrDataNotFoundError('ID %s not found in %s' % (id,self.dbpath))
+                raise PygrDataNotFoundError('ID %s not found in %s'
+                                            % (resID,self.dbpath))
             try:
-                del self.db['__doc__.'+id]
+                del self.db['__doc__.' + resID]
             except KeyError:
                 pass
         finally:
@@ -534,26 +534,28 @@ class ShelveMetabase(object):
                 d[name] = self.db.get('__doc__.'+name,None)
             return d
         return l
-    def setschema(self,id,attr,kwargs):
-        'save a schema binding for id.attr --> targetID'
+    def setschema(self, resID, attr, kwargs):
+        'save a schema binding for resID.attr --> targetID'
         if not attr.startswith('-'): # REAL ATTRIBUTE
-            targetID=kwargs['targetID'] # RAISES KeyError IF NOT PRESENT
+            targetID = kwargs['targetID'] # RAISES KeyError IF NOT PRESENT
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
-        d = self.db.get('SCHEMA.'+id,{})
-        d[attr]=kwargs # SAVE THIS SCHEMA RULE
-        self.db['SCHEMA.'+id]=d # FORCE shelve TO RESAVE BACK
+        d = self.db.get('SCHEMA.' + resID, {})
+        d[attr] = kwargs # SAVE THIS SCHEMA RULE
+        self.db['SCHEMA.' + resID] = d # FORCE shelve TO RESAVE BACK
         self.reopen('r')  # REOPEN READ-ONLY
-    def getschema(self,id):
+    def getschema(self, resID):
         'return dict of {attr:{args}}'
-        return self.db['SCHEMA.'+id]
-    def delschema(self,id,attr):
-        'delete schema binding for id.attr'
+        return self.db['SCHEMA.' + resID]
+    def delschema(self, resID, attr):
+        'delete schema binding for resID.attr'
         self.reopen('w')  # OPEN BRIEFLY IN WRITE MODE
-        d=self.db['SCHEMA.'+id]
+        d=self.db['SCHEMA.' + resID]
         del d[attr]
-        self.db['SCHEMA.'+id]=d # FORCE shelve TO RESAVE BACK
+        self.db['SCHEMA.' + resID] = d # FORCE shelve TO RESAVE BACK
         self.reopen('r')  # REOPEN READ-ONLY
-
+    def __del__(self):
+        'close the shelve file when finished'
+        self.db.close()
 
 
 
@@ -568,7 +570,6 @@ def dumps(obj, **kwargs):
 
 def get_info_dict(obj, pickleString):
     'get dict of standard info about a resource'
-    import os,datetime
     d = dict(creation_time=datetime.datetime.now(),
              pickle_size=len(pickleString),__doc__=obj.__doc__)
     try:

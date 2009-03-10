@@ -120,16 +120,6 @@ class DNAAnnotation_Test(TestBase):
 
 def populate_swissprot(pygrData, pygrDataSchema):
     "Populate the current pygrData with swissprot data"
-
-    # check for existance and don't populate twice
-    # the files are still open and cannot be removed on windows @CTB
-    ## try:
-    ##     sp = pygrData.Bio.Seq.Swissprot.sp42()
-    ##     return
-    ## except Exception, exc:
-    ##     # populate the data
-    ##     pass
-
     # build BlastDB out of the sequences
     sp_hbb1 = testutil.datafile('sp_hbb1')
     sp = seqdb.BlastDB(sp_hbb1)
