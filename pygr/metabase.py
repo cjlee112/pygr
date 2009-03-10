@@ -3,13 +3,12 @@ import os, pickle, sys, re
 from StringIO import StringIO
 import shelve
 from mapping import Collection,Mapping,Graph
-from classutil import standard_invert,get_bound_subclass
+from classutil import standard_invert,get_bound_subclass,SourceFileName
 from coordinator import XMLRPCServerBase
 
 try:
     nonPortableClasses
 except NameError: # DEFAULT LIST OF CLASSES NOT PORTABLE TO REMOTE CLIENTS
-    from classutil import SourceFileName
     nonPortableClasses = [SourceFileName]
 
 
@@ -20,10 +19,10 @@ class OneTimeDescriptor(object):
         self.mdb = mdb
     def __get__(self, obj, objtype):
         try:
-            pygrID = obj._persistent_id # GET ITS RESOURCE ID
+            resID = obj._persistent_id # GET ITS RESOURCE ID
         except AttributeError:
             raise AttributeError('attempt to access pygr.Data attr on non-pygr.Data object')
-        target = self.mdb.get_schema_attr(pygrID, self.attr) #get from mdb
+        target = self.mdb.get_schema_attr(resID, self.attr) #get from mdb
         obj.__dict__[self.attr] = target # save in __dict__ to evade __setattr__
         return target
 
@@ -585,7 +584,7 @@ class MetabaseBase(object):
             return self(persid[8:]) # RUN OUR STANDARD RESOURCE REQUEST PROCESS
         else: # UNKNOWN PERSISTENT ID... NOT FROM PYGR!
             raise pickle.UnpicklingError, 'Invalid persistent ID %s' % persid
-    def load(self, pygrID, objdata, docstring):
+    def load(self, resID, objdata, docstring):
         'load the pickled data and all its dependencies'
         obj = self.loads(objdata)
         obj.__doc__ = docstring
@@ -593,7 +592,7 @@ class MetabaseBase(object):
             saver = self.writer.saver # mdb in which to record local copy
             # SAVE AUTO BUILT RESOURCE TO LOCAL PYGR.DATA
             hasPending = saver.has_pending() # any pending transaction?
-            saver.add_resource(pygrID, obj) # add to queue for commit
+            saver.add_resource(resID, obj) # add to queue for commit
             obj._saveLocalBuild = False # NO NEED TO SAVE THIS AGAIN
             if hasPending:
                 print >>sys.stderr,'''Saving new resource %s to local pygr.Data...
@@ -602,13 +601,13 @@ You are seeing this message because you appear to be in the
 middle of a pygr.Data transaction.  Ordinarily pygr.Data would
 automatically commit this new downloaded resource, but doing so
 now would also commit your pending transaction, which you may
-not be ready to do!''' % pygrID
+not be ready to do!''' % resID
             else: # automatically save new resource
                 saver.save_pending() # commit it
         else: # NORMAL USAGE
-            obj._persistent_id = pygrID  # MARK WITH ITS PERSISTENT ID
-        self.resourceCache[pygrID] = obj # SAVE TO OUR CACHE
-        self.bind_schema(pygrID, obj) # BIND SHADOW ATTRIBUTES IF ANY
+            obj._persistent_id = resID  # MARK WITH ITS PERSISTENT ID
+        self.resourceCache[resID] = obj # SAVE TO OUR CACHE
+        self.bind_schema(resID, obj) # BIND SHADOW ATTRIBUTES IF ANY
         return obj
     def loads(self, data):
         'unpickle from string, using persistent ID expansion'
@@ -851,7 +850,6 @@ class MetabaseList(MetabaseBase):
     def update(self, pygrDataPath=None, debug=None, keepCurrentPath=False,
                mdbArgs=None):
         'get the latest list of resource databases'
-        import os
         if keepCurrentPath: # only update if self.pygrDataPath is None
             pygrDataPath = self.pygrDataPath
         if pygrDataPath is None: # get environment var or default
