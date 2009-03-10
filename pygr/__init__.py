@@ -3,3 +3,13 @@
 # does not support: from pygr import *
 
 __version__ = "0.8.0"
+
+try:
+    pygrData
+except NameError:
+    import metabase
+    mdb = metabase.MetabaseList() # use default PYGRDATAPATH
+    pygrData = mdb.Data
+    pygrSchema = mdb.Schema
+
+__all__ = ('__version__', 'pygrData', 'pygrSchema')

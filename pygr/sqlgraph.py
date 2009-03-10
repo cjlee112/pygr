@@ -224,20 +224,22 @@ def list_to_dict(names, values):
     return d
 
 
-def getNameCursor(name=None, connect=None, configFile=None, **args):
+def getNameCursor(name=None, connect=None, configFile=None, **kwargs):
     '''get table name and cursor by parsing name or using configFile.
     If neither provided, will try to get via your MySQL config file.
     If connect is None, will use MySQLdb.connect()'''
-
-    kwargs = args.copy() # a copy we can modify
     if name is not None:
         argList = name.split() # TREAT AS WS-SEPARATED LIST
         if len(argList)>1:
             name = argList[0] # USE 1ST ARG AS TABLE NAME
             argnames = ('host','user','passwd') # READ ARGS IN THIS ORDER
             kwargs = list_to_dict(argnames, argList[1:])
-    
-    
+    conn,cursor = connect_default_db(connect, configFile, **kwargs)
+    return name,cursor
+
+def connect_default_db(connect=None, configFile=None, **args):
+    'return table name, cursor, connection object'
+    kwargs = args.copy() # a copy we can modify
     if 'user' not in kwargs and configFile is None: #Find where config file is
         osname = platform.system()
         if osname in('Microsoft', 'Windows'): # Machine is a Windows box
@@ -264,8 +266,9 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
         import MySQLdb
         connect = MySQLdb.connect
         kwargs['compress'] = True
-    cursor = connect(**kwargs).cursor()
-    return name,cursor
+    conn = connect(**kwargs)
+    cursor = conn.cursor()
+    return conn,cursor
 
 _mysqlMacros = dict(IGNORE='ignore', REPLACE='replace',
                     AUTO_INCREMENT='AUTO_INCREMENT', SUBSTRING='substring',
