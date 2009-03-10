@@ -1,5 +1,5 @@
 
-import os, pickle, sys, re, datetime
+import os, pickle, sys, re, datetime, UserDict
 from StringIO import StringIO
 import shelve
 from mapping import Collection,Mapping,Graph
@@ -270,7 +270,7 @@ class XMLRPCMetabase(object):
         self.server=get_connection(url,'index')
         self.url=url
         self.mdb = mdb
-        self.name=self.server.getName()
+        self.zoneName = self.server.getName()
         self.writeable = False
     def find_resource(self,id,download=False):
         'get pickledata,docstring for this resource ID from server'
@@ -318,13 +318,15 @@ MySQLMetabase("DBNAME.TABLENAME", mdb, createLayer="LAYERNAME")
 where DBNAME is the name of your database, TABLENAME is the name of the
 table you want to create, and LAYERNAME is the layer name you want to assign it'''
     _pygr_data_version=(0,1,0)
-    def __init__(self, tablename, mdb, createLayer=None, **kwargs):
+    def __init__(self, tablename, mdb, createLayer=None, newZone=None, **kwargs):
         from sqlgraph import getNameCursor,SQLGraph
         self.tablename,self.cursor=getNameCursor(tablename)
         self.mdb = mdb
         self.writeable = True
         self.rootNames={}
         schemaTable = self.tablename+'_schema' # SEPARATE TABLE FOR SCHEMA GRAPH
+        if createLayer is None:
+            createLayer = newZone # use the new parameter
         if createLayer is not None: # CREATE DATABASE FROM SCRATCH
             creation_time = datetime.datetime.now()
             self.cursor.execute('drop table if exists %s' % self.tablename)
@@ -336,7 +338,7 @@ table you want to create, and LAYERNAME is the layer name you want to assign it'
                                 %self.tablename,
                                 ('0version','%d.%d.%d' % self._pygr_data_version,
                                  'a')) # SAVE VERSION STAMP
-            self.name=createLayer
+            self.zoneName = createLayer
             self.cursor.execute('drop table if exists %s' % schemaTable)
             self.cursor.execute('create table %s (source_id varchar(255) not null,target_id varchar(255),edge_id varchar(255),unique(source_id,target_id))' % schemaTable)
         else:
@@ -351,7 +353,7 @@ where <LAYERNAME> is the layer name you want to assign it.
 %s'''  %('!'*40,self.tablename,self.tablename,'!'*40)
                 raise
             if n>0:
-                self.name=self.cursor.fetchone()[0] # GET LAYERNAME FROM DB
+                self.zoneName = self.cursor.fetchone()[0] # GET LAYERNAME FROM DB
             if self.cursor.execute('select location from %s where pygr_id=%%s'
                                    % self.tablename,('0root',))>0:
                 for row in self.cursor.fetchall():
@@ -465,21 +467,29 @@ class ShelveMetabase(object):
     it is automatically created for you.'''
     _pygr_data_version=(0,1,0)
     graph = ResourceDBGraphDescr() # INTERFACE TO SCHEMA GRAPH
-    def __init__(self, dbpath, mdb, mode='r', **kwargs):
+    def __init__(self, dbpath, mdb, mode='r', newZone=None, **kwargs):
         import anydbm
         self.dbpath = os.path.join(dbpath, '.pygr_data') # CONSTRUCT FILENAME
         self.mdb = mdb
         self.writeable = True # can write to this storage
+        self.zoneName = None
         try: # OPEN DATABASE FOR READING
             self.db = shelve.open(self.dbpath, mode)
             try:
                 mdb.save_root_names(self.db['0root'])
             except KeyError:
                 pass
+            try:
+                self.zoneName = self.db['0zoneName']
+            except KeyError:
+                pass
         except anydbm.error: # CREATE NEW FILE IF NEEDED
             self.db = shelve.open(self.dbpath, 'c')
             self.db['0version'] = self._pygr_data_version # SAVE VERSION STAMP
             self.db['0root'] = {}
+            if newZone is not None:
+                self.db['0zoneName'] =  newZone
+                self.zoneName = newZone
     def reopen(self, mode):
         self.db.close()
         self.db = shelve.open(self.dbpath, mode)
@@ -734,42 +744,44 @@ not be ready to do!''' % resID
 
 
 class Metabase(MetabaseBase):
-    def __init__(self, dbpath, resourceCache, layer=None, parent=None, **kwargs):
-        '''layer provides a mechanism for the caller to request information
-        about what type of metabase this dbpath mapped to.  layer must
+    def __init__(self, dbpath, resourceCache, zoneDict=None, parent=None, **kwargs):
+        '''zoneDict provides a mechanism for the caller to request information
+        about what type of metabase this dbpath mapped to.  zoneDict must
         be a dict'''
         self.parent = parent
-        self.Data = ResourceRoot(None, self) # root of namespace
-        self.Schema = SchemaPath(None, self)
+        self.Data = ResourceRoot(self) # root of namespace
+        self.Schema = SchemaPath(self)
         self.resourceCache = resourceCache
         self.debug = True # single mdb should expose all errors 
         self.download = False
-        if layer is None: # user doesn't want layer info
-            layer = {} # use a dummy dict, disposable
+        if zoneDict is None: # user doesn't want zoneDict info
+            zoneDict = {} # use a dummy dict, disposable
         if dbpath.startswith('http://'):
             storage = XMLRPCMetabase(dbpath, self, **kwargs)
-            if 'remote' not in layer:
-                layer['remote'] = self
+            if 'remote' not in zoneDict:
+                zoneDict['remote'] = self
         elif dbpath.startswith('mysql:'):
             storage = MySQLMetabase(dbpath[6:], self, **kwargs)
-            if 'MySQL' not in layer:
-                layer['MySQL'] = self
+            if 'MySQL' not in zoneDict:
+                zoneDict['MySQL'] = self
         else: # TREAT AS LOCAL FILEPATH
             dbpath = os.path.expanduser(dbpath)
             storage = ShelveMetabase(dbpath, self, **kwargs)
             if dbpath == os.path.expanduser('~') \
                    or dbpath.startswith(os.path.expanduser('~')+os.sep):
-                if 'my' not in layer:
-                    layer['my'] = self
+                if 'my' not in zoneDict:
+                    zoneDict['my'] = self
             elif os.path.isabs(dbpath):
-                if 'system' not in layer:
-                    layer['system'] = self
+                if 'system' not in zoneDict:
+                    zoneDict['system'] = self
             elif dbpath.split(os.sep)[0]==os.curdir:
-                if 'here' not in layer:
-                    layer['here'] = self
-            elif 'subdir' not in layer:
-                layer['subdir'] = self
+                if 'here' not in zoneDict:
+                    zoneDict['here'] = self
+            elif 'subdir' not in zoneDict:
+                zoneDict['subdir'] = self
         self.storage = storage
+        if storage.zoneName is not None and storage.zoneName not in zoneDict:
+            zoneDict[storage.zoneName] = self  # record this zone name
         if storage.writeable:
             self.writeable = True
             self.saver = ResourceSaver(self)
@@ -808,6 +820,20 @@ class Metabase(MetabaseBase):
                             download=download)
 
 
+class ZoneDict(UserDict.DictMixin):
+    'interface to current zones'
+    def __init__(self, mdbList):
+        self.mdbList = mdbList
+    def __getitem__(self, zoneName):
+        self.mdbList.update(keepCurrentPath=True) # make sure metabases loaded
+        return self.mdbList.zoneDict[zoneName]
+    def keys(self):
+        self.mdbList.update(keepCurrentPath=True) # make sure metabases loaded
+        return self.mdbList.zoneDict.keys()
+    def copy(self):
+        self.mdbList.update(keepCurrentPath=True) # make sure metabases loaded
+        return self.mdbList.zoneDict.copy()
+
 class MetabaseList(MetabaseBase):
     '''Primary interface for pygr.Data resource database access.  A single instance
     of this class is created upon import of the pygr.Data module, accessible as
@@ -822,11 +848,12 @@ class MetabaseList(MetabaseBase):
         self.resourceCache = resourceCache
         self.mdb = None
         self.mdbArgs = mdbArgs
-        self.layer = {}
+        self.zoneDict = {}
+        self.zones = ZoneDict(self) # interface to dict of zones
         self.pygrDataPath = pygrDataPath
         self.separator = separator
-        self.Data = ResourceRoot(None, self) # root of namespace
-        self.Schema = SchemaPath(None, self)
+        self.Data = ResourceRoot(self) # root of namespace
+        self.Schema = SchemaPath(self)
         self.debug = False # if one load attempt fails, try other metabases
         self.download = False
         self.ready = False
@@ -870,10 +897,10 @@ class MetabaseList(MetabaseBase):
                 del self.writer
             except AttributeError:
                 pass
-            self.layer = {}
+            self.zoneDict = {}
             for dbpath in pygrDataPath.split(self.separator):
                 try: # connect to metabase
-                    mdb = Metabase(dbpath, self.resourceCache, self.layer, self,
+                    mdb = Metabase(dbpath, self.resourceCache, self.zoneDict, self,
                                    **mdbArgs)
                 except (KeyboardInterrupt,SystemExit):
                     raise # DON'T TRAP THESE CONDITIONS
@@ -901,12 +928,6 @@ WARNING: error accessing metabase %s.  Continuing...''' % dbpath
             except KeyError:
                 pass
         return self(resID, **kwargs)
-    def getLayer(self,layer): # not sure this is needed anymore...
-        self.update(keepCurrentPath=True) # make sure metabases loaded
-        if layer is not None:
-            return self.layer[layer]
-        else: # JUST USE OUR PRIMARY DATABASE
-            return self.mdb[0]
     def registerServer(self,locationKey,serviceDict):
         'register the serviceDict with the first index server in PYGRDATAPATH'
         for db in self.resourceDBiter():
@@ -973,7 +994,7 @@ class ResourceSaver(object):
         except AttributeError:
             raise ValueError('to save a resource object, you MUST give it a __doc__ string attribute describing it!')
     def add_resource(self, resID, obj):
-        'queue the object for saving to the specified database layer as <id>'
+        'queue the object for saving to our metabase as <resID>'
         self.check_docstring(obj)
         obj._persistent_id = resID # MARK OBJECT WITH ITS PERSISTENT ID
         self.pendingData[resID] = obj # ADD TO QUEUE
@@ -990,11 +1011,11 @@ class ResourceSaver(object):
             pass
         self.mdb.resourceCache[resID] = obj # SAVE TO OUR CACHE
     def addResourceDict(self, d):
-        'queue a dict of name:object pairs for saving to specified db layer'
+        'queue a dict of name:object pairs for saving to metabase'
         for k,v in d.items():
             self.add_resource(k, v)
     def queue_schema_obj(self, schemaPath, attr, schemaObj):
-        'add a schema object to the queue for saving to the specified database layer'
+        'add a schema object to the queue for saving to our metabase'
         resID = schemaPath.getPath(attr) # GET STRING ID
         self.pendingSchema[resID] = (schemaPath,attr,schemaObj)
     def save_resource(self, resID, obj):
@@ -1021,7 +1042,7 @@ so report the reproducible steps to this error message as a bug report.''' % res
         for schemaPath,attr,schemaObj in schemaDict.values():# save schema
             schemaObj.saveSchema(schemaPath, attr, self.mdb) # save each rule
         self.clear_pending() # FINALLY, CLEAN UP...
-        self.lastData = d # KEEP IN CASE USER WANTS TO SAVE TO MULTIPLE LAYERS
+        self.lastData = d # keep as a historical record
         self.lastSchema = schemaDict
     def list_pending(self):
         'return tuple of pending data dictionary, pending schema'
@@ -1152,7 +1173,7 @@ class ResourceServer(XMLRPCServerBase):
 
 class ResourcePath(object):
     'simple way to read resource names as python foo.bar.bob expressions'
-    def __init__(self, base=None, mdb=None):
+    def __init__(self, mdb, base=None):
         self.__dict__['_path'] = base # AVOID TRIGGERING setattr!
         self.__dict__['_mdb'] = mdb
     def getPath(self, name):
@@ -1162,7 +1183,7 @@ class ResourcePath(object):
             return name
     def __getattr__(self, name):
         'extend the resource path by one more attribute'
-        attr = self._pathClass(self.getPath(name), self._mdb)
+        attr = self._pathClass(self._mdb, self.getPath(name))
         # MUST NOT USE setattr BECAUSE WE OVERRIDE THIS BELOW!
         self.__dict__[name] = attr # CACHE THIS ATTRIBUTE ON THE OBJECT
         return attr
@@ -1183,23 +1204,47 @@ ResourcePath._pathClass = ResourcePath
 class ResourceRoot(ResourcePath):
     'provide proxy to public metabase methods'
     def dir(self, pattern='', matchType='p', asDict=False, download=False):
+        'search metabases using prefix or regexp'
         return self._mdb.dir(pattern, matchType, asDict, download)
     def commit(self):
+        'commit any resources queued for saving to primary metabase'
         self._mdb.commit()
     def rollback(self):
+        'abandon any resources queued for saving'
         self._mdb.rollback()
     def add_resource(self, resID, obj):
+        'queue a resource for saving to primary metabase'
         self._mdb.add_resource(resID, obj)
     def delete_resource(self, resID):
+        'delete resource from primary metabase'
         self._mdb.delete_resource(resID)
     def clear_cache(self):
+        'clear the pygrData cache so all future requests require a fresh load'
         self._mdb.clear_cache()
     def add_schema(self, resID, schemaObj):
+        'queue schema info for saving to primary metabase'
         self._mdb.add_schema(resId, schemaObj)
     def update(self, pygrDataPath=None, debug=None, keepCurrentPath=False,
                mdbArgs=None):
+        'set a new PYGRDATAPATH for accessing metabase(s)'
         self._mdb.update(pygrDataPath=pygrDataPath, debug=debug,
                          keepCurrentPath=keepCurrentPath, mdbArgs=mdbArgs)
+
+class ResourceZone(object):
+    'provide pygr.Data old-style interface to resource zones'
+    def __init__(self, mdb, zoneName):
+        self._mdbParent = mdb
+        self._zoneName = zoneName
+    def __getattr__(self, name):
+        self._mdbParent.update(keepCurrentPath=True) # make sure metabases loaded
+        try:
+            mdb = self._mdbParent.zoneDict[self._zoneName] # get our zone
+        except KeyError:
+            raise ValueError('no zone "%s" available' % self._zoneName)
+        if name == 'schema': # get schema root
+            return SchemaPath.__getitem__(self, mdb)
+        else: # treat as regular pygr.Data string
+            return ResourcePath.__getitem__(self, mdb, name)
 
 class SchemaPath(ResourcePath):
     'save schema information for a resource'

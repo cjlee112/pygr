@@ -11,5 +11,6 @@ except NameError:
     mdb = metabase.MetabaseList() # use default PYGRDATAPATH
     pygrData = mdb.Data
     pygrSchema = mdb.Schema
+    pygrZones = mdb.zones
 
-__all__ = ('__version__', 'pygrData', 'pygrSchema')
+__all__ = ('__version__', 'pygrData', 'pygrSchema', 'pygrZones')
