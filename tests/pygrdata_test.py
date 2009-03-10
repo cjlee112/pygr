@@ -33,8 +33,6 @@ class Download_Test(TestBase):
         pygr.Data.addResource('Bio.Test.Download1', url)
         pygr.Data.save()
 
-        pygr.Data.clear_cache()
-
         # performs the download            
         fpath = pygr.Data.Bio.Test.Download1()
         data  = file(fpath, 'rb').read()

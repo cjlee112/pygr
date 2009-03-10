@@ -33,8 +33,6 @@ class Download_Test(TestBase):
         self.metabase.add_resource('Bio.Test.Download1', url)
         self.metabase.commit()
 
-        self.metabase.clear_cache()
-
         # performs the download            
         fpath = self.pygrData.Bio.Test.Download1()
         data  = file(fpath, 'rb').read()

@@ -323,6 +323,7 @@ nlmsa_textdump_unpickler.__safe_for_unpickling__ = 1
   
 class NLMSABuilder(object):
   'when unpickled triggers construction of NLMSA from textdump'
+  _pygr_data_no_cache = True # force pygr.Data to reload this fresh
   def __init__(self,filepath,**kwargs):
     self.filepath = filepath
     self.kwargs = kwargs

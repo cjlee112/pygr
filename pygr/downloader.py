@@ -173,6 +173,7 @@ class SourceURL(object):
     '''unpickling this object will trigger downloading of the desired path,
     which will be cached to PYGRDATADOWNLOAD directory if any.  The value returned
     from unpickling will simply be the path to the downloaded file, as a SourceFileName'''
+    _pygr_data_no_cache = True # force pygr.Data to always re-load this class
     def __init__(self,path,filename=None,**kwargs):
         self.path = path
         self.kwargs = kwargs
@@ -205,6 +206,7 @@ generic_build_unpickler.__safe_for_unpickling__ = 1
 
 class GenericBuilder(object):
     'proxy for constructing the desired klass on unpickling'
+    _pygr_data_no_cache = True # force pygr.Data to always re-load this class
     def __init__(self, cname, *args, **kwargs):
         self.cname = cname
         self.args = args

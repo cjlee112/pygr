@@ -981,6 +981,13 @@ class ResourceSaver(object):
             self.rollbackData[resID] = self.mdb.resourceCache[resID]
         except KeyError:
             pass
+        self.cache_if_appropriate(resID, obj)
+    def cache_if_appropriate(self, resID, obj):
+        try:
+            if obj._pygr_data_no_cache: 
+                return # do not cache this object; it is not ready to use!!
+        except AttributeError:
+            pass
         self.mdb.resourceCache[resID] = obj # SAVE TO OUR CACHE
     def addResourceDict(self, d):
         'queue a dict of name:object pairs for saving to specified db layer'
@@ -998,7 +1005,7 @@ class ResourceSaver(object):
 If you changed it, shame on you!  Otherwise, this should not happen,
 so report the reproducible steps to this error message as a bug report.''' % resID)
         self.mdb.storage[resID] = obj # FINALLY, SAVE THE OBJECT TO THE DATABASE
-        self.mdb.resourceCache[resID] = obj # SAVE TO OUR CACHE
+        self.cache_if_appropriate(resID, obj) # SAVE TO OUR CACHE
     def has_pending(self):
         'return True if there are resources pending to be committed'
         return len(self.pendingData)>0 or len(self.pendingSchema)>0
