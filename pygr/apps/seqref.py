@@ -1,5 +1,5 @@
 from __future__ import generators
-from pygr.poa import *
+from pygr.sequence import *
 #from pathquery import *
 
 class AnonSequence(Sequence):
