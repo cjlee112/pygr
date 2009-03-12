@@ -10,6 +10,8 @@ from annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
 
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
+    # use this as an itemClass for SQLTable
+    # do not use this with SequenceDB, which cannot act as its own seqInfoDict!
     #@classmethod # decorators don't work prior to Python 2.4
     def _init_subclass(cls, db, **kwargs):
         db.seqInfoDict = db # db will act as its own seqInfoDict
