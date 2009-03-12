@@ -1687,7 +1687,7 @@ class DBServerInfo(object):
 class MapView(object, UserDict.DictMixin):
     'general purpose 1:1 mapping defined by any SQL query'
     def __init__(self, sourceDB, targetDB, viewSQL, cursor=None,
-                 serverInfo=None):
+                 serverInfo=None, **kwargs):
         self.sourceDB = sourceDB
         self.targetDB = targetDB
         self.viewSQL = viewSQL
