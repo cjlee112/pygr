@@ -1,3 +1,8 @@
+"""
+Tests for the pygr.seqdb module.
+"""
+
+import os
 import unittest
 from testlib import testutil
 from pygr.seqdb import SequenceFileDB, PrefixUnionDict, AnnotationDB
@@ -9,13 +14,66 @@ from pygr.annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
 
 class SequenceFileDB_Test(unittest.TestCase):
     """
-    Test for all of the basic dictionary functions on 'SequenceFileDB'.
+    Test for all of the basic dictionary functions on 'SequenceFileDB',
+    among other things.
     """
     def setUp(self):
         "Test setup"
-        dnaseq  = testutil.datafile('dnaseq.fasta')
+        dnaseq = testutil.datafile('dnaseq.fasta')
         self.db = SequenceFileDB(dnaseq) # contains 'seq1', 'seq2'
 
+    def test_len(self):
+        assert len(self.db) == 2
+
+    def test_seqInfoDict_len(self):
+        assert len(self.db.seqInfoDict) == 2
+
+    def test_no_file_given(self):
+        "Make sure that a TypeError is raised when no file is available"
+        try:
+            db = SequenceFileDB()
+            assert 0, "should not reach this point"
+        except TypeError:
+            pass
+        
+        try:
+            db = SequenceFileDB(ifile=None)
+            assert 0, "should not reach this point"
+        except TypeError:
+            pass
+
+    def test_seq_descriptor(self):
+        "Check the '.seq' attribute (tied to a descriptor)"
+        s = self.db['seq1']
+        assert str(s) == str(s.seq)
+
+    def test_cache(self):
+        "SequenceDB cache test"
+        assert len(self.db._weakValueDict) == 0
+        seq1 = self.db['seq1']
+        
+        # cache populated?
+        assert len(self.db._weakValueDict) == 1
+        assert 'seq1' in self.db._weakValueDict
+
+        # cache functions?
+        seq1_try2 = self.db['seq1']
+        assert seq1 is seq1_try2
+
+    def test_clear_cache(self):
+        "SequenceDB clear_cache test"
+        assert len(self.db._weakValueDict) == 0
+        seq1 = self.db['seq1']
+        
+        # cache populated?
+        assert len(self.db._weakValueDict) == 1
+        assert 'seq1' in self.db._weakValueDict
+
+        # clear_cache functions?
+        self.db.clear_cache()
+        seq1_try3 = self.db['seq1']
+        assert seq1 is not seq1_try3
+        
     def test_keys(self):
         "SequenceFileDB keys"
         k = self.db.keys()
@@ -27,6 +85,14 @@ class SequenceFileDB_Test(unittest.TestCase):
         assert 'seq1' in self.db, self.db.keys()
         assert 'seq2' in self.db
         assert 'foo' not in self.db
+
+    def test_invert_class(self):
+        "SequenceFileDB __invert__"
+        seq = self.db['seq1']
+        inversedb = ~self.db
+        assert inversedb[seq] == 'seq1'
+        assert seq in inversedb
+        assert 'foo' not in inversedb
 
     def test_keys_info(self):
         "SequenceFileDB keys info"
@@ -126,12 +192,107 @@ class SequenceFileDB_Test(unittest.TestCase):
         except KeyError, e:
             assert "no key 'foo' in database <SequenceFileDB" in str(e), str(e)
 
+class SequenceFileDB_Creation_Test(unittest.TestCase):
+    """
+    Test some of the nastier / more polluting creation code in an
+    isolated (and slower...) class that cleans up after itself.
+    """
+    def trash_intermediate_files(self):
+        seqlen = testutil.datafile('dnaseq.fasta.seqlen')
+        pureseq = testutil.datafile('dnaseq.fasta.pureseq')
+        try:
+            os.unlink(seqlen)
+            os.unlink(pureseq)
+        except OSError:
+            pass
+        
+    def setUp(self):
+        "Test setup"
+        self.trash_intermediate_files()
+        self.dbfile = testutil.datafile('dnaseq.fasta')
+
+    def tearDown(self):
+        self.trash_intermediate_files()
+
+    def test_basic_construction(self):
+        self.db = SequenceFileDB(self.dbfile)
+        assert str(self.db.get('seq1')).startswith('atggtgtca')
+        assert str(self.db.get('seq2')).startswith('GTGTTGAA')
+
+    def test_build_seqLenDict_with_reader(self):
+        "Test that building things works properly when specifying a reader."
+
+        class InfoBag(object):
+            def __init__(self, **kw):
+                self.__dict__.update(kw)
+
+        # first, load the db & save the sequence info in a list
+        l = []
+        db = SequenceFileDB(self.dbfile)
+        for k, v in db.items():
+            info = InfoBag(id=k, length=len(v), sequence=str(v))
+            l.append(info)
+            
+        # now, erase the existing files, and recreate the db.
+        del db
+        self.trash_intermediate_files()
+
+        # create a fake reader with access to the saved info
+        def my_fake_reader(fp, filename, info_list=l):
+            return info_list
+
+        # now try creating with the fake reader
+        db = SequenceFileDB(self.dbfile, reader=my_fake_reader)
+
+        # did it work?
+        assert str(db.get('seq1')).startswith('atggtgtca')
+        assert str(db.get('seq2')).startswith('GTGTTGAA')
+
+    def test_build_seqLenDict_with_bad_reader(self):
+        "Test that building things fails properly with a bad reader."
+
+        class InfoBag(object):
+            def __init__(self, **kw):
+                self.__dict__.update(kw)
+
+        # first, load the db & save the sequence info in a list
+        l = []
+        db = SequenceFileDB(self.dbfile)
+        for k, v in db.items():
+            info = InfoBag(id=k, length=0, sequence=str(v))
+            l.append(info)
+            
+        # now, erase the existing files, and recreate the db.
+        del db
+        self.trash_intermediate_files()
+
+        # create a fake reader with access to the saved info
+        def my_fake_reader(fp, filename, info_list=l):
+            return info_list
+
+        # now try creating with the fake reader
+        try:
+            db = SequenceFileDB(self.dbfile, reader=my_fake_reader)
+            assert 0, "should not reach here; db construction should fail!"
+        except ValueError:
+            pass                        # ValueError is expected
+
+    def test_ifile_arg(self):
+        "Test that we can pass in an 'ifile' arg instead of 'filepath'."
+        
+        dnaseq = testutil.datafile('dnaseq.fasta')
+        fp = file(dnaseq)
+        self.db = SequenceFileDB(ifile=fp)
+
+        assert str(self.db.get('seq1')).startswith('atggtgtca')
+        assert str(self.db.get('seq2')).startswith('GTGTTGAA')
+
 class PrefixUnionDict_Test(unittest.TestCase):
     """
     Test for all of the basic dictionary functions on 'PrefixUnionDict'.
     """
     def setUp(self):
-        dnaseq  = testutil.datafile('dnaseq.fasta')
+        dnaseq = testutil.datafile('dnaseq.fasta')
         blastdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
         self.db = PrefixUnionDict({ 'prefix' : blastdb })
 
@@ -365,13 +526,13 @@ class AnnotationDB_Test(unittest.TestCase):
             assert 0, "incorrect seqdb; key error should be raised"
         except KeyError:
             pass
-                                                
+
 class SeqDBCache_Test(unittest.TestCase):
     
     def test_cache(self):
         "Sequence slice cache mechanics."
 
-        dnaseq  = testutil.datafile('dnaseq.fasta')
+        dnaseq = testutil.datafile('dnaseq.fasta')
         db = SequenceFileDB(dnaseq)
 
         # create cache components
@@ -424,7 +585,7 @@ class SeqDBCache_Test(unittest.TestCase):
         "NLMSASlice sequence caching & removal"
         
         # set up sequences
-        dnaseq  = testutil.datafile('dnaseq.fasta')
+        dnaseq = testutil.datafile('dnaseq.fasta')
 
         db = SequenceFileDB(dnaseq, autoGC=-1) # use pure WeakValueDict...
         gc.collect()
@@ -469,8 +630,9 @@ class SeqDBCache_Test(unittest.TestCase):
 
 def get_suite():
     "Returns the testsuite"
-    tests  = [ 
-        SequenceFileDB_Test, PrefixUnionDict_Test, 
+    tests = [ 
+        SequenceFileDB_Test, SequenceFileDB_Creation_Test,
+        PrefixUnionDict_Test, 
         AnnotationDB_Test, SeqDBCache_Test
     ]
     return testutil.make_suite(tests)
