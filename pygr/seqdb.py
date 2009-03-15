@@ -1,7 +1,7 @@
 """
 @CTB
 
-discuss seqLenDict.
+discuss seqLenDict, seqInfoDict.
 
 add a close method to SequenceFileDB?
 is ifile necessary?
@@ -11,6 +11,45 @@ set_seqtype
  - stop returning
 make _cacheMax configurable as a kwarg?
 is idfilter used at all?
+
+PrefixUnionDict __contains__ is inconsistent with getitem
+PUD 'trypath' => 'trypaths'?
+PUD remove 'newMemberDict' function? not used anywhere (but in docs);
+   what about associated PrefixUnionDictMember class??
+   for PUDMember class, '.default' handling...?
+PUD remove 'writeHeaderFile' function? not used anywhere (but in docs)
+
+PrefixDictInverse KeyError abstraction violation
+
+what about adding __iadd__ directly into PUD?
+SeqPrefixUnionDict: if statement can never be reached?
+
+should we explicitly test seqInfoDict interfaces for the various seqdb
+   implementations?  what uses them, anyway -- NLMSAs, right? anything else?
+
+use logging instead of sys.stderr.write.
+
+could delegate inverse to actual class method; why implement it the way it is,
+   in separate classes?
+
+should Sequence classes be private (_)?
+SQLsequence stuff => another file (e.g. sqlgraph)?
+
+class/inheritance hierarchy naming..?
+    class names in this file still confuse me!
+
+doctests & examples
+-------------------
+
+intro:
+ - loading a FASTA file
+ - using a PUD
+   + combining dbs, etc.
+   + inverse
+ 
+advanced:
+ - writing your own sequence reader
+ - extending to your own backend
 
 prefixUnionDict defaulted to BlastDB; correct or not?  (I changed.)
 
@@ -68,7 +107,7 @@ class SequenceDB(object, UserDict.DictMixin):
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(autoGC=0)
 
-    # define ~ (invert) operator to return 
+    # define ~ (invert) operator to return ... @CTB document.
     __invert__ = classutil.standard_invert
     _inverseClass = _SequenceDBInverse
     
@@ -244,7 +283,7 @@ class FileDBSequence(SequenceBase):
         Called by classutil.get_bound_subclass in SequenceDB.
 
         @CTB where does kwargs come from?
-        @CTB point out pass into store_seqlen_dict...
+        @CTB point out pass into _store_seqlen_dict...
 
         """
         # bind all instances of this class to this database
@@ -257,7 +296,7 @@ class FileDBSequence(SequenceBase):
         except NoSuchFileError:
             seqLenDict = classutil.open_shelve(fullpath, 'n')
             print >>sys.stderr,'Building sequence length index...' # @CTB log?
-            store_seqlen_dict(seqLenDict, filepath, **kwargs)
+            _store_seqlen_dict(seqLenDict, filepath, **kwargs)
             # force a flush; reopen in read-only mode.
             seqLenDict.close() 
             seqLenDict = classutil.open_shelve(fullpath, 'r')
@@ -380,7 +419,7 @@ class _SeqLenDictWrapper(object, UserDict.DictMixin):
         return self.seqDB.seqLenDict.keys()
 
 class _SeqLenDictSaver(object):
-    """Support for generic reading functions, called by store_seqlen_dict.
+    """Support for generic reading functions, called by _store_seqlen_dict.
 
     This allows you to specify your own 'reader' function when
     constructing a FileSequenceDB, e.g. so that you could read
@@ -402,7 +441,7 @@ class _SeqLenDictSaver(object):
         offset = 0L
         pureseq_fp = file(filename + '.pureseq', 'wb')
         try:
-            for o in self.reader(ifile, filename): # run the reader as iterator
+            for o in self.reader(ifile, filename):
                 # store the length & offset in the seqLenDict
                 d[o.id] = o.length, offset
                 offset += o.length
@@ -413,13 +452,19 @@ class _SeqLenDictSaver(object):
         finally:
             pureseq_fp.close()
 
-def store_seqlen_dict(d, filename, ifile=None, idFilter=None, reader=None,
+def _store_seqlen_dict(d, filename, ifile=None, idFilter=None, reader=None,
                       mode='rU'):
-    "store sequence lengths in a dictionary"
-    if reader is not None: # run the user's custom reader() function.
+    """Store sequence lengths in a dictionary, e.g. a seqLenDict.
+
+    @CTB document reader
+    @CTB document idfilter.
+    """
+    # if a custom reader function was passed in, run that.
+    if reader is not None:
         builder = _SeqLenDictSaver(reader)
     else:
-        try: # TRY TO USE OUR FAST COMPILED PARSER
+        # use our own fast compiled parser.
+        try:
             import seqfmt
             builder = seqfmt.read_fasta_lengths
         except ImportError:             # @CTB move?
@@ -450,162 +495,212 @@ option to force a clean install''' % sys.version_info[:2])
             ifile.close()
     
 ####
+#
+# class PrefixUnionDict and associated support classes.
+#
 
-class PrefixDictInverse(object):        # @CTB untested
-    def __init__(self,db):
-        self.db=db
-    def __getitem__(self,seq):
-        try: # INSTEAD GET FROM seq.pathForward
-            return self.db.dicts[seq.pathForward.db] \
-                   +self.db.separator+str(seq.pathForward.id)
-        except KeyError:
-            try:
-                if seq.pathForward._anno_seq in self:
-                    raise KeyError('this annotation is not in the PrefixUnion, but its sequence is.  You can get that using its sequence attribute.')
-            except AttributeError:
-                pass
+class _PrefixUnionDictInverse(object):        # @CTB untested
+    """Provide inverse (~) operator behavior for PrefixUnionDicts.
+
+    This enables ~pud to return a database that, given a sequence
+    object, returns the corresponding key (prefix.id) to retrieve that
+    sequence object in the pud.
+    
+    """
+    
+    def __init__(self, db):
+        self.db = db
+        
+    def __getitem__(self, seq):
+        path = seq.pathForward
+        db = path.db
+        if db not in self.db.dicts:
+            # @CTB abstraction boundary violation! keep? how test?
+            anno_seq_attr = getattr(path, '_anno_seq', None)
+            if anno_seq_attr.db in self.db.dicts:
+                raise KeyError('''\
+this annotation is not in the PrefixUnion, but its sequence is.
+You can get that using its \'sequence\' attribute.''')
+            
             raise KeyError('seq not in PrefixUnionDict')
-    def __contains__(self,seq):
+
+        id = path.id
+        prefix = self.db.dicts[db]
+        return prefix + self.db.separator + id
+    
+    def __contains__(self, seq):
         try:
             return seq.pathForward.db in self.db.dicts
         except AttributeError:
             return False
 
 
-class PrefixUnionMemberDict(dict):      # @CTB untested
+class _PrefixUnionMemberDict(object, UserDict.DictMixin):
+    """
+    @CTB confusing/inappropriate use of a dict interface! keep??
+    @CTB document.
     'd[prefix]=value; d[k] returns value if k is a member of prefix'
-    def __init__(self,puDict,default=None,attrMethod=lambda x:x.pathForward.db):
-        dict.__init__(self)
-        self.puDict=puDict
-        self._attrMethod=attrMethod
+    """
+    def __init__(self, puDict, default=None,
+                 attrMethod=lambda x:x.pathForward.db):
+        self.values = {}
+        self.puDict = puDict
+        self._attrMethod = attrMethod
         if default is not None:
-            self.default=default
-    def possibleKeys(self):
-        for k in self.puDict.prefixDict:
-            yield k
-    def __setitem__(self,k,v):
+            self.default = default      # @CTB can we use setdefault for this?
+            
+    def keys(self):
+        return self.puDict.prefixDict.keys()
+    possibleKeys = keys                 # legacy interface (?)
+            
+    def __setitem__(self, k, v):
+        if k not in self.puDict.prefixDict:
+            raise KeyError('key %s is not a valid union prefix string!' % k)
+        new_k = self.puDict.prefixDict[k]
+        self.values[new_k] = v
+        
+    def __getitem__(self, k):
         try:
-            dict.__setitem__(self,self.puDict.prefixDict[k],v)
-        except KeyError:
-            raise KeyError('key must be a valid union prefix string!')
-    def __getitem__(self,k):
-        try:
-            return dict.__getitem__(self,self._attrMethod(k))
+            db = self._attrMethod(k)
         except AttributeError:
             raise TypeError('wrong key type? _attrMethod() failed.')
-        except KeyError:
-            try: # RETURN A DEFAULT VALUE IF WE HAVE ONE
+
+        if db not in self.values:
+            try:
                 return self.default
-            except AttributeError:
+            except AttributeError:      # no default value - raise KeyError.
                 raise KeyError('key not a member of this union!')
 
-class PUDSeqInfoDict(object,UserDict.DictMixin):
-    'seqInfoDict interface based on SequenceDB.seqLenDict'
-    def __init__(self, db):
-        self.seqDB = db
-    def __iter__(self):                 # @CTB untested
-        return iter(self.seqDB)
-    def keys(self): return list(iter(self.seqDB))
-    def iteritems(self):                # @CTB untested
-        for p,d in self.seqDB.prefixDict.items():
-            for seqID,info in d.seqInfoDict.iteritems():
-                yield self.seqDB.format_id(p,seqID),info
-    def __getitem__(self, k):           # @CTB untested
-        prefix,seqID = self.seqDB.get_prefix_id(k)
-        return self.seqDB.get_subitem(self.seqDB.prefixDict[prefix].seqInfoDict,
-                                      seqID)
-    def has_key(self, k):               # @CTB untested
-        return k in self.seqDB
+        return self.values[db]
 
 class PrefixUnionDict(object, UserDict.DictMixin):
-    """union interface to a series of dicts, each assigned a unique prefix
-       ID 'foo.bar' --> ID 'bar' in dict f associated with prefix 'foo'."""
-    def __init__(self,prefixDict=None,separator='.',filename=None,
-                 dbClass=SequenceFileDB,trypath=None):
-        '''can either be created using prefixDict, or a header file
-        for a previously created PrefixUnionDict'''
-        if filename is not None: # READ UNION HEADER FILE   vv @CTB untested
-            if trypath is None: # DEFAULT: LOOK IN SAME DIRECTORY AS UNION HEADER
-                trypath=[os.path.dirname(filename)]
-            ifile=file(filename, 'rU') # text file
-            it=iter(ifile)
-            separator=it.next().strip('\r\n') # DROP TRAILING CR
-            prefixDict={}
+    """Interface to a set of sequence DBs, each assigned a unique prefix.
+
+    For example, the sequence ID 'foo.bar' would unpack to ID 'bar' in
+    the dictionary associated with the prefix 'foo'.  This is a useful
+    way to combine disparate seqdbs into a single db, without actually
+    altering the individual seqdbs.
+
+    PrefixUnionDicts can be created in one of two ways: either
+      - pass in a dictionary containing prefix-to-seqdb mappings as
+        'prefixDict', or
+      - pass in a header file containing the information necessary to create
+        such a dictionary.
+
+    In the latter case, see the 'writeHeaderFile' method for format
+    information.  The optional kwarg 'trypath' contains a list of
+    directories to search for the database file named in each line.
+    The optional kwarg 'dbClass' specifies the database class to use
+    to load each sequence file; it defaults to SequenceFileDB.
+
+    The default ID separator is '.'; use the 'separator' kwarg to
+    change it.
+
+    @CTB trypath => trypaths?
+    
+    """
+    # define ~ (invert) operator to return ... @CTB document.
+    __invert__ = classutil.standard_invert
+    _inverseClass = _PrefixUnionDictInverse
+
+    def __init__(self, prefixDict=None, separator='.', filename=None,
+                 dbClass=SequenceFileDB, trypath=None):
+        # read union header file
+        if filename is not None:
+            if prefixDict:
+                raise TypeError('''
+cannot create with prefixDict and filename both!''')
+            
+            if trypath is None:
+                trypath = [os.path.dirname(filename)]
+            ifile = file(filename, 'rU')
+            it = iter(ifile)
+            separator = it.next().strip('\r\n') # remove leading/trailing CR
+            prefixDict = {}
             for line in it:
-                prefix,filepath=line.strip().split('\t')[:2]
+                prefix, filepath=line.strip().split('\t')[:2]
                 try:
-                    prefixDict[prefix] = \
-                      dbClass(classutil.search_dirs_for_file(filepath, trypath))
+                    dbfile = classutil.search_dirs_for_file(filepath, trypath)
+                    db = dbClass(dbfile)
+                    prefixDict[prefix] = db
                 except IOError:
-                    raise IOError('''unable to open database %s: check path or privileges.
-Set trypath to give a list of directories to search.'''
-                                  % filepath)
+                    raise IOError('''\
+unable to open database %s: check path or privileges.
+Set 'trypath' to give a list of directories to search.''' % filepath)
             ifile.close()
-        self.separator=separator
+            
+        self.separator = separator
         if prefixDict is not None:
-            self.prefixDict=prefixDict
+            self.prefixDict = prefixDict
         else:
-            self.prefixDict={}
-        d={}
-        for k,v in self.prefixDict.items():
-            d[v]=k # CREATE A REVERSE MAPPING
-        self.dicts=d
-        self.seqInfoDict = PUDSeqInfoDict(self) # standard interface
+            self.prefixDict = {}
+
+        # also create a reverse mapping            
+        d = {}
+        for k, v in self.prefixDict.items():
+            d[v] = k
+            
+        self.dicts = d
+        self.seqInfoDict = _PUDSeqInfoDict(self) # supply standard interface
+        
     def format_id(self, prefix, seqID):
         return prefix + self.separator + seqID
+    
     def get_prefix_id(self, k):
-        'subdivide key into prefix, id using separator'
+        """Subdivide a key into a prefix and ID using the given separator."""
         try:
-            t = k.split(self.separator) # @CTB untested
+            t = k.split(self.separator, 2)
         except AttributeError:
-            raise KeyError('key should be string! ' + repr(k))
-        l = len(t)
-        if l == 2:
-            return t
-        elif l<2:
-            raise KeyError('invalid id format; no prefix: '+k)
-        else: # id CONTAINS separator CHARACTER?
-            prefix = t[0] # ASSUME PREFIX DOESN'T CONTAIN separator @CTB untested
-            id = k[len(prefix)+1:] # SKIP PAST PREFIX
-            return prefix,id
+            raise KeyError('key should be a string! ' + repr(k))
+        if len(t) < 2:
+            raise KeyError('invalid id format; no prefix: ' + k)
+        return t
+        
     def get_subitem(self, d, seqID):
-        try: # TRY TO USE int KEY FIRST
-            return d[int(seqID)]
-        except (ValueError,KeyError,TypeError): # USE DEFAULT str KEY
-            try:
-                return d[seqID]
-            except KeyError:
-                raise KeyError, "no key '%s' in %s" % (seqID, repr(d))
-    def __getitem__(self,k):
-        "for ID 'foo.bar', return item 'bar' in dict f associated with prefix 'foo'"
-        prefix,seqID = self.get_prefix_id(k)
+        # try int key first
         try:
-            return self.get_subitem(self.prefixDict[prefix], seqID)
+            return d[int(seqID)]
+        except (ValueError, KeyError, TypeError):
+            pass
+        
+        # otherwise, use default (str) key
+        try:
+            return d[seqID]
+        except KeyError:
+            raise KeyError, "no key '%s' in %s" % (seqID, repr(d))
+        
+    def __getitem__(self, k):
+        """For 'foo.bar', return 'bar' in dict associated with prefix 'foo'"""
+        prefix, seqID = self.get_prefix_id(k)
+        try:
+            d = self.prefixDict[prefix]
         except KeyError, e:
-            #msg = ("no key '%s' in %s because " % (k,repr(self))) + str(e)
-            raise KeyError("no key '%s' in %s" % (k,repr(self)))
-
+            raise KeyError("no key '%s' in %s" % (k, repr(self)))
+        return self.get_subitem(d, seqID)
+    
     def __contains__(self,k):
-        "test whether ID in union; also check whether seq key in one of our DBs"
-        if isinstance(k,str):
+        """Is the given ID in our PrefixUnionDict?"""
+        # try it out as an ID.
+        if isinstance(k, str):
             try:
-                (prefix,id) = self.get_prefix_id(k)
+                (prefix, id) = self.get_prefix_id(k)
                 return id in self.prefixDict[prefix]
             except KeyError:
                 return False
-        else: # TREAT KEY AS A SEQ, CHECK IF IT IS FROM ONE OF OUR DB
-            try:  # @CTB untested
-                db=k.pathForward.db
-            except AttributeError:
-                raise AttributeError('key must be a sequence with db attribute!')
-            return db in self.dicts
 
-    def has_key(self,k):
+        # otherwise, try treating key as a sequence.
+        # @CTB inconsistent with 'getitem'.
+        try: 
+            db = k.pathForward.db
+        except AttributeError:
+            raise AttributeError('key must be a sequence with db attribute!')
+        return db in self.dicts
+
+    def has_key(self, k):
         return self.__contains__(k)
 
     def __iter__(self):
-        "generate union of all dicts IDs, each with appropriate prefix."
-        for p,d in self.prefixDict.items():
+        for p, d in self.prefixDict.items():
             for id in d:
                 yield self.format_id(p, id)
 
@@ -616,40 +711,40 @@ Set trypath to give a list of directories to search.'''
         return iter(self)
     
     def iteritems(self):
-        "generate union of all dicts items, each id with appropriate prefix."
         for p,d in self.prefixDict.items():
-            for id,seq in d.iteritems():
-                yield self.format_id(p, id),seq
+            for id, seq in d.iteritems():
+                yield self.format_id(p, id), seq
 
-    def getName(self,path):  # @CTB untested
-        "return fully qualified ID i.e. 'foo.bar'"
-        path=path.pathForward
-        return self.dicts[path.db]+self.separator+path.id
+    def getName(self, seq):
+        """For a given sequence, return a fully qualified name, 'prefix.id'."""
+        path = seq.pathForward
+        return self.dicts[path.db] + self.separator + path.id
 
-    def newMemberDict(self,**kwargs):  # @CTB untested
-        'return a new member dictionary (empty)'
-        return PrefixUnionMemberDict(self,**kwargs)
+    def newMemberDict(self, **kwargs):  # @CTB untested; not used; necessary?
+        """return a new member dictionary (empty)"""
+        return _PrefixUnionMemberDict(self, **kwargs)
 
-    def writeHeaderFile(self,filename):  # @CTB untested
-        'save a header file for this union, to reopen later'
-        ifile=file(filename,'w') # text file
-        print >>ifile,self.separator
-        for k,v in self.prefixDict.items():
+    def writeHeaderFile(self,filename):  # @CTB not used; necessary?
+        """Save a header file, suitable for later re-creation."""
+        ifile = file(filename, 'w')
+        print >>ifile, self.separator
+        for k, v in self.prefixDict.items():
             try:
-                print >>ifile,'%s\t%s\t' %(k,v.filepath)
+                print >>ifile, '%s\t%s' % (k, v.filepath)
             except AttributeError:
-                raise AttributeError('seq db %s has no filepath; you can save this to pygr.Data but not to a text HeaderFile!' % k)
+                raise AttributeError('''\
+seq db '%s' has no filepath; you may be able to save this to pygr.Data,
+but not to a text HeaderFile!''' % k)
         ifile.close()
-    __invert__ = classutil.standard_invert
-    _inverseClass = PrefixDictInverse
-    def __len__(self):                  # @CTB untested
-        "number of total entries in this database"
+
+    def __len__(self):
         n=0
         for db in self.dicts:
-            n+=len(db)
+            n += len(db)
         return n
+    
     def cacheHint(self, ivalDict, owner=None):  # @CTB untested
-        'save a cache hint dict of {id:(start,stop)}; return reference owner'
+        '''save a cache hint dict of {id:(start,stop)}; return ref owner'''
         d={}
         for id,ival in ivalDict.items(): # EXTRACT SEPARATE SUBDICT FOR EACH prefix
             prefix=id.split(self.separator)[0] # EXTRACT PREFIX, SEQID
@@ -668,94 +763,152 @@ Set trypath to give a list of directories to search.'''
                 return m(seqDict, owner)
 
     # not clear what this should do for PrefixUnionDict
-    def copy(self):
-        raise NotImplementedError, "nonsensical in PrefixUnionDict"
-    def setdefault(self, k, d=None):
-        raise NotImplementedError, "nonsensical in PrefixUnionDict"
-    def update(self, other):
-        raise NotImplementedError, "nonsensical in PrefixUnionDict"
+    copy = setdefault = update = classutil.method_not_implemented
     
     # these methods should not be implemented for read-only database.
-    def clear(self):
-        raise NotImplementedError, "no deletions allowed"
-    def pop(self):
-        raise NotImplementedError, "no deletions allowed"
-    def popitem(self):
-        raise NotImplementedError, "no deletions allowed"
+    clear = pop = popitem = classutil.read_only_error
 
-class PrefixDictInverseAdder(PrefixDictInverse):  # @CTB untested
-    def getName(self,seq):
-        'also handle seq with no db attribute...'
+
+class _PrefixDictInverseAdder(_PrefixUnionDictInverse):
+    """
+    @CTB document.
+    """
+    def getName(self, seq):
+        """
+        @CTB document
+        """
         try:
-            return PrefixDictInverse.__getitem__(self,seq)
-        except AttributeError: # NO db?  THEN TREAT AS A user SEQUENCE
-            userID='user'+self.db.separator+seq.pathForward.id
-            s=self.db[userID] # MAKE SURE ALREADY IN user SEQ DICTIONARY
-            return userID # ALREADY THERE
+            return _PrefixUnionDictInverse.__getitem__(self, seq)
+        except AttributeError: # no seq.db?  treat as a user sequence.
+            new_id = 'user' + self.db.separator + seq.pathForward.id
+            # check to make sure it's already in the user seq db...
+            _ = self.db[new_id]
+            return new_id
                 
     def __getitem__(self,seq):
-        'handles optional mode that adds seq if not already present'
+        """@CTB document."""
         try:
             return self.getName(seq)
         except KeyError:
-            if self.db.addAll:
-                self.db+=seq # FORCE self.db TO ADD THIS TO ITS INDEX
-                return self.getName(seq) # THIS SHOULD SUCCEED NOW...
-            else: # OTHERWISE JUST RE-RAISE THE ORIGINAL EXCEPTION
+            if not self.db.addAll:
                 raise
 
+            # if we should add, add seq & re-try.
+            self.db += seq
+            return self.getName(seq)
 
-class SeqPrefixUnionDict(PrefixUnionDict):  # @CTB untested
+
+class SeqPrefixUnionDict(PrefixUnionDict):
+    """
+    @CTB document.
+    @CTB doc addAll.
+    """
     'adds method for easily adding a seq or its database to the PUD'
-    def __init__(self,addAll=False,**kwargs):
-        PrefixUnionDict.__init__(self,**kwargs)
-        self._inverse=PrefixDictInverseAdder(self)
-        self.addAll=addAll # FORCE AUTOMATIC ADDING
+    def __init__(self, addAll=False, **kwargs):
+        PrefixUnionDict.__init__(self, **kwargs)
 
-    def __iadd__(self,k):
-        'add a sequence or database to prefix-union, with a unique prefix'
-        if k in (~self): # k ALREADY IN ONE OF OUR DATABASES
+        # override default PrefixUnionDict __invert__ to add sequences.
+        self._inverse = _PrefixDictInverseAdder(self)
+        self.addAll = addAll  # see self._inverse behavior.
+
+    def __iadd__(self, k):
+        """Add a sequence or database to the PUD, with a unique prefix.
+
+        NOTE: __iadd__ must return self.
+
+        """
+        # seq or db already present?
+        if k in (~self):
             return self
-        try: # OK, JUST ADD ITS DATABASE!
-            db=k.db # GET DB DIRECTLY FROM SeqPath object
-        except AttributeError:
-            try:
-                db=k.pathForward.db # GET DB FROM pathForward
-            except AttributeError: # USER SEQUENCE, NOT FROM ANY CONTAINER?!
-                try: # SAVE TO user SEQUENCE DICT
-                    d=self.prefixDict['user']
-                except KeyError: # NEED TO CREATE A user DICT
-                    d=KeepUniqueDict()
-                    self.prefixDict['user']=d
-                    self.dicts[d]='user'
-                d[k.pathForward.id]=k.pathForward # ADD TO user DICTIONARY
-                return self
-        # db MUST BE A SEQ DATABASE STYLE DICT...
-        if db in self.dicts: # ALREADY IS ONE OF OUR DATABASES
-            return self # NOTHING FURTHER TO DO
-        try: # USE LAST FIELD OF ITS persistent_id
-            id=db._persistent_id.split('.')[-1]
-        except AttributeError:
-            try: # TRY TO GET THE NAME FROM filepath ATTRIBUTE
-                id = os.path.basename(db.filepath).split('.')[0]
-                if id in self.prefixDict:
-                    raise ValueError('''
-It appears that two different sequence databases are being
-assigned the same prefix ("%s", based on the filepath)!
-For this reason, the attempted automatic construction of
-a PrefixUnionDict for you cannot be completed!
-You should instead construct a PrefixUnionDict that assigns
-a unique prefix to each sequence database, and supply it
-directly as the seqDict argument to the NLMSA constructor.''' % id)
-            except AttributeError:
-                id = 'noname%d'%len(self.dicts) # CREATE AN ARBITRARY UNIQUE ID
-        self.prefixDict[id]=db
-        self.dicts[db]=id
-        return self # IADD MUST RETURN SELF!
+
+        db = getattr(k, 'db', None)
+        if db is None:                  # annotation sequence?
+            db = getattr(k.pathForward, 'db', None) # @CTB untested
+
+        if db is None:  # this is a user sequence, with no container; create.
+            if not self.prefixDict.has_key('user'):
+                d = KeepUniqueDict()
+                self._add_prefix_dict('user', d)
+            else:
+                d = self.prefixDict['user']
+                
+            # now add the sequence
+            d[k.pathForward.id] = k.pathForward
+            return self
+
+        # already contain?  nothing to do.
+        if db in self.dicts:            # @CTB can this if ever be true?
+            return self
+
+        # ok, not present; add, with a unique name.  does it have
+        # _persistent_id?
+        try:
+            name = db._persistent_id.split('.')[-1]
+        except AttributeError:          # no; retrieve from filepath?
+            name = getattr(db, 'filepath', None)
+            if name:                    # got one; clean up.
+                name = os.path.basename(name)
+                name = name.split('.')[0]
+            else:                       # generate one.
+                name = 'noname%d' % len(self.dicts)
+            
+            if name in self.prefixDict:
+                raise ValueError('''
+It appears that two different sequence databases are being assigned
+the same prefix ("%s").  For this reason, the attempted automatic
+construction of a PrefixUnionDict for you cannot be completed!  You
+should instead construct a PrefixUnionDict that assigns a unique
+prefix to each sequence database, and supply it directly as the
+seqDict argument to the NLMSA constructor.''' % id)
+
+        self._add_prefix_dict(name, db)
+
+        return self
+
+    def _add_prefix_dict(self, name, d):
+        self.prefixDict[name] = d
+        self.dicts[d] = name
         
+class _PUDSeqInfoDict(object, UserDict.DictMixin):
+    """A wrapper object supplying a standard seqInfoDict interface for PUDs.
+
+    This class simply provides a standard dict interface that rewrites
+    individual sequence IDs into the compound PrefixUnionDict seq IDs
+    on the fly.
+
+    """
+    def __init__(self, db):
+        self.seqDB = db
+        
+    def __iter__(self):
+        return iter(self.seqDB)
+    
+    def keys(self):
+        return list(self.iterkeys())
+
+    def iterkeys(self):
+        for (k, v) in self.iteritems():
+            yield k
+
+    def itervalues(self):
+        for (k, v) in self.iteritems():
+            yield v
+    
+    def iteritems(self):
+        for p, d in self.seqDB.prefixDict.items():
+            for seqID, info in d.seqInfoDict.iteritems():
+                yield self.seqDB.format_id(p, seqID), info
+                
+    def __getitem__(self, k):
+        prefix, seqID = self.seqDB.get_prefix_id(k)
+        db = self.seqDB.prefixDict[prefix]
+        return self.seqDB.get_subitem(db.seqInfoDict, seqID)
+    
+    def has_key(self, k):
+        return k in self.seqDB
 
 #
-# @CTB stopped here.
+# @CTB stopped review here. ###################################################
 #
 
 class BlastDB(SequenceFileDB):          # @CTB untested?
