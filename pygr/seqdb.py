@@ -126,13 +126,6 @@ class FileDBSequence(SequenceBase):
     of sequence stored in a file.'''
     seq = FileDBSeqDescriptor()
     __reduce__ = classutil.item_reducer
-    #@classmethod # decorators don't work prior to Python 2.4
-    def _init_subclass(cls, db, filepath, **kwargs):
-        '''initialize our indexes if needed, and provide db with a
-        seqInfoDict attribute for looking up length and offset info.
-        Open or build seqLenDict if needed'''
-        cls.db = db # all instances of this class are now bound to this database
-    _init_subclass = classmethod(_init_subclass)
     def __init__(self, db, id):
         self.id = id
         SequenceBase.__init__(self)
@@ -299,6 +292,9 @@ class SequenceFileDB(SequenceDB):
     _pickleAttrs = SequenceDB._pickleAttrs.copy()
     _pickleAttrs['filepath'] = 0
     def __init__(self, filepath=None, **kwargs):
+        '''initialize our indexes if needed, and provide db with a
+        seqInfoDict attribute for looking up length and offset info.
+        Open or build seqLenDict if needed'''
         if filepath is None:
             try: # get filepath from ifile arg
                 filepath = kwargs['ifile'].name
@@ -739,7 +735,7 @@ directly as the seqDict argument to the NLMSA constructor.''' % id)
 
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
-    xmlrpc_methods = dict(getSeqLen=0, strslice=0, getSeqLenDict=0,
+    xmlrpc_methods = dict(getSeqLen=0, get_strslice=0, getSeqLenDict=0,
                           get_db_size=0, get_seqtype=0)
     def getSeqLen(self,id):
         'get sequence length, or -1 if not found'
@@ -755,7 +751,7 @@ class BlastDBXMLRPC(BlastDB):
         return d # XML-RPC CANNOT HANDLE INT > 2 GB, SO FORCED TO CONVERT...
     def get_db_size(self):
         return len(self)
-    def strslice(self,id,start,stop):
+    def get_strslice(self,id,start,stop):
         'return string sequence for specified interval in the specified sequence'
         if start<0: # HANDLE NEGATIVE ORIENTATION
             return str((-(self[id]))[-stop:-start])
@@ -769,19 +765,10 @@ class BlastDBXMLRPC(BlastDB):
     
 class XMLRPCSequence(SequenceBase):
     "Represents a sequence in a blast database, accessed via XMLRPC"
-    #@classmethod # decorators don't work prior to Python 2.4
-    def _init_subclass(cls, db, url, name, **kwargs):
-        import coordinator
-        db.server = coordinator.get_connection(url,name)
-        db.url = url
-        db.name = name
-        db.seqInfoDict = SeqLenDictWrapper(db)
-    _init_subclass = classmethod(_init_subclass)
     def __init__(self, db, id):
         self.length = db.server.getSeqLen(id)
         if self.length<=0:
             raise KeyError('%s not in this database' % id)
-        self.db = db
         self.id = id
         SequenceBase.__init__(self)
     def strslice(self,start,end,useCache=True):
@@ -791,7 +778,7 @@ class XMLRPCSequence(SequenceBase):
                 return self.db.strsliceCache(self,start,end)
             except IndexError: # NOT FOUND IN CACHE
                 pass # JUST USE OUR REGULAR XMLRPC METHOD
-        return self.db.server.strslice(self.id,start,end) # GET FROM XMLRPC
+        return self.db.server.get_strslice(self.id,start,end) # GET FROM XMLRPC
     def __len__(self):
         return self.length
 
@@ -811,6 +798,13 @@ class XMLRPCSequenceDB(SequenceDB):
     'XMLRPC client: access sequence database over XMLRPC'
     itemClass = XMLRPCSequence # sequence storage interface
     seqLenDict = XMLRPCSeqLenDescr('seqLenDict') # INTERFACE TO SEQLENDICT
+    def __init__(self, url, name, *args, **kwargs):
+        import coordinator
+        self.server = coordinator.get_connection(url, name)
+        self.url = url
+        self.name = name
+        self.seqInfoDict = SeqLenDictWrapper(self)
+        SequenceDB.__init__(self, *args, **kwargs)
     def __getstate__(self): # DO NOT pickle self.itemClass! We provide our own.
         return dict(url=self.url, name=self.name) # just need XMLRPC info
     def __len__(self):
