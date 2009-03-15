@@ -124,7 +124,7 @@ class FileDBSequence(SequenceBase):
     '''Our standard sequence storage mechanism, utilizing
     a shelve index of lengths and offsets, and fseek access to slices
     of sequence stored in a file.'''
-    seq=FileDBSeqDescriptor()
+    seq = FileDBSeqDescriptor()
     __reduce__ = classutil.item_reducer
     #@classmethod # decorators don't work prior to Python 2.4
     def _init_subclass(cls, db, filepath, **kwargs):
@@ -132,43 +132,22 @@ class FileDBSequence(SequenceBase):
         seqInfoDict attribute for looking up length and offset info.
         Open or build seqLenDict if needed'''
         cls.db = db # all instances of this class are now bound to this database
-        from dbfile import NoSuchFileError
-        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
-            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
-        except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
-            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
-            import sys
-            print >>sys.stderr,'Building sequence length index...'
-            store_seqlen_dict(db.seqLenDict, filepath, **kwargs)
-            db.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
-            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
-        db.seqInfoDict = SeqLenDictWrapper(db) # standard interface
     _init_subclass = classmethod(_init_subclass)
-    def __init__(self,db,id):
-        self.id=id
+    def __init__(self, db, id):
+        self.id = id
         SequenceBase.__init__(self)
-        self.checkID() # RAISE KeyError IF THIS SEQ NOT IN db
+        len(self) # RAISE KeyError IF THIS SEQ NOT IN db
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
         return self.db.seqLenDict[self.id][0]
-    def checkID(self):
-        'check whether this seq ID actually present in the DB, KeyError if not'
-        return self.db.seqLenDict[self.id][0]
-    def strslice(self,start,end,useCache=True):
+    def strslice(self, start, end, useCache=True):
         "Efficient access to slice of a sequence, useful for huge contigs"
         if useCache:
             try:
                 return self.db.strsliceCache(self,start,end)
             except IndexError: # NOT FOUND IN CACHE
                 pass # JUST USE OUR REGULAR METHOD
-        try:
-            ifile=self.db._pureseq
-        except AttributeError:
-            ifile = file(self.db.filepath + '.pureseq', 'rb') # binary mode
-            self.db._pureseq = ifile # but text mode probably also OK...
-        ifile.seek(self.db.seqLenDict[self.id][1]+start)
-        return ifile.read(end-start)
-    
+        return self.db.strslice(self.id, start, end)
 
 class SequenceDBInverse(object):
     'implements trivial inverse mapping seq --> id'
@@ -326,11 +305,31 @@ class SequenceFileDB(SequenceDB):
             except (KeyError, AttributeError):
                 raise TypeError("unable to obtain a filename")
         self.filepath = classutil.SourceFileName(str(filepath))
+        from dbfile import NoSuchFileError
+        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
+            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
+            import sys
+            print >>sys.stderr,'Building sequence length index...'
+            store_seqlen_dict(self.seqLenDict, filepath, **kwargs)
+            self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
+            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        self.seqInfoDict = SeqLenDictWrapper(self) # standard interface
         SequenceDB.__init__(self, filepath=filepath,
                             dbname=os.path.basename(filepath), **kwargs)
         try: # signal that we're done constructing, by closing the file object
             kwargs['ifile'].close()
         except (KeyError, AttributeError): pass
+    def strslice(self, seqID, start, end):
+        "Efficient access to slice of a sequence, useful for huge contigs"
+        try:
+            ifile = self._pureseq
+        except AttributeError:
+            ifile = file(self.filepath + '.pureseq', 'rb') # binary mode
+            self._pureseq = ifile # but text mode probably also OK...
+        ifile.seek(self.seqLenDict[seqID][1] + start)
+        return ifile.read(end - start)
 
 class BlastDB(SequenceFileDB):
     '''Deprecated interface provided for backwards compatibility.
