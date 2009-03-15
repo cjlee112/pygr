@@ -5,13 +5,22 @@ Tests for the pygr.seqdb module.
 import os
 import unittest
 from testlib import testutil
-from pygr.seqdb import SequenceFileDB, PrefixUnionDict, AnnotationDB, \
-     SeqPrefixUnionDict
+from pygr.seqdb import SequenceDB, SequenceFileDB, PrefixUnionDict, \
+     AnnotationDB, SeqPrefixUnionDict
 from pygr.sequence import Sequence
 from pygr.cnestedlist import NLMSA
 import gc
 from pygr.annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
     AnnotationServer, AnnotationClient
+
+class SequenceDB_Test(unittest.TestCase):
+    def test_create_no_itemclass(self):
+        # must supply an itemclass to SequenceDB!
+        try:
+            db = SequenceDB()
+            assert 0, "should not reach this point"
+        except TypeError:
+            pass
 
 class SequenceFileDB_Test(unittest.TestCase):
     """
@@ -923,7 +932,8 @@ class SeqDBCache_Test(unittest.TestCase):
 
 def get_suite():
     "Returns the testsuite"
-    tests = [ 
+    tests = [
+        SequenceDB_Test,
         SequenceFileDB_Test, SequenceFileDB_Creation_Test,
         PrefixUnionDict_Test, PrefixUnionDict_Creation_Test,
         PrefixUnionMemberDict_Test,

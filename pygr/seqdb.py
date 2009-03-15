@@ -66,8 +66,10 @@ class SequenceDB(object, UserDict.DictMixin):
         from cache if the owner object is garbage-collected.
 
     """
+    # class to use for database-linked sequences; no default.
+    itemClass = None
     # class to use for sequence slices; see sequence.SeqPath.classySlice.
-    itemSliceClass=SeqDBSlice
+    itemSliceClass = SeqDBSlice
     
     # pickling methods & what attributes to pickle.
     __getstate__ = classutil.standard_getstate
@@ -90,6 +92,9 @@ class SequenceDB(object, UserDict.DictMixin):
         self.itemClass = kwargs.get('itemClass', self.itemClass)
         self.itemSliceClass = kwargs.get('itemSliceClass', self.itemSliceClass)
 
+        if self.itemClass is None:
+            raise TypeError, "must supply itemClass to SequenceDB"
+            
         # get a copy we can modify w/o side effects and bind itemClass.
         kwargs = kwargs.copy() 
         kwargs['db'] = self
