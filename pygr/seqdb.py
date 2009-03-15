@@ -3,43 +3,10 @@
 
 discuss seqLenDict, seqInfoDict.
 
-add a close method to SequenceFileDB?
-is ifile necessary?
-set_seqtype
- - code chunk necessity?? refactor/remove.
- - rename to _
- - stop returning
-make _cacheMax configurable as a kwarg?
-is idfilter used at all?
-
-PrefixUnionDict __contains__ is inconsistent with getitem
-PUD 'trypath' => 'trypaths'?
-PUD remove 'newMemberDict' function? not used anywhere (but in docs);
-   what about associated PrefixUnionDictMember class??
-   for PUDMember class, '.default' handling...?
-PUD remove 'writeHeaderFile' function? not used anywhere (but in docs)
-
-PrefixDictInverse KeyError abstraction violation
-
-what about adding __iadd__ directly into PUD?
-SeqPrefixUnionDict: if statement can never be reached?
-
-should we explicitly test seqInfoDict interfaces for the various seqdb
-   implementations?  what uses them, anyway -- NLMSAs, right? anything else?
-
-use logging instead of sys.stderr.write.
-
-could delegate inverse to actual class method; why implement it the way it is,
-   in separate classes?
-
-should Sequence classes be private (_)?
-SQLsequence stuff => another file (e.g. sqlgraph)?
-
-class/inheritance hierarchy naming..?
-    class names in this file still confuse me!
-
 doctests & examples
 -------------------
+
+update docs for these classes!
 
 intro:
  - loading a FASTA file
@@ -112,7 +79,7 @@ class SequenceDB(object, UserDict.DictMixin):
     _inverseClass = _SequenceDBInverse
     
     def __init__(self, autoGC=True, dbname='__generic__', **kwargs):
-        "Initialize seq db from filepath or ifile"
+        """Initialize seq db from filepath or ifile."""
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = classutil.RecentValueDictionary(autoGC)
         else:
@@ -678,7 +645,7 @@ Set 'trypath' to give a list of directories to search.''' % filepath)
             raise KeyError("no key '%s' in %s" % (k, repr(self)))
         return self.get_subitem(d, seqID)
     
-    def __contains__(self,k):
+    def __contains__(self, k):
         """Is the given ID in our PrefixUnionDict?"""
         # try it out as an ID.
         if isinstance(k, str):
@@ -837,7 +804,7 @@ class SeqPrefixUnionDict(PrefixUnionDict):
             return self
 
         # already contain?  nothing to do.
-        if db in self.dicts:            # @CTB can this if ever be true?
+        if db in self.dicts:            # @CTB can this 'if' ever be true?
             return self
 
         # ok, not present; add, with a unique name.  does it have
