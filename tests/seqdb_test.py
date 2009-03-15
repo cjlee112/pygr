@@ -5,7 +5,8 @@ Tests for the pygr.seqdb module.
 import os
 import unittest
 from testlib import testutil
-from pygr.seqdb import SequenceFileDB, PrefixUnionDict, AnnotationDB
+from pygr.seqdb import SequenceFileDB, PrefixUnionDict, AnnotationDB, \
+     SeqPrefixUnionDict
 from pygr.sequence import Sequence
 from pygr.cnestedlist import NLMSA
 import gc
@@ -287,14 +288,90 @@ class SequenceFileDB_Creation_Test(unittest.TestCase):
         assert str(self.db.get('seq1')).startswith('atggtgtca')
         assert str(self.db.get('seq2')).startswith('GTGTTGAA')
 
+class PrefixUnionDict_Creation_Test(unittest.TestCase):
+    """
+    Test PUD creation options.
+    """
+    def setUp(self):
+        self.dbfile = testutil.datafile('dnaseq.fasta')
+
+    def test_empty_create(self):
+        db = PrefixUnionDict()
+        assert len(db) == 0
+
+    def test_headerfile_create(self):
+        header = testutil.datafile('prefixUnionDict-1.txt')
+        db = PrefixUnionDict(filename=header)
+        assert len(db) == 2
+        assert 'a.seq1' in db
+
+    def test_headerfile_create_conflict(self):
+        "test non-empty prefixDict with a passed in PUD header file: conflict"
+        subdb = SequenceFileDB(self.dbfile)
+        header = testutil.datafile('prefixUnionDict-1.txt')
+        try:
+            db = PrefixUnionDict(filename=header, prefixDict={ 'foo' : subdb })
+            assert 0, "should not get here"
+        except TypeError:
+            pass
+            
+    def test_multiline_headerfile_create(self):
+        header = testutil.datafile('prefixUnionDict-2.txt')
+        db = PrefixUnionDict(filename=header)
+        assert len(db) == 4
+        assert 'a.seq1' in db
+        assert 'b.seq1' in db
+
+    def test_headerfile_create_with_trypath(self):
+        header = testutil.datafile('prefixUnionDict-1.txt')
+        db = PrefixUnionDict(filename=header,
+                             trypath=[os.path.dirname(header)])
+        assert len(db) == 2, db.prefixDict
+
+    def test_headerfile_create_fail(self):
+        header = testutil.datafile('prefixUnionDict-3.txt')
+        try:
+            db = PrefixUnionDict(filename=header)
+            assert 0, "should not reach this point"
+        except IOError:
+            pass
+
+    def test_headerfile_write(self):
+        header = testutil.datafile('prefixUnionDict-2.txt')
+        db = PrefixUnionDict(filename=header)
+        assert len(db) == 4
+        assert 'a.seq1' in db
+        assert 'b.seq1' in db
+
+        output = testutil.tempdatafile('prefixUnionDict-write.txt')
+        db.writeHeaderFile(output)
+        db2 = PrefixUnionDict(filename=output,
+                               trypath=[os.path.dirname(header)])
+        assert len(db2) == 4
+        assert 'a.seq1' in db2
+        assert 'b.seq1' in db2
+
+    def test_headerfile_write_fail(self):
+        subdb = SequenceFileDB(self.dbfile)
+        del subdb.filepath              # remove 'filepath' attribute for test
+        db = PrefixUnionDict({ 'prefix' : subdb })
+        assert len(db) == 2
+        assert 'prefix.seq1' in db
+
+        output = testutil.tempdatafile('prefixUnionDict-write-fail.txt')
+        try:
+            db.writeHeaderFile(output)
+        except AttributeError:
+            pass
+
 class PrefixUnionDict_Test(unittest.TestCase):
     """
     Test for all of the basic dictionary functions on 'PrefixUnionDict'.
     """
     def setUp(self):
         dnaseq = testutil.datafile('dnaseq.fasta')
-        blastdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
-        self.db = PrefixUnionDict({ 'prefix' : blastdb })
+        seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
+        self.db = PrefixUnionDict({ 'prefix' : seqdb })
 
     def test_keys(self):
         "PrefixUnionDict keys"
@@ -304,10 +381,30 @@ class PrefixUnionDict_Test(unittest.TestCase):
 
     def test_contains(self):
         "PrefixUnionDict contains"
+        # first, check "is this sequence name in the PUD?"-style contains.
         assert 'prefix.seq1' in self.db
         assert 'prefix.seq2' in self.db
         assert 'foo' not in self.db
         assert 'prefix.foo' not in self.db
+
+        # now, check "is this sequence in the PUD?"
+        seq = self.db['prefix.seq1']
+        assert seq in self.db
+
+        # finally, check failure: "is something other than str/seq in db"
+        try:
+            12345 in self.db
+            assert 0, "should not get to this point"
+        except AttributeError:
+            pass
+
+    def test_invert_class(self):
+        "PrefixUnionDict __invert__"
+        seq = self.db['prefix.seq1']
+        inversedb = ~self.db
+        assert inversedb[seq] == 'prefix.seq1'
+        assert seq in inversedb
+        assert 'foo' not in inversedb
 
     def test_has_key(self):
         "PrefixUnionDict has key"
@@ -324,6 +421,20 @@ class PrefixUnionDict_Test(unittest.TestCase):
         assert str(self.db.get('prefix.seq1')).startswith('atggtgtca')
         assert self.db.get('prefix.seq2') is not None
         assert str(self.db.get('prefix.seq2')).startswith('GTGTTGAA')
+        assert self.db.get('foo.bar') is None
+        assert self.db.get(12345) is None
+
+    def test_get_prefix_id(self):
+        try:
+            self.db.get_prefix_id(12345)
+            assert 0, "should not get here"
+        except KeyError:
+            pass
+
+    def test_getName(self):
+        seq1 = self.db['prefix.seq1']
+        name = self.db.getName(seq1)
+        assert name == 'prefix.seq1'
 
     def test_items(self):
         "PrefixUnionDict items"
@@ -362,7 +473,7 @@ class PrefixUnionDict_Test(unittest.TestCase):
         try:
             self.db['prefix.foo']
         except KeyError, e:
-            assert "no key 'prefix.foo' in " in str(e), str(e)
+            assert "no key 'foo' in " in str(e), str(e)
         try:
             self.db['foo']
         except KeyError, e:
@@ -401,6 +512,188 @@ class PrefixUnionDict_Test(unittest.TestCase):
         except NotImplementedError:
             pass
 
+    def test_seqInfoDict(self):
+        seqInfoDict = self.db.seqInfoDict
+
+        keylist = seqInfoDict.keys()
+        keylist.sort()
+
+        keylist2 = list(seqInfoDict)
+        keylist2.sort()
+
+        assert keylist == ['prefix.seq1', 'prefix.seq2']
+        assert keylist2 == ['prefix.seq1', 'prefix.seq2']
+
+        itemlist = list(seqInfoDict.iteritems())
+        itemlist.sort()
+        ((n1, i1), (n2, i2)) = itemlist
+
+        ii1, ii2 = list(seqInfoDict.itervalues())
+        
+        s1i = seqInfoDict['prefix.seq1']
+        s2i = seqInfoDict['prefix.seq2']
+
+        assert n1 == 'prefix.seq1'
+        assert (i1.id, i1.db) == (s1i.id, s1i.db)
+        assert (ii1.id, ii1.db) == (s1i.id, s1i.db)
+        assert n2 == 'prefix.seq2'
+        assert (i2.id, i2.db) == (s2i.id, s2i.db)
+        assert (ii2.id, ii2.db) == (s2i.id, s2i.db)
+
+        assert seqInfoDict.has_key('prefix.seq1')
+
+class PrefixUnionMemberDict_Test(unittest.TestCase):
+    def setUp(self):
+        dnaseq = testutil.datafile('dnaseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
+        self.db = PrefixUnionDict({ 'prefix' : seqdb })
+        self.mdb = self.db.newMemberDict()
+
+    def test_basic(self):
+        self.mdb['prefix'] = 'this is from seqdb dnaseq.fasta'
+        seq = self.db['prefix.seq1']
+        assert self.mdb[seq] == 'this is from seqdb dnaseq.fasta'
+
+    def test_possible_keys(self):
+        assert list(self.mdb.possibleKeys()) == ['prefix']
+
+    def test_bad_prefix(self):
+        try:
+            self.mdb['foo'] = "xyz"
+            assert 0, "should fail before this"
+        except KeyError:
+            pass
+
+    def test_bad_keytype(self):
+        try:
+            self.mdb['some non-seq-obj']
+            assert 0, "should fail before this"
+        except TypeError:
+            pass
+
+    def test_default_val(self):
+        self.mdb = self.db.newMemberDict(default='baz')
+        seq = self.db['prefix.seq1']
+        assert self.mdb[seq] == 'baz'
+
+    def test_no_default_val(self):
+        self.mdb = self.db.newMemberDict()
+        seq = self.db['prefix.seq1']
+        try:
+            self.mdb[seq]
+            assert 0, "should fail before this"
+        except KeyError:
+            pass
+
+class SeqPrefixUnionDict_Test(unittest.TestCase):
+    """
+    Test SeqPrefixUnionDict.
+    """
+    def setUp(self):
+        dnaseq = testutil.datafile('dnaseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
+        self.db = SeqPrefixUnionDict({ 'prefix' : seqdb })
+
+    def test_basic_iadd(self):
+        dnaseq = testutil.datafile('dnaseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)
+        new_seq = seqdb['seq1']
+        
+        self.db += new_seq
+
+        assert new_seq in self.db
+        name = (~self.db)[new_seq]
+        assert name == 'dnaseq.seq1', name
+
+        ###
+
+        seqdb2 = SequenceFileDB(dnaseq)
+        seqdb2.filepath = 'foo'         # munge the filepath for testing
+        new_seq2 = seqdb2['seq1']
+        
+        self.db += new_seq2
+        name2 = (~self.db)[new_seq2]
+        assert name2 == 'foo.seq1', name2
+
+        # NOTE, the important thing here is less the specific names that
+        # are given (which are based on filepath) but that different names
+        # are created for the various sequences when they are added.
+
+    def test_iadd_db_twice(self):
+        dnaseq = testutil.datafile('dnaseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)
+        new_seq = seqdb['seq1']
+        
+        self.db += new_seq
+        name1 = (~self.db)[new_seq]
+        
+        self.db += new_seq              # should do nothing...
+        name2 = (~self.db)[new_seq]
+        assert name1 == name2           # ...leaving seq with same name.
+
+    def test_iadd_user_seq(self):
+        seq = Sequence('ATGGCAGG', 'foo')
+        self.db += seq
+        
+        name = (~self.db)[seq]
+        assert name == 'user.foo'       # created a new 'user' db.
+
+        # ok, make sure it doesn't wipe out the old 'user' db...
+        seq2 = Sequence('ATGGCAGG', 'foo2')
+        self.db += seq2
+        
+        name = (~self.db)[seq2]
+        assert name == 'user.foo2'
+
+        first_name = (~self.db)[seq]
+        assert first_name == 'user.foo'
+
+    def test_iadd_duplicate_seqdb(self):
+        dnaseq = testutil.datafile('dnaseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)
+        seqdb2 = SequenceFileDB(dnaseq)
+        new_seq = seqdb['seq1']
+        new_seq2 = seqdb2['seq1']
+        
+        self.db += new_seq
+        try:
+            self.db += new_seq2
+            assert 0, "should never reach this point"
+        except ValueError:
+            pass
+
+    def test_no_db_info(self):
+        dnaseq = testutil.datafile('dnaseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)
+        new_seq = seqdb['seq1']
+
+        assert getattr(seqdb, '_persistent_id', None) is None
+        del seqdb.filepath
+        
+        self.db += new_seq
+        name = (~self.db)[new_seq]
+        assert name == 'noname0.seq1'
+
+    def test_inverse_add_behavior(self):
+        dnaseq = testutil.datafile('dnaseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)
+        seq = seqdb['seq1']
+        
+        name = (~self.db)[seq]
+
+    def test_inverse_noadd_behavior(self):
+        # compare with test_inverse_add_behavior...
+        self.db = SeqPrefixUnionDict(addAll=False)
+        dnaseq = testutil.datafile('dnaseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)
+        seq = seqdb['seq1']
+
+        try:
+            name = (~self.db)[seq]
+            assert 0, "should not get here"
+        except KeyError:
+            pass
+        
 class AnnotationDB_Test(unittest.TestCase):
     """
     Test for all of the basic dictionary functions on 'AnnotationDB'.
@@ -632,7 +925,9 @@ def get_suite():
     "Returns the testsuite"
     tests = [ 
         SequenceFileDB_Test, SequenceFileDB_Creation_Test,
-        PrefixUnionDict_Test, 
+        PrefixUnionDict_Test, PrefixUnionDict_Creation_Test,
+        PrefixUnionMemberDict_Test,
+        SeqPrefixUnionDict_Test,
         AnnotationDB_Test, SeqDBCache_Test
     ]
     return testutil.make_suite(tests)

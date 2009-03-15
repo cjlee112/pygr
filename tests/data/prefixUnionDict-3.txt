@@ -1,0 +1,4 @@
+.
+a	dnaseq.fasta
+b	dnaseq.fasta
+c	does-not-exist
