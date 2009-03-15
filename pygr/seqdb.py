@@ -526,7 +526,7 @@ You can get that using its \'sequence\' attribute.''')
 
         id = path.id
         prefix = self.db.dicts[db]
-        return prefix + self.db.separator + id
+        return prefix + self.db.separator + str(id)
     
     def __contains__(self, seq):
         try:
