@@ -12,16 +12,20 @@ Contents:
 .. toctree::
     :maxdepth: 3
 
-    manual    
     guidelist
+    reference/sequence    
+    reference/seqdb
+    reference/annotation
+    reference/blast
+    reference/cnestedlist
+    reference/metabase
+    reference/downloader
+    reference/sqlgraph
+    reference/mapping
+    reference/classutil
+    reference/sequtil
+    reference/coordinator
     sequences
-    contrib/fetch.rst
-    contrib/databrowser.rst
-    recipes/pygrdata_recipes
-    recipes/alignment_recipes
-    guides/testing
-    guides/devguide
-    guides/gitusage
     team
 
 Indices and tables

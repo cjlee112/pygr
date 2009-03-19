@@ -7,6 +7,19 @@ Pygr recipes, guides and tutorials
 
 Below please find a series of documentation files that describe various pygr functionality.
 
+Tutorials
+---------
+
+.. toctree::
+    :maxdepth: 3
+
+    tutorials/sequence
+    tutorials/alignment
+    tutorials/pygrdata
+    tutorials/annotation
+    tutorials/graphquery
+    tutorials/annotating-yeast
+
 Recipes
 -------
 
@@ -18,14 +31,6 @@ Recipes
     recipes/pygrdata_recipes
     recipes/alignment_recipes
 
-Tutorials
----------
-
-.. toctree::
-    :maxdepth: 3
-
-    tutorials/annotating-yeast
-
 Guides
 ---------
 
@@ -35,6 +40,8 @@ Guides
     guides/devguide
     guides/gitusage
     guides/testing
+    guides/libnclist
+    manual
 
     
 Indices and tables
