@@ -34,7 +34,7 @@ pygr_source_dir = path_join(base_dir, 'pygr')
 
 # build specific directories
 os_info = distutils.util.get_platform()
-version = ".".join(platform.python_version_tuple()[:2])
+version = ".".join([str(x) for x in platform.python_version_tuple()[:2]])
 lib_dir  = 'lib.%s-%s' % (os_info, version,)
 temp_dir = 'temp.%s-%s' % (os_info, version,)
 pygr_build_dir = path_join(base_dir, 'build', lib_dir)
