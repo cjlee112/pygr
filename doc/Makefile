@@ -9,9 +9,15 @@ MKHTML = $(MKHOWTO) --html --about html/stdabout.dat \
 
 PYTHONDOCS="See <i><a href=\"about.html\">About this document...</a></i> for information on suggesting changes."
 
+DOC_DIR=rest
+BUILD_DIR=html_new
+
 pygr: html/pygr/pygr.html 
 html/pygr/pygr.html: $(PYGRFILES) perl/distutils.perl 
 	$(MKHTML) --dir html/pygr --split 4 pygr/pygr.tex
+
+newdocs:
+	sphinx-build -b html $(DOC_DIR) $(BUILD_DIR)
 
 clean:	
 	rm -rf html/pygr/*.html 
