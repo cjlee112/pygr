@@ -874,67 +874,6 @@ class BlastDB(SequenceFileDB):          # @CTB untested?
         return blastmap
 
 
-
-class SliceDB(dict):                    # @CTB untested; what does it do?
-    'associates an ID with a specific slice of a specific db sequence'
-    def __init__(self,sliceDB,seqDB,leftOffset=0,rightOffset=0):
-        '''sliceDB must map identifier to a sliceInfo object;
-        sliceInfo must have name,start,stop,ori attributes;
-        seqDB must map sequence ID to a sliceable sequence object'''
-        dict.__init__(self)
-        self.sliceDB=sliceDB
-        self.seqDB=seqDB
-        self.leftOffset=leftOffset
-        self.rightOffset=rightOffset
-    def __getitem__(self,k):
-        try:
-            return dict.__getitem__(self,k)
-        except KeyError:
-            pass
-        sliceInfo=self.sliceDB[k]
-        seq=self.seqDB[sliceInfo.name]
-        myslice=seq[sliceInfo.start-self.leftOffset:sliceInfo.stop+self.rightOffset]
-        if sliceInfo.ori<0:
-            myslice= -myslice
-        self[k]=myslice
-        return myslice
-
-
-
-class VirtualSeq(SeqPath):              # @CTB untested
-    """Empty sequence object acts purely as a reference system.
-    Automatically elongates if slice extends beyond current stop.
-    This class avoids setting the stop attribute, taking advantage
-    of SeqPath's mechanism for allowing a sequence to grow in length."""
-    start=0
-    step=1 # JUST DO OUR OWN SIMPLE INIT RATHER THAN CALLING SeqPath.__init__
-    _seqtype=DNA_SEQTYPE # ALLOW THIS VIRTUAL COORD SYSTEM TO BE REVERSIBLE
-    def __init__(self,id,length=1):
-        self.path=self # DANGEROUS TO CALL SeqPath.__init__ WITH path=self!
-        self._current_length=length # SO LET'S INIT OURSELVES TO AVOID THOSE PROBLEMS
-        self.id=id
-    def __getitem__(self,k):
-        "Elongate if slice extends beyond current self.stop"
-        if isinstance(k,types.SliceType):
-            if k.stop>self._current_length:
-                self._current_length=k.stop
-        return SeqPath.__getitem__(self,k)
-    def __len__(self):
-        return self._current_length
-    def strslice(self,start,end):
-        "NO sequence access!  Raise an exception."
-        raise ValueError('VirtualSeq has no actual sequence')
-
-class VirtualSeqDB(dict):               # @CTB untested
-    "return a VirtualSeq for any ID requested"
-    def __getitem__(self,k):
-        try: # IF WE ALREADY CREATED A SEQUENCE FOR THIS ID, RETURN IT
-            return dict.__getitem__(self,k)
-        except KeyError: # CREATE A VirtualSeq FOR THIS NEW ID
-            s=VirtualSeq(k)
-            self[k]=s
-            return s
-
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
     xmlrpc_methods = dict(getSeqLen=0, get_strslice=0, getSeqLenDict=0,
