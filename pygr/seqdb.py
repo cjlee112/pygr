@@ -441,7 +441,7 @@ def _store_seqlen_dict(d, filename, reader=None, mode='rU'):
 # class PrefixUnionDict and associated support classes.
 #
 
-class _PrefixUnionDictInverse(object):        # @CTB untested
+class _PrefixUnionDictInverse(object):
     """Provide inverse (~) operator behavior for PrefixUnionDicts.
 
     This enables ~pud to return a database that, given a sequence
@@ -711,13 +711,13 @@ but not to a text HeaderFile!''' % k)
 
 
 class _PrefixDictInverseAdder(_PrefixUnionDictInverse):
+    """Inverse class for SeqPrefixUnionDict; adds sequences when looked up.
+
+    @CTB is getName only used by __getitem__?  Make private?
     """
-    @@CTB document.
-    """
+    
     def getName(self, seq):
-        """
-        @@CTB document
-        """
+        """Find in or add the given sequence to the inverse of a PUD."""
         try:
             return _PrefixUnionDictInverse.__getitem__(self, seq)
         except AttributeError: # no seq.db?  treat as a user sequence.
@@ -726,8 +726,8 @@ class _PrefixDictInverseAdder(_PrefixUnionDictInverse):
             _ = self.db[new_id]
             return new_id
                 
-    def __getitem__(self,seq):
-        """@@CTB document."""
+    def __getitem__(self, seq):
+        """__getitem__ interface that calls getName."""
         try:
             return self.getName(seq)
         except KeyError:
@@ -740,11 +740,13 @@ class _PrefixDictInverseAdder(_PrefixUnionDictInverse):
 
 
 class SeqPrefixUnionDict(PrefixUnionDict):
+    """SeqPrefixUnionDict provides += functionality to add seqs to a PUD.
+
+    See the __iadd__ method for details.
+
+    If addAll is True, then looking a sequence up in the inverse db will
+    automatically add it to the PrefixUnionDict.
     """
-    @@CTB document.
-    @@CTB doc addAll.
-    """
-    'adds method for easily adding a seq or its database to the PUD'
 
     __invert__ = classutil.lazy_create_invert(_PrefixDictInverseAdder)
     
@@ -753,8 +755,7 @@ class SeqPrefixUnionDict(PrefixUnionDict):
 
         # override default PrefixUnionDict __invert__ to add sequences;
         # see classutil.lazy_create_invert.
-#        self._inverseObj = _PrefixDictInverseAdder(self)
-        self.addAll = addAll  # see self._inverse behavior.
+        self.addAll = addAll  # see _PrefixDictInverseAdder behavior.
 
     def __iadd__(self, k):
         """Add a sequence or database to the PUD, with a unique prefix.
