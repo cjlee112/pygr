@@ -104,13 +104,13 @@ class SequenceDB(object, UserDict.DictMixin):
                                      subclassArgs=kwargs)
         
         # guess the sequence type
-        self.set_seqtype()
+        self._set_seqtype()
 
     def __hash__(self):
         """Define a hash function to allow this object to be used as a key."""
         return id(self)
     
-    def set_seqtype(self):
+    def _set_seqtype(self):
         """Guess the seqtype from 100 chars of 1st seq if not already known."""
         seqtype = getattr(self, '_seqtype', None)
         if seqtype is not None:
@@ -1029,7 +1029,7 @@ class XMLRPCSequenceDB(SequenceDB):
             return True
         else:
             return False
-    def set_seqtype(self):
+    def _set_seqtype(self):
         'efficient way to determine sequence type of this database'
         try: # if already known, no need to do anything
             return self._seqtype
