@@ -32,6 +32,8 @@ import UserDict
 import weakref
 from annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
      AnnotationServer, AnnotationClient
+import logger
+import seqfmt
 
 from dbfile import NoSuchFileError
 
@@ -286,7 +288,7 @@ class SequenceFileDB(SequenceDB):
             seqLenDict = classutil.open_shelve(fullpath, 'r')
         except NoSuchFileError:
             seqLenDict = classutil.open_shelve(fullpath, 'n')
-            print >>sys.stderr,'Building sequence length index...' # @CTB log?
+            logger.debug('Building sequence length index...')
             _store_seqlen_dict(seqLenDict, filepath, **kwargs)
             # force a flush; reopen in read-only mode.
             seqLenDict.close() 
@@ -392,22 +394,9 @@ def _store_seqlen_dict(d, filename, ifile=None, reader=None, mode='rU'):
     @CTB document reader
     """
     # if a custom reader function was passed in, run that.
+    builder = seqfmt.read_fasta_lengths
     if reader is not None:
         builder = _SeqLenDictSaver(reader)
-    else:
-        # use our own fast compiled parser.
-        try:
-            import seqfmt
-            builder = seqfmt.read_fasta_lengths
-        except ImportError:             # @CTB move?
-            raise ImportError('''
-Unable to import extension module pygr.seqfmt that should be part of this package.
-Either you are working with an incomplete install, or an installation of pygr
-compiled with an incompatible Python version.  Please check your PYTHONPATH
-setting and make sure it is compatible with this Python version (%d.%d).
-When in doubt, rebuild your pygr installation using the
-python setup.py build --force
-option to force a clean install''' % sys.version_info[:2])
         
     ifile = file(filename, mode)
     try:
@@ -777,13 +766,15 @@ class SeqPrefixUnionDict(PrefixUnionDict):
                 name = 'noname%d' % len(self.dicts)
             
             if name in self.prefixDict:
-                raise ValueError('''
+                logger.debug('''
 It appears that two different sequence databases are being assigned
 the same prefix ("%s").  For this reason, the attempted automatic
 construction of a PrefixUnionDict for you cannot be completed!  You
 should instead construct a PrefixUnionDict that assigns a unique
 prefix to each sequence database, and supply it directly as the
 seqDict argument to the NLMSA constructor.''' % id)
+                raise ValueError('''\
+cannot automatically construct PrefixUnionDict''')
 
         self._add_prefix_dict(name, db)
 
