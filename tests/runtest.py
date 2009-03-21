@@ -7,7 +7,8 @@ unittest.TextTestRunner.
 """
 
 import os, sys, re, unittest, shutil, re, shutil
-from testlib import testutil, logger, testoptions
+from testlib import testutil, testoptions
+from pygr import logger
 
 def all_tests():
     "Returns all file names that end in _test.py"

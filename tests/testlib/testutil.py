@@ -6,7 +6,8 @@ import sys, os, shutil, unittest, random, warnings, threading, time, re
 import tempfile as tempfile_mod
 import atexit
 
-import pathfix, logger
+import pathfix
+from pygr import logger
 
 # a list that keeps track of the messages
 # generated when skipping tests

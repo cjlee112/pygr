@@ -15,7 +15,8 @@ Pygr XMLRPC server test. Recognized flags:
 
 """
 import new, sys, os
-import pathfix, testoptions, testutil, logger
+import pathfix, testoptions, testutil
+from pygr import logger
 
 # same options for all tests (some flags may be ignored)
 parser = testoptions.option_parser()

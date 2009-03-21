@@ -1,8 +1,8 @@
 # test will be skipped if MySqlDB is unavailable
 
 import unittest, string
-from testlib import testutil, logger
-from pygr import sqlgraph, seqdb, classutil
+from testlib import testutil
+from pygr import sqlgraph, seqdb, classutil, logger
 
 class SQLSequence_Test(unittest.TestCase):
     '''Basic SQL sequence class tests

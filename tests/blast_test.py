@@ -1,8 +1,8 @@
 from itertools import *
 import unittest
-from testlib import testutil, logger
+from testlib import testutil
 import pygr.Data
-from pygr import sequence, cnestedlist, seqdb, blast
+from pygr import sequence, cnestedlist, seqdb, blast, logger
 
 class Blast_Test(unittest.TestCase):
     def setUp(self):

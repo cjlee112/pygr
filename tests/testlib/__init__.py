@@ -4,6 +4,5 @@ __all__ = ['logger', 'testoptions', 'testutil']
 import pathfix
 
 # import rest of test utils.
-import logger
 import testoptions
 import testutil

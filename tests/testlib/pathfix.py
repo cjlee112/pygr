@@ -12,7 +12,7 @@ python setup.py build_ext -i
 
 import sys, os, distutils.util, platform
 
-import testoptions, logger
+import testoptions
 
 def path_join(*args):
     "Joins and normalizes paths"
@@ -20,7 +20,7 @@ def path_join(*args):
 
 def stop(msg):
     "A fatal unrecoverable error"
-    logger.error(msg)
+    sys.stderr.write(msg + '\n')
     sys.exit()
 
 # get the current directory of the current module
