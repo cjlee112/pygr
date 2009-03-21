@@ -2,6 +2,21 @@
 @CTB
 
 discuss seqLenDict, seqInfoDict.
+discuss caching.
+explain get_bound_subclass
+
+note seqInfoDict must be set before SequenceDB.__init__!
+
+programmer notes:
+
+extending SequenceDB
+ - init_subclass stuff
+ - seqInfoDict, itemclass
+ 
+extending SequenceFileDB
+ - seqLenDict
+ - using your own itemclass
+ - using your own reader
 
 doctests & examples
 -------------------
@@ -13,13 +28,17 @@ intro:
  - using a PUD
    + combining dbs, etc.
    + inverse
- 
-advanced:
- - writing your own sequence reader
- - extending to your own backend
 
-prefixUnionDict defaulted to BlastDB; correct or not?  (I changed.)
-
+Issues:
+ - @CTB get_bound_subclass stuff refers directly to itemClass to set 'db'.
+ - @CTB fix 'import *'s
+ - @CTB run lint/checker?
+ - @CTB use/abuse of kwargs
+ - @CTB test _create_seqLenDict
+ - @CTB _SeqLenDictSaver could probably be simpler? just combine with
+   _store_seqlen_dict...
+    
+   
 """
 
 from __future__ import generators
@@ -117,7 +136,7 @@ class SequenceDB(object, UserDict.DictMixin):
         if seqtype is not None:
             return
         
-        for seqID in self: # get an iterator  @CTB untested
+        for seqID in self: # get an iterator
             seq = self[seqID] # get the 1st sequence
             ch100 = str(seq[:100])
             self._seqtype = guess_seqtype(ch100)
@@ -278,21 +297,16 @@ class SequenceFileDB(SequenceDB):
     _pickleAttrs = SequenceDB._pickleAttrs.copy()
     _pickleAttrs['filepath'] = 0
     
-    def __init__(self, filepath, **kwargs):
+    def __init__(self, filepath, reader=None, **kwargs):
         # make filepath a pickleable attribute.
         self.filepath = classutil.SourceFileName(str(filepath))
 
         fullpath = self.filepath + '.seqlen'
         # build the seqLenDict if it doesn't already exist
-        try:                            # @CTB refactor; make testable?
+        try:
             seqLenDict = classutil.open_shelve(fullpath, 'r')
         except NoSuchFileError:
-            seqLenDict = classutil.open_shelve(fullpath, 'n')
-            logger.debug('Building sequence length index...')
-            _store_seqlen_dict(seqLenDict, filepath, **kwargs)
-            # force a flush; reopen in read-only mode.
-            seqLenDict.close() 
-            seqLenDict = classutil.open_shelve(fullpath, 'r')
+            seqLenDict = self._create_seqLenDict(fullpath, filepath, reader)
             
         self.seqLenDict = seqLenDict
         self.seqInfoDict = _SeqLenDictWrapper(self) # standard interface
@@ -300,6 +314,17 @@ class SequenceFileDB(SequenceDB):
         # initialize base class.
         dbname = os.path.basename(filepath)
         SequenceDB.__init__(self, filepath=filepath, dbname=dbname, **kwargs)
+
+    def _create_seqLenDict(self, dictpath, seqpath, reader=None):
+        """Create a seqLenDict from 'seqpath' and store in 'dictpath'."""
+        seqLenDict = classutil.open_shelve(dictpath, 'n')
+        logger.debug('Building sequence length index...')
+        _store_seqlen_dict(seqLenDict, seqpath, reader)
+        
+        # force a flush; reopen in read-only mode.
+        seqLenDict.close() 
+        seqLenDict = classutil.open_shelve(dictpath, 'r')
+        return seqLenDict
         
     def strslice(self, seqID, start, end, useCache=True):
         """Access slice of a sequence efficiently, using seqLenDict info."""
@@ -368,7 +393,7 @@ class _SeqLenDictSaver(object):
     file/filename.  _SeqLenDictSaver will then construct a '.pureseq'
     file containing the concatenated sequences and fill in the
     seqLenDict appropriately.
-    
+
     """
     def __init__(self, reader):
         self.reader = reader
@@ -388,10 +413,17 @@ class _SeqLenDictSaver(object):
         finally:
             pureseq_fp.close()
 
-def _store_seqlen_dict(d, filename, ifile=None, reader=None, mode='rU'):
+def _store_seqlen_dict(d, filename, reader=None, mode='rU'):
     """Store sequence lengths in a dictionary, e.g. a seqLenDict.
 
-    @CTB document reader
+    Used by SequenceFileDB._create_seqLenDict.
+
+    The 'reader' function implements a custom sequence format reader;
+    by default, _store_seqlen_dict uses seqfmt.read_fasta_lengths,
+    which reads FASTA-format files.  See _SeqLenDictSaver for
+    information on building a custom 'reader', and see the seqdb docs
+    for an example.
+    
     """
     # if a custom reader function was passed in, run that.
     builder = seqfmt.read_fasta_lengths
@@ -629,7 +661,7 @@ Set 'trypath' to give a list of directories to search.''' % filepath)
         path = seq.pathForward
         return self.dicts[path.db] + self.separator + path.id
 
-    def newMemberDict(self, **kwargs):  # @CTB untested; not used; necessary?
+    def newMemberDict(self, **kwargs):  # @CTB not used; necessary?
         """return a new member dictionary (empty)"""
         return _PrefixUnionMemberDict(self, **kwargs)
 
@@ -680,11 +712,11 @@ but not to a text HeaderFile!''' % k)
 
 class _PrefixDictInverseAdder(_PrefixUnionDictInverse):
     """
-    @CTB document.
+    @@CTB document.
     """
     def getName(self, seq):
         """
-        @CTB document
+        @@CTB document
         """
         try:
             return _PrefixUnionDictInverse.__getitem__(self, seq)
@@ -695,7 +727,7 @@ class _PrefixDictInverseAdder(_PrefixUnionDictInverse):
             return new_id
                 
     def __getitem__(self,seq):
-        """@CTB document."""
+        """@@CTB document."""
         try:
             return self.getName(seq)
         except KeyError:
@@ -709,8 +741,8 @@ class _PrefixDictInverseAdder(_PrefixUnionDictInverse):
 
 class SeqPrefixUnionDict(PrefixUnionDict):
     """
-    @CTB document.
-    @CTB doc addAll.
+    @@CTB document.
+    @@CTB doc addAll.
     """
     'adds method for easily adding a seq or its database to the PUD'
 
