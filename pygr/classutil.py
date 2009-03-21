@@ -99,6 +99,25 @@ def standard_invert(self):
         self._inverse = self._inverseClass(self)
         return self._inverse
 
+def lazy_create_invert(klass):
+    """Create a function to replace __invert__ with a call to a cached object.
+
+    lazy_create_invert defines a method that looks up self._inverseObj
+    and, it it doesn't exist, creates it from 'klass' and then saves it.
+    The resulting object is then returned as the inverse.  This allows
+    for one-time lazy creation of a single object per parent class.
+    
+    """
+    def invert_fn(self, klass=klass):
+        try:
+            inverseObj = self._inverseObj
+        except AttributeError:
+            # does not exist yet; create & store.
+            inverseObj = klass(self)
+            self._inverseObj = inverseObj
+        return inverseObj
+    
+    return invert_fn
 
 def standard_getstate(self):
     'get dict of attributes to save, using self._pickleAttrs dictionary'

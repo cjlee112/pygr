@@ -78,9 +78,8 @@ class SequenceDB(object, UserDict.DictMixin):
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(autoGC=0)
 
-    # define ~ (invert) operator to return ... @CTB document.
-    __invert__ = classutil.standard_invert
-    _inverseClass = _SequenceDBInverse
+    # define ~ (invert) operator to return a lazily-created _SequenceDBInverse
+    __invert__ = classutil.lazy_create_invert(_SequenceDBInverse)
     
     def __init__(self, autoGC=True, dbname='__generic__', **kwargs):
         """Initialize seq db from filepath or ifile."""
@@ -521,9 +520,8 @@ class PrefixUnionDict(object, UserDict.DictMixin):
     @CTB trypath => trypaths?
     
     """
-    # define ~ (invert) operator to return ... @CTB document.
-    __invert__ = classutil.standard_invert
-    _inverseClass = _PrefixUnionDictInverse
+    # define ~ (invert) operator to return a lazily-created _PUDInverse.
+    __invert__ = classutil.lazy_create_invert(_PrefixUnionDictInverse)
 
     def __init__(self, prefixDict=None, separator='.', filename=None,
                  dbClass=SequenceFileDB, trypath=None):
@@ -726,11 +724,15 @@ class SeqPrefixUnionDict(PrefixUnionDict):
     @CTB doc addAll.
     """
     'adds method for easily adding a seq or its database to the PUD'
+
+    __invert__ = classutil.lazy_create_invert(_PrefixDictInverseAdder)
+    
     def __init__(self, addAll=False, **kwargs):
         PrefixUnionDict.__init__(self, **kwargs)
 
-        # override default PrefixUnionDict __invert__ to add sequences.
-        self._inverse = _PrefixDictInverseAdder(self)
+        # override default PrefixUnionDict __invert__ to add sequences;
+        # see classutil.lazy_create_invert.
+#        self._inverseObj = _PrefixDictInverseAdder(self)
         self.addAll = addAll  # see self._inverse behavior.
 
     def __iadd__(self, k):
