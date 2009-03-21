@@ -985,30 +985,3 @@ class FastaDB(object):
 
 ####
 
-class SQLSequence(SQLRow, SequenceBase):
-    """Transparent access to a DB row representing a sequence.
-
-    Use attrAlias dict to rename 'length' to something else.
-    """
-    def _init_subclass(cls, db, **kwargs):
-        db.seqInfoDict = db # db will act as its own seqInfoDict
-        SQLRow._init_subclass(db=db, **kwargs)
-    _init_subclass = classmethod(_init_subclass)
-    def __init__(self, id):
-        SQLRow.__init__(self, id)
-        SequenceBase.__init__(self)
-    def __len__(self):
-        return self.length
-    def strslice(self,start,end):
-        "Efficient access to slice of a sequence, useful for huge contigs"
-        return self._select('%%(SUBSTRING)s(%s %%(SUBSTR_FROM)s %d %%(SUBSTR_FOR)s %d)'
-                            %(self.db._attrSQL('seq'),start+1,end-start))
-
-class DNASQLSequence(SQLSequence):
-    _seqtype=DNA_SEQTYPE
-
-class RNASQLSequence(SQLSequence):
-    _seqtype=RNA_SEQTYPE
-
-class ProteinSQLSequence(SQLSequence):
-    _seqtype=PROTEIN_SEQTYPE
