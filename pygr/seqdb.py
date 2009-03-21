@@ -279,10 +279,7 @@ class SequenceFileDB(SequenceDB):
 
     Takes one argument, 'filepath', which should be the name of a
     FASTA file (or a file whose format is understood by your
-    itemClass).  Alternatively, you can pass an open file in as the
-    'ifile' keyword arg. SequenceFileDB will retrieve the filepath
-    from that, and close 'ifile' when it is finished constructing the
-    seqLenDict.
+    itemClass).
 
     Also provides db with a seqInfoDict interface based on the seqLenDict.
 
@@ -293,13 +290,7 @@ class SequenceFileDB(SequenceDB):
     _pickleAttrs = SequenceDB._pickleAttrs.copy()
     _pickleAttrs['filepath'] = 0
     
-    def __init__(self, filepath=None, **kwargs):
-        if filepath is None:
-            try: # get filepath from ifile arg
-                filepath = kwargs['ifile'].name
-            except (KeyError, AttributeError):
-                raise TypeError("unable to obtain a filename")
-
+    def __init__(self, filepath, **kwargs):
         # make filepath a pickleable attribute.
         self.filepath = classutil.SourceFileName(str(filepath))
 
@@ -322,10 +313,6 @@ class SequenceFileDB(SequenceDB):
         dbname = os.path.basename(filepath)
         SequenceDB.__init__(self, filepath=filepath, dbname=dbname, **kwargs)
         
-        try: # signal that we're done constructing, by closing the file object
-            kwargs['ifile'].close()
-        except (KeyError, AttributeError): pass
-
     def strslice(self, seqID, start, end, useCache=True):
         """Access slice of a sequence efficiently, using seqLenDict info."""
         # Retrieve sequence from the .pureseq file based on seqLenDict

@@ -45,12 +45,6 @@ class SequenceFileDB_Test(unittest.TestCase):
             assert 0, "should not reach this point"
         except TypeError:
             pass
-        
-        try:
-            db = SequenceFileDB(ifile=None)
-            assert 0, "should not reach this point"
-        except TypeError:
-            pass
 
     def test_seq_descriptor(self):
         "Check the '.seq' attribute (tied to a descriptor)"
@@ -286,16 +280,6 @@ class SequenceFileDB_Creation_Test(unittest.TestCase):
             assert 0, "should not reach here; db construction should fail!"
         except ValueError:
             pass                        # ValueError is expected
-
-    def test_ifile_arg(self):
-        "Test that we can pass in an 'ifile' arg instead of 'filepath'."
-        
-        dnaseq = testutil.datafile('dnaseq.fasta')
-        fp = file(dnaseq)
-        self.db = SequenceFileDB(ifile=fp)
-
-        assert str(self.db.get('seq1')).startswith('atggtgtca')
-        assert str(self.db.get('seq2')).startswith('GTGTTGAA')
 
 class PrefixUnionDict_Creation_Test(unittest.TestCase):
     """
