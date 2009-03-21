@@ -387,12 +387,10 @@ class _SeqLenDictSaver(object):
         finally:
             pureseq_fp.close()
 
-def _store_seqlen_dict(d, filename, ifile=None, idFilter=None, reader=None,
-                      mode='rU'):
+def _store_seqlen_dict(d, filename, ifile=None, reader=None, mode='rU'):
     """Store sequence lengths in a dictionary, e.g. a seqLenDict.
 
     @CTB document reader
-    @CTB document idfilter.
     """
     # if a custom reader function was passed in, run that.
     if reader is not None:
@@ -411,23 +409,12 @@ setting and make sure it is compatible with this Python version (%d.%d).
 When in doubt, rebuild your pygr installation using the
 python setup.py build --force
 option to force a clean install''' % sys.version_info[:2])
-    if idFilter is not None: # need to wrap seqlendict to apply filter...
-        class dictwrapper(object):      # @CTB move?
-            def __init__(self, idFilter, d):
-                self.d = d
-                self.idFilter = idFilter
-            def __setitem__(self, k, v):
-                id = self.idFilter(k)
-                self.d[id] = v
-        d = dictwrapper(idFilter, d) # force builder to write to wrapper...
-    if ifile is not None:
+        
+    ifile = file(filename, mode)
+    try:
         builder(d, ifile, filename) # run the builder on our sequence set
-    else:
-        ifile = file(filename, mode)
-        try:
-            builder(d, ifile, filename) # run the builder on our sequence set
-        finally:
-            ifile.close()
+    finally:
+        ifile.close()
     
 ####
 #
