@@ -111,29 +111,16 @@ class SequenceDB(object, UserDict.DictMixin):
         return id(self)
     
     def set_seqtype(self):
-        """Guess the seqtype from 100 chars of 1st seq if not already known.
-
-        @CTB why return seqtype??  Used only in this one function.  Rename _?
-        """
-        try: # if already known, no need to do anything
-            return self._seqtype
-        except AttributeError:
-            pass
-        try:                                  # @CTB is this necessary?
-            ifile = file(self.filepath, 'rU') # read one sequence to check type
-            try: # this only works for FASTA file...
-                id,title,seq = read_fasta_one_line(ifile) 
-                self._seqtype = guess_seqtype(seq) # record protein vs. DNA...
-                return self._seqtype
-            finally:
-                ifile.close()
-        except (IOError,AttributeError): # @CTB ??
-            pass
+        """Guess the seqtype from 100 chars of 1st seq if not already known."""
+        seqtype = getattr(self, '_seqtype', None)
+        if seqtype is not None:
+            return
+        
         for seqID in self: # get an iterator  @CTB untested
             seq = self[seqID] # get the 1st sequence
             ch100 = str(seq[:100])
             self._seqtype = guess_seqtype(ch100)
-            return self._seqtype
+
     _cache_max=10000                    # @CTB move? make settable?
     def cacheHint(self, ivalDict, owner):
         """Save a cache hint dict: {id: (start, stop)}.

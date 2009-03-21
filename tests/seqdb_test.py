@@ -31,6 +31,8 @@ class SequenceFileDB_Test(unittest.TestCase):
         "Test setup"
         dnaseq = testutil.datafile('dnaseq.fasta')
         self.db = SequenceFileDB(dnaseq) # contains 'seq1', 'seq2'
+        
+        self.db._weakValueDict.clear()   # clear the cache
 
     def test_len(self):
         assert len(self.db) == 2
