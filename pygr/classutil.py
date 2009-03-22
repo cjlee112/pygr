@@ -402,7 +402,7 @@ class AttrFromTuple(AttributeInterface):
     'getattr from tuple obj'
     try:
         return obj[self.attrDict[attr]]
-    except IndexError:
+    except (IndexError, KeyError):
         if default is not None:
             return default
 

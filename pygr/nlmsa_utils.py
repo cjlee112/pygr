@@ -345,16 +345,12 @@ def get_interval(seq,start,end,ori):
     return ival
 
 
-def read_aligned_coords(alignedCoords, srcDB=None, destDB=None,
+def read_aligned_coords(alignedCoords, srcDB, destDB,
                         alignedIvalsAttrs=dict(idDest='id', startDest='start',
                                                stopDest='stop', oriDest='ori')):
   'read ID,start,stop,ori tuples from alignedCoords, and generate intervals'
   from classutil import AttributeInterface
   getAttr = AttributeInterface(alignedIvalsAttrs) # to extract desired attrs
-  if srcDB is None: # get all seqs from the existing seqDict
-    srcDB = al.seqDict
-  if destDB is None: # use same input set as source
-    destDB = srcDB
   for ivals in alignedCoords:
     if isinstance(ivals, (CoordsGroupStart,CoordsGroupEnd)):
       yield ivals # just pass grouping-info through
@@ -380,6 +376,10 @@ def add_aligned_intervals(al, alignedCoords, srcDB=None, destDB=None,
                           groupIntervals=None, **kwargs):
   '''save a set of aligned intervals to alignment, after applying
   groupIntervals() function if provided.'''
+  if srcDB is None: # get all seqs from the existing seqDict
+    srcDB = al.seqDict
+  if destDB is None: # use same input set as source
+    destDB = srcDB
   alignedIvals = read_aligned_coords(alignedCoords, srcDB, destDB, **kwargs)
   if groupIntervals is not None: # apply grouping function if present
     alignedIvals = groupIntervals(alignedIvals, **kwargs)

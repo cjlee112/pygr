@@ -1,6 +1,6 @@
 import unittest
 from testlib import testutil
-from pygr import cnestedlist, nlmsa_utils
+from pygr import cnestedlist, nlmsa_utils, seqdb
 
 class NestedList_Test(unittest.TestCase):
     "Basic cnestedlist class tests"
@@ -64,12 +64,142 @@ class NLMSA_Test(unittest.TestCase):
         "NLMSA build"
         
         testnlmsa = testutil.tempdatafile('testnlmsa')
-        msa = cnestedlist.NLMSA(testnlmsa ,mode='w', pairwiseMode=True,
+        msa = cnestedlist.NLMSA(testnlmsa, mode='w', pairwiseMode=True,
                                 bidirectional=False)
+
+class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
+    def setUp(self):
+        seqdb_name = testutil.datafile('alignments.fa')
+        self.db = seqdb.SequenceFileDB(seqdb_name)
+
+    def _check_results(self, n):
+        db = self.db
+        
+        a, b, c = db['a'], db['b'], db['c']
+        
+        ival = a[0:8]
+        (result,) = n[ival].keys()
+        assert result == b[0:8]
+
+        ival = a[12:20]
+        (result,) = n[ival].keys()
+        assert result == c[0:8]
+
+        l = sorted(n[a].keys())
+        assert b[0:8] in l
+        assert c[0:8] in l
+
+        
+        
+    def test_simple(self):           # @CTB doesn't work
+        # first set of intervals
+        db = self.db
+
+        ivals = [(('a', 0, 8, 1), ('b', 0, 8, 1),),
+                 (('a', 12, 20, 1), ('c', 0, 8, 1)),]
+
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True)
+
+        n.add_aligned_intervals(alignedIvals=ivals, srcDB=db, destDB=db,
+                                alignedIvalsAttrs=dict(id=0, start=1,
+                                stop=2, idDest=0, startDest=1,
+                                stopDest=2, ori=3, oriDest=3))
+        n.build()
+
+        self._check_results(n)
+
+    def test_simple_no_ori(self):
+        # first set of intervals
+        db = self.db
+
+        ivals = [(('a', 0, 8,), ('b', 0, 8,),),
+                 (('a', 12, 20,), ('c', 0, 8,)),]
+
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True)
+
+        n.add_aligned_intervals(alignedIvals=ivals, srcDB=db, destDB=db,
+                                alignedIvalsAttrs=dict(id=0, start=1,
+                                                       stop=2, idDest=0,
+                                                       startDest=1,stopDest=2))
+        n.build()
+
+        self._check_results(n)
+
+    def test_attr(self):
+        class Bag(object):
+            def __init__(self, **kw):
+                self.__dict__.update(kw)
+
+        # first set of intervals
+        db = self.db
+        a, b, c = db['a'], db['b'], db['c']
+
+        src_ival1 = Bag(id='a', start=0, stop=8, ori=1)
+        dst_ival1 = Bag(id='b', start=0, stop=8, ori=1)
+        
+        src_ival2 = Bag(id='a', start=12, stop=20, ori=1)
+        dst_ival2 = Bag(id='c', start=0, stop=8, ori=1)
+        
+        ivals = [(src_ival1, dst_ival1), (src_ival2, dst_ival2)]
+
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True)
+
+        n.add_aligned_intervals(alignedIvals=ivals, srcDB=db, destDB=db)
+        n.build()
+
+        self._check_results(n)
+
+    def test_single_ival_attr(self):
+        class Bag(object):
+            def __init__(self, **kw):
+                self.__dict__.update(kw)
+
+        # first set of intervals
+        db = self.db
+        a, b, c = db['a'], db['b'], db['c']
+
+        ival1 = Bag(id='a', start=0, stop=8, ori=1,
+                    idDest='b', startDest=0, stopDest=8, stopOri=1)
+        ival2 = Bag(id='a', start=12, stop=20, ori=1,
+                    idDest='c', startDest=0, stopDest=8, oriDest=1)
+        
+        ivals = [ival1, ival2]
+
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True)
+
+        n.add_aligned_intervals(alignedIvals=ivals, srcDB=db, destDB=db,
+                                alignedIvalsAttrs={}) # @CTB empty dict??
+        n.build()
+
+        self._check_results(n)
+
+
+def test_no_seqDict_args(self):
+        class Bag(object):
+            def __init__(self, **kw):
+                self.__dict__.update(kw)
+
+        # first set of intervals
+        db = self.db
+
+        src_ival1 = Bag(id='a', start=0, stop=8, ori=1)
+        dst_ival1 = Bag(id='b', start=0, stop=8, ori=1)
+        
+        src_ival2 = Bag(id='a', start=12, stop=20, ori=1)
+        dst_ival2 = Bag(id='c', start=0, stop=8, ori=1)
+        
+        ivals = [(src_ival1, dst_ival1), (src_ival2, dst_ival2)]
+
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True,
+                              seqDict=db)
+
+        n.add_aligned_intervals(alignedIvals=ivals)
+        n.build()
 
 def get_suite():
     "Returns the testsuite"
-    tests  = [ NestedList_Test, NLMSA_Test ]
+    tests  = [ NestedList_Test, NLMSA_Test,
+               NLMSA_BuildWithAlignedIntervals_Test ]
     return testutil.make_suite(tests)
 
 if __name__ == '__main__':
