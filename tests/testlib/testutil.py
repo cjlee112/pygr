@@ -38,11 +38,7 @@ def change_pygrdatapath(*args):
     os.environ['PYGRDATADOWNLOAD'] = path
     import pygr.Data
 
-def generate_coverage(func, path, *args, **kwds):
-    """
-    Generates code coverage for the function 
-    and places the results in the path
-    """
+def start_coverage():
     import figleaf
     from figleaf import annotate_html
 
@@ -51,17 +47,26 @@ def generate_coverage(func, path, *args, **kwds):
     # needs to be fixed in figleaf
     import logging
     root = logging.getLogger()
+    
     # remove all root handlers
     for hand in root.handlers: 
         root.removeHandler(hand)
 
+    figleaf.start()
+
+def generate_coverage(func, path, *args, **kwds):
+    """
+    Generates code coverage for the function 
+    and places the results in the path
+    """
+    import figleaf
+    from figleaf import annotate_html
+
     if os.path.isdir(path):
         shutil.rmtree(path)       
     
-    figleaf.start() 
     # execute the function itself
     func(*args, **kwds)
-    figleaf.stop()
     
     logger.info('generating coverage')
     coverage = figleaf.get_data().gather_files()
