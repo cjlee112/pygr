@@ -38,22 +38,6 @@ def change_pygrdatapath(*args):
     os.environ['PYGRDATADOWNLOAD'] = path
     import pygr.Data
 
-def start_coverage():
-    import figleaf
-    from figleaf import annotate_html
-
-    # Fix for figleaf misbehaving. It is adding a logger at root level 
-    # and that will add a handler to all subloggers (ours as well)
-    # needs to be fixed in figleaf
-    import logging
-    root = logging.getLogger()
-    
-    # remove all root handlers
-    for hand in root.handlers: 
-        root.removeHandler(hand)
-
-    figleaf.start()
-
 def generate_coverage(func, path, *args, **kwds):
     """
     Generates code coverage for the function 

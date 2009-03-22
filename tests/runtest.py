@@ -69,10 +69,6 @@ if __name__ == '__main__':
     # parse the options
     options, args = parser.parse_args()
 
-    # start coverage recording ASAP, if we want it:
-    if options.coverage:
-        testutil.start_coverage()
-
     # modules: from command line args or all modules
     targets = args or all_tests()
 
