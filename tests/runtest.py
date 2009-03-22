@@ -32,7 +32,8 @@ def run(targets, options):
             mod = __import__( name )
             suite = mod.get_suite()
 
-            runner = unittest.TextTestRunner(verbosity=options.verbosity)
+            runner = unittest.TextTestRunner(verbosity=options.verbosity,
+                                             descriptions=0)
             results = runner.run( suite )
             
             # count tests and errors
