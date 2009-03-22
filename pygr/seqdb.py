@@ -1,11 +1,103 @@
 """
-@CTB
+seqdb contains a set of classes for interacting with sequence databases.
 
-discuss seqLenDict, seqInfoDict.
-discuss caching.
-explain get_bound_subclass
+Primary sequence database classes:
 
-note seqInfoDict must be set before SequenceDB.__init__!
+  - SequenceDB         - base class for sequence databases
+  - SequenceFileDB     - file-based sequence database
+  - PrefixUnionDict    - container to combine multiple sequence databases
+  - XMLRPCSequenceDB   - XML-RPC-accessible sequence database
+
+Extensions:
+
+  - SeqPrefixUnionDict - extends PrefixUnionDict to automatically add seqs
+  - BlastDB            - implements NCBI-style name munging for lookups
+
+Associated sequence classes:
+
+  - FileDBSequence     - sequence associated with a SequenceFileDB
+  - XMLRPCSequence     - sequence associated with a XMLRPCSequenceDB
+
+----
+
+SequenceDB provides some basic behaviors for sequence databases:
+dictionary behavior, an invert operator interface, and caching for
+both sequence objects and sequence intervals.  It also relies on a
+'seqInfoDict' attribute to contain summary information about
+sequences, so that e.g. slice operations can be done without loading
+the entire sequence into memory.  (See below for more info on
+seqInfoDict.)
+
+SequenceFileDB extends SequenceDB to contain a file-based database of
+sequences.  It constructs a seqLenDict that allows direct on-disk lookup
+of sequence intervals.  (See below for more info on seqLenDict.)
+
+PrefixUnionDict provides a unified SequenceDB-like interface to a
+collection of sequence databases by combining the database name with
+the sequence ID into a new sequence id.  For example, the ID
+'genome.chrI' would return the sequence 'chrI' in the 'genome'
+database.  This is particularly handy for situations where you want to
+have seqdbs of multiple sequence types (DNA, protein, annotations,
+etc.) all associated together.
+
+@CTB document XMLRPCSequenceDB.
+@CTB document SeqPrefixUnionDict.
+@CTB document BlastDB.
+
+----
+
+The seqInfoDict interface
+-------------------------
+
+The seqInfoDict attribute of a SequenceDB is a dictionary-like object,
+keyed by sequence IDs, with associated values being an information
+object containing various attributes.  seqInfoDict is essentially an
+optimization that permits other pygr-aware components to access
+information *about* sequences without actually loading the entire
+sequence.
+
+The only required attribute at the moment is 'length', which is
+required by some of the NLMSA code.  However, seqInfoDict is a good
+mechanism for the storage of any summary information on a sequence,
+and so it may be expanded in the future.
+
+The seqLenDict interface
+------------------------
+
+The seqLenDict attribute is specific to a SequenceFileDB, where it
+provides a file-backed storage of length and offset sequence metadata.
+It is used to implement a key optimization in SequenceFileDB, in which
+a sequence's offset within a file is used to read only the required
+part of the sequence into memory.  This optimization is particularly
+important for large sequences, e.g. chromosomes, where reading the
+entire sequence into memory shouldn't be done unless it's necessary.
+
+The seqLenDict is keyed by sequence ID and the associated values are a
+2-tuple (length, offset), where the offset indicates the byte offset
+within the '.pureseq' index file created for each SequenceFileDB.
+
+get_bound_subclass and the 'self.db' attribute
+----------------------------------------------
+
+The SequenceDB constructor calls classutil.get_bound_subclass on its
+itemClass.  What does that do, and what is it for?
+
+get_bound_subclass takes an existing class, makes a new subclass of
+it, binds the variable 'db' to it, and then calls the _init_subclass
+classmethod (if it exists) on the new class.  This has the effect of
+creating a new class for each SequenceDB instance, tied specifically
+to that instance and initialized by the _init_subclass method.
+
+The main effect of this for SequenceDBs is that for any SequenceDB
+descendant, the '.db' attribute is automatically set for each Sequence
+retrieved from the database.
+
+CTB: I think this is an optimization?
+
+Caching
+-------
+
+@CTB discuss caching.
 
 programmer notes:
 
@@ -29,26 +121,32 @@ intro:
    + combining dbs, etc.
    + inverse
 
-Issues:
+@CTB use/abuse of kwargs
+
+Code review issues, short term:
+
  - @CTB get_bound_subclass stuff refers directly to itemClass to set 'db'.
  - @CTB fix 'import *'s
  - @CTB run lint/checker?
- - @CTB use/abuse of kwargs
  - @CTB test _create_seqLenDict
- - @CTB _SeqLenDictSaver could probably be simpler? just combine with
-   _store_seqlen_dict...
-    
+ - @CTB XMLRPCSequenceDB vs SequenceFileDB
    
+Some long term issues:
+
+ - it should be possible to remove _SeqLenDictSaver and just combine its
+   functionality with _store_seqlen_dict.  --titus
+ 
 """
 
 from __future__ import generators
 import sys
 import os
+import UserDict
+import weakref
+
 from sequence import *                  # @CTB
 from sqlgraph import *                  # @CTB
 import classutil
-import UserDict
-import weakref
 from annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
      AnnotationServer, AnnotationClient
 import logger
@@ -87,6 +185,9 @@ class SequenceDB(object, UserDict.DictMixin):
       - cacheHint() system for caching a given set of sequence
         intervals associated with an owner object, which are flushed
         from cache if the owner object is garbage-collected.
+
+    For subclassing, note that self.seqInfoDict must be set before
+    SequenceDB.__init__ is called!
 
     """
     # class to use for database-linked sequences; no default.
@@ -193,7 +294,7 @@ class SequenceDB(object, UserDict.DictMixin):
     
     def iteritems(self):
         for seqID in self:
-            yield seqID,self[seqID]
+            yield seqID, self[seqID]
             
     def __len__(self):
         return len(self.seqInfoDict)
@@ -240,11 +341,6 @@ class _FileDBSeqDescriptor(object):
 class FileDBSequence(SequenceBase):
     """Default sequence object for file-based storage mechanism.
 
-    By default, FileDBSequence uses a seqLenDict, a.k.a. a shelve
-    index of sequence lengths and offsets, to retrieve sequence slices
-    with fseek.  Thus entire chromosomes (for example) do not have to
-    be loaded to retrieve a subslice.
-
     See SequenceFileDB for the associated database class.
 
     In general, you should not create objects from this class directly;
@@ -280,15 +376,18 @@ class FileDBSequence(SequenceBase):
 class SequenceFileDB(SequenceDB):
     """Main class for file-based storage of a sequence database.
 
-    By default, uses FileDBSequence, which implements the seqLenDict
-    method of sequence storage & retrieval.  By specifying a different
-    itemClass, you can change that behavior.
+    By default, SequenceFileDB uses a seqLenDict, a.k.a. a shelve
+    index of sequence lengths and offsets, to retrieve sequence slices
+    with fseek.  Thus entire chromosomes (for example) do not have to
+    be loaded to retrieve a subslice.
 
-    Takes one argument, 'filepath', which should be the name of a
-    FASTA file (or a file whose format is understood by your
-    itemClass).
+    Takes one required argument, 'filepath', which should be the name
+    of a FASTA file (or a file whose format is understood by your
+    custom reader; see 'reader' kw arg, and the _store_seqlen_dict
+    function).
 
-    Also provides db with a seqInfoDict interface based on the seqLenDict.
+    The SequenceFileDB seqInfoDict interface is a wrapper around the
+    seqLenDict created by the __init__ function.
 
     """
     itemClass = FileDBSequence
@@ -988,6 +1087,8 @@ class XMLRPCSequenceDB(SequenceDB):
         except AttributeError:
             self._seqtype = self.server.get_seqtype()
             return self._seqtype
+
+###
 
 def fastaDB_unpickler(klass,srcfile,kwargs):  # @CTB untested
     if klass is BlastDB or klass == 'BlastDB':
