@@ -99,10 +99,13 @@ Caching
 
 @CTB discuss caching.
 
+Pickling sequence databases and sequences
+-----------------------------------------
+
+@CTB document pickling issues.
 programmer notes:
 
 extending SequenceDB
- - init_subclass stuff
  - seqInfoDict, itemclass
  
 extending SequenceFileDB
@@ -121,8 +124,6 @@ intro:
    + combining dbs, etc.
    + inverse
 
-@CTB use/abuse of kwargs
-
 Code review issues, short term:
 
  - @CTB get_bound_subclass stuff refers directly to itemClass to set 'db'.
@@ -134,7 +135,7 @@ Code review issues, short term:
 Some long term issues:
 
  - it should be possible to remove _SeqLenDictSaver and just combine its
-   functionality with _store_seqlen_dict.  --titus
+   functionality with _store_seqlen_dict.  --titus 3/21/09
  
 """
 
