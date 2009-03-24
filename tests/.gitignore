@@ -10,3 +10,4 @@ mega
 build
 *.pureseq
 *.seqlen
+tempdir
