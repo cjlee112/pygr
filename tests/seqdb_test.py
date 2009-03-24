@@ -13,7 +13,37 @@ import gc
 from pygr.annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
     AnnotationServer, AnnotationClient
 
+# utility classes for the SequenceDB tests
+
+_fake_seq = "ATCGAGAGCCAGAATGACGGGACCATTAG"
+class _SimpleFakeSequence(Sequence):
+    def __init__(self, db, id):
+        assert id == "foo"
+        Sequence.__init__(self, _fake_seq, "foo")
+        
+    def __len__(self):
+        return len(self.seq)
+    
+    def strslice(self, start, end):
+        return self.seq[start:end]
+    
+class _SimpleFakeInfoObj(object):
+    def __init__(self, length):
+        self.length = length
+        
+class _SimpleFakeSeqDB(SequenceDB):
+    def __init__(self, *args, **kwargs):
+        self.seqInfoDict = dict(foo=_SimpleFakeInfoObj(len(_fake_seq)))
+        SequenceDB.__init__(self, *args, **kwargs)
+
+###
+        
 class SequenceDB_Test(unittest.TestCase):
+    def test_repr(self):
+        "test the __repr__ function."
+        db = _SimpleFakeSeqDB(itemClass=_SimpleFakeSequence)
+        repr(db)
+            
     def test_create_no_itemclass(self):
         # must supply an itemclass to SequenceDB!
         try:

@@ -318,7 +318,8 @@ class SequenceDB(object, UserDict.DictMixin):
         return key in self.seqInfoDict
     
     def __repr__(self):
-        return "<%s '%s'>" % (self.__class__.__name__, self.filepath)
+        return "<%s '%s'>" % (self.__class__.__name__,
+                              self.itemClass.__class__.__name__)
     
     def clear_cache(self):
         """Empty the cache."""
@@ -415,6 +416,9 @@ class SequenceFileDB(SequenceDB):
         dbname = os.path.basename(filepath)
         SequenceDB.__init__(self, filepath=filepath, dbname=dbname, **kwargs)
 
+    def __repr__(self):
+        return "<%s '%s'>" % (self.__class__.__name__, self.filepath)
+    
     def _create_seqLenDict(self, dictpath, seqpath, reader=None):
         """Create a seqLenDict from 'seqpath' and store in 'dictpath'."""
         seqLenDict = classutil.open_shelve(dictpath, 'n')
