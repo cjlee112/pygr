@@ -12,6 +12,15 @@ Bio = pygrData.Bio
 
 getResource = pygrData._mdb # our metabase interface
 addResource = pygrData._mdb.add_resource
+def addResourceDict(d, layer=None):
+    'queue a dict of name:object pairs for saving to specified db layer'
+    if layer is not None: # use the named metabase specified by layer
+        mdb = pygrData._mdb.zoneDict[layer] # KeyError if layer not found!
+    else: # use default MetabaseList
+        mdb = pygrData._mdb
+    for k,v in d.items(): # queue each resource in the dictionary
+        mdb.add_resource(k, v)
+
 addSchema = pygrData._mdb.add_schema
 deleteResource = pygrData._mdb.delete_resource
 dir = pygrData._mdb.dir
