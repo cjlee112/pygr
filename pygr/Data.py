@@ -230,7 +230,7 @@ class ResourceDBServer(object):
         except KeyError:
             pass
         return ''  # DUMMY RETURN VALUE FOR XMLRPC
-    def dir(self,pattern,matchType,asDict=False,download=False):
+    def dir(self,pattern,asDict=False,matchType='p',download=False):
         'return list or dict of resources matching the specified string'
         db,docs = self.get_db(download)
         if matchType == 'r':
@@ -298,9 +298,9 @@ class ResourceDBClient(object):
     def dir(self,pattern,matchType,asDict=False,download=False):
         'return list or dict of resources matching the specified string'
         if download:
-            return self.server.dir(pattern,matchType,asDict,download)
+            return self.server.dir(pattern,asDict,matchType,download)
         else:
-            return self.server.dir(pattern,matchType,asDict)
+            return self.server.dir(pattern,asDict,matchType)
     __setitem__ = raise_illegal_save # RAISE USEFUL EXPLANATORY ERROR MESSAGE
     __delitem__ = raise_illegal_save
     setschema = raise_illegal_save

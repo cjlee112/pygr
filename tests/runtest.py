@@ -33,11 +33,13 @@ def run(targets, options):
             mod = __import__( name )
             suite = mod.get_suite()
 
-            runner = unittest.TextTestRunner(verbosity=options.verbosity)
+            runner = unittest.TextTestRunner(verbosity=options.verbosity,
+                                             descriptions=0)
             results = runner.run( suite )
             
             # count tests and errors
-            success += results.testsRun
+            success += results.testsRun - \
+                       len(results.errors) - len(results.failures)
             errors  += len(results.errors) + len(results.failures)
 
             # if we're in strict mode stop on errors
@@ -56,9 +58,10 @@ def run(targets, options):
         testutil.warn(message)
 
     # summarize the run
-    testutil.info('=' * 50)
-    testutil.info('%s tests passed, %s tests failed, %s suites skipped' % \
-                  (success, errors, skipped))
+    testutil.info('=' * 59)
+    testutil.info('''\
+%s tests passed, %s tests failed, %s suites skipped; %d total''' % \
+                  (success, errors, skipped, success + errors + skipped))
 
 if __name__ == '__main__':
     # gets the prebuild option parser

@@ -47,22 +47,11 @@ def generate_coverage(func, path, *args, **kwds):
     import figleaf
     from figleaf import annotate_html
 
-    # Fix for figleaf misbehaving. It is adding a logger at root level 
-    # and that will add a handler to all subloggers (ours as well)
-    # needs to be fixed in figleaf
-    import logging
-    root = logging.getLogger()
-    # remove all root handlers
-    for hand in root.handlers: 
-        root.removeHandler(hand)
-
     if os.path.isdir(path):
         shutil.rmtree(path)       
     
-    figleaf.start() 
     # execute the function itself
     func(*args, **kwds)
-    figleaf.stop()
     
     logger.info('generating coverage')
     coverage = figleaf.get_data().gather_files()
@@ -148,8 +137,8 @@ class TestXMLRPCServer(object):
         currdir = os.path.dirname(__file__)
         self.server_script = path_join(currdir, 'pygrdata_server.py')
 
-        self.outname = path_join(tempdir, 'xmlrcp-out.txt')
-        self.errname = path_join(tempdir, 'xmlrcp-err.txt')
+        self.outname = path_join(tempdir, 'xmlrpc-out.txt')
+        self.errname = path_join(tempdir, 'xmlrpc-err.txt')
     
         # start the tread
         thread = threading.Thread(target=self.run_server)
@@ -179,15 +168,20 @@ class TestXMLRPCServer(object):
         # without quoting, IF weird characters are present in TMP or TMPDIR.
         
 
-        cmd = '%s %s %s' % \
-              (sys.executable, self.server_script, flags)
+        cmd = '%s %s %s > %s 2> %s' % \
+              (sys.executable, self.server_script, flags,
+               self.outname, self.errname)
         logger.debug('Starting XML-RPC server: ')
         logger.debug(cmd)
 
         try:
             os.system(cmd)
         finally:
-            pass
+            output = open(self.outname).read()
+            errout = open(self.errname).read()
+
+            logger.debug('XML-RPC server output: %s' % output)
+            logger.debug('XML-RPC server error out: %s' % errout)
 
         logger.debug('server stopped')
     

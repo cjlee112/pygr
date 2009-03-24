@@ -58,6 +58,31 @@ if use_pathfix:
         sys.path = [ base_dir  ] + sys.path
         required_prefix = pygr_source_dir
 
+###
+
+# also, start coverage
+
+def start_coverage():
+    import figleaf
+    from figleaf import annotate_html
+
+    # Fix for figleaf misbehaving. It is adding a logger at root level 
+    # and that will add a handler to all subloggers (ours as well)
+    # needs to be fixed in figleaf
+    import logging
+    root = logging.getLogger()
+    
+    # remove all root handlers
+    for hand in root.handlers: 
+        root.removeHandler(hand)
+
+    figleaf.start()
+
+if options.coverage:
+    start_coverage()
+
+###
+
 try:
     # import the main pygr module
     import pygr
