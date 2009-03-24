@@ -736,7 +736,7 @@ not be ready to do!''' % resID
     def add_schema(self, resID, schemaObj):
         'assign a schema relation object to a pygr.Data resource name'
         l = resID.split('.')
-        schemaPath = SchemaPath('.'.join(l[:-1]), self)
+        schemaPath = SchemaPath(self, '.'.join(l[:-1]))
         setattr(schemaPath, l[-1], schemaObj)
     def list_pending(self):
         return self.get_writer().saver.list_pending()
