@@ -1,7 +1,8 @@
 import os, unittest
 from testlib import testutil
 from pygr.sqlgraph import SQLTable,SQLTableNoCache,getNameCursor,\
-     MapView,GraphView,DBServerInfo,import_sqlite, logger
+     MapView,GraphView,DBServerInfo,import_sqlite
+from pygr import logger
 
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTable
