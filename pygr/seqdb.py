@@ -767,10 +767,10 @@ Set 'trypath' to give a list of directories to search.''' % filepath)
             for id, seq in d.iteritems():
                 yield self.format_id(p, id), seq
 
-    def getName(self, seq):
+    def getName(self, ival):
         """For a given sequence, return a fully qualified name, 'prefix.id'."""
-        path = seq.pathForward
-        return self.dicts[path.db] + self.separator + path.id
+        seq = ival.pathForward # get the top-level sequence object
+        return self.dicts[seq.db] + self.separator + seq.id
 
     def newMemberDict(self, **kwargs):  # @CTB not used; necessary?
         """return a new member dictionary (empty)"""
@@ -798,17 +798,14 @@ but not to a text HeaderFile!''' % k)
     def cacheHint(self, ivalDict, owner=None):  # @CTB untested
         '''save a cache hint dict of {id:(start,stop)}; return ref owner'''
         d={}
-        for id,ival in ivalDict.items(): # EXTRACT SEPARATE SUBDICT FOR EACH prefix
-            prefix=id.split(self.separator)[0] # EXTRACT PREFIX, SEQID
-            seqID=id[len(prefix)+1:]
-            try: # SAVE TO SEPARATE DICTIONARY FOR EACH prefix
-                d[prefix][seqID]=ival
-            except KeyError:
-                d[prefix]={seqID:ival}
+        # extract separate cache hint dict for each prefix
+        for longID,ival in ivalDict.items():
+            prefix, seqID = self.get_prefix_id(longID)
+            d.setdefault(prefix, {})[seqID] = ival
         for prefix,seqDict in d.items():
             try:
-                m=self.prefixDict[prefix].cacheHint
-            except AttributeError: # CAN'T cacheHint, SO JUST IGNORE
+                m = self.prefixDict[prefix].cacheHint
+            except AttributeError: # subdict can't cacheHint(), so just ignore
                 pass
             else:
                 # pass cache hint down to subdictionary
