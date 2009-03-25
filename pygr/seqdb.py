@@ -559,12 +559,13 @@ class _PrefixUnionDictInverse(object):
     def __init__(self, db):
         self.db = db
         
-    def __getitem__(self, seq):
-        path = seq.pathForward
-        db = path.db
-        if db not in self.db.dicts:
+    def __getitem__(self, ival):
+        seq = ival.pathForward # get the top-level sequence object
+        try: # for speed, normal case should execute immediately
+            prefix = self.db.dicts[seq.db]
+        except KeyError:
             # @CTB abstraction boundary violation! keep? how test?
-            anno_seq_attr = getattr(path, '_anno_seq', None)
+            anno_seq_attr = getattr(seq, '_anno_seq', None)
             if anno_seq_attr.db in self.db.dicts:
                 raise KeyError('''\
 this annotation is not in the PrefixUnion, but its sequence is.
@@ -572,9 +573,7 @@ You can get that using its \'sequence\' attribute.''')
             
             raise KeyError('seq not in PrefixUnionDict')
 
-        id = path.id
-        prefix = self.db.dicts[db]
-        return prefix + self.db.separator + str(id)
+        return prefix + self.db.separator + str(seq.id)
     
     def __contains__(self, seq):
         try:
