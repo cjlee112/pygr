@@ -275,7 +275,9 @@ class SequenceDB(object, UserDict.DictMixin):
                 continue # NOT IN THIS CACHE, SO SKIP  @CTB untested
             ival_start, ival_stop = ival[:2]
             if start >= ival_start and stop <= ival_stop: # CONTAINED IN ival
-                if len(ival) != 3:
+                try:
+                    s = ival[2] # get seq string from our cache
+                except IndexError: # use strslice() to retrieve from storage
                     s = seq.strslice(ival_start, ival_stop, useCache=False)
                     ival.append(s)
                     try: # does owner want to reference this cached seq?
@@ -284,9 +286,7 @@ class SequenceDB(object, UserDict.DictMixin):
                         pass # no, so nothing to do
                     else: # let owner control caching in our _weakValueDict
                         save_f(seq)     # # @CTB untested
-                else:
-                    s = ival[2] # GET SEQ STRING FROM OUR CACHE
-                return s[start - ival_start:stop - ival_stop]
+                return s[start - ival_start:stop - ival_start]
         raise IndexError('interval not found in cache') # @CTB untested
 
     # these methods should all be implemented on all SequenceDBs.
