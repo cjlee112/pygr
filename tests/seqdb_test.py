@@ -431,6 +431,20 @@ class PrefixUnionDict_Test(unittest.TestCase):
         assert seq in inversedb
         assert 'foo' not in inversedb
 
+    def test_funny_key(self):
+        "check handling of ID containing multiple separators"
+        dnaseq = testutil.datafile('funnyseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
+        pudb = PrefixUnionDict({ 'prefix' : seqdb })
+        seq = pudb['prefix.seq.1.more']
+
+    def test_funny_key2(self):
+        "check handling of ID containing multiple separators"
+        dnaseq = testutil.datafile('funnyseq.fasta')
+        seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
+        pudb = PrefixUnionDict({ 'prefix' : seqdb })
+        seq = pudb['prefix.seq.2.even.longer']
+
     def test_has_key(self):
         "PrefixUnionDict has key"
         assert self.db.has_key('prefix.seq1')
