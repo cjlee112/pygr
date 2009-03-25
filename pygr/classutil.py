@@ -110,12 +110,12 @@ def lazy_create_invert(klass):
     """
     def invert_fn(self, klass=klass):
         try:
-            inverseObj = self._inverseObj
+            return self._inverse
         except AttributeError:
             # does not exist yet; create & store.
             inverseObj = klass(self)
-            self._inverseObj = inverseObj
-        return inverseObj
+            self._inverse = inverseObj
+            return inverseObj
     
     return invert_fn
 
