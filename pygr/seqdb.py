@@ -695,12 +695,18 @@ Set 'trypath' to give a list of directories to search.''' % filepath)
     def get_prefix_id(self, k):
         """Subdivide a key into a prefix and ID using the given separator."""
         try:
-            t = k.split(self.separator, 2)
+            t = k.split(self.separator, 2) # split into no more than 3 fields
         except AttributeError:
             raise KeyError('key should be a string! ' + repr(k))
-        if len(t) < 2:
+        l = len(t)
+        if l == 2:
+            return t
+        elif l<2:
             raise KeyError('invalid id format; no prefix: ' + k)
-        return t
+        else: # id contains separator character?
+            prefix = t[0] # assume prefix doesn't contain separator @CTB untested
+            seqID = k[len(prefix) + 1:] # skip past prefix
+            return prefix, seqID
         
     def get_subitem(self, d, seqID):
         # try int key first
