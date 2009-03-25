@@ -72,7 +72,6 @@ def select_from_row(row, what):
 
 def init_row_subclass(cls, db):
     'add descriptors for db attributes'
-    cls.db = db # all instances of this class are now bound to this database
     for attr in db.data: # bind all database columns
         if attr == 'id': # handle ID attribute specially
             setattr(cls, attr, cls._idDescriptor(db, attr))
@@ -1690,7 +1689,7 @@ class DBServerInfo(object):
 class MapView(object, UserDict.DictMixin):
     'general purpose 1:1 mapping defined by any SQL query'
     def __init__(self, sourceDB, targetDB, viewSQL, cursor=None,
-                 serverInfo=None):
+                 serverInfo=None, **kwargs):
         self.sourceDB = sourceDB
         self.targetDB = targetDB
         self.viewSQL = viewSQL

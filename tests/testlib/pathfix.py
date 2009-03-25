@@ -34,7 +34,7 @@ pygr_source_dir = path_join(base_dir, 'pygr')
 
 # build specific directories
 os_info = distutils.util.get_platform()
-version = ".".join(platform.python_version_tuple()[:2])
+version = ".".join([str(x) for x in platform.python_version_tuple()[:2]])
 lib_dir  = 'lib.%s-%s' % (os_info, version,)
 temp_dir = 'temp.%s-%s' % (os_info, version,)
 pygr_build_dir = path_join(base_dir, 'build', lib_dir)
@@ -57,6 +57,31 @@ if use_pathfix:
     else:
         sys.path = [ base_dir  ] + sys.path
         required_prefix = pygr_source_dir
+
+###
+
+# also, start coverage
+
+def start_coverage():
+    import figleaf
+    from figleaf import annotate_html
+
+    # Fix for figleaf misbehaving. It is adding a logger at root level 
+    # and that will add a handler to all subloggers (ours as well)
+    # needs to be fixed in figleaf
+    import logging
+    root = logging.getLogger()
+    
+    # remove all root handlers
+    for hand in root.handlers: 
+        root.removeHandler(hand)
+
+    figleaf.start()
+
+if options.coverage:
+    start_coverage()
+
+###
 
 try:
     # import the main pygr module

@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{% set title = 'Pygr Overview' %}
+{% block body %}
+  <h1>Welcome</h1>
+
+  <p>
+    Pygr is open source software designed to make it easy to do powerful sequence and
+    comparative genomics analyses, even with extremely large multi-genome alignments.</p>
+
+  <ul>
+    <li> <b>Bioinformatics tools</b> for sequence analysis and comparative 
+    genomics such as sequence databases, search methods such as BLAST, 
+    repeat-masking, megablast, etc., sequence annotation databases and 
+    annotation query, and sequence alignment datasets. </li>
+
+    <li><b>Data namespace</b> for accessing a given resource with seamless 
+    data relationship management. Easy data sharing that includes transparent 
+    access over network protocols.
+    </li>
+    
+    <li><b>High performance</b> graph representation of interval data</li>
+  
+  </ul>
+ 
+  <h2>Documentation</h2>
+  <table class="contentstable" align="center" style="margin-left: 30px"><tr>
+    
+    <td width="50%">
+      <p class="biglink"><a class="biglink" href="{{ pathto("contents") }}">Contents</a><br/>
+         <span class="linkdescr">a complete overview</span></p>
+      <p class="biglink"><a class="biglink" href="{{ pathto("media") }}">Multimedia</a><br/>
+         <span class="linkdescr">papers, presentations, videos</span></p>
+      <p class="biglink"><a class="biglink" href="{{ pathto("search") }}">Search page</a><br/>
+         <span class="linkdescr">search the documentation</span></p>
+
+    </td>
+    
+    <td width="50%">
+      <p class="biglink"><a class="biglink" href="{{ pathto("guidelist") }}">Recipes and Guides</a><br/>
+         <span class="linkdescr">recipes, guides and tutorials</span></p>
+      <p class="biglink"><a class="biglink" href="{{ pathto("epydoc/index") }}">Pygr API Index</a><br/>
+         <span class="linkdescr">quick access to all documented modules</span></p>
+      <p class="biglink"><a class="biglink" href="{{ pathto("team") }}">Pygr Team</a><br/>
+         <span class="linkdescr">people involved in developing pygr</span></p>
+    </td>
+    
+  </tr></table>
+
+  The Pygr code is accessbile from <a href="http://code.google.com/p/pygr/">Google Code</a>
+
+{% endblock %}

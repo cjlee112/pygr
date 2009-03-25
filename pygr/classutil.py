@@ -214,6 +214,8 @@ def get_bound_subclass(obj, classattr='__class__', subname=None, factories=(),
             locals().update(attrDict)
         for f in factories:
             f(locals())
+    if classattr == 'itemClass' or classattr == 'itemSliceClass':
+        shadowClass.db = obj # the class needs to know its db object
     try: # run subclass initializer if present
         subclass_init = shadowClass._init_subclass
     except AttributeError: # no subclass initializer, so nothing to do

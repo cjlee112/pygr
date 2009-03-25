@@ -10,6 +10,8 @@ from annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
 
 class SQLSequence(SQLRow,SequenceBase):
     "Transparent access to a DB row representing a sequence; no caching."
+    # use this as an itemClass for SQLTable
+    # do not use this with SequenceDB, which cannot act as its own seqInfoDict!
     #@classmethod # decorators don't work prior to Python 2.4
     def _init_subclass(cls, db, **kwargs):
         db.seqInfoDict = db # db will act as its own seqInfoDict
@@ -122,51 +124,23 @@ class FileDBSequence(SequenceBase):
     '''Our standard sequence storage mechanism, utilizing
     a shelve index of lengths and offsets, and fseek access to slices
     of sequence stored in a file.'''
-    seq=FileDBSeqDescriptor()
+    seq = FileDBSeqDescriptor()
     __reduce__ = classutil.item_reducer
-    #@classmethod # decorators don't work prior to Python 2.4
-    def _init_subclass(cls, db, filepath, **kwargs):
-        '''initialize our indexes if needed, and provide db with a
-        seqInfoDict attribute for looking up length and offset info.
-        Open or build seqLenDict if needed'''
-        cls.db = db # all instances of this class are now bound to this database
-        from dbfile import NoSuchFileError
-        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
-            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
-        except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
-            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
-            import sys
-            print >>sys.stderr,'Building sequence length index...'
-            store_seqlen_dict(db.seqLenDict, filepath, **kwargs)
-            db.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
-            db.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
-        db.seqInfoDict = SeqLenDictWrapper(db) # standard interface
-    _init_subclass = classmethod(_init_subclass)
-    def __init__(self,db,id):
-        self.id=id
+    def __init__(self, db, id):
+        self.id = id
         SequenceBase.__init__(self)
-        self.checkID() # RAISE KeyError IF THIS SEQ NOT IN db
+        len(self) # RAISE KeyError IF THIS SEQ NOT IN db
     def __len__(self):
         "Use persistent storage of sequence lengths to avoid reading whole sequence"
         return self.db.seqLenDict[self.id][0]
-    def checkID(self):
-        'check whether this seq ID actually present in the DB, KeyError if not'
-        return self.db.seqLenDict[self.id][0]
-    def strslice(self,start,end,useCache=True):
+    def strslice(self, start, end, useCache=True):
         "Efficient access to slice of a sequence, useful for huge contigs"
         if useCache:
             try:
                 return self.db.strsliceCache(self,start,end)
             except IndexError: # NOT FOUND IN CACHE
                 pass # JUST USE OUR REGULAR METHOD
-        try:
-            ifile=self.db._pureseq
-        except AttributeError:
-            ifile = file(self.db.filepath + '.pureseq', 'rb') # binary mode
-            self.db._pureseq = ifile # but text mode probably also OK...
-        ifile.seek(self.db.seqLenDict[self.id][1]+start)
-        return ifile.read(end-start)
-    
+        return self.db.strslice(self.id, start, end)
 
 class SequenceDBInverse(object):
     'implements trivial inverse mapping seq --> id'
@@ -318,17 +292,40 @@ class SequenceFileDB(SequenceDB):
     _pickleAttrs = SequenceDB._pickleAttrs.copy()
     _pickleAttrs['filepath'] = 0
     def __init__(self, filepath=None, **kwargs):
+        '''initialize our indexes if needed, and provide db with a
+        seqInfoDict attribute for looking up length and offset info.
+        Open or build seqLenDict if needed'''
         if filepath is None:
             try: # get filepath from ifile arg
                 filepath = kwargs['ifile'].name
             except (KeyError, AttributeError):
                 raise TypeError("unable to obtain a filename")
         self.filepath = classutil.SourceFileName(str(filepath))
+        from dbfile import NoSuchFileError
+        try: # THIS WILL FAIL IF SHELVE NOT ALREADY PRESENT...
+            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        except NoSuchFileError: # BUILD: READ ALL SEQ LENGTHS, STORE IN PERSIST DICT
+            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','n') # NEW EMPTY FILE
+            import sys
+            print >>sys.stderr,'Building sequence length index...'
+            store_seqlen_dict(self.seqLenDict, filepath, **kwargs)
+            self.seqLenDict.close() # FORCE IT TO WRITE DATA TO DISK
+            self.seqLenDict = classutil.open_shelve(filepath+'.seqlen','r') # READ-ONLY
+        self.seqInfoDict = SeqLenDictWrapper(self) # standard interface
         SequenceDB.__init__(self, filepath=filepath,
                             dbname=os.path.basename(filepath), **kwargs)
         try: # signal that we're done constructing, by closing the file object
             kwargs['ifile'].close()
         except (KeyError, AttributeError): pass
+    def strslice(self, seqID, start, end):
+        "Efficient access to slice of a sequence, useful for huge contigs"
+        try:
+            ifile = self._pureseq
+        except AttributeError:
+            ifile = file(self.filepath + '.pureseq', 'rb') # binary mode
+            self._pureseq = ifile # but text mode probably also OK...
+        ifile.seek(self.seqLenDict[seqID][1] + start)
+        return ifile.read(end - start)
 
 class BlastDB(SequenceFileDB):
     '''Deprecated interface provided for backwards compatibility.
@@ -738,7 +735,7 @@ directly as the seqDict argument to the NLMSA constructor.''' % id)
 
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
-    xmlrpc_methods = dict(getSeqLen=0, strslice=0, getSeqLenDict=0,
+    xmlrpc_methods = dict(getSeqLen=0, get_strslice=0, getSeqLenDict=0,
                           get_db_size=0, get_seqtype=0)
     def getSeqLen(self,id):
         'get sequence length, or -1 if not found'
@@ -754,7 +751,7 @@ class BlastDBXMLRPC(BlastDB):
         return d # XML-RPC CANNOT HANDLE INT > 2 GB, SO FORCED TO CONVERT...
     def get_db_size(self):
         return len(self)
-    def strslice(self,id,start,stop):
+    def get_strslice(self,id,start,stop):
         'return string sequence for specified interval in the specified sequence'
         if start<0: # HANDLE NEGATIVE ORIENTATION
             return str((-(self[id]))[-stop:-start])
@@ -768,19 +765,10 @@ class BlastDBXMLRPC(BlastDB):
     
 class XMLRPCSequence(SequenceBase):
     "Represents a sequence in a blast database, accessed via XMLRPC"
-    #@classmethod # decorators don't work prior to Python 2.4
-    def _init_subclass(cls, db, url, name, **kwargs):
-        import coordinator
-        db.server = coordinator.get_connection(url,name)
-        db.url = url
-        db.name = name
-        db.seqInfoDict = SeqLenDictWrapper(db)
-    _init_subclass = classmethod(_init_subclass)
     def __init__(self, db, id):
         self.length = db.server.getSeqLen(id)
         if self.length<=0:
             raise KeyError('%s not in this database' % id)
-        self.db = db
         self.id = id
         SequenceBase.__init__(self)
     def strslice(self,start,end,useCache=True):
@@ -790,7 +778,7 @@ class XMLRPCSequence(SequenceBase):
                 return self.db.strsliceCache(self,start,end)
             except IndexError: # NOT FOUND IN CACHE
                 pass # JUST USE OUR REGULAR XMLRPC METHOD
-        return self.db.server.strslice(self.id,start,end) # GET FROM XMLRPC
+        return self.db.server.get_strslice(self.id,start,end) # GET FROM XMLRPC
     def __len__(self):
         return self.length
 
@@ -810,6 +798,13 @@ class XMLRPCSequenceDB(SequenceDB):
     'XMLRPC client: access sequence database over XMLRPC'
     itemClass = XMLRPCSequence # sequence storage interface
     seqLenDict = XMLRPCSeqLenDescr('seqLenDict') # INTERFACE TO SEQLENDICT
+    def __init__(self, url, name, *args, **kwargs):
+        import coordinator
+        self.server = coordinator.get_connection(url, name)
+        self.url = url
+        self.name = name
+        self.seqInfoDict = SeqLenDictWrapper(self)
+        SequenceDB.__init__(self, *args, **kwargs)
     def __getstate__(self): # DO NOT pickle self.itemClass! We provide our own.
         return dict(url=self.url, name=self.name) # just need XMLRPC info
     def __len__(self):
