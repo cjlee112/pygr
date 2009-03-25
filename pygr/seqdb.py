@@ -300,16 +300,18 @@ class SequenceDB(object, UserDict.DictMixin):
     def __len__(self):
         return len(self.seqInfoDict)
     
-    def __getitem__(self, id):
+    def __getitem__(self, seqID):
         """Retrieve sequence by id, using cache if available."""
-        s = self._weakValueDict.get(id)
-        if s is None:                   # not in cache?  try loading.
+        try: # for speed, default case (cache hit) should return immediately
+            return self._weakValueDict[seqID]
+        except KeyError: # not in cache?  try loading.
             try:
-                s = self.itemClass(self, id)
+                s = self.itemClass(self, seqID)
             except KeyError:
-                raise KeyError, "no key '%s' in database %s" % (id, repr(self))
-            self._weakValueDict[id] = s # save in cache.
-        return s
+                raise KeyError("no key '%s' in database %s" 
+                               % (seqID, repr(self)))
+            self._weakValueDict[seqID] = s # save in cache.
+            return s
     
     def keys(self):
         return self.seqInfoDict.keys()
