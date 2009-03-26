@@ -2,8 +2,8 @@
 # python protest.py dm2_download_megatest.py
 
 from pygr import nlmsa_utils
-from nosebase import get_pygr_data_path
-import os
+import pygr.Data
+import os, time
 
 def rm_recursive(top):
     'recursively remove top and everything in it!'
@@ -27,7 +27,7 @@ class NLMSADownload_Test(object):
     def setup(self):
         'create pygr.Data entries for all NLMSAs on biodb/PYGRDATA site'
         os.mkdir(self.testDir)
-        pygrData = get_pygr_data_path(self.pygrdatapath)
+        pygr.Data.update(self.pygrdatapath) # set our desired path
         from pygr.apps.catalog_downloads import save_NLMSA_downloaders
         save_NLMSA_downloaders(self.url)
     ## def setup(self):
@@ -45,11 +45,14 @@ class NLMSADownload_Test(object):
         'test building the NLMSA, and a simple query'
         os.environ['PYGRDATADOWNLOAD'] = self.testDir
         os.environ['PYGRDATABUILDDIR'] = self.testDir
-        pygrData = get_pygr_data_path(self.pygrdatapath) # reload rsrc db
-        pygrData.Bio.MSA.UCSC.dm2_multiz9way() # build it!
-        pygrData.save() # save the built resources
-        pygrData = get_pygr_data_path(self.pygrdatapath) # reload rsrc db
-        msa = pygrData.Bio.MSA.UCSC.dm2_multiz9way() # already built
+        t = time.time()
+        pygr.Data.Bio.MSA.UCSC.dm2_multiz9way() # build it!
+        t1 = time.time() - t # 1st build time
+        pygr.Data.clear_cache() # reload rsrc db
+        t = time.time()
+        msa = pygr.Data.Bio.MSA.UCSC.dm2_multiz9way() # already built
+        t2 = time.time() - t # 2nd request time
+        assert t2 < t1/3., 'second request took too long!'
         chr4 = msa.seqDict['dm2.chr4']
         result = msa[chr4[:10000]]
         assert len(result) == 9

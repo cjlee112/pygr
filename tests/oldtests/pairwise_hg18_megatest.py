@@ -1,5 +1,6 @@
 
 import ConfigParser, sys, os, string, glob
+import pygr.Data
 
 config = ConfigParser.ConfigParser({'testOutputBaseDir' : '.', 'smallSampleKey': ''})
 config.read([ os.path.expanduser('~/.pygrrc'), os.path.expanduser('~/pygr.cfg'), 'pygrrc', 'pygr.cfg' ])	# FIXME: make this OS-dependent?
@@ -52,13 +53,12 @@ class PygrBuildNLMSAMegabase(object):
             open(tmpFileName, 'w').write('A'*1024*1024) # WRITE 1MB FILE FOR TESTING
         except:
             raise IOError
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
+        pygr.Data.update(self.path)
         from pygr import seqdb
         for orgstr in msaSpeciesList:
             genome = seqdb.BlastDB(os.path.join(seqDir, orgstr))
             genome.__doc__ = docStringDict[orgstr]
-            pygr.Data.getResource.addResource('TEST.Seq.Genome.' + orgstr, genome)
+            pygr.Data.addResource('TEST.Seq.Genome.' + orgstr, genome)
         pygr.Data.save()
     def copyFile(self, filename): # COPY A FILE INTO TEST DIRECTORY
         newname = os.path.join(self.path, os.path.basename(filename))
@@ -75,14 +75,10 @@ class PygrBuildNLMSAMegabase(object):
 
 class Build_Test(PygrBuildNLMSAMegabase):
     def seqdb_test(self): # CHECK PYGR.DATA CONTENTS
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         l = pygr.Data.dir('TEST')
         preList = ['TEST.Seq.Genome.' + orgstr for orgstr in msaSpeciesList]
         assert l == preList
     def build_test(self): # BUILD NLMSA AND QUERY RESULT COMPARISON
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         from pygr import seqdb, cnestedlist
         genomedict = {}
         for orgstr in msaSpeciesList:
@@ -98,7 +94,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         msa1 = cnestedlist.NLMSA(msaname, 'w', uniondict, axtFiles = axtlist, maxlen = 536870912, maxint = 22369620)
         msa1.save_seq_dict()
         msa1.__doc__ = 'TEST NLMSA for hg18 pairwise5way'
-        pygr.Data.getResource.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
+        pygr.Data.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
         pygr.Data.save()
         msa = pygr.Data.getResource('TEST.MSA.UCSC.hg18_pairwise5way')
         outfileName = os.path.join(testInputDir, 'splicesite_hg18%s.txt' % smallSamplePostfix)
@@ -162,7 +158,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
 
         msa1 = cnestedlist.NLMSA(msaname, 'r')
         msa1.__doc__ = 'TEST NLMSA for hg18 pairwise5way'
-        pygr.Data.getResource.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
+        pygr.Data.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
         pygr.Data.save()
         msa = pygr.Data.getResource('TEST.MSA.UCSC.hg18_pairwise5way')
         newOutputName = 'splicesite_new2.txt'

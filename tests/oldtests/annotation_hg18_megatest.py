@@ -1,5 +1,7 @@
 
 import ConfigParser, sys, os, string
+from pygr.mapping import Collection
+import pygr.Data
 
 config = ConfigParser.ConfigParser({'testOutputBaseDir' : '.', 'smallSampleKey': ''})
 config.read([ os.path.expanduser('~/.pygrrc'), os.path.expanduser('~/pygr.cfg'), 'pygrrc', 'pygr.cfg' ])	# FIXME: make this OS-dependent?
@@ -80,13 +82,12 @@ class PygrBuildNLMSAMegabase(object):
             open(tmpFileName, 'w').write('A'*1024*1024) # WRITE 1MB FILE FOR TESTING
         except:
             raise IOError
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
+        pygr.Data.update(self.path)
         from pygr import seqdb
         for orgstr in msaSpeciesList:
             genome = seqdb.BlastDB(os.path.join(seqDir, orgstr))
             genome.__doc__ = docStringDict[orgstr]
-            pygr.Data.getResource.addResource('TEST.Seq.Genome.' + orgstr, genome)
+            pygr.Data.addResource('TEST.Seq.Genome.' + orgstr, genome)
         pygr.Data.save()
     def copyFile(self, filename): # COPY A FILE INTO TEST DIRECTORY
         newname = os.path.join(self.path, os.path.basename(filename))
@@ -103,18 +104,14 @@ class PygrBuildNLMSAMegabase(object):
 
 class Build_Test(PygrBuildNLMSAMegabase):
     def seqdb_test(self): # CHECK PYGR.DATA CONTENTS
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         l = pygr.Data.dir('TEST')
         preList = ['TEST.Seq.Genome.' + orgstr for orgstr in msaSpeciesList]
         assert l == preList
     def collectionannot_test(self): # BUILD ANNOTATION DB FROM FILE
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         from pygr import seqdb, cnestedlist, sqlgraph
         hg18 = pygr.Data.getResource('TEST.Seq.Genome.hg18')
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS
-        exon_slices = pygr.Data.Collection(filename = os.path.join(self.path, 'refGene_exonAnnot_hg18.cdb'), \
+        exon_slices = Collection(filename = os.path.join(self.path, 'refGene_exonAnnot_hg18.cdb'), \
             intKeys = True, mode = 'c', writeback = False) # ONLY C
         exon_db = seqdb.AnnotationDB(exon_slices, hg18,
                                sliceAttrDict = dict(id = 0, exon_id = 1, orientation = 2,
@@ -131,14 +128,14 @@ class Build_Test(PygrBuildNLMSAMegabase):
         exon_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         exon_db.__doc__ = 'Exon Annotation Database for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.hg18.exons', exon_db)
+        pygr.Data.addResource('TEST.Annotation.hg18.exons', exon_db)
         msa.__doc__ = 'NLMSA Exon for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.hg18.exons', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.hg18.exons', msa)
         exon_schema = pygr.Data.ManyToManyRelation(hg18, exon_db, bindAttrs = ('exon1',))
         exon_schema.__doc__ = 'Exon Schema for hg18'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.hg18.exons', exon_schema)
         # BUILD ANNOTATION DATABASE FOR REFSEQ SPLICES
-        splice_slices = pygr.Data.Collection(filename = os.path.join(self.path, 'refGene_spliceAnnot_hg18.cdb'), \
+        splice_slices = Collection(filename = os.path.join(self.path, 'refGene_spliceAnnot_hg18.cdb'), \
             intKeys = True, mode = 'c', writeback = False) # ONLY C
         splice_db = seqdb.AnnotationDB(splice_slices, hg18,
                                sliceAttrDict = dict(id = 0, splice_id = 1, orientation = 2,
@@ -155,14 +152,14 @@ class Build_Test(PygrBuildNLMSAMegabase):
         splice_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         splice_db.__doc__ = 'Splice Annotation Database for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.hg18.splices', splice_db)
+        pygr.Data.addResource('TEST.Annotation.hg18.splices', splice_db)
         msa.__doc__ = 'NLMSA Splice for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.hg18.splices', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.hg18.splices', msa)
         splice_schema = pygr.Data.ManyToManyRelation(hg18, splice_db, bindAttrs = ('splice1',))
         splice_schema.__doc__ = 'Splice Schema for hg18'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.hg18.splices', splice_schema)
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS
-        cds_slices = pygr.Data.Collection(filename = os.path.join(self.path, 'refGene_cdsAnnot_hg18.cdb'), \
+        cds_slices = Collection(filename = os.path.join(self.path, 'refGene_cdsAnnot_hg18.cdb'), \
             intKeys = True, mode = 'c', writeback = False) # ONLY C
         cds_db = seqdb.AnnotationDB(cds_slices, hg18,
                                sliceAttrDict = dict(id = 0, cds_id = 1, orientation = 2,
@@ -179,14 +176,14 @@ class Build_Test(PygrBuildNLMSAMegabase):
         cds_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         cds_db.__doc__ = 'CDS Annotation Database for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.hg18.cdss', cds_db)
+        pygr.Data.addResource('TEST.Annotation.hg18.cdss', cds_db)
         msa.__doc__ = 'NLMSA CDS for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.hg18.cdss', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.hg18.cdss', msa)
         cds_schema = pygr.Data.ManyToManyRelation(hg18, cds_db, bindAttrs = ('cds1',))
         cds_schema.__doc__ = 'CDS Schema for hg18'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.hg18.cdss', cds_schema)
         # BUILD ANNOTATION DATABASE FOR MOST CONSERVED ELEMENTS FROM UCSC
-        ucsc_slices = pygr.Data.Collection(filename = os.path.join(self.path, 'phastConsElements28way_hg18.cdb'), \
+        ucsc_slices = Collection(filename = os.path.join(self.path, 'phastConsElements28way_hg18.cdb'), \
             intKeys = True, mode = 'c', writeback = False) # ONLY C
         ucsc_db = seqdb.AnnotationDB(ucsc_slices, hg18,
                                sliceAttrDict = dict(id = 0, ucsc_id = 1, orientation = 2,
@@ -203,14 +200,14 @@ class Build_Test(PygrBuildNLMSAMegabase):
         ucsc_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         ucsc_db.__doc__ = 'Most Conserved Elements for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.hg18.mostconserved', ucsc_db)
+        pygr.Data.addResource('TEST.Annotation.UCSC.hg18.mostconserved', ucsc_db)
         msa.__doc__ = 'NLMSA for Most Conserved Elements for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.NLMSA.hg18.mostconserved', msa)
+        pygr.Data.addResource('TEST.Annotation.UCSC.NLMSA.hg18.mostconserved', msa)
         ucsc_schema = pygr.Data.ManyToManyRelation(hg18, ucsc_db, bindAttrs = ('element1',))
         ucsc_schema.__doc__ = 'Schema for UCSC Most Conserved Elements for hg18'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.hg18.mostconserved', ucsc_schema)
         # BUILD ANNOTATION DATABASE FOR SNP126 FROM UCSC
-        snp_slices = pygr.Data.Collection(filename = os.path.join(self.path, 'snp126_hg18.cdb'), \
+        snp_slices = Collection(filename = os.path.join(self.path, 'snp126_hg18.cdb'), \
                                           intKeys = True, protocol = 2, mode = 'c', writeback = False) # ONLY C
         snp_db = seqdb.AnnotationDB(snp_slices, hg18,
                                sliceAttrDict = dict(id = 0, snp_id = 1, orientation = 2, gene_id = 3, start = 4,
@@ -229,14 +226,14 @@ class Build_Test(PygrBuildNLMSAMegabase):
         snp_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         snp_db.__doc__ = 'SNP126 for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.hg18.snp126', snp_db)
+        pygr.Data.addResource('TEST.Annotation.UCSC.hg18.snp126', snp_db)
         msa.__doc__ = 'NLMSA for SNP126 for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.NLMSA.hg18.snp126', msa)
+        pygr.Data.addResource('TEST.Annotation.UCSC.NLMSA.hg18.snp126', msa)
         snp_schema = pygr.Data.ManyToManyRelation(hg18, snp_db, bindAttrs = ('snp1',))
         snp_schema.__doc__ = 'Schema for UCSC SNP126 for hg18'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.hg18.snp126', snp_schema)
         pygr.Data.save()
-        reload(pygr.Data)
+        pygr.Data.clear_cache()
 
         # QUERY TO EXON AND SPLICES ANNOTATION DATABASE
         hg18 = pygr.Data.getResource('TEST.Seq.Genome.hg18')
@@ -499,8 +496,6 @@ class Build_Test(PygrBuildNLMSAMegabase):
         assert md5old.digest() == md5new.digest() # MD5 COMPARISON INSTEAD OF COMPARING EACH CONTENTS
 
     def mysqlannot_test(self): # BUILD ANNOTATION DB FROM MYSQL
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         from pygr import seqdb, cnestedlist, sqlgraph
         hg18 = pygr.Data.getResource('TEST.Seq.Genome.hg18')
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS: MYSQL VERSION
@@ -516,9 +511,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         exon_slices.clear_cache()
         msa.build()
         exon_db.__doc__ = 'SQL Exon Annotation Database for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.SQL.hg18.exons', exon_db)
+        pygr.Data.addResource('TEST.Annotation.SQL.hg18.exons', exon_db)
         msa.__doc__ = 'SQL NLMSA Exon for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.SQL.hg18.exons', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.SQL.hg18.exons', msa)
         exon_schema = pygr.Data.ManyToManyRelation(hg18, exon_db, bindAttrs = ('exon2',))
         exon_schema.__doc__ = 'SQL Exon Schema for hg18'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.SQL.hg18.exons', exon_schema)
@@ -535,9 +530,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         splice_slices.clear_cache()
         msa.build()
         splice_db.__doc__ = 'SQL Splice Annotation Database for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.SQL.hg18.splices', splice_db)
+        pygr.Data.addResource('TEST.Annotation.SQL.hg18.splices', splice_db)
         msa.__doc__ = 'SQL NLMSA Splice for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.SQL.hg18.splices', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.SQL.hg18.splices', msa)
         splice_schema = pygr.Data.ManyToManyRelation(hg18, splice_db, bindAttrs = ('splice2',))
         splice_schema.__doc__ = 'SQL Splice Schema for hg18'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.SQL.hg18.splices', splice_schema)
@@ -554,9 +549,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         cds_slices.clear_cache()
         msa.build()
         cds_db.__doc__ = 'SQL CDS Annotation Database for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.SQL.hg18.cdss', cds_db)
+        pygr.Data.addResource('TEST.Annotation.SQL.hg18.cdss', cds_db)
         msa.__doc__ = 'SQL NLMSA CDS for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.SQL.hg18.cdss', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.SQL.hg18.cdss', msa)
         cds_schema = pygr.Data.ManyToManyRelation(hg18, cds_db, bindAttrs = ('cds2',))
         cds_schema.__doc__ = 'SQL CDS Schema for hg18'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.SQL.hg18.cdss', cds_schema)
@@ -573,9 +568,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         ucsc_slices.clear_cache()
         msa.build()
         ucsc_db.__doc__ = 'SQL Most Conserved Elements for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.SQL.hg18.mostconserved', ucsc_db)
+        pygr.Data.addResource('TEST.Annotation.UCSC.SQL.hg18.mostconserved', ucsc_db)
         msa.__doc__ = 'SQL NLMSA for Most Conserved Elements for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.NLMSA.SQL.hg18.mostconserved', msa)
+        pygr.Data.addResource('TEST.Annotation.UCSC.NLMSA.SQL.hg18.mostconserved', msa)
         ucsc_schema = pygr.Data.ManyToManyRelation(hg18, ucsc_db, bindAttrs = ('element2',))
         ucsc_schema.__doc__ = 'SQL Schema for UCSC Most Conserved Elements for hg18'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.SQL.hg18.mostconserved', ucsc_schema)
@@ -595,14 +590,14 @@ class Build_Test(PygrBuildNLMSAMegabase):
         snp_slices.clear_cache()
         msa.build()
         snp_db.__doc__ = 'SQL SNP126 for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.SQL.hg18.snp126', snp_db)
+        pygr.Data.addResource('TEST.Annotation.UCSC.SQL.hg18.snp126', snp_db)
         msa.__doc__ = 'SQL NLMSA for SNP126 for hg18'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.NLMSA.SQL.hg18.snp126', msa)
+        pygr.Data.addResource('TEST.Annotation.UCSC.NLMSA.SQL.hg18.snp126', msa)
         snp_schema = pygr.Data.ManyToManyRelation(hg18, snp_db, bindAttrs = ('snp2',))
         snp_schema.__doc__ = 'SQL Schema for UCSC SNP126 for hg18'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.SQL.hg18.snp126', snp_schema)
         pygr.Data.save()
-        reload(pygr.Data)
+        pygr.Data.clear_cache()
 
         # QUERY TO EXON AND SPLICES ANNOTATION DATABASE
         hg18 = pygr.Data.getResource('TEST.Seq.Genome.hg18')
