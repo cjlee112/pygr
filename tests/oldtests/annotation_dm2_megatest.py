@@ -1,6 +1,7 @@
 
 import sys, os, string
 from pygr.mapping import Collection
+import pygr.Data
 
 seqDir = '/result/pygr_megatest/seq_data' # SEQDB.BLASTDB
 msaDir = '/result/pygr_megatest/maf_test' # PRE BUILT NLMSA
@@ -55,8 +56,7 @@ class PygrBuildNLMSAMegabase(object):
             open(tmpFileName, 'w').write('A'*1024*1024) # WRITE 1MB FILE FOR TESTING
         except:
             raise IOError
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
+        pygr.Data.update(self.path)
         from pygr import seqdb
         for orgstr in msaSpeciesList:
             genome = seqdb.BlastDB(os.path.join(seqDir, orgstr))
@@ -78,14 +78,10 @@ class PygrBuildNLMSAMegabase(object):
 
 class Build_Test(PygrBuildNLMSAMegabase):
     def seqdb_test(self): # CHECK PYGR.DATA CONTENTS
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         l = pygr.Data.dir('TEST')
         preList = ['TEST.Seq.Genome.' + orgstr for orgstr in msaSpeciesList]
         assert l == preList
     def collectionannot_test(self): # BUILD ANNOTATION DB FROM FILE
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         from pygr import seqdb, cnestedlist, sqlgraph
         dm2 = pygr.Data.getResource('TEST.Seq.Genome.dm2')
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS
@@ -300,8 +296,6 @@ class Build_Test(PygrBuildNLMSAMegabase):
         assert md5old.digest() == md5new.digest() # MD5 COMPARISON INSTEAD OF COMPARING EACH CONTENTS
 
     def mysqlannot_test(self): # BUILD ANNOTATION DB FROM MYSQL
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         from pygr import seqdb, cnestedlist, sqlgraph
         dm2 = pygr.Data.getResource('TEST.Seq.Genome.dm2')
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS: MYSQL VERSION
