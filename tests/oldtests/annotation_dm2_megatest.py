@@ -60,7 +60,7 @@ class PygrBuildNLMSAMegabase(object):
         for orgstr in msaSpeciesList:
             genome = seqdb.BlastDB(os.path.join(seqDir, orgstr))
             genome.__doc__ = docStringDict[orgstr]
-            pygr.Data.getResource.addResource('TEST.Seq.Genome.' + orgstr, genome)
+            pygr.Data.addResource('TEST.Seq.Genome.' + orgstr, genome)
         pygr.Data.save()
     def copyFile(self, filename): # COPY A FILE INTO TEST DIRECTORY
         newname = os.path.join(self.path, os.path.basename(filename))
@@ -106,9 +106,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         exon_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         exon_db.__doc__ = 'Exon Annotation Database for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.dm2.exons', exon_db)
+        pygr.Data.addResource('TEST.Annotation.dm2.exons', exon_db)
         msa.__doc__ = 'NLMSA Exon for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.dm2.exons', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.dm2.exons', msa)
         exon_schema = pygr.Data.ManyToManyRelation(dm2, exon_db, bindAttrs = ('exon1',))
         exon_schema.__doc__ = 'Exon Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.dm2.exons', exon_schema)
@@ -131,9 +131,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         splice_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         splice_db.__doc__ = 'Splice Annotation Database for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.dm2.splices', splice_db)
+        pygr.Data.addResource('TEST.Annotation.dm2.splices', splice_db)
         msa.__doc__ = 'NLMSA Splice for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.dm2.splices', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.dm2.splices', msa)
         splice_schema = pygr.Data.ManyToManyRelation(dm2, splice_db, bindAttrs = ('splice1',))
         splice_schema.__doc__ = 'Splice Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.dm2.splices', splice_schema)
@@ -156,9 +156,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         ucsc_slices.close() # SHELVE SHOULD BE EXPLICITLY CLOSED IN ORDER TO SAVE CURRENT CONTENTS
         msa.build() # FINALIZE GENOME ALIGNMENT INDEXES
         ucsc_db.__doc__ = 'Most Conserved Elements for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.dm2.mostconserved', ucsc_db)
+        pygr.Data.addResource('TEST.Annotation.UCSC.dm2.mostconserved', ucsc_db)
         msa.__doc__ = 'NLMSA for Most Conserved Elements for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.NLMSA.dm2.mostconserved', msa)
+        pygr.Data.addResource('TEST.Annotation.UCSC.NLMSA.dm2.mostconserved', msa)
         ucsc_schema = pygr.Data.ManyToManyRelation(dm2, ucsc_db, bindAttrs = ('element1',))
         ucsc_schema.__doc__ = 'Schema for UCSC Most Conserved Elements for dm2'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.dm2.mostconserved', ucsc_schema)
@@ -317,9 +317,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         exon_slices.clear_cache()
         msa.build()
         exon_db.__doc__ = 'SQL Exon Annotation Database for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.SQL.dm2.exons', exon_db)
+        pygr.Data.addResource('TEST.Annotation.SQL.dm2.exons', exon_db)
         msa.__doc__ = 'SQL NLMSA Exon for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.SQL.dm2.exons', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.SQL.dm2.exons', msa)
         exon_schema = pygr.Data.ManyToManyRelation(dm2, exon_db, bindAttrs = ('exon2',))
         exon_schema.__doc__ = 'SQL Exon Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.SQL.dm2.exons', exon_schema)
@@ -337,9 +337,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         splice_slices.clear_cache()
         msa.build()
         splice_db.__doc__ = 'SQL Splice Annotation Database for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.SQL.dm2.splices', splice_db)
+        pygr.Data.addResource('TEST.Annotation.SQL.dm2.splices', splice_db)
         msa.__doc__ = 'SQL NLMSA Splice for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.NLMSA.SQL.dm2.splices', msa)
+        pygr.Data.addResource('TEST.Annotation.NLMSA.SQL.dm2.splices', msa)
         splice_schema = pygr.Data.ManyToManyRelation(dm2, splice_db, bindAttrs = ('splice2',))
         splice_schema.__doc__ = 'SQL Splice Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.SQL.dm2.splices', splice_schema)
@@ -357,9 +357,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
         ucsc_slices.clear_cache()
         msa.build()
         ucsc_db.__doc__ = 'SQL Most Conserved Elements for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.SQL.dm2.mostconserved', ucsc_db)
+        pygr.Data.addResource('TEST.Annotation.UCSC.SQL.dm2.mostconserved', ucsc_db)
         msa.__doc__ = 'SQL NLMSA for Most Conserved Elements for dm2'
-        pygr.Data.getResource.addResource('TEST.Annotation.UCSC.NLMSA.SQL.dm2.mostconserved', msa)
+        pygr.Data.addResource('TEST.Annotation.UCSC.NLMSA.SQL.dm2.mostconserved', msa)
         ucsc_schema = pygr.Data.ManyToManyRelation(dm2, ucsc_db, bindAttrs = ('element2',))
         ucsc_schema.__doc__ = 'SQL Schema for UCSC Most Conserved Elements for dm2'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.SQL.dm2.mostconserved', ucsc_schema)

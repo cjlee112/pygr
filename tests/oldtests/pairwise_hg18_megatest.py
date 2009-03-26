@@ -48,7 +48,7 @@ class PygrBuildNLMSAMegabase(object):
         for orgstr in msaSpeciesList:
             genome = seqdb.BlastDB(os.path.join(seqDir, orgstr))
             genome.__doc__ = docStringDict[orgstr]
-            pygr.Data.getResource.addResource('TEST.Seq.Genome.' + orgstr, genome)
+            pygr.Data.addResource('TEST.Seq.Genome.' + orgstr, genome)
         pygr.Data.save()
     def copyFile(self, filename): # COPY A FILE INTO TEST DIRECTORY
         newname = os.path.join(self.path, os.path.basename(filename))
@@ -86,7 +86,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         msa1 = cnestedlist.NLMSA(msaname, 'w', uniondict, axtFiles = axtlist, maxlen = 536870912, maxint = 22369620)
         msa1.save_seq_dict()
         msa1.__doc__ = 'TEST NLMSA for hg18 pairwise5way'
-        pygr.Data.getResource.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
+        pygr.Data.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
         pygr.Data.save()
         msa = pygr.Data.getResource('TEST.MSA.UCSC.hg18_pairwise5way')
         outfileName = 'splicesite_hg18_chrY.txt' # CHRY TESTING
@@ -150,7 +150,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
 
         msa1 = cnestedlist.NLMSA(msaname, 'r')
         msa1.__doc__ = 'TEST NLMSA for hg18 pairwise5way'
-        pygr.Data.getResource.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
+        pygr.Data.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
         pygr.Data.save()
         msa = pygr.Data.getResource('TEST.MSA.UCSC.hg18_pairwise5way')
         newOutputName = 'splicesite_new2.txt'
