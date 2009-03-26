@@ -242,6 +242,7 @@ class SequenceDB(object, UserDict.DictMixin):
             seq = self[seqID] # get the 1st sequence
             ch100 = str(seq[:100])
             self._seqtype = guess_seqtype(ch100)
+            break # only process the 1st sequence!!!
 
     _cache_max=10000                    # @CTB move? make settable?
     def cacheHint(self, ivalDict, owner):
