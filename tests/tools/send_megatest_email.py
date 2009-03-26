@@ -19,7 +19,7 @@ os.chdir(logdir)
 sendStr = 'MEGATEST report, generated ' + timeStr + '\n\n'
 sendStr += 'Test started: ' + open('tmp1_megatest.log', 'r').read()
 sendStr += 'PYTHONPATH = ' + open('tmp3_megatest.log', 'r').read() + '\n'
-sendStr += 'Output of standard tests:\n' + open('tmp2_megatest.log', 'r').read() + '\n\n'
+sendStr += 'Output of standard tests:\n' + ''.join(open('tmp2_megatest.log', 'r').readlines()[-5:]) + '\n\n'
 sendStr += 'Output of megatests:\n' + open('tmp4_megatest.log', 'r').read() + '\n\n'
 sendStr += 'Test finished: ' + open('tmp5_megatest.log', 'r').read()
 
@@ -27,10 +27,15 @@ sendStr += 'Test finished: ' + open('tmp5_megatest.log', 'r').read()
 nError = 0
 abnormalStop = 0
 for lines in sendStr.splitlines():
+    # Standard-test output
+    if lines[:4] == 'INFO' and 'passed' in lines and 'failed' in lines and 'skipped' in lines:
+        nError += int(lines[18:].split(',')[1].strip().split(' ')[0])
+        abnormalStop += 1
+    # Megatest output
     if lines[:6] == 'FINAL:':
         nError += int(lines[7:30].split(' ')[0])
-        abnormalStop = 1
-if nError == 0 and abnormalStop:
+        abnormalStop += 1
+if nError == 0 and abnormalStop == 2:
     maillist = maillist_pass
 else:
     maillist = maillist_fail
