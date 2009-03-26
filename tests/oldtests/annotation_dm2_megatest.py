@@ -1,5 +1,6 @@
 
 import sys, os, string
+from pygr.mapping import Collection
 
 seqDir = '/result/pygr_megatest/seq_data' # SEQDB.BLASTDB
 msaDir = '/result/pygr_megatest/maf_test' # PRE BUILT NLMSA
@@ -88,7 +89,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         from pygr import seqdb, cnestedlist, sqlgraph
         dm2 = pygr.Data.getResource('TEST.Seq.Genome.dm2')
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS
-        exon_slices = pygr.Data.Collection(filename = os.path.join(self.path, 'refGene_exonAnnot_dm2.cdb'), \
+        exon_slices = Collection(filename = os.path.join(self.path, 'refGene_exonAnnot_dm2.cdb'), \
             intKeys = True, mode = 'c', writeback = False) # ONLY C
         exon_db = seqdb.AnnotationDB(exon_slices, dm2,
                                sliceAttrDict = dict(id = 0, exon_id = 1, orientation = 2,
@@ -113,7 +114,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         exon_schema.__doc__ = 'Exon Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.dm2.exons', exon_schema)
         # BUILD ANNOTATION DATABASE FOR REFSEQ SPLICES
-        splice_slices = pygr.Data.Collection(filename = os.path.join(self.path, 'refGene_spliceAnnot_dm2.cdb'), \
+        splice_slices = Collection(filename = os.path.join(self.path, 'refGene_spliceAnnot_dm2.cdb'), \
             intKeys = True, mode = 'c', writeback = False) # ONLY C
         splice_db = seqdb.AnnotationDB(splice_slices, dm2,
                                sliceAttrDict = dict(id = 0, splice_id = 1, orientation = 2,
@@ -138,7 +139,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         splice_schema.__doc__ = 'Splice Schema for dm2'
         pygr.Data.addSchema('TEST.Annotation.NLMSA.dm2.splices', splice_schema)
         # BUILD ANNOTATION DATABASE FOR MOST CONSERVED ELEMENTS FROM UCSC
-        ucsc_slices = pygr.Data.Collection(filename = os.path.join(self.path, 'phastConsElements15way_dm2.cdb'), \
+        ucsc_slices = Collection(filename = os.path.join(self.path, 'phastConsElements15way_dm2.cdb'), \
             intKeys = True, mode = 'c', writeback = False) # ONLY C
         ucsc_db = seqdb.AnnotationDB(ucsc_slices, dm2,
                                sliceAttrDict = dict(id = 0, ucsc_id = 1, orientation = 2,
