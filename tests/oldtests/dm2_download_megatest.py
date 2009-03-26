@@ -3,7 +3,7 @@
 
 from pygr import nlmsa_utils
 import pygr.Data
-import os
+import os, time
 
 def rm_recursive(top):
     'recursively remove top and everything in it!'
@@ -45,11 +45,14 @@ class NLMSADownload_Test(object):
         'test building the NLMSA, and a simple query'
         os.environ['PYGRDATADOWNLOAD'] = self.testDir
         os.environ['PYGRDATABUILDDIR'] = self.testDir
-        pygr.Data.clear_cache() # reload rsrc db
+        t = time.time()
         pygr.Data.Bio.MSA.UCSC.dm2_multiz9way() # build it!
-        pygr.Data.save() # save the built resources
+        t1 = time.time() - t # 1st build time
         pygr.Data.clear_cache() # reload rsrc db
+        t = time.time()
         msa = pygr.Data.Bio.MSA.UCSC.dm2_multiz9way() # already built
+        t2 = time.time() - t # 2nd request time
+        assert t2 < t1/3., 'second request took too long!'
         chr4 = msa.seqDict['dm2.chr4']
         result = msa[chr4[:10000]]
         assert len(result) == 9
