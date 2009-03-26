@@ -164,7 +164,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         ucsc_schema.__doc__ = 'Schema for UCSC Most Conserved Elements for dm2'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.dm2.mostconserved', ucsc_schema)
         pygr.Data.save()
-        reload(pygr.Data)
+        pygr.Data.clear_cache() # force resources to reload when requested
 
         # QUERY TO EXON AND SPLICES ANNOTATION DATABASE
         dm2 = pygr.Data.getResource('TEST.Seq.Genome.dm2')
@@ -365,7 +365,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         ucsc_schema.__doc__ = 'SQL Schema for UCSC Most Conserved Elements for dm2'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.SQL.dm2.mostconserved', ucsc_schema)
         pygr.Data.save()
-        reload(pygr.Data)
+        pygr.Data.clear_cache()
 
         # QUERY TO EXON AND SPLICES ANNOTATION DATABASE
         dm2 = pygr.Data.getResource('TEST.Seq.Genome.dm2')

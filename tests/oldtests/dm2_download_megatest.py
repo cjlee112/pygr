@@ -2,7 +2,7 @@
 # python protest.py dm2_download_megatest.py
 
 from pygr import nlmsa_utils
-from nosebase import get_pygr_data_path
+import pygr.Data
 import os
 
 def rm_recursive(top):
@@ -27,7 +27,7 @@ class NLMSADownload_Test(object):
     def setup(self):
         'create pygr.Data entries for all NLMSAs on biodb/PYGRDATA site'
         os.mkdir(self.testDir)
-        pygrData = get_pygr_data_path(self.pygrdatapath)
+        pygr.Data.update(self.pygrdatapath) # set our desired path
         from pygr.apps.catalog_downloads import save_NLMSA_downloaders
         save_NLMSA_downloaders(self.url)
     ## def setup(self):
@@ -45,11 +45,11 @@ class NLMSADownload_Test(object):
         'test building the NLMSA, and a simple query'
         os.environ['PYGRDATADOWNLOAD'] = self.testDir
         os.environ['PYGRDATABUILDDIR'] = self.testDir
-        pygrData = get_pygr_data_path(self.pygrdatapath) # reload rsrc db
-        pygrData.Bio.MSA.UCSC.dm2_multiz9way() # build it!
-        pygrData.save() # save the built resources
-        pygrData = get_pygr_data_path(self.pygrdatapath) # reload rsrc db
-        msa = pygrData.Bio.MSA.UCSC.dm2_multiz9way() # already built
+        pygr.Data.clear_cache() # reload rsrc db
+        pygr.Data.Bio.MSA.UCSC.dm2_multiz9way() # build it!
+        pygr.Data.save() # save the built resources
+        pygr.Data.clear_cache() # reload rsrc db
+        msa = pygr.Data.Bio.MSA.UCSC.dm2_multiz9way() # already built
         chr4 = msa.seqDict['dm2.chr4']
         result = msa[chr4[:10000]]
         assert len(result) == 9

@@ -54,7 +54,7 @@ def save_NLMSA_downloaders(url,fileFilter=lambda x: x.endswith(".txt.gz"),
         nlmsa.__doc__ = fileDocumenter(resID)
         d[resID[:-4]] = nlmsa # remove .txt suffix
     import pygr.Data
-    pygr.Data.getResource.addResourceDict(d,layer)
+    pygr.Data.addResourceDict(d,layer)
     pygr.Data.save()
     return d # just in case the user wants to see what was saved
 

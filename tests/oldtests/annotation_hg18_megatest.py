@@ -231,7 +231,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         snp_schema.__doc__ = 'Schema for UCSC SNP126 for hg18'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.hg18.snp126', snp_schema)
         pygr.Data.save()
-        reload(pygr.Data)
+        pygr.Data.clear_cache()
 
         # QUERY TO EXON AND SPLICES ANNOTATION DATABASE
         hg18 = pygr.Data.getResource('TEST.Seq.Genome.hg18')
@@ -603,7 +603,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         snp_schema.__doc__ = 'SQL Schema for UCSC SNP126 for hg18'
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.SQL.hg18.snp126', snp_schema)
         pygr.Data.save()
-        reload(pygr.Data)
+        pygr.Data.clear_cache()
 
         # QUERY TO EXON AND SPLICES ANNOTATION DATABASE
         hg18 = pygr.Data.getResource('TEST.Seq.Genome.hg18')
