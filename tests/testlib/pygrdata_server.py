@@ -17,6 +17,7 @@ Pygr XMLRPC server test. Recognized flags:
 import new, sys, os
 import pathfix, testoptions, testutil
 from pygr import logger
+from pygr import metabase
 
 # same options for all tests (some flags may be ignored)
 parser = testoptions.option_parser()
@@ -24,30 +25,28 @@ parser = testoptions.option_parser()
 # parse the arguments
 options, args = parser.parse_args()
 
-# change the pygrdatapath if necessary
-if options.pygrdatapath:
-    testutil.change_pygrdatapath(options.pygrdatapath)
+if options.pygrdatapath: # load from specified path
+    mdb = metabase.MetabaseList(options.pygrdatapath)
+else: # use default PYGRDATAPATH
+    mdb = metabase.MetabaseList()
+    
 
 # disables debug messages at zero verbosity
 if options.verbosity == 0:
     logger.disable('DEBUG')
 
-# import after path change
-import pygr.Data
-
-# this is done for the side effects on pygr.Data
-# the resources are listed as comma separated names
+# the resources are listed as colon separated names
 names = filter(None, options.resources.split(':'))
-resources = map(pygr.Data.getResource, names)
+resources = map(mdb, names) # load the specified resources
 
-# set it to None
+# set it to None by default
 options.downloadDB = options.downloadDB or None
 
 # create a new server that will serve the resources we just loaded
-xmlrpc = pygr.Data.getResource.newServer('testy',
-                                         withIndex=True,
-                                         downloadDB=options.downloadDB,
-                                         host='localhost', port=options.port)
+xmlrpc = metabase.ResourceServer(mdb, 'testy',
+                                 withIndex=True,
+                                 downloadDB=options.downloadDB,
+                                 host='localhost', port=options.port)
 
 # main loop
 def serve_forever(self):

@@ -114,29 +114,21 @@ class TestXMLRPCServer(object):
     PYGRDATAPATH: passed to the server process command line as its PYGRDATAPATH
     checkResources: if True, first check that all pygrDataNames are loadable.
     """
-    def __init__(self,*pygrDataNames,**kwargs):
+    def __init__(self, pygrDataNames, pygrDataPath, port=83756, downloadDB=''):
         'starts server, returns without blocking'
-        import pygr.Data
-        
-        # point it to a temporary directory
-        tempdir = TempDir('pygrdata').path
-        self.port = kwargs.get('port', 83756)
+        self.pygrDataNames = pygrDataNames
+        self.pygrDataPath = pygrDataPath
+        self.port = port
+        self.downloadDB = downloadDB
 
         # check that all resources are available
-        if kwargs.get('checkResources'):
-            map(pygr.Data.getResource, *pygrDataNames)
+        ## if kwargs.get('checkResources'):
+        ##     map(pygr.Data.getResource, *pygrDataNames)
 
-        self.pygrDataNames = pygrDataNames
-        
-        # user specified or default values
-        self.pygrDataPath = kwargs.get('PYGRDATAPATH', tempdir)
-
-        self.downloadDB = '%s' % kwargs.get('downloadDB', '')
-        
-        # create temporary directory for its logs
         currdir = os.path.dirname(__file__)
         self.server_script = path_join(currdir, 'pygrdata_server.py')
-
+        # create temporary directory for its logs
+        tempdir = TempDir('pygrdata').path
         self.outname = path_join(tempdir, 'xmlrpc-out.txt')
         self.errname = path_join(tempdir, 'xmlrpc-err.txt')
     
@@ -185,10 +177,6 @@ class TestXMLRPCServer(object):
 
         logger.debug('server stopped')
     
-    def access_server(self):
-        'force pygr.Data to only use the XMLRPC server'
-        pass
-        
     def close(self):
         import xmlrpclib
         s = xmlrpclib.ServerProxy('http://localhost:%d' % self.port)
@@ -263,6 +251,19 @@ class SQLite_Mixin(object):
             os.remove(self.sqlite_file)
         except OSError:
             pass
+
+def temp_table_name(dbname='test'):
+    import random
+    l = [c for c in 'TeMpBiGdAcDy']
+    random.shuffle(l)
+    return dbname+'.'+''.join(l)
+
+def drop_tables(cursor, tablename):
+    cursor.execute('drop table if exists %s' % tablename)
+    cursor.execute('drop table if exists %s_schema' % tablename)
+        
+
+
         
 def blast_enabled():
     """
