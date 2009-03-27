@@ -25,6 +25,36 @@ info, error, warn, debug = logger.info, logger.error, logger.warn, logger.debug
 
 ###
 
+def approximate_cmp(x, y, delta):
+    '''expects two lists of tuples.  Performs comparison as usual,
+    except that numeric types are considered equal if they differ by
+    less than delta'''
+    diff = cmp(len(x),len(y))
+    if diff != 0:
+        return diff
+    x.sort() # SORT TO ENSURE IN SAME ORDER...
+    y.sort()
+    for i in range(len(x)):
+        s = x[i]
+        t = y[i]
+        diff = cmp(len(s),len(t))
+        if diff != 0:
+            return diff
+        for j in range(len(s)):
+            u = s[j]
+            v = t[j]
+            if isinstance(u,int) or isinstance(u,float):
+                diff = u - v
+                if diff < -delta:
+                    return -1
+                elif diff >delta:
+                    return 1
+            else:
+                diff = cmp(u,v)
+                if diff != 0:
+                    return diff
+    return 0
+
 def stop(text):
     "Unrecoverable error"
     logger.error (text)

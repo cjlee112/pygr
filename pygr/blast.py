@@ -1,4 +1,5 @@
 import os
+import threading
 import classutil
 from sequtil import *
 from parse_blast import BlastHitParser
@@ -44,19 +45,40 @@ def read_interval_alignment(ofile, srcDB, destDB, al=None, **kwargs):
         al.build()
     return al
 
-def start_blast(cmd, seq, seqString=None):
+class SeqWriterThread(threading.Thread):
+    'write query seqs to output buffer in a separate thread to avoid deadlock'
+    def __init__(self, ifile, seqDB, writer=write_fasta):
+        threading.Thread.__init__(self)        
+        self.ifile = ifile
+        self.seqDB = seqDB
+        self.writer = writer
+    def run(self):
+        for seqID, seq in self.seqDB.iteritems():
+            self.writer(self.ifile, seq)
+        self.ifile.close()
+
+def start_blast(cmd, seq, seqString=None, seqDict=None):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
     ifile,ofile = os.popen2(cmd)
     if seqString is None:
         seqString = seq
-    seqID = write_fasta(ifile, seqString)
-    ifile.close()
-    return seqID,ofile
+    if seqDict is not None: # write all seqs in a separate thread
+        wthread = SeqWriterThread(ifile, seqDict)
+        wthread.start() # start writing in a separate thread
+        return None,ofile
+    else: # just write one query sequence
+        seqID = write_fasta(ifile, seqString)
+        ifile.close()
+        return seqID,ofile
 
-def process_blast(cmd, seq, seqDB, al=None, seqString=None, **kwargs):
+def process_blast(cmd, seq, seqDB, al=None, seqString=None, queryDB=None,
+                  **kwargs):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
-    seqID,ofile = start_blast(cmd, seq, seqString)
-    al = read_interval_alignment(ofile, {seqID:seq}, seqDB, al, **kwargs)
+    seqID,ofile = start_blast(cmd, seq, seqString, seqDict=queryDB)
+    if queryDB is not None:
+        al = read_interval_alignment(ofile, queryDB, seqDB, al, **kwargs)
+    else:
+        al = read_interval_alignment(ofile, {seqID:seq}, seqDB, al, **kwargs)
     if ofile.close() is not None:
         raise OSError('command %s failed' % cmd)
     return al
@@ -84,7 +106,8 @@ def repeat_mask(seq, progname='RepeatMasker', opts=''):
 class BlastMapping(object):
     'Graph interface for mapping a sequence to homologs in a seq db via BLAST'
     def __init__(self, seqDB, filepath=None, blastReady=False,
-                 blastIndexPath=None, blastIndexDirs=None, **kwargs):
+                 blastIndexPath=None, blastIndexDirs=None, verbose=True,
+                 **kwargs):
         '''seqDB: sequence database object to search for homologs
         filepath: location of FASTA format file for the sequence database
         blastReady: if True, ensure that BLAST index file ready to use
@@ -93,6 +116,7 @@ class BlastMapping(object):
         '''
         self.seqDB = seqDB
         self.idIndex = BlastIDIndex(seqDB)
+        self.verbose = verbose
         if filepath is not None:
             self.filepath = filepath
         else:
@@ -195,7 +219,11 @@ class BlastMapping(object):
             cmd='fastacmd -D -d "%s"' % self.get_blast_index_path()
             return os.popen(cmd),NCBI_ID_PARSER #BLAST ADDS lcl| TO id
 
-    def warn_about_self_masking(self, seq, methodname='blast'):
+    def warn_about_self_masking(self, seq, verbose, methodname='blast'):
+        if verbose is None:
+            verbose = self.verbose
+        if not verbose: # don't print out annoying warning messages
+            return
         try:
             if seq.db is self.seqDB:
                 import sys
@@ -226,32 +254,36 @@ To turn off this message, use the verbose=False option''' % methodname
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd += ' -b %d -v %d' % (maxseq,maxseq)
         return cmd
+    def get_seq_from_queryDB(self, queryDB):
+        'get one sequence obj from queryDB'
+        seqID = iter(queryDB).next() # get 1st seq ID
+        return queryDB[seqID]
     def __call__(self, seq, al=None, blastpath='blastall',
-                 blastprog=None, expmax=0.001, maxseq=None, verbose=True,
-                 opts='', **kwargs):
+                 blastprog=None, expmax=0.001, maxseq=None, verbose=None,
+                 opts='', queryDB=None, **kwargs):
         "Run blast search for seq in database, return aligned intervals"
-        if verbose:
-            self.warn_about_self_masking(seq)
+        if queryDB is not None:
+            seq = self.get_seq_from_queryDB(queryDB)
+        self.warn_about_self_masking(seq, verbose)
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
         blastprog = self.blast_program(seq, blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
         if blastprog=='tblastn': # apply ORF transformation to results
-            return process_blast(cmd, seq, self.idIndex, al,
+            return process_blast(cmd, seq, self.idIndex, al, queryDB=queryDB,
                                  groupIntervals=generate_tblastn_ivals)
         elif blastprog=='blastx':
             raise ValueError("Use BlastxMapping for " + blastprog)
         else:
-            return process_blast(cmd, seq, self.idIndex, al)
+            return process_blast(cmd, seq, self.idIndex, al, queryDB=queryDB)
 
 class MegablastMapping(BlastMapping):
     def __call__(self, seq, al=None, blastpath='megablast', expmax=1e-20,
                  maxseq=None, minIdentity=None, maskOpts='-U T -F m',
                  rmPath='RepeatMasker', rmOpts='-xsmall',
-                 verbose=True, opts='', **kwargs):
+                 verbose=None, opts='', **kwargs):
         "Run megablast search with optional repeat masking."
-        if verbose:
-            self.warn_about_self_masking(seq, 'megablast')
+        self.warn_about_self_masking(seq, verbose, 'megablast')
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
         masked_seq = repeat_mask(seq,rmPath,rmOpts)  # MASK REPEATS TO lowercase
@@ -430,11 +462,10 @@ class BlastxMapping(BlastMapping):
     Running a query on this class returns a BlastxResults object
     which provides an interface to iterate through the hits one by one.'''
     def __call__(self, seq, blastpath='blastall',
-                 blastprog=None, expmax=0.001, maxseq=None, verbose=True,
+                 blastprog=None, expmax=0.001, maxseq=None, verbose=None,
                  opts='', xformSrc=True, xformDest=False, **kwargs):
         'perform blastx or tblastx query'
-        if verbose:
-            self.warn_about_self_masking(seq)
+        self.warn_about_self_masking(seq, verbose)
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
         blastprog = self.blast_program(seq, blastprog)
