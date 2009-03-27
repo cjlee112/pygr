@@ -63,6 +63,8 @@ def run(targets, options):
 %s tests passed, %s tests failed, %s suites skipped; %d total''' % \
                   (success, errors, skipped, success + errors + skipped))
 
+    return (success, errors, skipped)
+
 if __name__ == '__main__':
     # gets the prebuild option parser
     parser = testoptions.option_parser()
@@ -87,7 +89,13 @@ if __name__ == '__main__':
     
     # run all the tests
     if options.coverage:
-        testutil.generate_coverage(run, 'coverage', targets=targets,
-                                   options=options)
+        good, bad, skip = testutil.generate_coverage(run, 'coverage',
+                                                     targets=targets,
+                                                     options=options)
     else:
-        run(targets=targets, options=options)
+        good, bad, skip = run(targets=targets, options=options)
+
+    if bad:
+        sys.exit(-1)
+        
+    sys.exit(0)

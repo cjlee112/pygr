@@ -81,7 +81,7 @@ def generate_coverage(func, path, *args, **kwds):
         shutil.rmtree(path)       
     
     # execute the function itself
-    func(*args, **kwds)
+    return_vals = func(*args, **kwds)
     
     logger.info('generating coverage')
     coverage = figleaf.get_data().gather_files()
@@ -92,6 +92,8 @@ def generate_coverage(func, path, *args, **kwds):
     patterns = map(regpatt, [ 'python', 'tests' ])
     annotate_html.report_as_html(coverage, path, exclude_patterns=patterns,
                                  files_list='')
+
+    return return_vals
 
 class TempDir(object):
     """
