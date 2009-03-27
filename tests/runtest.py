@@ -13,7 +13,7 @@ from pygr import logger
 def all_tests():
     "Returns all file names that end in _test.py"
     patt = re.compile("_test.py$")
-    mods = os.listdir(os.getcwd())
+    mods = os.listdir(os.path.normpath(os.path.dirname(__file__)))
     mods = filter(patt.search, mods)
     mods = [ m.rstrip(".py") for m in mods ]
 
