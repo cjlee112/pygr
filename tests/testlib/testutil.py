@@ -162,8 +162,6 @@ class TestXMLRPCServer(object):
         else:
             self.port = port
 
-        assert 0, self.port
-        
         # check that all resources are available
         ## if kwargs.get('checkResources'):
         ##     map(pygr.Data.getResource, *pygrDataNames)
