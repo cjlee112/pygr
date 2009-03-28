@@ -23,6 +23,9 @@ path_join = pathfix.path_join
 # use the main logger to produce 
 info, error, warn, debug = logger.info, logger.error, logger.warn, logger.debug
 
+# global port setting
+default_xmlrpc_port = 89324              # should be set by test runner
+
 ###
 
 def approximate_cmp(x, y, delta):
@@ -146,13 +149,21 @@ class TestXMLRPCServer(object):
     PYGRDATAPATH: passed to the server process command line as its PYGRDATAPATH
     checkResources: if True, first check that all pygrDataNames are loadable.
     """
-    def __init__(self, pygrDataNames, pygrDataPath, port=83756, downloadDB=''):
+    def __init__(self, pygrDataNames, pygrDataPath, port=None, downloadDB=''):
         'starts server, returns without blocking'
         self.pygrDataNames = pygrDataNames
         self.pygrDataPath = pygrDataPath
-        self.port = port
         self.downloadDB = downloadDB
 
+        global default_xmlrpc_port
+        if port is None:
+            assert default_xmlrpc_port
+            self.port = default_xmlrpc_port
+        else:
+            self.port = port
+
+        assert 0, self.port
+        
         # check that all resources are available
         ## if kwargs.get('checkResources'):
         ##     map(pygr.Data.getResource, *pygrDataNames)
