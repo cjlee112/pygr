@@ -116,9 +116,9 @@ class TempDir(object):
         self.path = tempfile_mod.mkdtemp(prefix=prefix, dir=self.tempdir)
         atexit.register(self.remove)
 
-    def randname(self, prefix='x', size=56):
+    def randname(self, prefix='x'):
         "Generates a random name"
-        id = prefix + str(random.getrandbits(size))
+        id = prefix + str(random.randint(0, 2**31))
         return id
 
     def subfile(self, name=None):
