@@ -73,14 +73,14 @@ def option_parser():
 
     # port information for the pygrdata_test.py test
     parser.add_option(
-        '--port', action="store", type=int, 
+        '--port', action="store", type="int",
         dest="port", default=89324, 
         help="sets the port information for the XMLRPC server"
     )
 
     # set the pygraphdata path from command line
     parser.add_option(
-        '--pygrdatapath', action="store", type=str, 
+        '--pygrdatapath', action="store", type="string",
         dest="pygrdatapath", default='', 
         help="sets the pygraphdata path for the XMLRPC server"
     )
@@ -88,7 +88,7 @@ def option_parser():
     # add resources to the path colon separated
     # --downloadDB=database1
     parser.add_option(
-        '--downloadDB', action="store", type=str, 
+        '--downloadDB', action="store", type="string",
         dest="downloadDB", default=None, 
         help="sets the downloadDB shelve for the XMLRPC server"
     )
@@ -97,7 +97,7 @@ def option_parser():
     # add resources to the path colon separated
     # --resources=database1
     parser.add_option(
-        '--resources', action="store", type=str, 
+        '--resources', action="store", type="string",
         dest="resources", default='', 
         help="sets the downloadable resources, separate multiple ones with a : symbol"
     )
