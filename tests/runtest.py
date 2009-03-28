@@ -79,6 +79,9 @@ if __name__ == '__main__':
     # the command line
     targets = [ t.rstrip(".py") for t in targets ]
 
+    if options.port:
+        testutil.default_xmlrpc_port = options.port
+
     # exclusion mode
     if options.exclude:
         targets = [ name for name in all_tests() if name not in targets ]

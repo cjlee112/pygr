@@ -71,10 +71,11 @@ def option_parser():
         help="runs the performance tests (not implemented)"
     )
 
-    # port information for the pygrdata_test.py test
+    # port information for the pygrdata_test.py test; default is in
+    # testutil.default_xmlrpc_port.
     parser.add_option(
         '--port', action="store", type="int",
-        dest="port", default=89324, 
+        dest="port", default=0, 
         help="sets the port information for the XMLRPC server"
     )
 
