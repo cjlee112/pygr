@@ -5,6 +5,7 @@ import thread
 import sys
 import xmlrpclib
 import traceback
+import dbfile
 
 
 def get_hostname(host=None):
@@ -446,11 +447,11 @@ class ResourceController(object):
 
     def getrules(self):
         import shelve
-        self.rules=shelve.open(self.name+'.rules')
+        self.rules=dbfile.shelve_open(self.name+'.rules')
 
     def getresources(self):
         import shelve
-        self.resources=shelve.open(self.name+'.rsrc')
+        self.resources=dbfile.shelve_open(self.name+'.rsrc')
 
     def setrule(self,rsrc,rule):
         "save a resource generation rule into our database"

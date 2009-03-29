@@ -64,3 +64,26 @@ class BtreeShelf(shelve.Shelf):
     def __iter__(self):
         'avoid using iter provided by shelve/DictMixin, which loads all keys!'
         return iter(self.dict)
+
+class DbfilenameShelf(shelve.Shelf):
+    """Shelf implementation using the "anydbm" generic dbm interface.
+
+    Copied out of python2.3's shelve.py, in order to patch some issues
+    where the destructor can run the 'sync' command on an uninitialized
+    Shelf object and cause an (ignored) exception.  'sync' requires
+    'writeback' and 'dict' attributes or else it raises an exception --
+    this is fixed in more recent Python versions.
+    """
+
+    def __init__(self, filename, flag='c', protocol=None, writeback=False,
+                 binary=None):
+        self.writeback = False
+        self.dict = None
+        
+        import anydbm
+        shelve.Shelf.__init__(self, anydbm.open(filename, flag), protocol,
+                       writeback, binary)
+
+def shelve_open(filename, flag='c', protocol=None, writeback=False,
+                binary=None):
+    return DbfilenameShelf(filename, flag, protocol, writeback, binary)
