@@ -3,6 +3,11 @@ import socket, unittest, os, md5, pickle, datetime
 from pygr import seqdb, cnestedlist, metabase, mapping
 from pygr.downloader import SourceURL, GenericBuilder
 
+try:
+    set
+except NameError:
+    from sets import Set as set
+
 class TestBase(unittest.TestCase):
     "A base class to all pygr.Data test classes"
 
