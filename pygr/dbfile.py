@@ -24,6 +24,13 @@ class BtreeShelf(shelve.Shelf):
 
     def __init__(self, filename, flag='r', protocol=None, writeback=False, mode=0666,useHash=False):
         import bsddb
+
+        # whether or not we call __init__ later on, the destructor is still
+        # called (and that does a Shelf.sync, which looks for 'writeback'
+        # and 'dict' attributes.  --CTB 3/09
+        self.writeback = writeback
+        self.dict = None
+        
         try: # 1ST OPEN AS BTREE
             if useHash: # FORCE IT TO USE HASH INSTEAD OF BTREE
                 import anydbm # FALLBACK TO USING DEFAULT: HASH FILE
