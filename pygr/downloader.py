@@ -1,4 +1,4 @@
-import sys
+import sys, os
 
 # METHODS FOR AUTOMATIC DOWNLOADING OF RESOURCES
 
