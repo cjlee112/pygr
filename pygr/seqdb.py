@@ -565,14 +565,15 @@ class _PrefixUnionDictInverse(object):
         try: # for speed, normal case should execute immediately
             prefix = self.db.dicts[seq.db]
         except KeyError:
-            # @CTB abstraction boundary violation! keep? how test?
-            anno_seq_attr = getattr(seq, '_anno_seq', None)
-            if anno_seq_attr.db in self.db.dicts:
-                raise KeyError('''\
+            try:
+                # @CTB abstraction boundary violation! keep? how test?
+                if seq.pathForward._anno_seq.db in self.db.dicts:
+                    raise KeyError('''\
 this annotation is not in the PrefixUnion, but its sequence is.
 You can get that using its \'sequence\' attribute.''')
-            
-            raise KeyError('seq not in PrefixUnionDict')
+            except AttributeError:
+                pass
+            raise KeyError('seq.db not in PrefixUnionDict')
 
         return prefix + self.db.separator + str(seq.id)
     
