@@ -17,15 +17,30 @@ dateStr = ' '.join([ix for ix in timeStr.split(' ') if ':' not in ix])
 # Gather the runner script's output
 os.chdir(logdir)
 sendStr = 'MEGATEST report, generated ' + timeStr + '\n\n'
-sendStr += 'Test started: ' + open('tmp1_megatest.log', 'r').read()
+sendStr += 'Test started: ' + open('tmp1_megatest.log', 'r').readlines()[0]
 sendStr += 'PYTHONPATH = ' + open('tmp3_megatest.log', 'r').read() + '\n'
 sendStr += 'Output of standard tests:\n' + ''.join(open('tmp2_megatest.log', 'r').readlines()[-5:]) + '\n\n'
 sendStr += 'Output of megatests:\n' + open('tmp4_megatest.log', 'r').read() + '\n\n'
-sendStr += 'Test finished: ' + open('tmp5_megatest.log', 'r').read()
+sendStr += 'Test finished: ' + open('tmp5_megatest.log', 'r').readlines()[0] + '\n'
 
 # Try to determine whether the test has failed or not
 nError = 0
 abnormalStop = 0
+
+# GET TIME DIFFERENCE BETWEEN tmp1 AND tmp5 TO CHECK WHOLE MEGATEST RUNNING TIME
+startTime = int(open('tmp1_megatest.log', 'r').readlines()[1].split(':')[1].strip())
+endTime = int(open('tmp5_megatest.log', 'r').readlines()[1].split(':')[1].strip())
+# CURRENT RUNNING TIME FOR SHORT VERSION IS 11 MIN INCLUDING dm2 DOWNLOAD TEST
+# THERE COULD BE SOME DELAY OTHER THAN ACTUAL MEGATEST CALCULATION TIME
+# DM2 DOWNLOAD SHOULD OCCUR IN LOCAL NETWORK, NOT WLAN
+if endTime - starTime > 20*60: # SET MAX TO 20MIN
+    abnormalStop += 1
+    runMinutes = float((endTime - startTime))/60.
+    delayMinutes = runMinutes - 11.
+    sendStr += '#########################################################\n\n'
+    sendStr += ('IT TAKES %s MIN TO FINISH MEGATEST, %s MIN LONGER THAN NORMAL RUN' % (runMinutes, delayMinutes))
+    sendStr += '\n#########################################################\n'
+
 for lines in sendStr.splitlines():
     # Standard-test output
     if lines[:4] == 'INFO' and 'passed' in lines and 'failed' in lines and 'skipped' in lines:

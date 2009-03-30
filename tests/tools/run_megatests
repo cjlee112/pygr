@@ -45,6 +45,7 @@ fi
 
 # Step 1: download and build Pygr
 date &> "${logdir}/tmp1_megatest.log"
+echo START: `date +"%s"` >> "${logdir}/tmp1_megatest.log"
 rm -rf pygr
 git clone -q 'git://repo.or.cz/pygr.git' &> /dev/null
 cd pygr
@@ -59,6 +60,7 @@ python protest.py *megatest.py &> "${logdir}/tmp4_megatest.log"
 
 # Step 3: send report and clean up
 date &> "${logdir}/tmp5_megatest.log"
+echo END: `date +"%s"` >> "${logdir}/tmp5_megatest.log"
 cd ..
 python tools/send_megatest_email.py
 cd ../..
