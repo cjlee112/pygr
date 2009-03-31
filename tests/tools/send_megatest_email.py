@@ -4,7 +4,7 @@ import ConfigParser, os, smtplib, time
 from email.mime.text import MIMEText
 
 config = ConfigParser.ConfigParser({'mailServer' : ''})
-config.read([ os.path.expanduser('~/.pygrrc'), os.path.expanduser('~/pygr.cfg'), 'pygrrc', 'pygr.cfg' ])	# FIXME: make this OS-dependent?
+config.read([ os.path.join(os.path.expanduser('~'), '.pygrrc'), os.path.join(os.path.expanduser('~'), 'pygr.cfg'), '.pygrrc', 'pygr.cfg' ])
 logdir = config.get('megatests', 'logDir')
 mailsender = config.get('megatests', 'mailFrom')
 mailserver = config.get('megatests', 'mailServer')

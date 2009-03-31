@@ -4,7 +4,7 @@ from pygr.mapping import Collection
 import pygr.Data
 
 config = ConfigParser.ConfigParser({'testOutputBaseDir' : '.', 'smallSampleKey': ''})
-config.read([ os.path.expanduser('~/.pygrrc'), os.path.expanduser('~/pygr.cfg'), 'pygrrc', 'pygr.cfg' ])	# FIXME: make this OS-dependent?
+config.read([ os.path.join(os.path.expanduser('~'), '.pygrrc'), os.path.join(os.path.expanduser('~'), 'pygr.cfg'), '.pygrrc', 'pygr.cfg' ])
 msaDir = config.get('megatests_hg18', 'msaDir')
 seqDir = config.get('megatests_hg18', 'seqDir')
 smallSampleKey = config.get('megatests_hg18', 'smallSampleKey')
