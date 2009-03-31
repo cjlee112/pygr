@@ -675,6 +675,16 @@ class Blast_Test(BlastBase):
 
         check_results(results, correct,
                       lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+    def test_multiblast_long(self):
+        "testing multi sequence blast with long db to assess thread safety, see issue 79"
+        longerFile = testutil.datafile('sp_all_hbb')
+
+        sp_all_hbb = seqdb.SequenceFileDB(longerFile)
+        blastmap = blast.BlastMapping(self.prot, verbose=False)
+        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
+                               bidirectional=False)
+        blastmap(None, al, queryDB=sp_all_hbb) # all vs all
+        al.build() # construct the alignment indexes
 
 class Blastx_Test(BlastBase):
     def test_blastx(self):
