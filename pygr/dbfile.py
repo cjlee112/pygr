@@ -1,5 +1,6 @@
 
-import shelve
+import shelve, anydbm
+import logger
 
 class WrongFormatError(IOError):
     'attempted to open db with the wrong format e.g. btree vs. hash'
@@ -14,76 +15,55 @@ class ReadOnlyError(PermissionsError):
     'attempted to open a file for writing, but no write permission'
     pass
 
-class BtreeShelf(shelve.Shelf):
-    """Shelf implementation using bsddb btree index, wrapped in
-    the "anydbm" generic dbm interface.
-
-    This is initialized with the filename for the dbm database.
-    See the module's __doc__ string for an overview of the interface.
-    """
-
-    def __init__(self, filename, flag='r', protocol=None, writeback=False, mode=0666,useHash=False):
+def open_index(filename, flag='r', useHash=False, mode=0666):
+    """open bsddb index instead of hash by default.
+    useHash=True forces it to use anydbm default (i.e. hash) instead.
+    Also gives more meaningful error messages."""
+    try:
         import bsddb
-
-        # whether or not we call __init__ later on, the destructor is still
-        # called (and that does a Shelf.sync, which looks for 'writeback'
-        # and 'dict' attributes.  --CTB 3/09
-        self.writeback = writeback
-        self.dict = None
-        
-        try: # 1ST OPEN AS BTREE
-            if useHash: # FORCE IT TO USE HASH INSTEAD OF BTREE
-                import anydbm # FALLBACK TO USING DEFAULT: HASH FILE
-                d = anydbm.open(filename, flag)
-            else:
-                d = bsddb.btopen(filename, flag, mode)
-        except bsddb.db.DBAccessError: # HMM, BLOCKED BY PERMISSIONS
-            if flag=='c' or flag=='w': # TRY OPENING READ-ONLY
-                try:
-                    ifile = file(filename)
-                except IOError: # HMM, NOT EVEN READABLE. RAISE GENERIC PERMISSIONS ERROR
-                    raise PermissionsError('insufficient permissions to open file: '
-                                           +filename)
-                ifile.close() # OK, WE CAN READ THE FILE, SO RAISE EXCEPTION WITH
-                raise ReadOnlyError('file is read-only: '+filename) # VERY SPECIFIC MEANING!
-            else: # r OR n FLAG: JUST RAISE EXCEPTION
+    except ImportError:
+        d = anydbm.open(filename, flag)
+        if not useHash:
+            logger.warn('Falling back to hash index: unable to import bsddb')
+        return d
+    try: # 1ST OPEN AS BTREE
+        if useHash: # FORCE IT TO USE HASH INSTEAD OF BTREE
+            return anydbm.open(filename, flag)
+        else:
+            return bsddb.btopen(filename, flag, mode)
+    except bsddb.db.DBAccessError: # HMM, BLOCKED BY PERMISSIONS
+        if flag=='c' or flag=='w': # TRY OPENING READ-ONLY
+            try:
+                ifile = file(filename)
+            except IOError: # HMM, NOT EVEN READABLE. RAISE GENERIC PERMISSIONS ERROR
                 raise PermissionsError('insufficient permissions to open file: '
                                        +filename)
-        except bsddb.db.DBNoSuchFileError:
-            raise NoSuchFileError('no file named: '+filename)
-        except bsddb.db.DBInvalidArgError: # NOT A BTREE FILE...
-            try:
-                if useHash: # NO POINT IN TRYING HASH YET AGAIN...
-                    raise bsddb.db.DBInvalidArgError
-                import anydbm # FALLBACK TO USING DEFAULT: HASH FILE
-                d = anydbm.open(filename, flag)
-            except bsddb.db.DBInvalidArgError:
-                raise WrongFormatError('file does not match expected shelve format: '+filename)
-                
-        shelve.Shelf.__init__(self, d, protocol, writeback)
+            ifile.close() # OK, WE CAN READ THE FILE, SO RAISE EXCEPTION WITH
+            raise ReadOnlyError('file is read-only: '+filename) # VERY SPECIFIC MEANING!
+        else: # r OR n FLAG: JUST RAISE EXCEPTION
+            raise PermissionsError('insufficient permissions to open file: '
+                                   +filename)
+    except bsddb.db.DBNoSuchFileError:
+        raise NoSuchFileError('no file named: '+filename)
+    except bsddb.db.DBInvalidArgError: # NOT A BTREE FILE...
+        try:
+            if useHash: # NO POINT IN TRYING HASH YET AGAIN...
+                raise bsddb.db.DBInvalidArgError
+            # fallback to using default: hash file
+            return anydbm.open(filename, flag)
+        except bsddb.db.DBInvalidArgError:
+            raise WrongFormatError('file does not match expected shelve format: '+filename)
+
+class BetterShelf(shelve.Shelf):
+    """Shelf subclass that fixes its horrible iter implementation.
+    """
     def __iter__(self):
         'avoid using iter provided by shelve/DictMixin, which loads all keys!'
         return iter(self.dict)
 
-class DbfilenameShelf(shelve.Shelf):
-    """Shelf implementation using the "anydbm" generic dbm interface.
-
-    Copied out of python2.3's shelve.py, in order to patch some issues
-    where the destructor can run the 'sync' command on an uninitialized
-    Shelf object and cause an (ignored) exception.  'sync' requires
-    'writeback' and 'dict' attributes or else it raises an exception --
-    this is fixed in more recent Python versions.
-    """
-
-    def __init__(self, filename, flag='c', protocol=None, writeback=False,
-                 binary=None):
-        self.writeback = False
-        self.dict = None
-        
-        import anydbm
-        shelve.Shelf.__init__(self, anydbm.open(filename, flag), protocol,
-                       writeback, binary)
-
 def shelve_open(filename, flag='c', protocol=None, writeback=False,
-                binary=None):
-    return DbfilenameShelf(filename, flag, protocol, writeback, binary)
+                useHash=True, mode=0666, *args, **kwargs):
+    """improved implementation of shelve.open() that won't generate
+bogus __del__ warning messages like Python's version does."""
+    d = open_index(filename, flag, useHash, mode) # construct Shelf only if OK
+    return BetterShelf(d, protocol, writeback, *args, **kwargs)
