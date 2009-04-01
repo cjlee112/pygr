@@ -1,4 +1,4 @@
-import sys
+import sys, os
 
 # METHODS FOR AUTOMATIC DOWNLOADING OF RESOURCES
 
@@ -27,8 +27,12 @@ def do_gunzip(filepath,newpath=None):
 
 def run_gunzip(filepath,newpath=None):
     'run gunzip program as a sub process'
-    from subprocess import call # secure way to run process
-    retcode = call(['gunzip',filepath])
+    try:
+        from subprocess import call # secure way to run process
+        retcode = call(['gunzip',filepath])
+    #NK: os.system() for python2.3
+    except ImportError:
+        retcode = os.system('gunzip ' + filepath)
     if retcode != 0:
         raise OSError('gunzip "%s" failed!' % filepath)
     return filepath[:-3] # DROP THE .gz SUFFIX
@@ -38,17 +42,29 @@ def run_unzip(filepath,newpath=None,singleFile=False,**kwargs):
     save to single file newpath if desired.'''
     if newpath is None:
         newpath = filepath[:-4] # DROP THE .zip SUFFIX
-    from subprocess import Popen,call
-    if singleFile: # concatenate all files into newpath
-        import os
-        ifile = file(newpath,'wb') # copy as binary file
-        try:
-            p = Popen(['unzip', '-p',filepath], stdout=ifile)
-            pid,status = os.waitpid(p.pid, 0) # wait for unzip to exit
-        finally:
-            ifile.close()
-    else: # just unzip the package as usual
-        status = call(['unzip',filepath])
+    try:
+        from subprocess import Popen,call
+        if singleFile: # concatenate all files into newpath
+            import os
+            ifile = file(newpath,'wb') # copy as binary file
+            try:
+                p = Popen(['unzip', '-p',filepath], stdout=ifile)
+                pid,status = os.waitpid(p.pid, 0) # wait for unzip to exit
+            finally:
+                ifile.close()
+        else: # just unzip the package as usual
+            status = call(['unzip',filepath])
+    #NK: os.system() for python2.3
+    except ImportError:
+        if singleFile:
+            import os
+            ifile = file(newpath, 'wb')
+            try:
+                status = os.system('unzip -p ' + filepath)
+            finally:
+                ifile.close()
+        else:
+            status = os.system('unzip ' + filepath)
     if status != 0:
         raise OSError('unzip "%s" failed!' % filepath)
     return newpath
@@ -159,20 +175,23 @@ def download_unpickler(path,filename,kwargs):
     import urllib,classutil,os
     if filename is None:
         filename = os.path.basename(path)
-    filepath = os.path.join(classutil.get_env_or_cwd('PYGRDATADOWNLOAD'),filename)
+    filepath = os.path.join(classutil.get_env_or_cwd('PYGRDATADOWNLOAD'),\
+        filename)
     print >>sys.stderr,'Beginning download of %s to %s...' %(path,filepath)
     t = urllib.urlretrieve(path,filepath,download_monitor)
     print >>sys.stderr,'Download done.'
     filepath = uncompress_file(filepath, **kwargs) # UNCOMPRESS IF NEEDED
-    o = classutil.SourceFileName(filepath) # PATH TO WHERE THIS FILE IS NOW STORED
+    # PATH TO WHERE THIS FILE IS NOW STORED
+    o = classutil.SourceFileName(filepath)
     o._saveLocalBuild = True # MARK THIS FOR SAVING IN LOCAL PYGR.DATA
     return o
 download_unpickler.__safe_for_unpickling__ = 1
 
 class SourceURL(object):
     '''unpickling this object will trigger downloading of the desired path,
-    which will be cached to PYGRDATADOWNLOAD directory if any.  The value returned
-    from unpickling will simply be the path to the downloaded file, as a SourceFileName'''
+    which will be cached to PYGRDATADOWNLOAD directory if any.
+    The value returned from unpickling will simply be the path to the
+    downloaded file, as a SourceFileName'''
     _pygr_data_no_cache = True # force pygr.Data to always re-load this class
     def __init__(self,path,filename=None,**kwargs):
         self.path = path

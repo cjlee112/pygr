@@ -1,5 +1,6 @@
 import os, sys, tempfile
 from weakref import WeakValueDictionary
+import dbfile, logger
 
 try:
     import subprocess
@@ -308,8 +309,8 @@ def methodFactory(methodList, methodStr, localDict):
         else:
             localDict[methodName]=eval(methodStr%methodName)
 
-def open_shelve(filename,mode=None,writeback=False,allowReadOnly=False,
-                useHash=False,verbose=True):
+def open_shelve(filename, mode=None, writeback=False, allowReadOnly=False,
+                useHash=False, verbose=True):
     '''Alternative to shelve.open with several benefits:
 - uses bsddb btree by default instead of bsddb hash, which is very slow
   for large databases.  Will automatically fall back to using bsddb hash
@@ -323,25 +324,29 @@ def open_shelve(filename,mode=None,writeback=False,allowReadOnly=False,
 
 - raises standard exceptions defined in dbfile: WrongFormatError, PermissionsError,
   ReadOnlyError, NoSuchFileError
+
+- avoids generating bogus __del__ warnings as Python shelve.open() does.
   '''
-    import dbfile
     if mode=='r': # READ-ONLY MODE, RAISE EXCEPTION IF NOT FOUND
-        return dbfile.BtreeShelf(filename,mode,useHash=useHash)
+        return dbfile.shelve_open(filename, flag=mode, useHash=useHash)
     elif mode is None:
         try: # 1ST TRY READ-ONLY, BUT IF NOT FOUND CREATE AUTOMATICALLY
-            return dbfile.BtreeShelf(filename,'r',useHash=useHash)
+            return dbfile.shelve_open(filename, 'r', useHash=useHash)
         except dbfile.NoSuchFileError:
             mode = 'c' # CREATE NEW SHELVE FOR THE USER
     try: # CREATION / WRITING: FORCE IT TO WRITEBACK AT close() IF REQUESTED
-        return dbfile.BtreeShelf(filename,mode,writeback=writeback,useHash=useHash)
+        return dbfile.shelve_open(filename, flag=mode, writeback=writeback,
+                                  useHash=useHash)
     except dbfile.ReadOnlyError:
         if allowReadOnly:
-            d = dbfile.BtreeShelf(filename,'r',useHash=useHash)
+            d = dbfile.shelve_open(filename, flag='r', useHash=useHash)
             if verbose:
-                print >>sys.stderr,'''Opening shelve file %s in read-only mode because you lack
+                logger.warn('''
+Opening shelve file %s in read-only mode because you lack
 write permissions to this file.  You will NOT be able to modify the contents
-of this shelve dictionary.  To avoid seeing this warning message, use verbose=False
-argument for the classutil.open_shelve() function.''' % filename
+of this shelve dictionary.  To avoid seeing this warning message,
+use verbose=False argument for the classutil.open_shelve() function.
+''' % filename)
             return d
         else:
             raise

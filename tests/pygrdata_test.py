@@ -4,6 +4,11 @@ from pygr import seqdb, cnestedlist, mapping
 from pygr.downloader import SourceURL, GenericBuilder
 import pygr.Data
 
+try:
+    set
+except NameError:
+    from sets import Set as set
+
 class TestBase(unittest.TestCase):
     "A base class to all pygr.Data test classes"
 

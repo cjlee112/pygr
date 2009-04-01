@@ -5,6 +5,7 @@ import shelve
 from mapping import Collection,Mapping,Graph
 from classutil import standard_invert,get_bound_subclass,SourceFileName
 from coordinator import XMLRPCServerBase
+import dbfile
 
 try:
     nonPortableClasses
@@ -187,7 +188,7 @@ class MetabaseServer(object):
             self.read_download_db(downloadDB)
     def read_download_db(self,filename,location='default'):
         'add the designated resource DB shelve to our downloadable resources'
-        d = shelve.open(filename,'r')
+        d = dbfile.shelve_open(filename,'r')
         for k,v in d.items():
             if k.startswith('__doc__.'): # SAVE DOC INFO FOR THIS ID
                 self.downloadDocs[k[8:]] = v
@@ -474,7 +475,7 @@ class ShelveMetabase(object):
         self.writeable = True # can write to this storage
         self.zoneName = None
         try: # OPEN DATABASE FOR READING
-            self.db = shelve.open(self.dbpath, mode)
+            self.db = dbfile.shelve_open(self.dbpath, mode)
             try:
                 mdb.save_root_names(self.db['0root'])
             except KeyError:
@@ -484,7 +485,7 @@ class ShelveMetabase(object):
             except KeyError:
                 pass
         except anydbm.error: # CREATE NEW FILE IF NEEDED
-            self.db = shelve.open(self.dbpath, 'c')
+            self.db = dbfile.shelve_open(self.dbpath, 'c')
             self.db['0version'] = self._pygr_data_version # SAVE VERSION STAMP
             self.db['0root'] = {}
             if newZone is not None:
@@ -492,7 +493,7 @@ class ShelveMetabase(object):
                 self.zoneName = newZone
     def reopen(self, mode):
         self.db.close()
-        self.db = shelve.open(self.dbpath, mode)
+        self.db = dbfile.shelve_open(self.dbpath, mode)
     def find_resource(self, resID, download=False):
         'get an item from this resource database'
         objdata = self.db[resID] # RAISES KeyError IF NOT PRESENT
