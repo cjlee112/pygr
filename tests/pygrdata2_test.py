@@ -355,11 +355,12 @@ def get_suite():
         Download_Test,
         GenericBuild_Test,
         Sequence_Test,
-        SQL_Sequence_Test,
         InvalidPickle_Test, 
         #XMLRPC_Test, # already tested in pygrdata_test.py
         DNAAnnotation_Test, # move this to top to test test framework isolation
     ]
+    if testutil.mysql_enabled():
+        tests.append(SQL_Sequence_Test)
     return testutil.make_suite(tests)
 
 if __name__ == '__main__':
