@@ -2,10 +2,12 @@
 # and keywords supported at the moment.
 
 [megatests]
+expectedRunningTime = 11
 logDir = /result/pygr_megatest/src_save
 mailFrom = testrunner@somehost.edu
 mailTo_failed = somethingswrong@pygr.org, logger@pygr.org, dev@bugfix.org
 mailTo_ok = wentokay@pygr.org, logger@pygr.org
+runningTimeAllowedDelay = 9
 testInputDB = PYGRDB_JAN06
 testInputDir = /result/pygr_megatest
 testOutputBaseDir = /usr/tmp/deepreds

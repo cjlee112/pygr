@@ -3,13 +3,15 @@
 import ConfigParser, os, smtplib, time
 from email.mime.text import MIMEText
 
-config = ConfigParser.ConfigParser({'mailServer' : ''})
+config = ConfigParser.ConfigParser({'expectedRunningTime' : '-1', 'mailServer' : '', 'runningTimeAllowedDelay' : '0'})
 config.read([ os.path.join(os.path.expanduser('~'), '.pygrrc'), os.path.join(os.path.expanduser('~'), 'pygr.cfg'), '.pygrrc', 'pygr.cfg' ])
+expectedRunningTime = config.get('megatests', 'expectedRunningTime')
 logdir = config.get('megatests', 'logDir')
 mailsender = config.get('megatests', 'mailFrom')
 mailserver = config.get('megatests', 'mailServer')
 maillist_fail = config.get('megatests', 'mailTo_failed')
 maillist_pass = config.get('megatests', 'mailTo_ok')
+runningTimeAllowedDelay = config.get('megatests', 'runningTimeAllowedDelay')
 
 timeStr = time.ctime()
 dateStr = ' '.join([ix for ix in timeStr.split(' ') if ':' not in ix])
@@ -27,19 +29,26 @@ sendStr += 'Test finished: ' + open('tmp5_megatest.log', 'r').readlines()[0] + '
 nError = 0
 abnormalStop = 0
 
-# GET TIME DIFFERENCE BETWEEN tmp1 AND tmp5 TO CHECK WHOLE MEGATEST RUNNING TIME
-startTime = int(open('tmp1_megatest.log', 'r').readlines()[1].split(':')[1].strip())
-endTime = int(open('tmp5_megatest.log', 'r').readlines()[1].split(':')[1].strip())
-# CURRENT RUNNING TIME FOR SHORT VERSION IS 11 MIN INCLUDING dm2 DOWNLOAD TEST
-# THERE COULD BE SOME DELAY OTHER THAN ACTUAL MEGATEST CALCULATION TIME
-# DM2 DOWNLOAD SHOULD OCCUR IN LOCAL NETWORK, NOT WLAN
-if endTime - starTime > 20*60: # SET MAX TO 20MIN
-    abnormalStop += 1
-    runMinutes = float((endTime - startTime))/60.
-    delayMinutes = runMinutes - 11.
-    sendStr += '#########################################################\n\n'
-    sendStr += ('IT TAKES %s MIN TO FINISH MEGATEST, %s MIN LONGER THAN NORMAL RUN' % (runMinutes, delayMinutes))
-    sendStr += '\n#########################################################\n'
+# Compare running time with expectations, mark test as failed if it took
+# significantly longer than it should (some latitude is given to account
+# for fluctuations due to machine/network/... load).
+# Unlike later on, increment abnormalStop first and decrement it in case
+# of failure - it's cleaner than the other way around.
+abnormalStop += 1
+expectedRunningTime = float(expectedRunningTime)
+if expectedRunningTime >= 0.:
+    startTime = int(open('tmp1_megatest.log', 'r').readlines()[1].split(':')[1].strip())
+    endTime = int(open('tmp5_megatest.log', 'r').readlines()[1].split(':')[1].strip())
+    if runningTimeAllowedDelay[-1] == '%':
+        maxRunningTime = expectedRunningTime * (1 + float(runningTimeAllowedDelay[:-1]) / 100.)
+    else:
+        maxRunningTime = expectedRunningTime + float(runningTimeAllowedDelay)
+    runMinutes = (endTime - startTime) / 60.
+    if runMinutes > maxRunningTime:
+        sendStr += '\n#####################################################################\n'
+        sendStr += ('ERROR: megatests took %s minutes to complete, expected %s minutes' % (runMinutes, expectedRunningTime))
+        sendStr += '\n#####################################################################\n'
+        abnormalStop -= 1
 
 for lines in sendStr.splitlines():
     # Standard-test output
@@ -50,7 +59,8 @@ for lines in sendStr.splitlines():
     if lines[:6] == 'FINAL:':
         nError += int(lines[7:30].split(' ')[0])
         abnormalStop += 1
-if nError == 0 and abnormalStop == 2:
+
+if nError == 0 and abnormalStop == 3:
     maillist = maillist_pass
 else:
     maillist = maillist_fail
