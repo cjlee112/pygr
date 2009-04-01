@@ -1,5 +1,53 @@
-import os,sys
+import os, sys, tempfile
 from weakref import WeakValueDictionary
+
+try:
+    import subprocess
+    PIPE = subprocess.PIPE
+    class FilePopen(object):
+        def __init__(self, args, bufsize=0, executable=None,
+                     stdin=None, stdout=None, stderr=None, *largs, **kwargs):
+            self.stdin, self._close_stdin = self._get_pipe_file(stdin)
+            self.stdout, self._close_stdout = self._get_pipe_file(stdout)
+            self.stderr, self._close_stderr = self._get_pipe_file(stderr)
+            self.args = (args, bufsize, executable, self.stdin, self.stdout,
+                         self.stderr) + largs
+            self.kwargs = kwargs
+        def _get_pipe_file(self, ifile):
+            if ifile == subprocess.PIPE: # use temp file instead!
+                return tempfile.TemporaryFile(), True
+            return ifile, False
+        def _rewind_for_reading(self, ifile):
+            if ifile is not None:
+                ifile.flush()
+                ifile.seek(0)
+        def run(self):
+            self._rewind_for_reading(self.stdin)
+            p = subprocess.Popen(*self.args, **self.kwargs)
+            p.wait()
+            if self._close_stdin:
+                self.stdin.close()
+                self._close_stdin = False
+            self._rewind_for_reading(self.stdout)
+            self._rewind_for_reading(self.stderr)
+            return p.returncode
+        def __del__(self):
+            if self._close_stdin:
+                self.stdin.close()
+                self._close_stdin = False
+            if self._close_stdout:
+                self.stdout.close()
+                self._close_stdout = False
+            if self._close_stderr:
+                self.stderr.close()
+                self._close_stderr = False
+
+    def call_subprocess(*popenargs, **kwargs):
+        p = FilePopen(*popenargs, **kwargs)
+        return p.run()
+except ImportError:
+    pass
+
 
 def ClassicUnpickler(cls, state):
     'standard python unpickling behavior'
