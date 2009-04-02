@@ -1,4 +1,5 @@
 import sys, os
+from classutil import call_subprocess
 
 # METHODS FOR AUTOMATIC DOWNLOADING OF RESOURCES
 
@@ -27,44 +28,30 @@ def do_gunzip(filepath,newpath=None):
 
 def run_gunzip(filepath,newpath=None):
     'run gunzip program as a sub process'
+    if newpath is None:
+        newpath = filepath[:-3]
+    ifile = open(newpath, 'w+b')
     try:
-        from subprocess import call # secure way to run process
-        retcode = call(['gunzip',filepath])
-    #NK: os.system() for python2.3
-    except ImportError:
-        retcode = os.system('gunzip ' + filepath)
-    if retcode != 0:
-        raise OSError('gunzip "%s" failed!' % filepath)
-    return filepath[:-3] # DROP THE .gz SUFFIX
+        if call_subprocess(['gunzip', '-c', filepath], stdout=ifile):
+            raise OSError('gunzip "%s" failed!' % filepath)
+    finally:
+        ifile.close()
+    return newpath
+
 
 def run_unzip(filepath,newpath=None,singleFile=False,**kwargs):
     '''run unzip program as a sub process,
     save to single file newpath if desired.'''
     if newpath is None:
         newpath = filepath[:-4] # DROP THE .zip SUFFIX
-    try:
-        from subprocess import Popen,call
-        if singleFile: # concatenate all files into newpath
-            import os
-            ifile = file(newpath,'wb') # copy as binary file
-            try:
-                p = Popen(['unzip', '-p',filepath], stdout=ifile)
-                pid,status = os.waitpid(p.pid, 0) # wait for unzip to exit
-            finally:
-                ifile.close()
-        else: # just unzip the package as usual
-            status = call(['unzip',filepath])
-    #NK: os.system() for python2.3
-    except ImportError:
-        if singleFile:
-            import os
-            ifile = file(newpath, 'wb')
-            try:
-                status = os.system('unzip -p ' + filepath)
-            finally:
-                ifile.close()
-        else:
-            status = os.system('unzip ' + filepath)
+    if singleFile: # concatenate all files into newpath
+        ifile = file(newpath, 'wb') # copy as binary file
+        try:
+            status = call_subprocess(['unzip', '-p', filepath], stdout=ifile)
+        finally:
+            ifile.close()
+    else: # just unzip the package as usual
+        status = call_subprocess(['unzip', filepath])
     if status != 0:
         raise OSError('unzip "%s" failed!' % filepath)
     return newpath
@@ -158,9 +145,9 @@ def uncompress_file(filepath,**kwargs):
     elif filepath.endswith('.gz'):
         print >>sys.stderr, 'gunzipping %s...' % filepath
         try:  # could use gzip module, but it's two times slower!!
-            return run_gunzip(filepath) # run as sub process
+            return run_gunzip(filepath, **kwargs) # run as sub process
         except OSError: # on Windows, have to run as python module
-            return do_gunzip(filepath)
+            return do_gunzip(filepath, **kwargs)
     
     return filepath # DEFAULT: NOT COMPRESSED, SO JUST HAND BACK FILENAME
 

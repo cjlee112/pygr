@@ -40,9 +40,7 @@ class Download_Test(TestBase):
 
         # performs the download            
         fpath = pygr.Data.Bio.Test.Download1()
-        data  = file(fpath, 'rb').read()
-        
-        h = md5.md5(data)
+        h = testutil.get_file_md5(fpath)
         self.assertEqual(h.hexdigest(), 'f95656496c5182d6cff9a56153c9db73')
         os.remove(fpath)
 

@@ -1,7 +1,8 @@
 from testlib import testutil
-import socket, unittest, os, md5, pickle, datetime
+import socket, unittest, os, pickle, datetime
 from pygr import seqdb, cnestedlist, metabase, mapping
-from pygr.downloader import SourceURL, GenericBuilder
+from pygr.downloader import SourceURL, GenericBuilder, uncompress_file, \
+     do_unzip, do_gunzip
 
 try:
     set
@@ -40,11 +41,37 @@ class Download_Test(TestBase):
 
         # performs the download            
         fpath = self.pygrData.Bio.Test.Download1()
-        data  = file(fpath, 'rb').read()
-        
-        h = md5.md5(data)
+        h = testutil.get_file_md5(fpath)
         self.assertEqual(h.hexdigest(), 'f95656496c5182d6cff9a56153c9db73')
         os.remove(fpath)
+    def test_run_unzip(self):
+        'test uncompress_file unzip'
+        zipfile = testutil.datafile('test.zip')
+        outfile = testutil.tempdatafile('test.out')
+        uncompress_file(zipfile, newpath=outfile, singleFile=True)
+        h = testutil.get_file_md5(outfile)
+        self.assertEqual(h.hexdigest(), '12ada4c51ccb4c7277c16f1a3c000b90')
+    def test_do_unzip(self):
+        'test do_unzip'
+        zipfile = testutil.datafile('test.zip')
+        outfile = testutil.tempdatafile('test2.out')
+        do_unzip(zipfile, outfile, singleFile=True)
+        h = testutil.get_file_md5(outfile)
+        self.assertEqual(h.hexdigest(), '12ada4c51ccb4c7277c16f1a3c000b90')
+    def test_run_gunzip(self):
+        'test uncompress_file gunzip'
+        zipfile = testutil.datafile('test.gz')
+        outfile = testutil.tempdatafile('test3.out')
+        uncompress_file(zipfile, newpath=outfile)
+        h = testutil.get_file_md5(outfile)
+        self.assertEqual(h.hexdigest(), '1db5a21a01ba465fd26c3203d6589b0e')
+    def test_do_gunzip(self):
+        'test do_gunzip'
+        zipfile = testutil.datafile('test.gz')
+        outfile = testutil.tempdatafile('test4.out')
+        do_gunzip(zipfile, outfile)
+        h = testutil.get_file_md5(outfile)
+        self.assertEqual(h.hexdigest(), '1db5a21a01ba465fd26c3203d6589b0e')
 
 class GenericBuild_Test(TestBase):
 

@@ -2,7 +2,7 @@
 Utility functions for testing
 """
 
-import sys, os, shutil, unittest, random, warnings, threading, time, re
+import sys, os, shutil, unittest, random, warnings, threading, time, re, md5
 import tempfile as tempfile_mod
 import atexit
 
@@ -330,11 +330,21 @@ TEMPDIR = TempDir('tempdata').path
 # shortcuts for creating full paths to files in the data and temporary
 # directories
 datafile = lambda name: path_join(DATADIR, name)
-def tempdatafile(name, errorIfExists=True):
+def tempdatafile(name, errorIfExists=True, copyData=False):
     filepath = path_join(TEMPDIR, name)
     if errorIfExists and os.path.exists(filepath):
         raise AssertionError('tempdatafile %s already exists!' % name)
+    if copyData: # copy data file to new location
+        shutil.copyfile(datafile(name), filepath)
     return filepath
+
+def get_file_md5(fpath):
+    ifile = file(fpath, 'rb')
+    try:
+        h = md5.md5(ifile.read())
+    finally:
+        ifile.close()
+    return h
 
 if __name__ == '__main__':
     TempDir(reset=True)
