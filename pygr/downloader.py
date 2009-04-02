@@ -1,5 +1,6 @@
 import sys, os
 from classutil import call_subprocess
+import logger
 
 # METHODS FOR AUTOMATIC DOWNLOADING OF RESOURCES
 
@@ -125,25 +126,25 @@ def uncompress_file(filepath,**kwargs):
     '''stub for applying appropriate uncompression based on file suffix
     (.tar .tar.gz .tgz .tar.bz2 .gz and .zip for now)'''
     if filepath.endswith('.zip'):
-        print >>sys.stderr, 'unzipping %s...' % filepath
+        logger.info('unzipping %s...' % filepath)
         try:
             return run_unzip(filepath,**kwargs)
         except OSError:
             return do_unzip(filepath, **kwargs)
     elif filepath.endswith('.tar'):
-        print >>sys.stderr, 'untarring %s...' % filepath
+        logger.info('untarring %s...' % filepath)
         return do_untar(filepath,newpath=filepath[:-4],**kwargs)
     elif filepath.endswith('.tgz'):
-        print >>sys.stderr, 'untarring %s...' % filepath
+        logger.info('untarring %s...' % filepath)
         return do_untar(filepath,mode='r:gz',newpath=filepath[:-4],**kwargs)
     elif filepath.endswith('.tar.gz'):
-        print >>sys.stderr, 'untarring %s...' % filepath
+        logger.info('untarring %s...' % filepath)
         return do_untar(filepath,mode='r:gz',newpath=filepath[:-7],**kwargs)
     elif filepath.endswith('.tar.bz2'):
-        print >>sys.stderr, 'untarring %s...' % filepath
+        logger.info('untarring %s...' % filepath)
         return do_untar(filepath,mode='r:bz2',newpath=filepath[:-8],**kwargs)
     elif filepath.endswith('.gz'):
-        print >>sys.stderr, 'gunzipping %s...' % filepath
+        logger.info('gunzipping %s...' % filepath)
         try:  # could use gzip module, but it's two times slower!!
             return run_gunzip(filepath, **kwargs) # run as sub process
         except OSError: # on Windows, have to run as python module
