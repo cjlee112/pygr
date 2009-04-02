@@ -50,7 +50,7 @@ except ImportError:
             if ifile == PIPE: # use temp file instead!
                 fd, path = tempfile.mkstemp()
                 setattr(self, '_' + attr + '_path', path)
-                return os.fdopen(fd), True
+                return os.fdopen(fd,'w+b'), True
             elif ifile is not None:
                 setattr(self, '_' + attr + '_path', ifile.name)
             return ifile, False
