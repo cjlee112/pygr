@@ -1,5 +1,5 @@
 import os, tempfile, glob
-import classutil
+import classutil, logger
 from sequtil import *
 from parse_blast import BlastHitParser
 from seqdb import write_fasta, read_fasta
@@ -151,13 +151,12 @@ class BlastMapping(object):
         if not os.access(dirname, os.W_OK): # check if directory is writable
             raise IOError('run_formatdb: directory %s is not writable!'
                           % dirname)
-        cmd = 'formatdb -i "%s" -n "%s" -o T' % (self.filepath,filepath)
+        cmd = ['formatdb', '-i', self.filepath, '-n', filepath, '-o', 'T']
         if self.seqDB._seqtype != PROTEIN_SEQTYPE:
-            cmd += ' -p F' # SPECIAL FLAG REQUIRED FOR NUCLEOTIDE SEQS
-        import sys
-        print >>sys.stderr,'Building index:',cmd
-        if os.system(cmd)!=0: # BAD EXIT CODE, SO COMMAND FAILED
-            raise OSError('command %s failed' % cmd)
+            cmd += ['-p', 'F'] # special flag required for nucleotide seqs
+        logger.info('Building index: ' + ' '.join(cmd))
+        if classutil.call_subprocess(cmd): # bad exit code, so command failed
+            raise OSError('command %s failed' % ' '.join(cmd))
         self.blastReady=True
         if filepath!=self.filepath:
             self.blastIndexPath = filepath
