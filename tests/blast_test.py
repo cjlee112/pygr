@@ -750,6 +750,16 @@ class Blastn_Test(BlastBase):
         except ValueError:
             pass
 
+    def test_megablast(self):
+        'test megablast'
+        blastmap = blast.MegablastMapping(self.dna, verbose=False)
+        try:
+            result = blastmap[self.dna['gi|171854975|dbj|AB364477.1|']]
+        except OSError: # silently ignore missing RepeatMasker, megablast
+            return
+        for src,dest,edge in result.edges():
+            print '%s %s\n%s %s\n' %(src,repr(src),dest,repr(dest))
+
     def test_bad_subject(self):
         "Test bad subjects"
 

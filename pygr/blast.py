@@ -1,4 +1,4 @@
-import os
+import os, tempfile, glob
 import classutil
 from sequtil import *
 from parse_blast import BlastHitParser
@@ -70,22 +70,31 @@ def process_blast(cmd, seq, seqDB, al=None, seqString=None, queryDB=None,
     return al
 
 
-def repeat_mask(seq, progname='RepeatMasker', opts=''):
+def repeat_mask(seq, progname='RepeatMasker', opts=()):
     'Run RepeatMasker on a sequence, return lowercase-masked string'
-    temppath = os.tempnam()
-    ofile = file(temppath,'w') # text file
-    write_fasta(ofile, seq, reformatter=lambda x:x.upper()) # SAVE IN UPPERCASE!
-    ofile.close()
-    cmd = progname + ' ' + opts + ' ' + temppath
-    if os.system(cmd) != 0:
-        raise OSError('command %s failed' % cmd)
-    ifile = file(temppath+'.masked', 'rU') # text file
-    for id,title,seq_masked in read_fasta(ifile):
-        break # JUST READ ONE SEQUENCE
-    ifile.close()
-    cmd = 'rm -f %s %s.*' % (temppath,temppath)
-    if os.system(cmd) != 0:
-        raise OSError('command ' + cmd + ' failed')
+    fd, temppath = tempfile.mkstemp()
+    ofile = os.fdopen(fd, 'w') # text file
+    try:
+        try: # save in uppercase!
+            write_fasta(ofile, seq, reformatter=lambda x:x.upper())
+        finally:
+            ofile.close()
+        cmd = [progname] + list(opts) + [temppath]
+        if classutil.call_subprocess(cmd):
+            raise OSError('command %s failed' % ' '.join(cmd))
+        ifile = file(temppath+'.masked', 'rU') # text file
+        try:
+            for id,title,seq_masked in read_fasta(ifile):
+                break # JUST READ ONE SEQUENCE
+        finally:
+            ifile.close()
+    finally: # clean up our temp files no matter what happened
+        junkfiles = glob.glob(temppath + '.*') + [temppath]
+        for fpath in junkfiles:
+            try:
+                os.remove(fpath)
+            except OSError:
+                pass
     return seq_masked # ONLY THE REPEATS ARE IN LOWERCASE NOW
 
 
@@ -264,16 +273,18 @@ To turn off this message, use the verbose=False option''' % methodname
 
 class MegablastMapping(BlastMapping):
     def __call__(self, seq, al=None, blastpath='megablast', expmax=1e-20,
-                 maxseq=None, minIdentity=None, maskOpts='-U T -F m',
-                 rmPath='RepeatMasker', rmOpts='-xsmall',
+                 maxseq=None, minIdentity=None,
+                 maskOpts=['-U', 'T', '-F', 'm'],
+                 rmPath='RepeatMasker', rmOpts=['-xsmall'],
                  verbose=None, opts=(), **kwargs):
         "Run megablast search with optional repeat masking."
         self.warn_about_self_masking(seq, verbose, 'megablast')
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
         masked_seq = repeat_mask(seq,rmPath,rmOpts)  # MASK REPEATS TO lowercase
-        cmd = [blastpath, maskOpts, '-d', self.get_blast_index_path(),
-               '-D', '2', '-e', '%e' % float(expmax)] + list(opts)
+        cmd = [blastpath] + maskOpts \
+              + ['-d', self.get_blast_index_path(),
+                 '-D', '2', '-e', '%e' % float(expmax)] + list(opts)
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd += ['-b', '%d' % maxseq, '-v', '%d' % maxseq]
         if minIdentity is not None:
