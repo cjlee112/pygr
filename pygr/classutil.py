@@ -30,7 +30,6 @@ class FilePopenBase(object):
             stdout = self.stdout
         self.args = (args, bufsize, executable, stdin, stdout,
                      self.stderr) + largs
-        print 'args:', self.args
         self.kwargs = kwargs
     def _get_pipe_file(self, ifile, attr):
         if ifile == PIPE: # use temp file instead!
@@ -59,14 +58,6 @@ try:
     import subprocess
     PIPE = subprocess.PIPE
     class FilePopen(FilePopenBase):
-        ## def _get_pipe_file(self, ifile, attr):
-        ##     if ifile == PIPE: # use temp file instead!
-        ##         return tempfile.TemporaryFile(), True
-        ##     return ifile, False
-        ## def _close_file(self, attr):
-        ##     if getattr(self, '_close_' + attr):
-        ##         getattr(self, attr).close()
-        ##         setattr(self, '_close_' + attr, False)
         def wait(self):
             self._rewind_for_reading(self.stdin)
             p = subprocess.Popen(*self.args, **self.kwargs)

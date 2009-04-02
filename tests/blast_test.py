@@ -753,12 +753,16 @@ class Blastn_Test(BlastBase):
     def test_megablast(self):
         'test megablast'
         blastmap = blast.MegablastMapping(self.dna, verbose=False)
+        from pygr.sequence import Sequence
+        # must use copy of sequence to get "self matches" from NLMSA...
+        query = Sequence(str(self.dna['gi|171854975|dbj|AB364477.1|']),
+                         'foo')
         try:
-            result = blastmap[self.dna['gi|171854975|dbj|AB364477.1|']]
+            result = blastmap[query]
         except OSError: # silently ignore missing RepeatMasker, megablast
             return
-        for src,dest,edge in result.edges():
-            print '%s %s\n%s %s\n' %(src,repr(src),dest,repr(dest))
+        found = [(len(t[0]),len(t[1])) for t in result.edges()]
+        assert found == [(444, 444)]
 
     def test_bad_subject(self):
         "Test bad subjects"
