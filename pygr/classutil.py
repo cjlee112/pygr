@@ -4,8 +4,23 @@ import dbfile, logger
 
 
 class FilePopenBase(object):
+    '''Base class for subprocess.Popen-like class interface that
+can be supported on Python 2.3 (without subprocess).  The main goal
+is to avoid the pitfalls of Popen.communicate(), which cannot handle
+more than a small amount of data, and to avoid the possibility of deadlocks
+and the issue of threading, by using temporary files'''
     def __init__(self, args, bufsize=0, executable=None,
                  stdin=None, stdout=None, stderr=None, *largs, **kwargs):
+        '''Mimics the interface of subprocess.Popen() with two additions:
+- stdinFlag, if passed, gives a flag to add the stdin filename directly
+to the command line (rather than passing it by redirecting stdin).
+example: stdinFlag="-i" will add the following to the commandline:
+-i /path/to/the/file
+If set to None, the stdin filename is still appended to the commandline,
+but without a preceding flag argument.
+
+-stdoutFlag: exactly the same thing, except for the stdout filename.
+'''
         self.stdin, self._close_stdin = self._get_pipe_file(stdin, 'stdin')
         self.stdout, self._close_stdout = self._get_pipe_file(stdout, 'stdout')
         self.stderr, self._close_stderr = self._get_pipe_file(stderr, 'stderr')
@@ -32,6 +47,7 @@ class FilePopenBase(object):
                      self.stderr) + largs
         self.kwargs = kwargs
     def _get_pipe_file(self, ifile, attr):
+        'create a temp filename instead of a PIPE; save the filename'
         if ifile == PIPE: # use temp file instead!
             fd, path = tempfile.mkstemp()
             setattr(self, '_' + attr + '_path', path)
@@ -40,6 +56,7 @@ class FilePopenBase(object):
             setattr(self, '_' + attr + '_path', ifile.name)
         return ifile, False
     def _close_file(self, attr):
+        'close and delete this temp file if still open'
         if getattr(self, '_close_' + attr):
             getattr(self, attr).close()
             setattr(self, '_close_' + attr, False)
@@ -58,6 +75,7 @@ try:
     import subprocess
     PIPE = subprocess.PIPE
     class FilePopen(FilePopenBase):
+        'this subclass uses the subprocess module Popen() functionality'
         def wait(self):
             self._rewind_for_reading(self.stdin)
             p = subprocess.Popen(*self.args, **self.kwargs)
@@ -70,6 +88,7 @@ try:
 except ImportError:
     from commands import mkarg
     class FilePopen(FilePopenBase):
+        'this subclass fakes subprocess.Popen.wait() using os.system()'
         def wait(self):
             self._rewind_for_reading(self.stdin)
             args = map(mkarg, self.args[0])
@@ -86,6 +105,7 @@ except ImportError:
     PIPE = id(FilePopen) # an arbitrary code for identifying this code
 
 def call_subprocess(*popenargs, **kwargs):
+    'portable interface to subprocess.call(), even if subprocess not available'
     p = FilePopen(*popenargs, **kwargs)
     return p.wait()
 
