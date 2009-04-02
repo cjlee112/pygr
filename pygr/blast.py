@@ -81,7 +81,7 @@ def repeat_mask(seq, progname='RepeatMasker', opts=()):
     try:
         if p.wait():
             raise OSError('command %s failed' % ' '.join(p.args[0]))
-        ifile = file(temppath+'.masked', 'rU') # text file
+        ifile = file(p._stdin_path + '.masked', 'rU') # text file
         try:
             for id,title,seq_masked in read_fasta(ifile):
                 break # JUST READ ONE SEQUENCE
