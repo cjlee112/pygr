@@ -9,9 +9,42 @@ class FilePopenBase(object):
         self.stdin, self._close_stdin = self._get_pipe_file(stdin, 'stdin')
         self.stdout, self._close_stdout = self._get_pipe_file(stdout, 'stdout')
         self.stderr, self._close_stderr = self._get_pipe_file(stderr, 'stderr')
-        self.args = (args, bufsize, executable, self.stdin, self.stdout,
+        kwargs = kwargs.copy() # get a copy we can change
+        try: # add as a file argument
+            stdinFlag = kwargs['stdinFlag']
+            if stdinFlag:
+                args.append(stdinFlag)
+            args.append(self._stdin_path)
+            del kwargs['stdinFlag']
+            stdin = None
+        except KeyError: # just make it read this stream
+            stdin = self.stdin
+        try: # add as a file argument
+            stdoutFlag = kwargs['stdoutFlag']
+            if stdoutFlag:
+                args.append(stdoutFlag)
+            args.append(self._stdout_path)
+            del kwargs['stdoutFlag']
+            stdout = None
+        except KeyError: # make it write to this stream
+            stdout = self.stdout
+        self.args = (args, bufsize, executable, stdin, stdout,
                      self.stderr) + largs
+        print 'args:', self.args
         self.kwargs = kwargs
+    def _get_pipe_file(self, ifile, attr):
+        if ifile == PIPE: # use temp file instead!
+            fd, path = tempfile.mkstemp()
+            setattr(self, '_' + attr + '_path', path)
+            return os.fdopen(fd,'w+b'), True
+        elif ifile is not None:
+            setattr(self, '_' + attr + '_path', ifile.name)
+        return ifile, False
+    def _close_file(self, attr):
+        if getattr(self, '_close_' + attr):
+            getattr(self, attr).close()
+            setattr(self, '_close_' + attr, False)
+            os.remove(getattr(self, '_' + attr + '_path'))
     def _rewind_for_reading(self, ifile):
         if ifile is not None:
             ifile.flush()
@@ -26,14 +59,14 @@ try:
     import subprocess
     PIPE = subprocess.PIPE
     class FilePopen(FilePopenBase):
-        def _get_pipe_file(self, ifile, attr):
-            if ifile == PIPE: # use temp file instead!
-                return tempfile.TemporaryFile(), True
-            return ifile, False
-        def _close_file(self, attr):
-            if getattr(self, '_close_' + attr):
-                getattr(self, attr).close()
-                setattr(self, '_close_' + attr, False)
+        ## def _get_pipe_file(self, ifile, attr):
+        ##     if ifile == PIPE: # use temp file instead!
+        ##         return tempfile.TemporaryFile(), True
+        ##     return ifile, False
+        ## def _close_file(self, attr):
+        ##     if getattr(self, '_close_' + attr):
+        ##         getattr(self, attr).close()
+        ##         setattr(self, '_close_' + attr, False)
         def wait(self):
             self._rewind_for_reading(self.stdin)
             p = subprocess.Popen(*self.args, **self.kwargs)
@@ -46,25 +79,12 @@ try:
 except ImportError:
     from commands import mkarg
     class FilePopen(FilePopenBase):
-        def _get_pipe_file(self, ifile, attr):
-            if ifile == PIPE: # use temp file instead!
-                fd, path = tempfile.mkstemp()
-                setattr(self, '_' + attr + '_path', path)
-                return os.fdopen(fd,'w+b'), True
-            elif ifile is not None:
-                setattr(self, '_' + attr + '_path', ifile.name)
-            return ifile, False
-        def _close_file(self, attr):
-            if getattr(self, '_close_' + attr):
-                getattr(self, attr).close()
-                setattr(self, '_close_' + attr, False)
-                os.remove(getattr(self, '_' + attr + '_path'))
         def wait(self):
             self._rewind_for_reading(self.stdin)
             args = map(mkarg, self.args[0])
-            if self.stdin:
+            if self.args[3]: # redirect stdin
                 args += ['<', mkarg(self._stdin_path)]
-            if self.stdout:
+            if self.args[4]: # redirect stdout
                 args += ['>', mkarg(self._stdout_path)]
             cmd = ' '.join(args)
             returncode = os.system(cmd)

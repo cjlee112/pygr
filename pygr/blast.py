@@ -44,9 +44,10 @@ def read_interval_alignment(ofile, srcDB, destDB, al=None, **kwargs):
         al.build()
     return al
 
-def start_blast(cmd, seq, seqString=None, seqDict=None):
+def start_blast(cmd, seq, seqString=None, seqDict=None, **kwargs):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
-    p = classutil.FilePopen(cmd, stdin=classutil.PIPE, stdout=classutil.PIPE)
+    p = classutil.FilePopen(cmd, stdin=classutil.PIPE, stdout=classutil.PIPE,
+                            **kwargs)
     if seqString is None:
         seqString = seq
     if seqDict is not None: # write all seqs to nonblocking ifile
@@ -60,9 +61,9 @@ def start_blast(cmd, seq, seqString=None, seqDict=None):
     return seqID, p
 
 def process_blast(cmd, seq, seqDB, al=None, seqString=None, queryDB=None,
-                  **kwargs):
+                  popenArgs={}, **kwargs):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
-    seqID,p = start_blast(cmd, seq, seqString, seqDict=queryDB)
+    seqID,p = start_blast(cmd, seq, seqString, seqDict=queryDB, **popenArgs)
     if queryDB is not None:
         al = read_interval_alignment(p.stdout, queryDB, seqDB, al, **kwargs)
     else:
@@ -72,16 +73,14 @@ def process_blast(cmd, seq, seqDB, al=None, seqString=None, queryDB=None,
 
 def repeat_mask(seq, progname='RepeatMasker', opts=()):
     'Run RepeatMasker on a sequence, return lowercase-masked string'
-    fd, temppath = tempfile.mkstemp()
-    ofile = os.fdopen(fd, 'w') # text file
+    ## fd, temppath = tempfile.mkstemp()
+    ## ofile = os.fdopen(fd, 'w') # text file
+    p = classutil.FilePopen([progname] + list(opts), stdin=classutil.PIPE,
+                            stdinFlag=None)
+    write_fasta(p.stdin, seq, reformatter=lambda x:x.upper()) # save uppercase!
     try:
-        try: # save in uppercase!
-            write_fasta(ofile, seq, reformatter=lambda x:x.upper())
-        finally:
-            ofile.close()
-        cmd = [progname] + list(opts) + [temppath]
-        if classutil.call_subprocess(cmd):
-            raise OSError('command %s failed' % ' '.join(cmd))
+        if p.wait():
+            raise OSError('command %s failed' % ' '.join(p.args[0]))
         ifile = file(temppath+'.masked', 'rU') # text file
         try:
             for id,title,seq_masked in read_fasta(ifile):
@@ -89,8 +88,7 @@ def repeat_mask(seq, progname='RepeatMasker', opts=()):
         finally:
             ifile.close()
     finally: # clean up our temp files no matter what happened
-        junkfiles = glob.glob(temppath + '.*') + [temppath]
-        for fpath in junkfiles:
+        for fpath in glob.glob(p._stdin_path + '.*'):
             try:
                 os.remove(fpath)
             except OSError:
@@ -289,7 +287,8 @@ class MegablastMapping(BlastMapping):
             cmd += ['-b', '%d' % maxseq, '-v', '%d' % maxseq]
         if minIdentity is not None:
             cmd += ['-p', '%f' % float(minIdentity)]
-        return process_blast(cmd, seq, self.idIndex, al, seqString=masked_seq)
+        return process_blast(cmd, seq, self.idIndex, al, seqString=masked_seq,
+                             popenArgs=dict(stdinFlag='-i'))
 
 
 class BlastIDIndex(object):
