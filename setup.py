@@ -57,9 +57,12 @@ except ImportError, exc:
     cmdclass = {}
 
 # extension sources 
-seqfmt_src = [ 'pygr/seqfmt.%s' % ext ]
-cdict_src  = [ 'pygr/cgraph.c', 'pygr/cdict.%s' % ext ]
-nested_src = [ 'pygr/intervaldb.c', 'pygr/cnestedlist.%s' % ext, 'pygr/apps/maf2nclist.c' ]
+seqfmt_src = [ os.path.join('pygr', 'seqfmt.%s' % ext) ]
+cdict_src  = [ os.path.join('pygr', 'cgraph.c'),
+              os.path.join('pygr', 'cdict.%s' % ext) ]
+nested_src = [ os.path.join('pygr', 'intervaldb.c'),
+              os.path.join('pygr', 'cnestedlist.%s' % ext),
+              os.path.join('pygr', 'apps', 'maf2nclist.c') ]
 
 def main():
     setup(
