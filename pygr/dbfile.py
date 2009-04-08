@@ -15,20 +15,34 @@ class ReadOnlyError(PermissionsError):
     'attempted to open a file for writing, but no write permission'
     pass
 
-def open_index(filename, flag='r', useHash=False, mode=0666):
+def open_anydbm(*args, **kwargs):
+    'trap anydbm.error message and transform to our consistent exception types'
+    try:
+        return anydbm.open(*args, **kwargs)
+    except anydbm.error, e:
+        msg = str(e)
+        if msg.endswith('new db'):
+            raise NoSuchFileError(msg)
+        elif msg.startswith('db type'):
+            raise WrongFormatError(msg)
+        raise
+
+try: # detect whether bsddb module available and working...
+    import bsddb
+    try:
+        bsddb.db
+    except AttributeError:
+        raise ImportError
+except ImportError:
+    bsddb = None
+
+def open_bsddb(filename, flag='r', useHash=False, mode=0666):
     """open bsddb index instead of hash by default.
     useHash=True forces it to use anydbm default (i.e. hash) instead.
     Also gives more meaningful error messages."""
-    try:
-        import bsddb
-    except ImportError:
-        d = anydbm.open(filename, flag)
-        if not useHash:
-            logger.warn('Falling back to hash index: unable to import bsddb')
-        return d
     try: # 1ST OPEN AS BTREE
         if useHash: # FORCE IT TO USE HASH INSTEAD OF BTREE
-            return anydbm.open(filename, flag)
+            return open_anydbm(filename, flag)
         else:
             return bsddb.btopen(filename, flag, mode)
     except bsddb.db.DBAccessError: # HMM, BLOCKED BY PERMISSIONS
@@ -50,16 +64,35 @@ def open_index(filename, flag='r', useHash=False, mode=0666):
             if useHash: # NO POINT IN TRYING HASH YET AGAIN...
                 raise bsddb.db.DBInvalidArgError
             # fallback to using default: hash file
-            return anydbm.open(filename, flag)
+            return open_anydbm(filename, flag)
         except bsddb.db.DBInvalidArgError:
             raise WrongFormatError('file does not match expected shelve format: '+filename)
+
+def open_index(filename, flag='r', useHash=False, mode=0666):
+    if bsddb is None:
+        d = open_anydbm(filename, flag)
+        if not useHash:
+            logger.warn('Falling back to hash index: unable to import bsddb')
+        return d
+    return open_bsddb(filename, flag, useHash, mode)
+
+def iter_gdbm(db):
+    'iterator for gdbm objects'
+    k = db.firstkey()
+    while k is not None:
+        yield k
+        k = db.nextkey(k)
+
 
 class BetterShelf(shelve.Shelf):
     """Shelf subclass that fixes its horrible iter implementation.
     """
     def __iter__(self):
         'avoid using iter provided by shelve/DictMixin, which loads all keys!'
-        return iter(self.dict)
+        try:
+            return iter(self.dict)
+        except TypeError: # gdbm has wierd iterator behavior...
+            return iter_gdbm(self.dict)
 
 def shelve_open(filename, flag='c', protocol=None, writeback=False,
                 useHash=True, mode=0666, *args, **kwargs):
