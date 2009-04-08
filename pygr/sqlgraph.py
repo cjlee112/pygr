@@ -249,11 +249,8 @@ def connect_default_db(connect=None, configFile=None, **args):
                                         (windir, 'my.cnf'),
                                         (sysdrv, os.path.sep + 'my.ini'),
                                         (sysdrv, os.path.sep + 'my.cnf'))
-        else: # treat as normal platform with $HOME defined
-            homedir = os.environ.get('HOME')
-            if not homedir:
-                raise Exception('home environment variable not set')
-            configFile = os.path.join(homedir, '.my.cnf')
+        else: # treat as normal platform with home directories
+            configFile = os.path.join(os.path.expanduser('~'), '.my.cnf')
 
     # allows for a local mysql local configuration file to be read 
     # from the current directory
