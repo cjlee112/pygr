@@ -152,11 +152,16 @@ def uncompress_file(filepath,**kwargs):
     
     return filepath # DEFAULT: NOT COMPRESSED, SO JUST HAND BACK FILENAME
 
-def download_monitor(bcount,bsize,totalsize):
+def download_monitor(bcount, bsize, totalsize):
     'show current download progress'
-    bytes = bcount*bsize
-    print >>sys.stderr,'downloaded %s bytes (%2.1f%%)...' \
-          % (bytes,bytes*100./totalsize)
+    if bcount == 0:
+        download_monitor.percentage_last_shown = 0.
+    bytes = bcount * bsize
+    percentage = bytes * 100. / totalsize
+    if percentage >= 10. + download_monitor.percentage_last_shown:
+        print >>sys.stderr, 'downloaded %s bytes (%2.1f%%)...' \
+                % (bytes, percentage)
+        download_monitor.percentage_last_shown = percentage
 
 def download_unpickler(path,filename,kwargs):
     'try to download the desired file, and uncompress it if need be'
