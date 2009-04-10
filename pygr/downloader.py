@@ -159,8 +159,8 @@ def download_monitor(bcount, bsize, totalsize):
     bytes = bcount * bsize
     percentage = bytes * 100. / totalsize
     if percentage >= 10. + download_monitor.percentage_last_shown:
-        print >>sys.stderr, 'downloaded %s bytes (%2.1f%%)...' \
-                % (bytes, percentage)
+        logger.info('downloaded %s bytes (%2.1f%%)...'
+                    % (bytes, percentage))
         download_monitor.percentage_last_shown = percentage
 
 def download_unpickler(path,filename,kwargs):
