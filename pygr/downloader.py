@@ -170,9 +170,9 @@ def download_unpickler(path,filename,kwargs):
         filename = os.path.basename(path)
     filepath = os.path.join(classutil.get_env_or_cwd('PYGRDATADOWNLOAD'),\
         filename)
-    print >>sys.stderr,'Beginning download of %s to %s...' %(path,filepath)
+    logger.info('Beginning download of %s to %s...' % (path, filepath))
     t = urllib.urlretrieve(path,filepath,download_monitor)
-    print >>sys.stderr,'Download done.'
+    logger.info('Download done.')
     filepath = uncompress_file(filepath, **kwargs) # UNCOMPRESS IF NEEDED
     # PATH TO WHERE THIS FILE IS NOW STORED
     o = classutil.SourceFileName(filepath)
