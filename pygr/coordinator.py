@@ -293,8 +293,15 @@ class XMLRPCServerBase(object):
             serve_forever(self)
         else:
             print "Running in the background of active session"
-            if not hasattr(sys, 'ps1'):		# FIXME: check if -i has been given to python
-                print "Warning: Running non-interactively without daemonising means the server will die right after starting. This is probably not what you want."
+            # Check if we're running interactively, as otherwise the server will
+            # die right after starting. Two checks are needed for this: one for
+            # a truly interactive session and one for the interpreter having
+            # been run with the -i flag (makes the session interactive AFTER the
+            # script has been executed). Unfortunately, the latter only works
+            # with Python 2.6 and up.
+            if not hasattr(sys, 'ps1'):
+                if sys.version_info < (2, 6) or not sys.flags.interactive:
+                    print "Warning: Running non-interactively without daemonising means the server will die right after starting. This is probably not what you want."
             thread.start_new_thread(serve_forever, (self, ))
     def register(self,url=None,name='index',server=None):
         'register our server with the designated index server'
