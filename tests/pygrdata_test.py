@@ -189,6 +189,14 @@ def check_dir_noargs(self):
     found2.sort()
     assert found == found2
 
+def check_dir_download(self):
+    found = pygr.Data.dir(download=True)
+    found.sort()
+    found2 = pygr.Data.dir('', download=True)
+    found2.sort()
+    assert len(found) == 0
+    assert found == found2
+
 def check_dir_re(self):
     expected=['Bio.Annotation.annoDB', 'Bio.Annotation.map',
                 'Bio.Seq.Swissprot.sp42', 'Bio.Seq.frag', 'Bio.Seq.spmap']
@@ -330,6 +338,7 @@ class XMLRPC_Test(TestBase):
         check_match(self)
         check_dir(self)
         check_dir_noargs(self)
+        check_dir_download(self)
         check_dir_re(self)
         check_bind(self)
         check_bind2(self)
