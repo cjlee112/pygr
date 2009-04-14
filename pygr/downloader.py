@@ -152,11 +152,16 @@ def uncompress_file(filepath,**kwargs):
     
     return filepath # DEFAULT: NOT COMPRESSED, SO JUST HAND BACK FILENAME
 
-def download_monitor(bcount,bsize,totalsize):
+def download_monitor(bcount, bsize, totalsize):
     'show current download progress'
-    bytes = bcount*bsize
-    print >>sys.stderr,'downloaded %s bytes (%2.1f%%)...' \
-          % (bytes,bytes*100./totalsize)
+    if bcount == 0:
+        download_monitor.percentage_last_shown = 0.
+    bytes = bcount * bsize
+    percentage = bytes * 100. / totalsize
+    if percentage >= 10. + download_monitor.percentage_last_shown:
+        logger.info('downloaded %s bytes (%2.1f%%)...'
+                    % (bytes, percentage))
+        download_monitor.percentage_last_shown = percentage
 
 def download_unpickler(path,filename,kwargs):
     'try to download the desired file, and uncompress it if need be'
@@ -165,9 +170,9 @@ def download_unpickler(path,filename,kwargs):
         filename = os.path.basename(path)
     filepath = os.path.join(classutil.get_env_or_cwd('PYGRDATADOWNLOAD'),\
         filename)
-    print >>sys.stderr,'Beginning download of %s to %s...' %(path,filepath)
+    logger.info('Beginning download of %s to %s...' % (path, filepath))
     t = urllib.urlretrieve(path,filepath,download_monitor)
-    print >>sys.stderr,'Download done.'
+    logger.info('Download done.')
     filepath = uncompress_file(filepath, **kwargs) # UNCOMPRESS IF NEEDED
     # PATH TO WHERE THIS FILE IS NOW STORED
     o = classutil.SourceFileName(filepath)
