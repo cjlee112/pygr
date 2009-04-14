@@ -1,6 +1,6 @@
 
 from pygr import pygrData,pygrSchema
-from metabase import ResourceServer, dumps, OneToManyRelation, \
+from metabase import ResourceServer, dumps, OneToManyRelation, OneToOneRelation,\
      ManyToManyRelation, PygrDataNotPortableError, PygrDataNotFoundError, \
      PygrDataMismatchError, PygrDataEmptyError, PygrDataReadOnlyError, \
      PygrDataSchemaError, PygrDataNoModuleError, ResourceZone
@@ -44,7 +44,8 @@ MySQL = ResourceZone(getResource, 'MySQL')
 __all__ = ('Bio', 'schema', 'getResource', 'addResource', 'addSchema',
            'deleteResource', 'dir', 'newServer', 'save', 'rollback',
            'list_pending', 'loads', 'dumps', 'update', 'clear_cache',
-           'OneToManyRelation', 'ManyToManyRelation', 'PygrDataNotPortableError',
+           'OneToManyRelation', 'ManyToManyRelation',
+           'OneToOneRelation', 'PygrDataNotPortableError',
            'PygrDataNotFoundError', 'PygrDataMismatchError',
            'PygrDataEmptyError', 'PygrDataReadOnlyError',
            'PygrDataSchemaError', 'PygrDataNoModuleError',
