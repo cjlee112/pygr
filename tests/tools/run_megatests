@@ -37,6 +37,7 @@ PYTHONPATH="${megatestdir}/src_save/pygr/build/lib.linux-${arch}-${pver}"
 export PYTHONPATH
 unset arch pver
 
+[ -d "${megatestdir}/src_save" ] || mkdir -p "${megatestdir}/src_save"
 cd "${megatestdir}/src_save"
 if [ $? -ne 0 ]; then
 	echo "Error: Couldn't cd to ${megatestdir}/src_save, aborting"
