@@ -21,8 +21,6 @@ class TestBase(unittest.TestCase):
         pygr.Data.update(pygrDataPath, **kwargs) # use this path
         # handy shortcuts
         self.EQ = self.assertEqual
-    def runTest(): # TestCase() won't init without this!
-        pass
 
 class Download_Test(TestBase):
     "Save seq db and interval to pygr.Data shelve"

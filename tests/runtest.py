@@ -29,13 +29,13 @@ def run(targets, options):
     # run the tests by importing the module and getting its test suite
     for name in targets:
         try:
-            testutil.info( 'running tests for module %s' % name )
-            mod = __import__( name )
-            suite = mod.get_suite()
+            testutil.info('running tests for module %s' % name)
+            l = unittest.TestLoader()
+            suite = l.loadTestsFromName(name)
 
             runner = unittest.TextTestRunner(verbosity=options.verbosity,
                                              descriptions=0)
-            results = runner.run( suite )
+            results = runner.run(suite)
             
             # count tests and errors
             success += results.testsRun - \
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     if options.verbosity != 2:
         logger.disable('DEBUG')
     
-    # run all the tests
+    # run the tests
     if options.coverage:
         good, bad, skip = testutil.generate_coverage(run, 'coverage',
                                                      targets=targets,
