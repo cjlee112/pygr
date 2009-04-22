@@ -90,6 +90,11 @@ if __name__ == '__main__':
     if options.verbosity != 2:
         logger.disable('DEBUG')
     
+    # cleans full entire test directory
+    if options.clean:
+        testutil.TEMPROOT.reset()
+        testutil.TEMPDIR = testutil.TEMPROOT.path # yikes!
+
     # run all the tests
     if options.coverage:
         good, bad, skip = testutil.generate_coverage(run, 'coverage',
