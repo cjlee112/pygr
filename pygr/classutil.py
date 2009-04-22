@@ -562,3 +562,30 @@ def kwargs_filter(kwargs, allowed):
         except KeyError:
             pass
     return d
+
+
+class OpenFileDescriptor(object):
+    'holder for an open file or shelve object -- anything you must close()'
+    def __init__(self, attr, closeOptional=False):
+        self.attr = attr
+        self.closeOptional = closeOptional
+    def __get__(self, obj, objtype):
+        raise ValueError('Attempted to use a file that is already closed!')
+    def __set__(self, obj, val):
+        'save an open object to this attribute'
+        obj.__dict__[self.attr] = val # attr will get val instead of __get__
+    def __delete__(self, obj):
+        'close the attribute, then delete the attribute'
+        try:
+            ifile = obj.__dict__[self.attr]
+        except KeyError:
+            raise ValueError('No associated open file attribute!')
+        else:
+            try:
+                do_close = ifile.close
+            except AttributeError:
+                if not self.closeOptional:
+                    raise
+            else:
+                do_close()
+            del obj.__dict__[self.attr] # expose our __get__ method

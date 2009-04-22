@@ -1,3 +1,6 @@
+import classutil, logger
+import os, types
+
 class NLMSASeqList(list):
   def __init__(self,nlmsaSeqDict):
     list.__init__(self)
@@ -71,10 +74,11 @@ class EmptySlice:
   def rawIvals(self):
     return []
     
-
-
 class NLMSASeqDict(dict):
   'index sequences by pathForward, and use list to keep reverse mapping'
+  # raise err msg if shelve file already closed
+  seqIDdict = classutil.OpenFileDescriptor('seqIDdict', closeOptional=True)
+  IDdict = classutil.OpenFileDescriptor('idDict', closeOptional=True)
   def __init__(self,nlmsa,filename,mode,maxID=1000000,idDictClass=None):
     dict.__init__(self)
     self.seqlist=NLMSASeqList(self)
@@ -82,13 +86,12 @@ class NLMSASeqDict(dict):
     self.nlmsa=nlmsa
     self.filename=filename
     if mode=='memory': # JUST USE PYTHON DICTIONARY
-      idDictClass=dict
+      idDictClass = dict
     elif mode=='w': # NEW DATABASE
       mode='n'
     if idDictClass is None: # USE PERSISTENT ID DICTIONARY STORAGE
-      from classutil import open_shelve
-      self.seqIDdict = open_shelve(filename+'.seqIDdict',mode)
-      self.IDdict = open_shelve(filename+'.idDict',mode)
+      self.seqIDdict = classutil.open_shelve(filename+'.seqIDdict',mode)
+      self.IDdict = classutil.open_shelve(filename+'.idDict',mode)
     else: # USER SUPPLIED CLASS FOR ID DICTIONARY STORAGE
       self.seqIDdict=idDictClass()
       self.IDdict=idDictClass()
@@ -98,7 +101,6 @@ class NLMSASeqDict(dict):
     if nsID<0: # LET THE UNION FIGURE IT OUT
       self.nlmsa.currentUnion.__iadd__(seq)
       return # THE UNION ADDED IT FOR US, NO NEED TO DO ANYTHING
-    import types
     if isinstance(seq,types.StringType):
       id=seq # TREAT THIS AS FULLY QUALIFIED IDENTIFIER
     else: # GET THE IDENTFIER FROM THE SEQ / DATABASE
@@ -141,7 +143,6 @@ class NLMSASeqDict(dict):
   def __setitem__(self,k,ns):
     'save mapping of seq to the specified NLMSASequence'
     self.seqlist.append(ns)
-    import types
     if isinstance(k,types.StringType):
       dict.__setitem__(self,k,(ns.id,ns,0)) # ALLOW BUILD WITH A STRING OBJECT
     elif k is not None:
@@ -152,14 +153,13 @@ class NLMSASeqDict(dict):
     return self # iadd MUST RETURN self!!!
   def close(self):
     'finalize and close shelve indexes'
-    self.seqIDdict.close()
-    self.IDdict.close()
+    del self.seqIDdict # make OpenFileDescriptor close both shelves
+    del self.IDdict
   def reopenReadOnly(self,mode='r'):
     'save existing data and reopen in read-only mode'
     self.close()
-    from classutil import open_shelve
-    self.seqIDdict = open_shelve(self.filename+'.seqIDdict',mode)
-    self.IDdict = open_shelve(self.filename+'.idDict',mode)
+    self.seqIDdict = classutil.open_shelve(self.filename+'.seqIDdict',mode)
+    self.IDdict = classutil.open_shelve(self.filename+'.idDict',mode)
   def getUnionSlice(self,seq):
     'get union coords for this seq interval, adding seq to index if needed'
     try:
@@ -231,7 +231,6 @@ class BuildMSASlice(object):
             return slice(ival.start+self.offset,ival.stop+self.offset)
     def __iadd__(self,targetIval):
         'save an alignment edge between self and targetIval'
-        import types
         if self.is_lpo: # ASSIGN TO CORRECT LPO(S)
             if isinstance(targetIval,types.SliceType):
                 raise ValueError('you attempted to map LPO --> LPO?!?')
@@ -271,7 +270,6 @@ class BuildMSASlice(object):
 
 def read_seq_dict(pathstem,trypath=None):
   'read seqDict for NLMSA'
-  import seqdb,os
   if os.access(pathstem+'.seqDictP',os.R_OK):
     from pygr.Data import loads
     ifile = file(pathstem+'.seqDictP', 'rb') # pickle is binary file!
@@ -280,6 +278,7 @@ def read_seq_dict(pathstem,trypath=None):
     finally:
       ifile.close()
   elif os.access(pathstem+'.seqDict',os.R_OK): # OLD-STYLE UNION HEADER
+    import seqdb
     seqDict = seqdb.PrefixUnionDict(filename=pathstem+'.seqDict',
                                          trypath=trypath)
   else:
@@ -291,7 +290,7 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
 
 def save_seq_dict(pathstem,seqDict):
   'save seqDict to a pygr.Data-aware pickle file'
-  from pygr.Data import dumps
+  from metabase import dumps
   ofile = file(pathstem+'.seqDictP','wb') # pickle is binary file!
   try:
     ofile.write(dumps(seqDict))
@@ -310,11 +309,10 @@ def prune_self_mappings(src_prefix,dest_prefix,is_bidirectional):
     return 1
 
 def nlmsa_textdump_unpickler(filepath,kwargs):
-  from classutil import get_env_or_cwd 
   from cnestedlist import textfile_to_binaries,NLMSA
-  import sys
-  print >>sys.stderr,'Saving NLMSA indexes from textdump',filepath
-  path = textfile_to_binaries(filepath,buildpath=get_env_or_cwd('PYGRDATABUILDDIR'),
+  logger.info('Saving NLMSA indexes from textdump: %s' % filepath)
+  path = textfile_to_binaries(filepath,
+                      buildpath=classutil.get_env_or_cwd('PYGRDATABUILDDIR'),
                               **kwargs)
   o = NLMSA(path) # NOW OPEN IN READ MODE FROM THE SAVED INDEX FILESET
   o._saveLocalBuild = True # MARK THIS FOR SAVING IN LOCAL PYGR.DATA
@@ -350,8 +348,7 @@ def read_aligned_coords(alignedCoords, srcDB=None, destDB=None,
                         alignedIvalsAttrs=dict(idDest='id', startDest='start',
                                                stopDest='stop', oriDest='ori')):
   'read ID,start,stop,ori tuples from alignedCoords, and generate intervals'
-  from classutil import AttributeInterface
-  getAttr = AttributeInterface(alignedIvalsAttrs) # to extract desired attrs
+  getAttr = classutil.AttributeInterface(alignedIvalsAttrs) # extract our attrs
   if srcDB is None: # get all seqs from the existing seqDict
     srcDB = al.seqDict
   if destDB is None: # use same input set as source

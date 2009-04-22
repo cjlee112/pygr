@@ -291,6 +291,9 @@ class SequenceDB(object, UserDict.DictMixin):
         raise IndexError('interval not found in cache') # @CTB untested
 
     # these methods should all be implemented on all SequenceDBs.
+    def close(self):
+        pass # subclass should implement closing of its open resources!
+    
     def __iter__(self):
         return iter(self.seqInfoDict)
     
@@ -396,6 +399,8 @@ class SequenceFileDB(SequenceDB):
 
     """
     itemClass = FileDBSequence
+    # protect this attr with proper error msg if already closed
+    seqLenDict = classutil.OpenFileDescriptor('seqLenDict')
 
     # copy _pickleAttrs and add 'filepath'
     _pickleAttrs = SequenceDB._pickleAttrs.copy()
@@ -418,6 +423,10 @@ class SequenceFileDB(SequenceDB):
         # initialize base class.
         dbname = os.path.basename(filepath)
         SequenceDB.__init__(self, filepath=filepath, dbname=dbname, **kwargs)
+
+    def close(self):
+        'close our open shelve index file...'
+        del self.seqLenDict # make OpenFileDescriptor close shelve for us
 
     def __repr__(self):
         return "<%s '%s'>" % (self.__class__.__name__, self.filepath)

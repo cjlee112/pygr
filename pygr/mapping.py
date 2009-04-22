@@ -307,10 +307,11 @@ class Collection(object):
     close = close_if_possible
     def __del__(self):
         'must ensure that shelve object is closed to save pending data'
-        close_if_possible(self)
+        self.close()
 
 class PicklableShelve(Collection):
     'persistent storage mapping ID --> OBJECT'
+    d = classutil.OpenFileDescriptor('d') # raise err msg if already closed
     def __init__(self,filename,mode=None,writeback=False,unpicklingMode=False,
                  verbose=True,**kwargs):
         '''Wrapper for a shelve object that can be pickled.  Ideally, you
@@ -354,6 +355,8 @@ verbose=False option.''' % (filename,mode,mode)
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(filename=0,mode=0,writeback=0)
+    def close(self):
+        del self.d # make OpenFileDescriptor close our shelve index file
     def __setitem__(self,k,v):
         try:
             self.d[k]=v
@@ -361,7 +364,7 @@ verbose=False option.''' % (filename,mode,mode)
             raise TypeError('to allow int keys, you must pass intKeys=True to constructor!')
     def reopen(self,mode='r'):
         're-open shelve in the specified mode, and save mode on self'
-        self.d.close()
+        self.close()
         self.d = classutil.open_shelve(self.filename,mode,writeback=self.writeback)
         self.mode = mode
 
@@ -748,6 +751,7 @@ class Graph(object):
     """Top layer graph interface implemenation using proxy dict.
        Works with dict, shelve, any mapping interface."""
     edgeDictClass=IDNodeDict # DEFAULT EDGE DICT
+    d = classutil.OpenFileDescriptor('d') # raise err msg if already closed
     def __init__(self,saveDict=None,dictClass=dict,writeNow=False,**kwargs):
         if saveDict is not None: # USE THE SUPPLIED STORAGE
             self.d = saveDict
@@ -771,6 +775,8 @@ class Graph(object):
     _pickleAttrs = dict(d='saveDict',sourceDB=0,targetDB=0,edgeDB=0,
                         edgeDictClass=0)
     add_standard_packing_methods(locals())  ############ PACK / UNPACK METHODS
+    def close(self):
+        del self.d # make OpenFileDescriptor close our index file, if any
     def __len__(self):
         return len(self.d)
     def __iter__(self):

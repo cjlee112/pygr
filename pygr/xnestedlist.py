@@ -48,6 +48,8 @@ class NLMSAClient(cnestedlist.NLMSA):
         for nsID,is_lpo,nsLength,is_union in l:
             ns=cnestedlist.NLMSASequence(self,None,None,'onDemand',is_union,nsLength) # is_lpo AUTOMATIC
             self.addToSeqlist(ns) # ADD THIS TO THE INDEX
+    def close(self):
+        pass # required interface, but nothing to do
     def doSlice(self,seq):
         'getSlice from the server, and create an NLMSASlice object from results'
         result=self.server.getSlice(self.seqs.getSeqID(seq),seq.start,seq.stop)
