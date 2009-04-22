@@ -570,10 +570,13 @@ class OpenFileDescriptor(object):
         self.attr = attr
         self.closeOptional = closeOptional
     def __get__(self, obj, objtype):
-        raise ValueError('Attempted to use a file that is already closed!')
+        try:
+            return obj.__dict__[self.attr]
+        except KeyError:
+            raise ValueError('Attempted to use a file that is already closed!')
     def __set__(self, obj, val):
         'save an open object to this attribute'
-        obj.__dict__[self.attr] = val # attr will get val instead of __get__
+        obj.__dict__[self.attr] = val # attr will get val instead of error
     def __delete__(self, obj):
         'close the attribute, then delete the attribute'
         try:
@@ -588,4 +591,4 @@ class OpenFileDescriptor(object):
                     raise
             else:
                 do_close()
-            del obj.__dict__[self.attr] # expose our __get__ method
+            del obj.__dict__[self.attr] # attr requests will raise error
