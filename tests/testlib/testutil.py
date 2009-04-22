@@ -104,20 +104,25 @@ class TempDir(object):
     random one
     """
 
-    def __init__(self, prefix, path='tempdir', reset=False):
+    def __init__(self, prefix, path='tempdir'):
+        self.prefix = prefix
         self.tempdir = path_join( pathfix.curr_dir, '..', path )
-        
-        # will remove the root directory of all temporary directories
-        # removes content 
-        if reset and os.path.isdir(self.tempdir):
-            logger.info('resetting path %s' % self.tempdir)
-            shutil.rmtree(self.tempdir, ignore_errors=True)
+        self.path = self.get_path()
+        atexit.register(self.remove)
 
+    def reset(self):
+        "Resets the root temporary directory"
+       
+        logger.debug('resetting path %s' % self.tempdir)
+        shutil.rmtree(self.path, ignore_errors=True)
+        shutil.rmtree(self.tempdir, ignore_errors=True)
+        self.path = self.get_path()
+
+    def get_path(self):
         if not os.path.isdir(self.tempdir):
             os.mkdir(self.tempdir)
-        
-        self.path = tempfile_mod.mkdtemp(prefix=prefix, dir=self.tempdir)
-        atexit.register(self.remove)
+        path = tempfile_mod.mkdtemp(prefix=self.prefix, dir=self.tempdir)
+        return path
 
     def randname(self, prefix='x'):
         "Generates a random name"
@@ -302,10 +307,7 @@ def temp_table_name(dbname='test'):
 def drop_tables(cursor, tablename):
     cursor.execute('drop table if exists %s' % tablename)
     cursor.execute('drop table if exists %s_schema' % tablename)
-        
-
-
-        
+                
 def blast_enabled():
     """
     Detects whether the blast suite is functional on the current system
@@ -324,12 +326,14 @@ def blast_enabled():
 
 ###
 
-DATADIR = path_join(pathfix.curr_dir, '..', 'data')
-TEMPDIR = TempDir('tempdata').path
+DATADIR  = path_join(pathfix.curr_dir, '..', 'data')
+TEMPROOT = TempDir('tempdir')
+TEMPDIR  = TEMPROOT.path
 
 # shortcuts for creating full paths to files in the data and temporary
 # directories
 datafile = lambda name: path_join(DATADIR, name)
+
 def tempdatafile(name, errorIfExists=True, copyData=False):
     filepath = path_join(TEMPDIR, name)
     if errorIfExists and os.path.exists(filepath):
@@ -347,5 +351,7 @@ def get_file_md5(fpath):
     return h
 
 if __name__ == '__main__':
-    TempDir(reset=True)
-    TestXMLRPCServer()
+    t = TempDir('tempdir')
+    t.reset()
+
+    #TestXMLRPCServer()
