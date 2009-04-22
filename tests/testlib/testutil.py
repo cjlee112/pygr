@@ -2,7 +2,7 @@
 Utility functions for testing
 """
 
-import sys, os, shutil, unittest, random, warnings, threading, time, re, md5
+import sys, os, shutil, unittest, random, warnings, threading, time, re, md5, glob
 import tempfile as tempfile_mod
 import atexit
 
@@ -341,6 +341,13 @@ def tempdatafile(name, errorIfExists=True, copyData=False):
     if copyData: # copy data file to new location
         shutil.copyfile(datafile(name), filepath)
     return filepath
+
+def remove_files( path, patterns=[ "*.seqlen" ]):
+    "Removes files matching any pattern in the list"
+    for patt in patterns:
+        fullpatt = path_join(path, patt)
+        for name in glob.glob( fullpatt ):
+            os.remove(name)
 
 def get_file_md5(fpath):
     ifile = file(fpath, 'rb')
