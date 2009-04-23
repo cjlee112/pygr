@@ -307,7 +307,10 @@ class Collection(object):
     close = close_if_possible
     def __del__(self):
         'must ensure that shelve object is closed to save pending data'
-        self.close()
+        try:
+            self.close()
+        except classutil.FileAlreadyClosedError:
+            pass
 
 class PicklableShelve(Collection):
     'persistent storage mapping ID --> OBJECT'
@@ -751,7 +754,8 @@ class Graph(object):
     """Top layer graph interface implemenation using proxy dict.
        Works with dict, shelve, any mapping interface."""
     edgeDictClass=IDNodeDict # DEFAULT EDGE DICT
-    d = classutil.OpenFileDescriptor('d') # raise err msg if already closed
+    # raise err msg if attribute already closed
+    d = classutil.OpenFileDescriptor('d', closeOptional=True)
     def __init__(self,saveDict=None,dictClass=dict,writeNow=False,**kwargs):
         if saveDict is not None: # USE THE SUPPLIED STORAGE
             self.d = saveDict
@@ -822,9 +826,11 @@ class Graph(object):
         return self # THIS IS REQUIRED FROM isub()!!
     update = update_graph
     __cmp__ = graph_cmp
-    close = close_if_possible
     def __del__(self):
-        close_if_possible(self)
+        try:            
+            self.close()
+        except classutil.FileAlreadyClosedError:
+            pass
 
 
 # NEED TO PROVIDE A REAL INVERT METHOD!!

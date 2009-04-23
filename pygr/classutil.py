@@ -563,6 +563,8 @@ def kwargs_filter(kwargs, allowed):
             pass
     return d
 
+class FileAlreadyClosedError(AttributeError):
+    pass
 
 class OpenFileDescriptor(object):
     'holder for an open file or shelve object -- anything you must close()'
@@ -573,7 +575,7 @@ class OpenFileDescriptor(object):
         try:
             return obj.__dict__[self.attr]
         except KeyError:
-            raise ValueError('Attempted to use a file that is already closed!')
+            raise FileAlreadyClosedError('Attempted to use a file that is already closed!')
     def __set__(self, obj, val):
         'save an open object to this attribute'
         obj.__dict__[self.attr] = val # attr will get val instead of error
@@ -582,7 +584,7 @@ class OpenFileDescriptor(object):
         try:
             ifile = obj.__dict__[self.attr]
         except KeyError:
-            raise ValueError('No associated open file attribute!')
+            raise FileAlreadyClosedError('No associated open file attribute!')
         else:
             try:
                 do_close = ifile.close
