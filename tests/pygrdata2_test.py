@@ -75,48 +75,58 @@ class DNAAnnotation_Test(TestBase):
         tryannot = testutil.tempdatafile('tryannot')
 
         db = seqdb.BlastDB(dnaseq)
-        db.__doc__ = 'little dna'
+        try:
+            db.__doc__ = 'little dna'
 
-        pygrData.Bio.Test.dna = db
-        annoDB = seqdb.AnnotationDB({1:('seq1',5,10,'fred'),
-                                     2:('seq1',-60,-50,'bob'),
-                                     3:('seq2',-20,-10,'mary')},
-                                    db,
-                              sliceAttrDict=dict(id=0, start=1, stop=2,
-                                                 name=3))
-        annoDB.__doc__ = 'trivial annotation'
-        pygrData.Bio.Test.annoDB = annoDB
-        nlmsa = cnestedlist.NLMSA(tryannot,'w',pairwiseMode=True,
-                                  bidirectional=False)
-        for annID in annoDB:
-            nlmsa.addAnnotation(annoDB[annID])
-            
-        nlmsa.build(verbose=False)
-        nlmsa.__doc__ = 'trivial map'
-        pygrData.Bio.Test.map = nlmsa
-        pygrSchema.Bio.Test.map = metabase.ManyToManyRelation(db,
-                                               annoDB,bindAttrs=('exons',))
-        pygrData.commit()
-        pygrData.clear_cache()
+            pygrData.Bio.Test.dna = db
+            annoDB = seqdb.AnnotationDB({1:('seq1',5,10,'fred'),
+                                         2:('seq1',-60,-50,'bob'),
+                                         3:('seq2',-20,-10,'mary')},
+                                        db,
+                                  sliceAttrDict=dict(id=0, start=1, stop=2,
+                                                     name=3))
+            annoDB.__doc__ = 'trivial annotation'
+            pygrData.Bio.Test.annoDB = annoDB
+            nlmsa = cnestedlist.NLMSA(tryannot,'w',pairwiseMode=True,
+                                      bidirectional=False)
+            try:
+                for annID in annoDB:
+                    nlmsa.addAnnotation(annoDB[annID])
+
+                nlmsa.build(verbose=False)
+                nlmsa.__doc__ = 'trivial map'
+                pygrData.Bio.Test.map = nlmsa
+                pygrSchema.Bio.Test.map = metabase.ManyToManyRelation(db,
+                                                       annoDB,bindAttrs=('exons',))
+                pygrData.commit()
+                pygrData.clear_cache()
+            finally:
+                nlmsa.close()
+        finally:
+            db.close()
     
     def test_annotation(self):
         "Annotation test"
         db = pygrData.Bio.Test.dna()
-        s1 = db['seq1']
-        l = s1.exons.keys()
-        annoDB = pygrData.Bio.Test.annoDB()
-        assert l == [annoDB[1], -(annoDB[2])]
-        assert l[0].sequence == s1[5:10]
-        assert l[1].sequence == s1[50:60]
-        assert l[0].name == 'fred','test annotation attribute access'
-        assert l[1].name == 'bob'
-        sneg = -(s1[:55])
-        l = sneg.exons.keys()
-        assert l == [annoDB[2][5:], -(annoDB[1])]
-        assert l[0].sequence == -(s1[50:55])
-        assert l[1].sequence == -(s1[5:10])
-        assert l[0].name == 'bob'
-        assert l[1].name == 'fred'
+        try:
+            s1 = db['seq1']
+            l = s1.exons.keys()
+            annoDB = pygrData.Bio.Test.annoDB()
+            assert l == [annoDB[1], -(annoDB[2])]
+            assert l[0].sequence == s1[5:10]
+            assert l[1].sequence == s1[50:60]
+            assert l[0].name == 'fred','test annotation attribute access'
+            assert l[1].name == 'bob'
+            sneg = -(s1[:55])
+            l = sneg.exons.keys()
+            assert l == [annoDB[2][5:], -(annoDB[1])]
+            assert l[0].sequence == -(s1[50:55])
+            assert l[1].sequence == -(s1[5:10])
+            assert l[0].name == 'bob'
+            assert l[1].name == 'fred'
+        finally:
+            db.close() # close SequenceFileDB
+            pygrData.Bio.Test.map().close() # close NLMSA
 
 def populate_swissprot():
     "Populate the current pygrData with swissprot data"

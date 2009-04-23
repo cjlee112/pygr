@@ -401,6 +401,7 @@ class SequenceFileDB(SequenceDB):
     itemClass = FileDBSequence
     # protect this attr with proper error msg if already closed
     seqLenDict = classutil.OpenFileDescriptor('seqLenDict')
+    _pureseq = classutil.OpenFileDescriptor('_pureseq')
 
     # copy _pickleAttrs and add 'filepath'
     _pickleAttrs = SequenceDB._pickleAttrs.copy()
@@ -427,6 +428,7 @@ class SequenceFileDB(SequenceDB):
     def close(self):
         'close our open shelve index file...'
         del self.seqLenDict # make OpenFileDescriptor close shelve for us
+        del self._pureseq
 
     def __repr__(self):
         return "<%s '%s'>" % (self.__class__.__name__, self.filepath)
@@ -699,7 +701,7 @@ Set 'trypath' to give a list of directories to search.''' % filepath)
             
         self.dicts = d
         self.seqInfoDict = _PUDSeqInfoDict(self) # supply standard interface
-        
+
     def format_id(self, prefix, seqID):
         return prefix + self.separator + seqID
     
