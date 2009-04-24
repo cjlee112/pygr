@@ -2,12 +2,12 @@
 """
 Test runner for main pygr tests.
 
-Collects all files ending in _test.py and executes them with
-unittest.TextTestRunner.
+Collects all files ending in _test.py and executes them.
 """
 
 import os, sys, re, unittest, shutil, re, shutil
 from testlib import testutil, testoptions
+from testlib.unittest_extensions import PygrTestRunner
 from pygr import logger
 
 def all_tests():
@@ -33,8 +33,9 @@ def run(targets, options):
             l = unittest.TestLoader()
             suite = l.loadTestsFromName(name)
 
-            runner = unittest.TextTestRunner(verbosity=options.verbosity,
-                                             descriptions=0)
+            runner = PygrTestRunner(verbosity=options.verbosity,
+                                    descriptions=0)
+            
             results = runner.run(suite)
             
             # count tests and errors
