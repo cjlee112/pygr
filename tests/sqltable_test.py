@@ -1,5 +1,5 @@
 import os, unittest
-from testlib import testutil
+from testlib import testutil, PygrTestProgram
 from pygr.sqlgraph import SQLTable,SQLTableNoCache,connect_default_db,\
      MapView,GraphView,DBServerInfo,import_sqlite
 from pygr import logger
@@ -284,5 +284,4 @@ def get_suite():
     return testutil.make_suite(tests)
 
 if __name__ == '__main__':
-    suite = get_suite()
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    PygrTestProgram(verbosity=2)

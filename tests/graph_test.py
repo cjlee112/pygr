@@ -3,7 +3,8 @@ Test some of the basics underpinning the graph system.
 """
 
 import os, unittest
-from testlib import testutil
+
+from testlib import testutil, PygrTestProgram, SkipTest
 from pygr import mapping, graphquery, sqlgraph
 import pygr.Data
 
@@ -173,6 +174,9 @@ class SQLGraph_Test(Mapping_Test):
     dbname = 'test.dumbo_foo_test'
 
     def setUp(self):
+        if not testutil.mysql_enabled():
+            raise SkipTest, "no MySQL"
+    
         createOpts = dict(source_id='int', target_id='int', edge_id='int')
         self.datagraph = sqlgraph.SQLGraph(self.dbname, dropIfExists=True,
                                            createTable=createOpts)
@@ -202,26 +206,5 @@ class Splicegraph_Test(unittest.TestCase):
         l = list(gq)
         assert len(l) == 11546, 'test exact size of exonskip set'
 
-def get_suite():
-    "Returns the testsuite"
-
-    tests  = [ 
-        Query_Test, 
-        Mapping_Test,
-        Graph_Test, 
-        GraphShelve_Test,
-    ]
-
-    # deal with the mysql tests
-    if testutil.mysql_enabled():
-        tests.append(SQLGraph_Test)    
-    else:
-        testutil.info('*** skipping MySql version of SQLGraph test')
-    if testutil.sqlite_enabled():
-        tests.append(SQLiteGraph_Test)
-        
-    return testutil.make_suite(tests)
-
 if __name__ == '__main__':
-    suite = get_suite()
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    PygrTestProgram(verbosity=2)

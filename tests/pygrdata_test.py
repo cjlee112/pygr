@@ -1,5 +1,7 @@
-from testlib import testutil
 import socket, unittest, os, md5, pickle, datetime
+
+import testlib
+from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import seqdb, cnestedlist, mapping
 from pygr.downloader import SourceURL, GenericBuilder
 import pygr.Data
@@ -289,6 +291,9 @@ class Sequence_Test(TestBase):
 
 class SQL_Sequence_Test(Sequence_Test):
     def setUp(self):
+        if not testutil.mysql_enabled():
+            raise SkipTest, "no MySQL installed"
+        
         self.dbtable = testutil.temp_table_name() # create temp db tables
         Sequence_Test.setUp(self, pygrDataPath='mysql:' + self.dbtable,
                             mdbArgs=dict(createLayer='temp'))
@@ -356,20 +361,5 @@ class XMLRPC_Test(TestBase):
         self.server.close()
 
 
-def get_suite():
-    "Returns the testsuite"
-    tests  = [ 
-        Download_Test,
-        GenericBuild_Test,
-        Sequence_Test,
-        InvalidPickle_Test, 
-        XMLRPC_Test,
-        DNAAnnotation_Test, # move this to top to test test framework isolation
-    ]
-    if testutil.mysql_enabled():
-        tests.append(SQL_Sequence_Test)
-    return testutil.make_suite(tests)
-
 if __name__ == '__main__':
-    suite = get_suite()
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    PygrTestProgram(verbosity=2)

@@ -8,4 +8,4 @@ import testoptions
 import testutil
 
 # make SkipTest available
-from unittest_extensions import SkipTest
+from unittest_extensions import SkipTest, PygrTestProgram

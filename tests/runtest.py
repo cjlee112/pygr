@@ -24,7 +24,7 @@ def all_tests():
 def run(targets, options):
     "Imports and runs the modules names that are contained in the 'targets'"
     
-    success = errors = 0
+    success = errors = skipped = 0
 
     # run the tests by importing the module and getting its test suite
     for name in targets:
@@ -40,8 +40,12 @@ def run(targets, options):
             
             # count tests and errors
             success += results.testsRun - \
-                       len(results.errors) - len(results.failures)
+                       len(results.errors) - \
+                       len(results.failures) - \
+                       len(results.skipped)
+            
             errors  += len(results.errors) + len(results.failures)
+            skipped += len(results.skipped)
 
             # if we're in strict mode stop on errors
             if options.strict and errors:
@@ -51,17 +55,10 @@ def run(targets, options):
         except ImportError:
             testutil.error( "unable to import module '%s'" % name )
 
-    # each skipped testsuite generates a message
-    skipped = len(testutil.SKIP_MESSAGES)
-    
-    # generate warnings on skipped tests
-    for message in testutil.SKIP_MESSAGES:
-        testutil.warn(message)
-
     # summarize the run
     testutil.info('=' * 59)
     testutil.info('''\
-%s tests passed, %s tests failed, %s suites skipped; %d total''' % \
+%s tests passed, %s tests failed, %s tests skipped; %d total''' % \
                   (success, errors, skipped, success + errors + skipped))
 
     return (success, errors, skipped)
