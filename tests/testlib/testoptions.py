@@ -71,12 +71,19 @@ def option_parser():
         help="runs the performance tests (not implemented)"
     )
 
-    # port information for the pygrdata_test.py test; default is in
-    # testutil.default_xmlrpc_port.
+    # port information for the pygrdata_test.py test; default is random
     parser.add_option(
         '--port', action="store", type="int",
         dest="port", default=0, 
         help="sets the port information for the XMLRPC server"
+    )
+
+    # where to write out the port information, for communication to test
+    # runner.
+    parser.add_option(
+        '--port-file', action="store", type="string",
+        dest="port_file",
+        help="where to write the port information for the XMLRPC server"
     )
 
     # set the pygraphdata path from command line
