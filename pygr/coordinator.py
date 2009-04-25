@@ -5,12 +5,14 @@ import thread
 import sys
 import xmlrpclib
 import traceback
-import dbfile
+from SimpleXMLRPCServer import SimpleXMLRPCServer
+import socket
 
+import dbfile
+import logging
 
 def get_hostname(host=None):
     'get FQDN for host, or current host if not specified'
-    import socket
     if host is None:
         host=socket.gethostname()
     try:
@@ -18,23 +20,19 @@ def get_hostname(host=None):
     except socket.herror: # DNS CAN'T RESOLVE HOSTNAME
         return host # JUST USE HOSTNAME AS REPORTED BY gethostname()
 
-def get_server(host,port,logRequests=False):
-    "start xmlrpc server on requested host:port"
-    from SimpleXMLRPCServer import SimpleXMLRPCServer
-    import socket
-    if host is None: # FOR CREATING XMLRPC SERVER, USE localhost BY DEFAULT
+def get_server(host, port, logRequests=False):
+    """Start xmlrpc server on requested host:port.
+
+    Return bound SimpleXMLRPCServer server obj and port it's bound to.
+    
+    Set port=0 to bind to a random port number.
+    """
+    if host is None: # use localhost as default
         host='localhost'
-    maxport=port+50
-    while port<maxport:
-        try: # TRY TO FIND AN OPEN PORT
-            server=SimpleXMLRPCServer((host,port),logRequests=logRequests)
-            break
-        except socket.error: # KEEP TRYING MORE PORTS
-            port += 1
-    if port>= maxport:
-        raise socket.error('unable to find any open port up to %d' % maxport)
-    print >>sys.stderr, "Running XMLRPC server on port %d..." % port
-    return server,port
+    server = SimpleXMLRPCServer((host, port), logRequests=logRequests)
+    port = server.socket.getsockname()[1]
+    logging.info("Running XMLRPC server on port %d..." % port)
+    return server, port
 
 
 class XMLRPCClientObject(object):
@@ -1218,7 +1216,6 @@ class RCMonitor(object):
         self.get_status()
 
     def get_status(self):
-        import socket
         self.name,self.errlog,self.systemLoad,self.hosts,coordinators, \
                self.rules,self.resources,self.locks=self.rc_server.get_status()
         print "Got status from ResourceController:",self.name,self.rc_url
