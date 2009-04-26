@@ -66,8 +66,8 @@ def option_parser():
 
     # adds the clean option to the testrunner
     parser.add_option(
-        '--clean', action="store_true", dest="clean", default=False, 
-        help="removes the temporary directory"
+        '--no-clean', action="store_false", dest="clean", default=True,
+        help="does not reset the temporary directory and temp files"
     )
 
     # runs the performance tests
