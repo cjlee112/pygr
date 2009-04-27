@@ -65,11 +65,13 @@ but without a preceding flag argument.
         if ifile is not None:
             ifile.flush()
             ifile.seek(0)
-    def __del__(self):
+    def close(self):
+        """Close any open temp (PIPE) files. """
         self._close_file('stdin')
         self._close_file('stdout')
         self._close_file('stderr')
-
+    def __del__(self):
+        self.close()
 
 try:
     import subprocess

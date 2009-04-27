@@ -64,10 +64,14 @@ def process_blast(cmd, seq, seqDB, al=None, seqString=None, queryDB=None,
                   popenArgs={}, **kwargs):
     "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
     seqID,p = start_blast(cmd, seq, seqString, seqDict=queryDB, **popenArgs)
-    if queryDB is not None:
-        al = read_interval_alignment(p.stdout, queryDB, seqDB, al, **kwargs)
-    else:
-        al = read_interval_alignment(p.stdout, {seqID:seq}, seqDB, al, **kwargs)
+    try:
+        if queryDB is not None:
+            al = read_interval_alignment(p.stdout, queryDB, seqDB, al, **kwargs)
+        else:
+            al = read_interval_alignment(p.stdout, {seqID:seq}, seqDB, al,
+                                         **kwargs)
+    finally:
+        p.close() # close our PIPE files
     return al
 
 
@@ -88,6 +92,7 @@ def repeat_mask(seq, progname='RepeatMasker', opts=()):
         finally:
             ifile.close()
     finally: # clean up our temp files no matter what happened
+        p.close() # close temp stdin file
         for fpath in glob.glob(p._stdin_path + '.*'):
             try:
                 os.remove(fpath)
