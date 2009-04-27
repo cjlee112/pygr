@@ -86,7 +86,20 @@ try:
             return p.returncode
 
 except ImportError:
-    from commands import mkarg
+    CSH_REDIRECT = False # SH style redirection is default
+    import platform
+    if platform.system() == 'Windows':
+        def mkarg(arg):
+            """Very basic quoting of arguments for Windows """
+            return '"' + arg + '"'
+    else: # UNIX 
+        from commands import mkarg
+        try:
+            if os.environ['SHELL'].endswith('csh'):
+                CSH_REDIRECT = True
+        except KeyError:
+            pass
+            
     class FilePopen(FilePopenBase):
         'this subclass fakes subprocess.Popen.wait() using os.system()'
         def wait(self):
@@ -97,6 +110,11 @@ except ImportError:
             if self.args[4]: # redirect stdout
                 args += ['>', mkarg(self._stdout_path)]
             cmd = ' '.join(args)
+            if self.args[5]: # redirect stderr
+                if CSH_REDIRECT:
+                    cmd = '(%s) >& %s' % (cmd, mkarg(self._stderr_path))
+                else:
+                    cmd = cmd + ' 2> ' + mkarg(self._stderr_path)
             returncode = os.system(cmd)
             self._close_file('stdin')
             self._rewind_for_reading(self.stdout)
