@@ -1,5 +1,5 @@
 
-import shelve, anydbm, sys
+import shelve, anydbm, sys, UserDict
 import logger
 
 class WrongFormatError(IOError):
@@ -83,7 +83,7 @@ def iter_gdbm(db):
         yield k
         k = db.nextkey(k)
 
-class _ClosedDict(object):
+class _ClosedDict(UserDict.DictMixin):
     """This dummy class exists solely to raise a clear error msg if accessed.
     Copied from the Python 2.6 shelve.py """
     def closed(self, *args):

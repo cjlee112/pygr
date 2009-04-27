@@ -224,12 +224,28 @@ class SequenceFileDB_Test(unittest.TestCase):
             
     # test some things other than dict behavior
     def test_keyerror(self):
-        "SequenceFileDB keyerror"
-        "Make sure that the SequenceFileDB KeyError is informative."
+        """SequenceFileDB keyerror.
+        Make sure that the SequenceFileDB KeyError is informative."""
         try:
             self.db['foo']
         except KeyError, e:
             assert "no key 'foo' in database <SequenceFileDB" in str(e), str(e)
+
+    def test_close(self):
+        """SequenceFileDB close.
+        Check closing behavior; access after close() --> ValueError """
+        self.db.close()
+        self.db.close() # closing twice should not raise an error
+        try:
+            len(self.db)
+            assert 0, 'Failed to catch invalid shelve access!'
+        except ValueError:
+            pass
+        try:
+            self.db['seq1']
+            assert 0, 'Failed to catch invalid shelve access!'
+        except ValueError:
+            pass
 
 class SequenceFileDB_Creation_Test(unittest.TestCase):
     """
