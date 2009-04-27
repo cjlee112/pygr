@@ -76,9 +76,6 @@ class EmptySlice:
     
 class NLMSASeqDict(dict):
   'index sequences by pathForward, and use list to keep reverse mapping'
-  # raise err msg if shelve file already closed
-  seqIDdict = classutil.OpenFileDescriptor('seqIDdict', closeOptional=True)
-  IDdict = classutil.OpenFileDescriptor('idDict', closeOptional=True)
   def __init__(self,nlmsa,filename,mode,maxID=1000000,idDictClass=None):
     dict.__init__(self)
     self.seqlist=NLMSASeqList(self)
@@ -153,8 +150,12 @@ class NLMSASeqDict(dict):
     return self # iadd MUST RETURN self!!!
   def close(self):
     'finalize and close shelve indexes'
-    del self.seqIDdict # make OpenFileDescriptor close both shelves
-    del self.IDdict
+    try:
+      do_close = self.seqIDdict.close
+    except AttributeError:
+      return # our storage doesn't support close(), so nothing to do
+    do_close() # close both shelve objects
+    self.IDdict.close()
   def reopenReadOnly(self,mode='r'):
     'save existing data and reopen in read-only mode'
     self.close()

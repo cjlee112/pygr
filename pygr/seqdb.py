@@ -399,9 +399,6 @@ class SequenceFileDB(SequenceDB):
 
     """
     itemClass = FileDBSequence
-    # protect this attr with proper error msg if already closed
-    seqLenDict = classutil.OpenFileDescriptor('seqLenDict')
-    _pureseq = classutil.OpenFileDescriptor('_pureseq')
 
     # copy _pickleAttrs and add 'filepath'
     _pickleAttrs = SequenceDB._pickleAttrs.copy()
@@ -426,9 +423,14 @@ class SequenceFileDB(SequenceDB):
         SequenceDB.__init__(self, filepath=filepath, dbname=dbname, **kwargs)
 
     def close(self):
-        'close our open shelve index file...'
-        del self.seqLenDict # make OpenFileDescriptor close shelve for us
-        del self._pureseq
+        '''close our open shelve index file and _pureseq...'''
+        self.seqLenDict.close()
+        try:
+            do_close = self._pureseq.close
+        except AttributeError:
+            pass # _pureseq not open yet, so nothing to do
+        else:
+            do_close()
 
     def __repr__(self):
         return "<%s '%s'>" % (self.__class__.__name__, self.filepath)

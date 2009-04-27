@@ -314,7 +314,6 @@ class Collection(object):
 
 class PicklableShelve(Collection):
     'persistent storage mapping ID --> OBJECT'
-    d = classutil.OpenFileDescriptor('d') # raise err msg if already closed
     def __init__(self,filename,mode=None,writeback=False,unpicklingMode=False,
                  verbose=True,**kwargs):
         '''Wrapper for a shelve object that can be pickled.  Ideally, you
@@ -359,7 +358,8 @@ verbose=False option.''' % (filename,mode,mode)
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(filename=0,mode=0,writeback=0)
     def close(self):
-        del self.d # make OpenFileDescriptor close our shelve index file
+        '''close our shelve index file. '''
+        self.d.close()
     def __setitem__(self,k,v):
         try:
             self.d[k]=v
@@ -754,8 +754,6 @@ class Graph(object):
     """Top layer graph interface implemenation using proxy dict.
        Works with dict, shelve, any mapping interface."""
     edgeDictClass=IDNodeDict # DEFAULT EDGE DICT
-    # raise err msg if attribute already closed
-    d = classutil.OpenFileDescriptor('d', closeOptional=True)
     def __init__(self,saveDict=None,dictClass=dict,writeNow=False,**kwargs):
         if saveDict is not None: # USE THE SUPPLIED STORAGE
             self.d = saveDict
@@ -780,7 +778,13 @@ class Graph(object):
                         edgeDictClass=0)
     add_standard_packing_methods(locals())  ############ PACK / UNPACK METHODS
     def close(self):
-        del self.d # make OpenFileDescriptor close our index file, if any
+        '''If possible, close our dict. '''
+        try:
+            do_close = self.d.close
+        except AttributeError:
+            pass
+        else:
+            do_close()
     def __len__(self):
         return len(self.d)
     def __iter__(self):

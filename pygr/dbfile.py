@@ -1,5 +1,5 @@
 
-import shelve, anydbm
+import shelve, anydbm, sys
 import logger
 
 class WrongFormatError(IOError):
@@ -83,6 +83,17 @@ def iter_gdbm(db):
         yield k
         k = db.nextkey(k)
 
+class _ClosedDict(object):
+    """This dummy class exists solely to raise a clear error msg if accessed.
+    Copied from the Python 2.6 shelve.py """
+    def closed(self, *args):
+        raise ValueError('invalid operation on closed shelf')
+    __getitem__ = __setitem__ = __delitem__ = keys = closed
+
+    def __repr__(self):
+        return '<Closed Dictionary>'
+
+
 
 class BetterShelf(shelve.Shelf):
     """Shelf subclass that fixes its horrible iter implementation.
@@ -93,6 +104,13 @@ class BetterShelf(shelve.Shelf):
             return iter(self.dict)
         except TypeError: # gdbm has wierd iterator behavior...
             return iter_gdbm(self.dict)
+
+    if sys.version_info < (2, 6): # Python finally added good err msg in 2.6
+        def close(self):
+            if isinstance(self.dict, _ClosedDict):
+                return # if already closed, nothing further to do...
+            shelve.Shelf.close(self) # close Shelf as usual
+            self.dict = _ClosedDict() # raises sensible error msg if accessed
 
 def shelve_open(filename, flag='c', protocol=None, writeback=False,
                 useHash=True, mode=0666, *args, **kwargs):
