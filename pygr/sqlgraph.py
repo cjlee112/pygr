@@ -6,7 +6,8 @@ from sequence import SequenceBase, DNA_SEQTYPE, RNA_SEQTYPE, PROTEIN_SEQTYPE
 import types
 from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
      override_rich_cmp,generate_items,get_bound_subclass,standard_setstate,\
-     get_valid_path,standard_invert,RecentValueDictionary,read_only_error
+     get_valid_path,standard_invert,RecentValueDictionary,read_only_error,\
+     SourceFileName
 import os
 import platform 
 import UserDict
@@ -1683,6 +1684,34 @@ class DBServerInfo(object):
         'return all picklable arguments'
         return dict(kwargs=self.kwargs, get_connection=self.get_connection)
 
+
+class SQLiteServerInfo(object):
+    """picklable reference to a sqlite database"""
+    def __init__(self, database, *args, **kwargs):
+        """Takes same arguments as sqlite3.connect()"""
+        if database == ':memory:':
+            raise ValueError('SQLite in-memory database is not picklable!')
+        self.args = (SourceFileName(database),) + args[1:] # save abs path!
+        self.kwargs = kwargs
+    def cursor(self):
+        """Get a cursor for accessing this database """
+        try:
+            return self._cursor
+        except AttributeError:
+            sqlite = import_sqlite()
+            self._connection = sqlite.connect(*self.args, **self.kwargs)
+            self._cursor = self._connection.cursor()
+            return self._cursor
+    def close(self):
+        """Close file containing this database"""
+        self._cursor.close()
+        self._connection.close()
+        del self._cursor
+        del self._connection
+    def __getstate__(self):
+        """return all picklable arguments"""
+        return dict(args=self.args, kwargs=self.kwargs)
+        
 
             
 class MapView(object, UserDict.DictMixin):
