@@ -4,7 +4,8 @@ Tests for the pygr.seqdb module.
 
 import os
 import unittest
-from testlib import testutil
+
+from testlib import testutil, PygrTestProgram
 from pygr.seqdb import SequenceDB, SequenceFileDB, PrefixUnionDict, \
      AnnotationDB, SeqPrefixUnionDict
 from pygr.sequence import Sequence
@@ -41,6 +42,7 @@ class _SimpleFakeSeqDB(SequenceDB):
 class SequenceDB_Test(unittest.TestCase):
     def test_repr(self):
         "test the __repr__ function."
+    
         db = _SimpleFakeSeqDB(itemClass=_SimpleFakeSequence)
         repr(db)
             
@@ -1029,18 +1031,5 @@ class SeqDBCache_Test(unittest.TestCase):
         # check that db._weakValueDict cache is empty
         assert len(db._weakValueDict)==0, '_weakValueDict should be empty'
 
-def get_suite():
-    "Returns the testsuite"
-    tests = [
-        SequenceDB_Test,
-        SequenceFileDB_Test, SequenceFileDB_Creation_Test,
-        PrefixUnionDict_Test, PrefixUnionDict_Creation_Test,
-        PrefixUnionMemberDict_Test,
-        SeqPrefixUnionDict_Test,
-        AnnotationDB_Test, SeqDBCache_Test
-    ]
-    return testutil.make_suite(tests)
-
 if __name__ == '__main__':
-    suite = get_suite()
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    PygrTestProgram(verbosity=2)

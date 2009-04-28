@@ -6,12 +6,10 @@ import sys, os, shutil, unittest, random, warnings, threading, time, re, md5, gl
 import tempfile as tempfile_mod
 import atexit
 
+from unittest_extensions import SkipTest
+
 import pathfix
 from pygr import logger
-
-# a list that keeps track of the messages
-# generated when skipping tests
-SKIP_MESSAGES = []
 
 # represents a test data
 class TestData(object):
@@ -236,15 +234,12 @@ def make_suite(tests):
 
 def mysql_enabled():
     """
-    Detects wether mysql is functional on the current system
+    Detects whether mysql is functional on the current system
     """
-    global SKIP_MESSAGES
-
     try:
         import MySQLdb
     except ImportError, exc:
         msg = 'MySQLdb error: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
     try:
@@ -255,7 +250,6 @@ def mysql_enabled():
         tempcurs.execute('create database if not exists test')
     except Exception, exc:
         msg = 'cannot operate on MySql database: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
 
@@ -266,13 +260,11 @@ def sqlite_enabled():
     """
     Detects whether sqlite3 is functional on the current system
     """
-    global SKIP_MESSAGES
     from pygr.sqlgraph import import_sqlite
     try:
         sqlite = import_sqlite() # from 2.5+ stdlib, or pysqlite2
     except ImportError, exc:
         msg = 'sqlite3 error: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
     return True
@@ -281,6 +273,9 @@ def sqlite_enabled():
 class SQLite_Mixin(object):
     'use this as a base for any test'
     def setUp(self):
+        if not sqlite_enabled():
+            raise SkipTest
+            
         from pygr.sqlgraph import import_sqlite
         sqlite = import_sqlite() # from 2.5+ stdlib, or external module
         self.sqlite_file = tempdatafile('test_sqlite.db', False)
@@ -312,13 +307,10 @@ def blast_enabled():
     """
     Detects whether the blast suite is functional on the current system
     """
-    global SKIP_MESSAGES
-
     try:
         pass
     except ImportError, exc:
         msg = 'blast utilities not enabled: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
 
