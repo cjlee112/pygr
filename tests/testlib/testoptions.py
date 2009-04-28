@@ -52,7 +52,7 @@ def option_parser():
     # verbosity can be 0,1 and 2 (increasing verbosity)
     parser.add_option(
         '-v', '--verbosity', action="store", 
-        dest="verbosity", type="int", default=1, 
+        dest="verbosity", type="int", default=0, 
         help="sets the verbosity (0, 1, or 2)",
     )
 
@@ -62,6 +62,12 @@ def option_parser():
     parser.add_option(
         '--coverage', action="store_true", dest="coverage", default=False, 
         help="runs figleaf and collects the coverage information into the html directory"
+    )
+
+    # adds the clean option to the testrunner
+    parser.add_option(
+        '--no-clean', action="store_false", dest="clean", default=True,
+        help="does not reset the temporary directory and temp files"
     )
 
     # runs the performance tests

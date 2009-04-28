@@ -93,7 +93,13 @@ try:
     # import an extension module
     from pygr import cnestedlist
 except ImportError, exc:
-    stop("unable to import extension module: %s" %  exc )
+    stop("""
+    Unable to import extension modules: '%s'
+    
+    Either build in place with: python setup.py build_ext -i
+    
+    Or pass the -b flag to runtest.py (see runtest.py -h for more details)
+    """ % exc)
 
 if use_pathfix:
     

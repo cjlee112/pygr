@@ -90,6 +90,19 @@ if __name__ == '__main__':
     if options.verbosity != 2:
         logger.disable('DEBUG')
     
+    # cleans full entire test directory
+    if options.clean:
+        testutil.TEMPROOT.reset()
+        testutil.TEMPDIR = testutil.TEMPROOT.path # yikes!
+
+        # list patterns matching files to be removed here
+        patterns = [
+            "*.seqlen", "*.pureseq", "*.nin", "*.pin", "*.psd",
+            "*.psi", "*.psq", "*.gz", "*.zip", "*.psd", "*.nni", "*.nhr", 
+            "*.nsi", "*.nsd", "*.nsq", "*.nnd",
+        ]
+        testutil.remove_files(path=testutil.DATADIR, patterns=patterns)
+    
     # run all the tests
     if options.coverage:
         good, bad, skip = testutil.generate_coverage(run, 'coverage',
