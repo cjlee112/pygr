@@ -98,7 +98,7 @@ if __name__ == '__main__':
         # list patterns matching files to be removed here
         patterns = [
             "*.seqlen", "*.pureseq", "*.nin", "*.pin", "*.psd",
-            "*.psi", "*.psq", "*.gz", "*.zip", "*.psd", "*.nni", "*.nhr", 
+            "*.psi", "*.psq", "*.psd", "*.nni", "*.nhr", 
             "*.nsi", "*.nsd", "*.nsq", "*.nnd",
         ]
         testutil.remove_files(path=testutil.DATADIR, patterns=patterns)
