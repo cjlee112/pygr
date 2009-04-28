@@ -168,12 +168,8 @@ class TestXMLRPCServer(object):
 
         currdir = os.path.dirname(__file__)
         self.server_script = path_join(currdir, 'pygrdata_server.py')
-        # create temporary directory for its logs
-        tempdir = TempDir('pygrdata').path
-        self.outname = path_join(tempdir, 'xmlrpc-out.txt')
-        self.errname = path_join(tempdir, 'xmlrpc-err.txt')
     
-        # start the tread
+        # start the thread
         thread = threading.Thread(target=self.run_server)
         thread.start()
         
