@@ -22,7 +22,7 @@ path_join = pathfix.path_join
 info, error, warn, debug = logger.info, logger.error, logger.warn, logger.debug
 
 # global port setting
-default_xmlrpc_port = 89324              # should be set by test runner
+default_xmlrpc_port = 0              # 0 -> random port; overriden by runtest.
 
 ###
 
@@ -152,18 +152,18 @@ class TestXMLRPCServer(object):
     PYGRDATAPATH: passed to the server process command line as its PYGRDATAPATH
     checkResources: if True, first check that all pygrDataNames are loadable.
     """
-    def __init__(self, pygrDataNames, pygrDataPath, port=None, downloadDB=''):
+    def __init__(self, pygrDataNames, pygrDataPath, port=0, downloadDB=''):
         'starts server, returns without blocking'
         self.pygrDataNames = pygrDataNames
         self.pygrDataPath = pygrDataPath
         self.downloadDB = downloadDB
 
         global default_xmlrpc_port
-        if port is None:
-            assert default_xmlrpc_port
-            self.port = default_xmlrpc_port
-        else:
-            self.port = port
+        if not port:
+            port = default_xmlrpc_port
+            
+        self.port = port
+        self.port_file = tempdatafile('xmlrpc_port_file', False)
 
         # check that all resources are available
         ## if kwargs.get('checkResources'):
@@ -176,29 +176,40 @@ class TestXMLRPCServer(object):
         thread = threading.Thread(target=self.run_server)
         thread.start()
         
-        # wait for it to start for 
-        time.sleep(1) 
+        # wait for it to start
+        time.sleep(1)
+
+        # retrieve port info
+        try:
+            ifile = open(self.port_file)
+            try:
+                self.port = int(ifile.read())
+            finally:
+                ifile.close() # make sure to close file no matter what
+        except OSError:
+            assert 0, "cannot get port info from server; is server running?"
 
     def run_server(self):
         'this method blocks, so run it in a separate thread'
-        logger.debug('starting server on port %s', self.port)
-
-        p = classutil.FilePopen((sys.executable, self.server_script) +
-                                tuple(sys.argv) +
-                                ('--port=' + str(self.port),
-                                 '--pygrdatapath=' + self.pygrDataPath,
-                                 '--downloadDB=' + self.downloadDB,
-                                 '--resources=' + ':'.join(self.pygrDataNames)),
-                                stdout=classutil.PIPE, stderr=classutil.PIPE)
+        cmdArgs = (sys.executable, self.server_script) + tuple(sys.argv) \
+                  + ('--port=' + str(self.port),
+                     '--port-file=' + self.port_file,
+                     '--pygrdatapath=' + self.pygrDataPath,
+                     '--downloadDB=' + self.downloadDB,
+                     '--resources=' + ':'.join(self.pygrDataNames))
+        p = classutil.FilePopen(cmdArgs, stdout=classutil.PIPE,
+                                stderr=classutil.PIPE)
         try:
+            logger.debug('Starting XML-RPC server: ')
+            logger.debug(repr(cmdArgs))
             if p.wait():
                 logger.warn('XML-RPC server command failed!')
-        finally:
             output = p.stdout.read()
             errout = p.stderr.read()
-            p.close()
             logger.debug('XML-RPC server output: %s' % output)
             logger.debug('XML-RPC server error out: %s' % errout)
+        finally:
+            p.close()
 
         logger.debug('server stopped')
     
