@@ -241,9 +241,12 @@ class Ensembl_Test(unittest.TestCase):
         logger.debug('accessing ensembldb.ensembl.org')
         conn = DBServerInfo(host='ensembldb.ensembl.org', user='anonymous',
                             passwd='')
-        translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
-                                 serverInfo=conn)
-        exonDB = SQLTable('homo_sapiens_core_47_36i.exon', serverInfo=conn)
+        try:
+            translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
+                                     serverInfo=conn)
+            exonDB = SQLTable('homo_sapiens_core_47_36i.exon', serverInfo=conn)
+        except ImportError,e:
+            raise SkipTest(e)
         
         sql_statement = '''SELECT t3.exon_id FROM
 homo_sapiens_core_47_36i.translation AS tr,
