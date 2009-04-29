@@ -1,5 +1,5 @@
 import os, unittest
-from testlib import testutil, PygrTestProgram
+from testlib import testutil, PygrTestProgram, SkipTest
 from pygr.sqlgraph import SQLTable,SQLTableNoCache,connect_default_db,\
      MapView,GraphView,DBServerInfo,import_sqlite
 from pygr import logger
@@ -8,7 +8,10 @@ class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTable
     def __init__(self, *args, **kwargs):
         unittest.TestCase.__init__(self, *args, **kwargs)
-        self.conn,self.cursor = connect_default_db() # share conn for all tests
+        try:
+            self.conn,self.cursor = connect_default_db() # share conn for all tests
+        except ImportError:
+            raise SkipTest('unable to import db connectivity module')
     def setUp(self):
         self.load_data(writeable=self.writeable)
     def load_data(self, cursor=None, tableName='test.sqltable_test',
@@ -261,27 +264,6 @@ t3.rank <= t2.rank ORDER BY t3.rank
                    95110,95172]
         self.assertEqual(result, correct) # make sure the exact order matches
 
-def get_suite():
-    "Returns the testsuite"
-
-    tests = []
-
-    # detect mysql
-    if testutil.mysql_enabled():
-        tests.append(SQLTable_Test)
-        tests.append(SQLTableRW_Test)
-        tests.append(SQLTable_NoCache_Test)
-        tests.append(SQLTableRW_NoCache_Test)
-        tests.append(Ensembl_Test) 
-    else:
-        testutil.info('*** skipping MySQL tests')
-    if testutil.sqlite_enabled():
-        tests.append(SQLiteTable_Test)
-        tests.append(SQLiteTableRW_Test)
-        tests.append(SQLiteTable_NoCache_Test)
-        tests.append(SQLiteTableRW_NoCache_Test)
-
-    return testutil.make_suite(tests)
 
 if __name__ == '__main__':
     PygrTestProgram(verbosity=2)
