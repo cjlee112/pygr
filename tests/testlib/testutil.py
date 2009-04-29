@@ -9,7 +9,7 @@ import atexit
 from unittest_extensions import SkipTest
 
 import pathfix
-from pygr import logger
+from pygr import logger, classutil
 
 # represents a test data
 class TestData(object):
@@ -171,12 +171,8 @@ class TestXMLRPCServer(object):
 
         currdir = os.path.dirname(__file__)
         self.server_script = path_join(currdir, 'pygrdata_server.py')
-        # create temporary directory for its logs
-        tempdir = TempDir('pygrdata').path
-        self.outname = path_join(tempdir, 'xmlrpc-out.txt')
-        self.errname = path_join(tempdir, 'xmlrpc-err.txt')
     
-        # start the tread
+        # start the thread
         thread = threading.Thread(target=self.run_server)
         thread.start()
         
@@ -187,35 +183,20 @@ class TestXMLRPCServer(object):
         'this method blocks, so run it in a separate thread'
         logger.debug('starting server on port %s', self.port)
 
-        params = dict(
-            port=self.port, 
-            downloadDB=self.downloadDB, 
-            pygrdatapath=self.pygrDataPath,
-            resources = ':'.join(self.pygrDataNames),
-            incoming_flags = " ".join(sys.argv)
-       )
-
-        flags = """%(incoming_flags)s --port=%(port)s \
-        --pygrdatapath=%(pygrdatapath)s \
-        --downloadDB=%(downloadDB)s --resources=%(resources)s""" % params
-
-        flags = ' '.join(flags.split() )
-        # CTB -- warning, these could fail when passed to the os.system
-        # without quoting, IF weird characters are present in TMP or TMPDIR.
-        
-
-        cmd = '%s %s %s > %s 2> %s' % \
-              (sys.executable, self.server_script, flags,
-               self.outname, self.errname)
-        logger.debug('Starting XML-RPC server: ')
-        logger.debug(cmd)
-
+        p = classutil.FilePopen((sys.executable, self.server_script) +
+                                tuple(sys.argv) +
+                                ('--port=' + str(self.port),
+                                 '--pygrdatapath=' + self.pygrDataPath,
+                                 '--downloadDB=' + self.downloadDB,
+                                 '--resources=' + ':'.join(self.pygrDataNames)),
+                                stdout=classutil.PIPE, stderr=classutil.PIPE)
         try:
-            os.system(cmd)
+            if p.wait():
+                logger.warn('XML-RPC server command failed!')
         finally:
-            output = open(self.outname).read()
-            errout = open(self.errname).read()
-
+            output = p.stdout.read()
+            errout = p.stderr.read()
+            p.close()
             logger.debug('XML-RPC server output: %s' % output)
             logger.debug('XML-RPC server error out: %s' % errout)
 
