@@ -10,9 +10,13 @@ class SQLTable_Setup(unittest.TestCase):
         unittest.TestCase.__init__(self, *args, **kwargs)
         try:
             self.conn,self.cursor = connect_default_db() # share conn for all tests
-        except ImportError:
-            raise SkipTest('unable to import db connectivity module')
+        except ImportError,e:
+            self._importError = e
     def setUp(self):
+        try:
+            raise SkipTest(self._importError)
+        except AttributeError:
+            pass # no import error, so carry on...
         self.load_data(writeable=self.writeable)
     def load_data(self, cursor=None, tableName='test.sqltable_test',
                   writeable=False):
