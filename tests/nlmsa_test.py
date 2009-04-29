@@ -85,7 +85,8 @@ class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
         (result,) = n[ival].keys()
         assert result == c[0:8]
 
-        l = sorted(n[a].keys())
+        l = list(n[a].keys())
+        l.sort()
         assert b[0:8] in l
         assert c[0:8] in l
 
