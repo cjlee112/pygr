@@ -1,0 +1,3 @@
+.
+a	dnaseq.fasta
+b	dnaseq.fasta

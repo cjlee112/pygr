@@ -2,15 +2,14 @@
 Utility functions for testing
 """
 
-import sys, os, shutil, unittest, random, warnings, threading, time, re
+import sys, os, shutil, unittest, random, warnings, threading, time, re, md5, glob
 import tempfile as tempfile_mod
 import atexit
 
-import pathfix, logger
+from unittest_extensions import SkipTest
 
-# a list that keeps track of the messages
-# generated when skipping tests
-SKIP_MESSAGES = []
+import pathfix
+from pygr import logger
 
 # represents a test data
 class TestData(object):
@@ -22,7 +21,40 @@ path_join = pathfix.path_join
 # use the main logger to produce 
 info, error, warn, debug = logger.info, logger.error, logger.warn, logger.debug
 
+# global port setting
+default_xmlrpc_port = 89324              # should be set by test runner
+
 ###
+
+def approximate_cmp(x, y, delta):
+    '''expects two lists of tuples.  Performs comparison as usual,
+    except that numeric types are considered equal if they differ by
+    less than delta'''
+    diff = cmp(len(x),len(y))
+    if diff != 0:
+        return diff
+    x.sort() # SORT TO ENSURE IN SAME ORDER...
+    y.sort()
+    for i in range(len(x)):
+        s = x[i]
+        t = y[i]
+        diff = cmp(len(s),len(t))
+        if diff != 0:
+            return diff
+        for j in range(len(s)):
+            u = s[j]
+            v = t[j]
+            if isinstance(u,int) or isinstance(u,float):
+                diff = u - v
+                if diff < -delta:
+                    return -1
+                elif diff >delta:
+                    return 1
+            else:
+                diff = cmp(u,v)
+                if diff != 0:
+                    return diff
+    return 0
 
 def stop(text):
     "Unrecoverable error"
@@ -46,22 +78,11 @@ def generate_coverage(func, path, *args, **kwds):
     import figleaf
     from figleaf import annotate_html
 
-    # Fix for figleaf misbehaving. It is adding a logger at root level 
-    # and that will add a handler to all subloggers (ours as well)
-    # needs to be fixed in figleaf
-    import logging
-    root = logging.getLogger()
-    # remove all root handlers
-    for hand in root.handlers: 
-        root.removeHandler(hand)
-
     if os.path.isdir(path):
         shutil.rmtree(path)       
     
-    figleaf.start() 
     # execute the function itself
-    func(*args, **kwds)
-    figleaf.stop()
+    return_vals = func(*args, **kwds)
     
     logger.info('generating coverage')
     coverage = figleaf.get_data().gather_files()
@@ -73,30 +94,37 @@ def generate_coverage(func, path, *args, **kwds):
     annotate_html.report_as_html(coverage, path, exclude_patterns=patterns,
                                  files_list='')
 
+    return return_vals
+
 class TempDir(object):
     """
     Returns a directory in the temporary directory, either named or a 
     random one
     """
 
-    def __init__(self, prefix, path='tempdir', reset=False):
+    def __init__(self, prefix, path='tempdir'):
+        self.prefix = prefix
         self.tempdir = path_join( pathfix.curr_dir, '..', path )
-        
-        # will remove the root directory of all temporary directories
-        # removes content 
-        if reset and os.path.isdir(self.tempdir):
-            logger.info('resetting path %s' % self.tempdir)
-            shutil.rmtree(self.tempdir, ignore_errors=True)
-
-        if not os.path.isdir(self.tempdir):
-            os.mkdir(self.tempdir)
-        
-        self.path = tempfile_mod.mkdtemp(prefix=prefix, dir=self.tempdir)
+        self.path = self.get_path()
         atexit.register(self.remove)
 
-    def randname(self, prefix='x', size=56):
+    def reset(self):
+        "Resets the root temporary directory"
+       
+        logger.debug('resetting path %s' % self.tempdir)
+        shutil.rmtree(self.path, ignore_errors=True)
+        shutil.rmtree(self.tempdir, ignore_errors=True)
+        self.path = self.get_path()
+
+    def get_path(self):
+        if not os.path.isdir(self.tempdir):
+            os.mkdir(self.tempdir)
+        path = tempfile_mod.mkdtemp(prefix=self.prefix, dir=self.tempdir)
+        return path
+
+    def randname(self, prefix='x'):
         "Generates a random name"
-        id = prefix + str(random.getrandbits(size))
+        id = prefix + str(random.randint(0, 2**31))
         return id
 
     def subfile(self, name=None):
@@ -124,31 +152,29 @@ class TestXMLRPCServer(object):
     PYGRDATAPATH: passed to the server process command line as its PYGRDATAPATH
     checkResources: if True, first check that all pygrDataNames are loadable.
     """
-    def __init__(self,*pygrDataNames,**kwargs):
+    def __init__(self, pygrDataNames, pygrDataPath, port=None, downloadDB=''):
         'starts server, returns without blocking'
-        import pygr.Data
-        
-        # point it to a temporary directory
-        tempdir = TempDir('pygrdata').path
-        self.port = kwargs.get('port', 83756)
+        self.pygrDataNames = pygrDataNames
+        self.pygrDataPath = pygrDataPath
+        self.downloadDB = downloadDB
+
+        global default_xmlrpc_port
+        if port is None:
+            assert default_xmlrpc_port
+            self.port = default_xmlrpc_port
+        else:
+            self.port = port
 
         # check that all resources are available
-        if kwargs.get('checkResources'):
-            map(pygr.Data.getResource, *pygrDataNames)
+        ## if kwargs.get('checkResources'):
+        ##     map(pygr.Data.getResource, *pygrDataNames)
 
-        self.pygrDataNames = pygrDataNames
-        
-        # user specified or default values
-        self.pygrDataPath = kwargs.get('PYGRDATAPATH', tempdir)
-
-        self.downloadDB = '%s' % kwargs.get('downloadDB', '')
-        
-        # create temporary directory for its logs
         currdir = os.path.dirname(__file__)
         self.server_script = path_join(currdir, 'pygrdata_server.py')
-
-        self.outname = path_join(tempdir, 'xmlrcp-out.txt')
-        self.errname = path_join(tempdir, 'xmlrcp-err.txt')
+        # create temporary directory for its logs
+        tempdir = TempDir('pygrdata').path
+        self.outname = path_join(tempdir, 'xmlrpc-out.txt')
+        self.errname = path_join(tempdir, 'xmlrpc-err.txt')
     
         # start the tread
         thread = threading.Thread(target=self.run_server)
@@ -178,22 +204,23 @@ class TestXMLRPCServer(object):
         # without quoting, IF weird characters are present in TMP or TMPDIR.
         
 
-        cmd = '%s %s %s' % \
-              (sys.executable, self.server_script, flags)
+        cmd = '%s %s %s > %s 2> %s' % \
+              (sys.executable, self.server_script, flags,
+               self.outname, self.errname)
         logger.debug('Starting XML-RPC server: ')
         logger.debug(cmd)
 
         try:
             os.system(cmd)
         finally:
-            pass
+            output = open(self.outname).read()
+            errout = open(self.errname).read()
+
+            logger.debug('XML-RPC server output: %s' % output)
+            logger.debug('XML-RPC server error out: %s' % errout)
 
         logger.debug('server stopped')
     
-    def access_server(self):
-        'force pygr.Data to only use the XMLRPC server'
-        pass
-        
     def close(self):
         import xmlrpclib
         s = xmlrpclib.ServerProxy('http://localhost:%d' % self.port)
@@ -207,15 +234,12 @@ def make_suite(tests):
 
 def mysql_enabled():
     """
-    Detects wether mysql is functional on the current system
+    Detects whether mysql is functional on the current system
     """
-    global SKIP_MESSAGES
-
     try:
         import MySQLdb
     except ImportError, exc:
         msg = 'MySQLdb error: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
     try:
@@ -226,7 +250,6 @@ def mysql_enabled():
         tempcurs.execute('create database if not exists test')
     except Exception, exc:
         msg = 'cannot operate on MySql database: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
 
@@ -237,13 +260,11 @@ def sqlite_enabled():
     """
     Detects whether sqlite3 is functional on the current system
     """
-    global SKIP_MESSAGES
     from pygr.sqlgraph import import_sqlite
     try:
         sqlite = import_sqlite() # from 2.5+ stdlib, or pysqlite2
     except ImportError, exc:
         msg = 'sqlite3 error: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
     return True
@@ -252,6 +273,9 @@ def sqlite_enabled():
 class SQLite_Mixin(object):
     'use this as a base for any test'
     def setUp(self):
+        if not sqlite_enabled():
+            raise SkipTest
+            
         from pygr.sqlgraph import import_sqlite
         sqlite = import_sqlite() # from 2.5+ stdlib, or external module
         self.sqlite_file = tempdatafile('test_sqlite.db', False)
@@ -268,18 +292,25 @@ class SQLite_Mixin(object):
             os.remove(self.sqlite_file)
         except OSError:
             pass
-        
+
+def temp_table_name(dbname='test'):
+    import random
+    l = [c for c in 'TeMpBiGdAcDy']
+    random.shuffle(l)
+    return dbname+'.'+''.join(l)
+
+def drop_tables(cursor, tablename):
+    cursor.execute('drop table if exists %s' % tablename)
+    cursor.execute('drop table if exists %s_schema' % tablename)
+                
 def blast_enabled():
     """
     Detects whether the blast suite is functional on the current system
     """
-    global SKIP_MESSAGES
-
     try:
         pass
     except ImportError, exc:
         msg = 'blast utilities not enabled: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
 
@@ -287,18 +318,39 @@ def blast_enabled():
 
 ###
 
-DATADIR = path_join(pathfix.curr_dir, '..', 'data')
-TEMPDIR = TempDir('tempdata').path
+DATADIR  = path_join(pathfix.curr_dir, '..', 'data')
+TEMPROOT = TempDir('tempdir')
+TEMPDIR  = TEMPROOT.path
 
 # shortcuts for creating full paths to files in the data and temporary
 # directories
 datafile = lambda name: path_join(DATADIR, name)
-def tempdatafile(name, errorIfExists=True):
+
+def tempdatafile(name, errorIfExists=True, copyData=False):
     filepath = path_join(TEMPDIR, name)
     if errorIfExists and os.path.exists(filepath):
         raise AssertionError('tempdatafile %s already exists!' % name)
+    if copyData: # copy data file to new location
+        shutil.copyfile(datafile(name), filepath)
     return filepath
 
+def remove_files( path, patterns=[ "*.seqlen" ]):
+    "Removes files matching any pattern in the list"
+    for patt in patterns:
+        fullpatt = path_join(path, patt)
+        for name in glob.glob( fullpatt ):
+            os.remove(name)
+
+def get_file_md5(fpath):
+    ifile = file(fpath, 'rb')
+    try:
+        h = md5.md5(ifile.read())
+    finally:
+        ifile.close()
+    return h
+
 if __name__ == '__main__':
-    TempDir(reset=True)
-    TestXMLRPCServer()
+    t = TempDir('tempdir')
+    t.reset()
+
+    #TestXMLRPCServer()

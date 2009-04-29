@@ -72,7 +72,7 @@ def read_fasta(ifile):
     elif isEmpty:
         raise IOError('no readable sequence in FASTA file!')
 
-def read_fasta_one_line(ifile):
+def read_fasta_one_line(ifile): # @CTB deprecated; remove
     "read a single sequence line, return id,title,seq"
     id = None
     seq = ''

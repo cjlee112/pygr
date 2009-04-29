@@ -1,5 +1,5 @@
 import unittest
-from testlib import testutil
+from testlib import testutil, PygrTestProgram
 from pygr import cnestedlist, nlmsa_utils, seqdb
 
 class NestedList_Test(unittest.TestCase):
@@ -196,12 +196,5 @@ def test_no_seqDict_args(self):
         n.add_aligned_intervals(alignedIvals=ivals)
         n.build()
 
-def get_suite():
-    "Returns the testsuite"
-    tests  = [ NestedList_Test, NLMSA_Test,
-               NLMSA_BuildWithAlignedIntervals_Test ]
-    return testutil.make_suite(tests)
-
 if __name__ == '__main__':
-    suite = get_suite()
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    PygrTestProgram(verbosity=2)

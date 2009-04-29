@@ -52,7 +52,7 @@ def option_parser():
     # verbosity can be 0,1 and 2 (increasing verbosity)
     parser.add_option(
         '-v', '--verbosity', action="store", 
-        dest="verbosity", type="int", default=1, 
+        dest="verbosity", type="int", default=0, 
         help="sets the verbosity (0, 1, or 2)",
     )
 
@@ -64,6 +64,12 @@ def option_parser():
         help="runs figleaf and collects the coverage information into the html directory"
     )
 
+    # adds the clean option to the testrunner
+    parser.add_option(
+        '--no-clean', action="store_false", dest="clean", default=True,
+        help="does not reset the temporary directory and temp files"
+    )
+
     # runs the performance tests
     parser.add_option(
         '--performance', action="store_true", dest="performance",
@@ -71,16 +77,17 @@ def option_parser():
         help="runs the performance tests (not implemented)"
     )
 
-    # port information for the pygrdata_test.py test
+    # port information for the pygrdata_test.py test; default is in
+    # testutil.default_xmlrpc_port.
     parser.add_option(
-        '--port', action="store", type=int, 
-        dest="port", default=89324, 
+        '--port', action="store", type="int",
+        dest="port", default=0, 
         help="sets the port information for the XMLRPC server"
     )
 
     # set the pygraphdata path from command line
     parser.add_option(
-        '--pygrdatapath', action="store", type=str, 
+        '--pygrdatapath', action="store", type="string",
         dest="pygrdatapath", default='', 
         help="sets the pygraphdata path for the XMLRPC server"
     )
@@ -88,7 +95,7 @@ def option_parser():
     # add resources to the path colon separated
     # --downloadDB=database1
     parser.add_option(
-        '--downloadDB', action="store", type=str, 
+        '--downloadDB', action="store", type="string",
         dest="downloadDB", default=None, 
         help="sets the downloadDB shelve for the XMLRPC server"
     )
@@ -97,7 +104,7 @@ def option_parser():
     # add resources to the path colon separated
     # --resources=database1
     parser.add_option(
-        '--resources', action="store", type=str, 
+        '--resources', action="store", type="string",
         dest="resources", default='', 
         help="sets the downloadable resources, separate multiple ones with a : symbol"
     )

@@ -1,15 +1,23 @@
 import os, unittest
-from testlib import testutil, logger
-from pygr.sqlgraph import SQLTable,SQLTableNoCache,getNameCursor,\
+from testlib import testutil, PygrTestProgram
+from pygr.sqlgraph import SQLTable,SQLTableNoCache,connect_default_db,\
      MapView,GraphView,DBServerInfo,import_sqlite
+from pygr import logger
 
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTable
+    def __init__(self, *args, **kwargs):
+        unittest.TestCase.__init__(self, *args, **kwargs)
+        self.conn,self.cursor = connect_default_db() # share conn for all tests
     def setUp(self):
         self.load_data(writeable=self.writeable)
     def load_data(self, cursor=None, tableName='test.sqltable_test',
                   writeable=False):
         'create 3 tables and load 9 rows for our tests'
+        if cursor is not None:
+            self.cursor = cursor
+        else: # reuse default cursor
+            cursor = self.cursor
         self.tableName = tableName
         self.joinTable1 = joinTable1 = tableName + '1'
         self.joinTable2 = joinTable2 = tableName + '2'
@@ -137,7 +145,8 @@ class SQLiteBase(testutil.SQLite_Mixin):
         self.load_data(self.cursor, 'sqltable_test', writeable=self.writeable)
 
 class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
-    pass
+    def __init__(self, *args, **kwargs):
+        unittest.TestCase.__init__(self, *args, **kwargs)
 
 class SQLTable_NoCache_Test(SQLTable_Test):
     tableClass = SQLTableNoCache
@@ -208,7 +217,8 @@ class SQLTableRW_Test(SQLTable_Setup):
         
 
 class SQLiteTableRW_Test(SQLiteBase, SQLTableRW_Test):
-    pass
+    def __init__(self, *args, **kwargs):
+        unittest.TestCase.__init__(self, *args, **kwargs)
 
 class SQLTableRW_NoCache_Test(SQLTableRW_Test):
     tableClass = SQLTableNoCache
@@ -274,5 +284,4 @@ def get_suite():
     return testutil.make_suite(tests)
 
 if __name__ == '__main__':
-    suite = get_suite()
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    PygrTestProgram(verbosity=2)

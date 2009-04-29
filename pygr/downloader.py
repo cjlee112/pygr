@@ -1,4 +1,6 @@
-import sys
+import sys, os
+from classutil import call_subprocess
+import logger
 
 # METHODS FOR AUTOMATIC DOWNLOADING OF RESOURCES
 
@@ -27,28 +29,30 @@ def do_gunzip(filepath,newpath=None):
 
 def run_gunzip(filepath,newpath=None):
     'run gunzip program as a sub process'
-    from subprocess import call # secure way to run process
-    retcode = call(['gunzip',filepath])
-    if retcode != 0:
-        raise OSError('gunzip "%s" failed!' % filepath)
-    return filepath[:-3] # DROP THE .gz SUFFIX
+    if newpath is None:
+        newpath = filepath[:-3]
+    ifile = open(newpath, 'w+b')
+    try:
+        if call_subprocess(['gunzip', '-c', filepath], stdout=ifile):
+            raise OSError('gunzip "%s" failed!' % filepath)
+    finally:
+        ifile.close()
+    return newpath
+
 
 def run_unzip(filepath,newpath=None,singleFile=False,**kwargs):
     '''run unzip program as a sub process,
     save to single file newpath if desired.'''
     if newpath is None:
         newpath = filepath[:-4] # DROP THE .zip SUFFIX
-    from subprocess import Popen,call
     if singleFile: # concatenate all files into newpath
-        import os
-        ifile = file(newpath,'wb') # copy as binary file
+        ifile = file(newpath, 'wb') # copy as binary file
         try:
-            p = Popen(['unzip', '-p',filepath], stdout=ifile)
-            pid,status = os.waitpid(p.pid, 0) # wait for unzip to exit
+            status = call_subprocess(['unzip', '-p', filepath], stdout=ifile)
         finally:
             ifile.close()
     else: # just unzip the package as usual
-        status = call(['unzip',filepath])
+        status = call_subprocess(['unzip', filepath])
     if status != 0:
         raise OSError('unzip "%s" failed!' % filepath)
     return newpath
@@ -122,57 +126,66 @@ def uncompress_file(filepath,**kwargs):
     '''stub for applying appropriate uncompression based on file suffix
     (.tar .tar.gz .tgz .tar.bz2 .gz and .zip for now)'''
     if filepath.endswith('.zip'):
-        print >>sys.stderr, 'unzipping %s...' % filepath
+        logger.info('unzipping %s...' % filepath)
         try:
             return run_unzip(filepath,**kwargs)
         except OSError:
             return do_unzip(filepath, **kwargs)
     elif filepath.endswith('.tar'):
-        print >>sys.stderr, 'untarring %s...' % filepath
+        logger.info('untarring %s...' % filepath)
         return do_untar(filepath,newpath=filepath[:-4],**kwargs)
     elif filepath.endswith('.tgz'):
-        print >>sys.stderr, 'untarring %s...' % filepath
+        logger.info('untarring %s...' % filepath)
         return do_untar(filepath,mode='r:gz',newpath=filepath[:-4],**kwargs)
     elif filepath.endswith('.tar.gz'):
-        print >>sys.stderr, 'untarring %s...' % filepath
+        logger.info('untarring %s...' % filepath)
         return do_untar(filepath,mode='r:gz',newpath=filepath[:-7],**kwargs)
     elif filepath.endswith('.tar.bz2'):
-        print >>sys.stderr, 'untarring %s...' % filepath
+        logger.info('untarring %s...' % filepath)
         return do_untar(filepath,mode='r:bz2',newpath=filepath[:-8],**kwargs)
     elif filepath.endswith('.gz'):
-        print >>sys.stderr, 'gunzipping %s...' % filepath
+        logger.info('gunzipping %s...' % filepath)
         try:  # could use gzip module, but it's two times slower!!
-            return run_gunzip(filepath) # run as sub process
+            return run_gunzip(filepath, **kwargs) # run as sub process
         except OSError: # on Windows, have to run as python module
-            return do_gunzip(filepath)
+            return do_gunzip(filepath, **kwargs)
     
     return filepath # DEFAULT: NOT COMPRESSED, SO JUST HAND BACK FILENAME
 
-def download_monitor(bcount,bsize,totalsize):
+def download_monitor(bcount, bsize, totalsize):
     'show current download progress'
-    bytes = bcount*bsize
-    print >>sys.stderr,'downloaded %s bytes (%2.1f%%)...' \
-          % (bytes,bytes*100./totalsize)
+    if bcount == 0:
+        download_monitor.percentage_last_shown = 0.
+    bytes = bcount * bsize
+    percentage = bytes * 100. / totalsize
+    if percentage >= 10. + download_monitor.percentage_last_shown:
+        logger.info('downloaded %s bytes (%2.1f%%)...'
+                    % (bytes, percentage))
+        download_monitor.percentage_last_shown = percentage
 
 def download_unpickler(path,filename,kwargs):
     'try to download the desired file, and uncompress it if need be'
     import urllib,classutil,os
     if filename is None:
         filename = os.path.basename(path)
-    filepath = os.path.join(classutil.get_env_or_cwd('PYGRDATADOWNLOAD'),filename)
-    print >>sys.stderr,'Beginning download of %s to %s...' %(path,filepath)
+    filepath = os.path.join(classutil.get_env_or_cwd('PYGRDATADOWNLOAD'),\
+        filename)
+    logger.info('Beginning download of %s to %s...' % (path, filepath))
     t = urllib.urlretrieve(path,filepath,download_monitor)
-    print >>sys.stderr,'Download done.'
+    logger.info('Download done.')
     filepath = uncompress_file(filepath, **kwargs) # UNCOMPRESS IF NEEDED
-    o = classutil.SourceFileName(filepath) # PATH TO WHERE THIS FILE IS NOW STORED
+    # PATH TO WHERE THIS FILE IS NOW STORED
+    o = classutil.SourceFileName(filepath)
     o._saveLocalBuild = True # MARK THIS FOR SAVING IN LOCAL PYGR.DATA
     return o
 download_unpickler.__safe_for_unpickling__ = 1
 
 class SourceURL(object):
     '''unpickling this object will trigger downloading of the desired path,
-    which will be cached to PYGRDATADOWNLOAD directory if any.  The value returned
-    from unpickling will simply be the path to the downloaded file, as a SourceFileName'''
+    which will be cached to PYGRDATADOWNLOAD directory if any.
+    The value returned from unpickling will simply be the path to the
+    downloaded file, as a SourceFileName'''
+    _pygr_data_no_cache = True # force pygr.Data to always re-load this class
     def __init__(self,path,filename=None,**kwargs):
         self.path = path
         self.kwargs = kwargs
@@ -205,6 +218,7 @@ generic_build_unpickler.__safe_for_unpickling__ = 1
 
 class GenericBuilder(object):
     'proxy for constructing the desired klass on unpickling'
+    _pygr_data_no_cache = True # force pygr.Data to always re-load this class
     def __init__(self, cname, *args, **kwargs):
         self.cname = cname
         self.args = args

@@ -2,6 +2,7 @@
 
 from __future__ import generators
 from mapping import *
+from sequence import SequenceBase, DNA_SEQTYPE, RNA_SEQTYPE, PROTEIN_SEQTYPE
 import types
 from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
      override_rich_cmp,generate_items,get_bound_subclass,standard_setstate,\
@@ -223,20 +224,22 @@ def list_to_dict(names, values):
     return d
 
 
-def getNameCursor(name=None, connect=None, configFile=None, **args):
+def getNameCursor(name=None, connect=None, configFile=None, **kwargs):
     '''get table name and cursor by parsing name or using configFile.
     If neither provided, will try to get via your MySQL config file.
     If connect is None, will use MySQLdb.connect()'''
-
-    kwargs = args.copy() # a copy we can modify
     if name is not None:
         argList = name.split() # TREAT AS WS-SEPARATED LIST
         if len(argList)>1:
             name = argList[0] # USE 1ST ARG AS TABLE NAME
             argnames = ('host','user','passwd') # READ ARGS IN THIS ORDER
             kwargs = list_to_dict(argnames, argList[1:])
-    
-    
+    conn,cursor = connect_default_db(connect, configFile, **kwargs)
+    return name,cursor
+
+def connect_default_db(connect=None, configFile=None, **args):
+    'return table name, cursor, connection object'
+    kwargs = args.copy() # a copy we can modify
     if 'user' not in kwargs and configFile is None: #Find where config file is
         osname = platform.system()
         if osname in('Microsoft', 'Windows'): # Machine is a Windows box
@@ -246,11 +249,8 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
                                         (windir, 'my.cnf'),
                                         (sysdrv, os.path.sep + 'my.ini'),
                                         (sysdrv, os.path.sep + 'my.cnf'))
-        else: # treat as normal platform with $HOME defined
-            homedir = os.environ.get('HOME')
-            if not homedir:
-                raise Exception('home environment variable not set')
-            configFile = os.path.join(homedir, '.my.cnf')
+        else: # treat as normal platform with home directories
+            configFile = os.path.join(os.path.expanduser('~'), '.my.cnf')
 
     # allows for a local mysql local configuration file to be read 
     # from the current directory
@@ -263,8 +263,9 @@ def getNameCursor(name=None, connect=None, configFile=None, **args):
         import MySQLdb
         connect = MySQLdb.connect
         kwargs['compress'] = True
-    cursor = connect(**kwargs).cursor()
-    return name,cursor
+    conn = connect(**kwargs)
+    cursor = conn.cursor()
+    return conn,cursor
 
 _mysqlMacros = dict(IGNORE='ignore', REPLACE='replace',
                     AUTO_INCREMENT='AUTO_INCREMENT', SUBSTRING='substring',
@@ -484,12 +485,13 @@ class SQLTableBase(object, UserDict.DictMixin):
                         writeable=0)
     __getstate__ = standard_getstate
     def __setstate__(self,state):
-        if 'serverInfo' not in state: # hmm, no address for db server?
-            try: # SEE IF WE CAN GET CURSOR DIRECTLY FROM RESOURCE DATABASE
-                from Data import getResource
-                state['cursor'] = getResource.getTableCursor(state['name'])
-            except ImportError:
-                pass # FAILED, SO TRY TO GET A CURSOR IN THE USUAL WAYS...
+        # default cursor provisioning by pygr.Data is deprecated!
+        ## if 'serverInfo' not in state: # hmm, no address for db server?
+        ##     try: # SEE IF WE CAN GET CURSOR DIRECTLY FROM RESOURCE DATABASE
+        ##         from Data import getResource
+        ##         state['cursor'] = getResource.getTableCursor(state['name'])
+        ##     except ImportError:
+        ##         pass # FAILED, SO TRY TO GET A CURSOR IN THE USUAL WAYS...
         self.__init__(**state)
     def __repr__(self):
         return '<SQL table '+self.name+'>'
@@ -1802,3 +1804,33 @@ class GraphView(MapView):
         return GraphViewEdgeDict(self, k)
     _pickleAttrs = MapView._pickleAttrs.copy()
     _pickleAttrs.update(dict(edgeDB=0))
+
+# @CTB move to sqlgraph.py?
+
+class SQLSequence(SQLRow, SequenceBase):
+    """Transparent access to a DB row representing a sequence.
+
+    Use attrAlias dict to rename 'length' to something else.
+    """
+    def _init_subclass(cls, db, **kwargs):
+        db.seqInfoDict = db # db will act as its own seqInfoDict
+        SQLRow._init_subclass(db=db, **kwargs)
+    _init_subclass = classmethod(_init_subclass)
+    def __init__(self, id):
+        SQLRow.__init__(self, id)
+        SequenceBase.__init__(self)
+    def __len__(self):
+        return self.length
+    def strslice(self,start,end):
+        "Efficient access to slice of a sequence, useful for huge contigs"
+        return self._select('%%(SUBSTRING)s(%s %%(SUBSTR_FROM)s %d %%(SUBSTR_FOR)s %d)'
+                            %(self.db._attrSQL('seq'),start+1,end-start))
+
+class DNASQLSequence(SQLSequence):
+    _seqtype=DNA_SEQTYPE
+
+class RNASQLSequence(SQLSequence):
+    _seqtype=RNA_SEQTYPE
+
+class ProteinSQLSequence(SQLSequence):
+    _seqtype=PROTEIN_SEQTYPE

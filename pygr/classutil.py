@@ -1,5 +1,114 @@
-import os,sys
+import os, sys, tempfile
 from weakref import WeakValueDictionary
+import dbfile, logger
+
+
+class FilePopenBase(object):
+    '''Base class for subprocess.Popen-like class interface that
+can be supported on Python 2.3 (without subprocess).  The main goal
+is to avoid the pitfalls of Popen.communicate(), which cannot handle
+more than a small amount of data, and to avoid the possibility of deadlocks
+and the issue of threading, by using temporary files'''
+    def __init__(self, args, bufsize=0, executable=None,
+                 stdin=None, stdout=None, stderr=None, *largs, **kwargs):
+        '''Mimics the interface of subprocess.Popen() with two additions:
+- stdinFlag, if passed, gives a flag to add the stdin filename directly
+to the command line (rather than passing it by redirecting stdin).
+example: stdinFlag="-i" will add the following to the commandline:
+-i /path/to/the/file
+If set to None, the stdin filename is still appended to the commandline,
+but without a preceding flag argument.
+
+-stdoutFlag: exactly the same thing, except for the stdout filename.
+'''
+        self.stdin, self._close_stdin = self._get_pipe_file(stdin, 'stdin')
+        self.stdout, self._close_stdout = self._get_pipe_file(stdout, 'stdout')
+        self.stderr, self._close_stderr = self._get_pipe_file(stderr, 'stderr')
+        kwargs = kwargs.copy() # get a copy we can change
+        try: # add as a file argument
+            stdinFlag = kwargs['stdinFlag']
+            if stdinFlag:
+                args.append(stdinFlag)
+            args.append(self._stdin_path)
+            del kwargs['stdinFlag']
+            stdin = None
+        except KeyError: # just make it read this stream
+            stdin = self.stdin
+        try: # add as a file argument
+            stdoutFlag = kwargs['stdoutFlag']
+            if stdoutFlag:
+                args.append(stdoutFlag)
+            args.append(self._stdout_path)
+            del kwargs['stdoutFlag']
+            stdout = None
+        except KeyError: # make it write to this stream
+            stdout = self.stdout
+        self.args = (args, bufsize, executable, stdin, stdout,
+                     self.stderr) + largs
+        self.kwargs = kwargs
+    def _get_pipe_file(self, ifile, attr):
+        'create a temp filename instead of a PIPE; save the filename'
+        if ifile == PIPE: # use temp file instead!
+            fd, path = tempfile.mkstemp()
+            setattr(self, '_' + attr + '_path', path)
+            return os.fdopen(fd,'w+b'), True
+        elif ifile is not None:
+            setattr(self, '_' + attr + '_path', ifile.name)
+        return ifile, False
+    def _close_file(self, attr):
+        'close and delete this temp file if still open'
+        if getattr(self, '_close_' + attr):
+            getattr(self, attr).close()
+            setattr(self, '_close_' + attr, False)
+            os.remove(getattr(self, '_' + attr + '_path'))
+    def _rewind_for_reading(self, ifile):
+        if ifile is not None:
+            ifile.flush()
+            ifile.seek(0)
+    def __del__(self):
+        self._close_file('stdin')
+        self._close_file('stdout')
+        self._close_file('stderr')
+
+
+try:
+    import subprocess
+    PIPE = subprocess.PIPE
+    class FilePopen(FilePopenBase):
+        'this subclass uses the subprocess module Popen() functionality'
+        def wait(self):
+            self._rewind_for_reading(self.stdin)
+            p = subprocess.Popen(*self.args, **self.kwargs)
+            p.wait()
+            self._close_file('stdin')
+            self._rewind_for_reading(self.stdout)
+            self._rewind_for_reading(self.stderr)
+            return p.returncode
+
+except ImportError:
+    from commands import mkarg
+    class FilePopen(FilePopenBase):
+        'this subclass fakes subprocess.Popen.wait() using os.system()'
+        def wait(self):
+            self._rewind_for_reading(self.stdin)
+            args = map(mkarg, self.args[0])
+            if self.args[3]: # redirect stdin
+                args += ['<', mkarg(self._stdin_path)]
+            if self.args[4]: # redirect stdout
+                args += ['>', mkarg(self._stdout_path)]
+            cmd = ' '.join(args)
+            returncode = os.system(cmd)
+            self._close_file('stdin')
+            self._rewind_for_reading(self.stdout)
+            self._rewind_for_reading(self.stderr)
+            return returncode
+    PIPE = id(FilePopen) # an arbitrary code for identifying this code
+
+def call_subprocess(*popenargs, **kwargs):
+    'portable interface to subprocess.call(), even if subprocess not available'
+    p = FilePopen(*popenargs, **kwargs)
+    return p.wait()
+
 
 def ClassicUnpickler(cls, state):
     'standard python unpickling behavior'
@@ -99,6 +208,25 @@ def standard_invert(self):
         self._inverse = self._inverseClass(self)
         return self._inverse
 
+def lazy_create_invert(klass):
+    """Create a function to replace __invert__ with a call to a cached object.
+
+    lazy_create_invert defines a method that looks up self._inverseObj
+    and, it it doesn't exist, creates it from 'klass' and then saves it.
+    The resulting object is then returned as the inverse.  This allows
+    for one-time lazy creation of a single object per parent class.
+    
+    """
+    def invert_fn(self, klass=klass):
+        try:
+            return self._inverse
+        except AttributeError:
+            # does not exist yet; create & store.
+            inverseObj = klass(self)
+            self._inverse = inverseObj
+            return inverseObj
+    
+    return invert_fn
 
 def standard_getstate(self):
     'get dict of attributes to save, using self._pickleAttrs dictionary'
@@ -241,8 +369,8 @@ def methodFactory(methodList, methodStr, localDict):
         else:
             localDict[methodName]=eval(methodStr%methodName)
 
-def open_shelve(filename,mode=None,writeback=False,allowReadOnly=False,
-                useHash=False,verbose=True):
+def open_shelve(filename, mode=None, writeback=False, allowReadOnly=False,
+                useHash=False, verbose=True):
     '''Alternative to shelve.open with several benefits:
 - uses bsddb btree by default instead of bsddb hash, which is very slow
   for large databases.  Will automatically fall back to using bsddb hash
@@ -256,25 +384,29 @@ def open_shelve(filename,mode=None,writeback=False,allowReadOnly=False,
 
 - raises standard exceptions defined in dbfile: WrongFormatError, PermissionsError,
   ReadOnlyError, NoSuchFileError
+
+- avoids generating bogus __del__ warnings as Python shelve.open() does.
   '''
-    import dbfile
     if mode=='r': # READ-ONLY MODE, RAISE EXCEPTION IF NOT FOUND
-        return dbfile.BtreeShelf(filename,mode,useHash=useHash)
+        return dbfile.shelve_open(filename, flag=mode, useHash=useHash)
     elif mode is None:
         try: # 1ST TRY READ-ONLY, BUT IF NOT FOUND CREATE AUTOMATICALLY
-            return dbfile.BtreeShelf(filename,'r',useHash=useHash)
+            return dbfile.shelve_open(filename, 'r', useHash=useHash)
         except dbfile.NoSuchFileError:
             mode = 'c' # CREATE NEW SHELVE FOR THE USER
     try: # CREATION / WRITING: FORCE IT TO WRITEBACK AT close() IF REQUESTED
-        return dbfile.BtreeShelf(filename,mode,writeback=writeback,useHash=useHash)
+        return dbfile.shelve_open(filename, flag=mode, writeback=writeback,
+                                  useHash=useHash)
     except dbfile.ReadOnlyError:
         if allowReadOnly:
-            d = dbfile.BtreeShelf(filename,'r',useHash=useHash)
+            d = dbfile.shelve_open(filename, flag='r', useHash=useHash)
             if verbose:
-                print >>sys.stderr,'''Opening shelve file %s in read-only mode because you lack
+                logger.warn('''
+Opening shelve file %s in read-only mode because you lack
 write permissions to this file.  You will NOT be able to modify the contents
-of this shelve dictionary.  To avoid seeing this warning message, use verbose=False
-argument for the classutil.open_shelve() function.''' % filename
+of this shelve dictionary.  To avoid seeing this warning message,
+use verbose=False argument for the classutil.open_shelve() function.
+''' % filename)
             return d
         else:
             raise
@@ -430,3 +562,4 @@ def kwargs_filter(kwargs, allowed):
         except KeyError:
             pass
     return d
+

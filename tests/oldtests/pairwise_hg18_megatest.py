@@ -1,15 +1,26 @@
 
-import sys, os, string, glob
+import ConfigParser, sys, os, string, glob
+import pygr.Data
 
-axtDir = '/result/pygr_megatest/axt_data'
-seqDir = '/result/pygr_megatest/seq_data3'
+config = ConfigParser.ConfigParser({'testOutputBaseDir' : '.', 'smallSampleKey': ''})
+config.read([ os.path.join(os.path.expanduser('~'), '.pygrrc'), os.path.join(os.path.expanduser('~'), 'pygr.cfg'), '.pygrrc', 'pygr.cfg' ])
+axtDir = config.get('megatests_hg18', 'axtDir')
+seqDir = config.get('megatests_hg18', 'seqDir')
+smallSampleKey = config.get('megatests_hg18', 'smallSampleKey')
+testInputDir = config.get('megatests', 'testInputDir')
+testOutputBaseDir = config.get('megatests', 'testOutputBaseDir')
+
+if smallSampleKey:
+    smallSamplePostfix = '_' + smallSampleKey
+else:
+    smallSamplePostfix = ''
 
 ## axtDir CONTAINS: hg18_canFam2  hg18_mm8  hg18_panTro2  hg18_rn4  hg18_self
 ## seqDir CONTAINS FOLLOWING 15 GENOME ASSEMBLIES AND THEIR SEQDB FILES
 ## TEST INPUT/OUPTUT FOR COMPARISON, THESE FILES SHOULD BE IN THIS DIRECTORY
 ##        outfileName = 'splicesite_hg18.txt' # CHR4H TESTING
 ##        outputName = 'splicesite_hg18_pairwise5way.txt' # CHR4H TESTING
-## testDir = os.path.join('/usr/tmp/deepreds', 'TEST_' + ''.join(tmpList)) SHOULD BE DELETED IF YOU WANT TO RUN IN '.'
+## testDir = os.path.join(testOutputBaseDir, 'TEST_' + ''.join(tmpList)) SHOULD BE DELETED IF YOU WANT TO RUN IN '.'
 
 # DIRECTIONARY FOR DOC STRING OF SEQDB
 docStringDict = {
@@ -29,7 +40,7 @@ class PygrBuildNLMSAMegabase(object):
         import random
         tmpList = [c for c in 'PygrBuildNLMSAMegabase']
         random.shuffle(tmpList)
-        testDir = os.path.join('/usr/tmp/deepreds', 'TEST_' + ''.join(tmpList)) # FOR TEST, SHOULD BE DELETED
+        testDir = os.path.join(testOutputBaseDir, 'TEST_' + ''.join(tmpList)) # FOR TEST, SHOULD BE DELETED
         if testDir is None: testDir = 'TEST_' + ''.join(tmpList) # NOT SPECIFIED, USE CURRENT DIRECTORY
         try:
             os.mkdir(testDir)
@@ -42,13 +53,12 @@ class PygrBuildNLMSAMegabase(object):
             open(tmpFileName, 'w').write('A'*1024*1024) # WRITE 1MB FILE FOR TESTING
         except:
             raise IOError
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
+        pygr.Data.update(self.path)
         from pygr import seqdb
         for orgstr in msaSpeciesList:
             genome = seqdb.BlastDB(os.path.join(seqDir, orgstr))
             genome.__doc__ = docStringDict[orgstr]
-            pygr.Data.getResource.addResource('TEST.Seq.Genome.' + orgstr, genome)
+            pygr.Data.addResource('TEST.Seq.Genome.' + orgstr, genome)
         pygr.Data.save()
     def copyFile(self, filename): # COPY A FILE INTO TEST DIRECTORY
         newname = os.path.join(self.path, os.path.basename(filename))
@@ -65,32 +75,30 @@ class PygrBuildNLMSAMegabase(object):
 
 class Build_Test(PygrBuildNLMSAMegabase):
     def seqdb_test(self): # CHECK PYGR.DATA CONTENTS
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         l = pygr.Data.dir('TEST')
         preList = ['TEST.Seq.Genome.' + orgstr for orgstr in msaSpeciesList]
         assert l == preList
     def build_test(self): # BUILD NLMSA AND QUERY RESULT COMPARISON
-        os.environ['PYGRDATAPATH'] = self.path
-        import pygr.Data
         from pygr import seqdb, cnestedlist
         genomedict = {}
         for orgstr in msaSpeciesList:
             genomedict[orgstr] = pygr.Data.getResource('TEST.Seq.Genome.' + orgstr)
         uniondict = seqdb.PrefixUnionDict(genomedict)
-        import glob
-        axtlist = glob.glob(os.path.join(axtDir, '*/chrY.*.net.axt')) # CHRY TESTING
+        if smallSampleKey:
+            axtlist = glob.glob(os.path.join(axtDir, '*' + os.sep + smallSampleKey + '.*.net.axt'))
+        else:
+            axtlist = glob.glob(os.path.join(axtDir, '*' + os.sep + '*.*.net.axt'))
         axtlist.sort()
         msaname = os.path.join(self.path, 'hg18_pairwise5way')
         # 500MB VERSION
         msa1 = cnestedlist.NLMSA(msaname, 'w', uniondict, axtFiles = axtlist, maxlen = 536870912, maxint = 22369620)
         msa1.save_seq_dict()
         msa1.__doc__ = 'TEST NLMSA for hg18 pairwise5way'
-        pygr.Data.getResource.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
+        pygr.Data.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
         pygr.Data.save()
         msa = pygr.Data.getResource('TEST.MSA.UCSC.hg18_pairwise5way')
-        outfileName = 'splicesite_hg18_chrY.txt' # CHRY TESTING
-        outputName = 'splicesite_hg18_chrY_pairwise5way.txt' # CHRY TESTING
+        outfileName = os.path.join(testInputDir, 'splicesite_hg18%s.txt' % smallSamplePostfix)
+        outputName = os.path.join(testInputDir, 'splicesite_hg18%s_pairwise5way.txt' % smallSamplePostfix)
         newOutputName = 'splicesite_new1.txt'
         tmpInputName = self.copyFile(outfileName)
         tmpOutputName = self.copyFile(outputName)
@@ -150,7 +158,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
 
         msa1 = cnestedlist.NLMSA(msaname, 'r')
         msa1.__doc__ = 'TEST NLMSA for hg18 pairwise5way'
-        pygr.Data.getResource.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
+        pygr.Data.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
         pygr.Data.save()
         msa = pygr.Data.getResource('TEST.MSA.UCSC.hg18_pairwise5way')
         newOutputName = 'splicesite_new2.txt'

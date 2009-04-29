@@ -1533,6 +1533,13 @@ cdef class NLMSA:
     elif mode!='xmlrpc':
       raise ValueError('unknown mode %s' % mode)
 
+  def close(self):
+    'close our shelve index files'
+    cdef NLMSASequence ns
+    for ns in self.seqlist: # tell each seq to close its index files
+      ns.close()
+    self.seqs.close()
+
   def __reduce__(self): ############################# SUPPORT FOR PICKLING
     import seqdb
     return (seqdb.ClassicUnpickler, (self.__class__,self.__getstate__()))

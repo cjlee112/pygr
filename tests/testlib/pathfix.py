@@ -12,7 +12,7 @@ python setup.py build_ext -i
 
 import sys, os, distutils.util, platform
 
-import testoptions, logger
+import testoptions
 
 def path_join(*args):
     "Joins and normalizes paths"
@@ -20,7 +20,7 @@ def path_join(*args):
 
 def stop(msg):
     "A fatal unrecoverable error"
-    logger.error(msg)
+    sys.stderr.write(msg + '\n')
     sys.exit()
 
 # get the current directory of the current module
@@ -58,6 +58,31 @@ if use_pathfix:
         sys.path = [ base_dir  ] + sys.path
         required_prefix = pygr_source_dir
 
+###
+
+# also, start coverage
+
+def start_coverage():
+    import figleaf
+    from figleaf import annotate_html
+
+    # Fix for figleaf misbehaving. It is adding a logger at root level 
+    # and that will add a handler to all subloggers (ours as well)
+    # needs to be fixed in figleaf
+    import logging
+    root = logging.getLogger()
+    
+    # remove all root handlers
+    for hand in root.handlers: 
+        root.removeHandler(hand)
+
+    figleaf.start()
+
+if options.coverage:
+    start_coverage()
+
+###
+
 try:
     # import the main pygr module
     import pygr
@@ -68,7 +93,13 @@ try:
     # import an extension module
     from pygr import cnestedlist
 except ImportError, exc:
-    stop("unable to import extension module: %s" %  exc )
+    stop("""
+    Unable to import extension modules: '%s'
+    
+    Either build in place with: python setup.py build_ext -i
+    
+    Or pass the -b flag to runtest.py (see runtest.py -h for more details)
+    """ % exc)
 
 if use_pathfix:
     

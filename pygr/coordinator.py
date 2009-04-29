@@ -1,9 +1,11 @@
 from __future__ import generators
 import os
 import time
+import thread
 import sys
 import xmlrpclib
 import traceback
+import dbfile
 
 
 def get_hostname(host=None):
@@ -283,10 +285,24 @@ class XMLRPCServerBase(object):
         except (KeyError,AttributeError):
             return '' # RETURN FAILURE CODE
         return m(*args) # RUN THE OBJECT METHOD
-    def serve_forever(self):
-        'launch the XMLRPC service.  Never exits.'
-        detach_as_demon_process(self)
-        serve_forever(self)
+    def serve_forever(self, demonize = True):
+        'launch the XMLRPC service.  Never exits if demonize == True.'
+        if demonize == True:
+            print "Running as a daemon"
+            detach_as_demon_process(self)
+            serve_forever(self)
+        else:
+            print "Running in the background of active session"
+            # Check if we're running interactively, as otherwise the server will
+            # die right after starting. Two checks are needed for this: one for
+            # a truly interactive session and one for the interpreter having
+            # been run with the -i flag (makes the session interactive AFTER the
+            # script has been executed). Unfortunately, the latter only works
+            # with Python 2.6 and up.
+            if not hasattr(sys, 'ps1'):
+                if sys.version_info < (2, 6) or not sys.flags.interactive:
+                    print "Warning: Running non-interactively without daemonising means the server will die right after starting. This is probably not what you want."
+            thread.start_new_thread(serve_forever, (self, ))
     def register(self,url=None,name='index',server=None):
         'register our server with the designated index server'
         data=self.registrationData # RAISE ERROR IF NO DATA TO REGISTER...
@@ -438,11 +454,11 @@ class ResourceController(object):
 
     def getrules(self):
         import shelve
-        self.rules=shelve.open(self.name+'.rules')
+        self.rules=dbfile.shelve_open(self.name+'.rules')
 
     def getresources(self):
         import shelve
-        self.resources=shelve.open(self.name+'.rsrc')
+        self.resources=dbfile.shelve_open(self.name+'.rsrc')
 
     def setrule(self,rsrc,rule):
         "save a resource generation rule into our database"
