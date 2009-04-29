@@ -987,6 +987,8 @@ class BlastDB(SequenceFileDB):          # @CTB untested?
     Provides blast() and megablast() methods for searching your seq db.
     Instead of this, you should use the blast.BlastMapping, which provides
     a graph interface to BLAST, or MegablastMapping for megablast.'''
+    def __reduce__(self): # provided only for compatibility w/ 0.7 clients
+        return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __init__(self, filepath=None, blastReady=False, blastIndexPath=None,
                  blastIndexDirs=None, **kwargs):
         "format database and build indexes if needed. Provide filepath or file object"
@@ -1095,6 +1097,8 @@ class XMLRPCSequenceDB(SequenceDB):
         self.name = name
         self.seqInfoDict = _SeqLenDictWrapper(self)
         SequenceDB.__init__(self, *args, **kwargs)
+    def __reduce__(self): # provided only for compatibility w/ 0.7 clients
+        return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __getstate__(self): # DO NOT pickle self.itemClass! We provide our own.
         return dict(url=self.url, name=self.name) # just need XMLRPC info
     def __len__(self):
