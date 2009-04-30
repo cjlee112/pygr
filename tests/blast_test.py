@@ -1,6 +1,6 @@
 from itertools import *
 import unittest
-from testlib import testutil
+from testlib import testutil, SkipTest, PygrTestProgram
 import pygr.Data
 from pygr import sequence, cnestedlist, seqdb, blast, logger
 
@@ -27,6 +27,9 @@ def check_results(results, correct, formatter, delta=0.01):
 
 class BlastBase(unittest.TestCase):
     def setUp(self):
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         hbb1_mouse = testutil.datafile('hbb1_mouse.fa')
         sp_hbb1 = testutil.datafile('sp_hbb1')
 
@@ -832,21 +835,6 @@ def all_vs_all_blast_save():
 
     #return msa
 
-def get_suite():
-    "Returns the testsuite"
-
-    # save the data that will be tested
-    # all_vs_all_blast_save()
-
-    tests  = [ 
-        Blast_Test,
-        Blastx_Test,
-        Blastn_Test,
-    ]
-
-    return testutil.make_suite(tests)
-
 if __name__ == '__main__':
-    suite = get_suite()
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    PygrTestProgram(verbosity=2)
 

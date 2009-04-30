@@ -6,12 +6,10 @@ import sys, os, shutil, unittest, random, warnings, threading, time, re, md5, gl
 import tempfile as tempfile_mod
 import atexit
 
-import pathfix
-from pygr import logger
+from unittest_extensions import SkipTest
 
-# a list that keeps track of the messages
-# generated when skipping tests
-SKIP_MESSAGES = []
+import pathfix
+from pygr import logger, classutil
 
 # represents a test data
 class TestData(object):
@@ -24,7 +22,7 @@ path_join = pathfix.path_join
 info, error, warn, debug = logger.info, logger.error, logger.warn, logger.debug
 
 # global port setting
-default_xmlrpc_port = 89324              # should be set by test runner
+default_xmlrpc_port = 0              # 0 -> random port; overriden by runtest.
 
 ###
 
@@ -154,18 +152,18 @@ class TestXMLRPCServer(object):
     PYGRDATAPATH: passed to the server process command line as its PYGRDATAPATH
     checkResources: if True, first check that all pygrDataNames are loadable.
     """
-    def __init__(self, pygrDataNames, pygrDataPath, port=None, downloadDB=''):
+    def __init__(self, pygrDataNames, pygrDataPath, port=0, downloadDB=''):
         'starts server, returns without blocking'
         self.pygrDataNames = pygrDataNames
         self.pygrDataPath = pygrDataPath
         self.downloadDB = downloadDB
 
         global default_xmlrpc_port
-        if port is None:
-            assert default_xmlrpc_port
-            self.port = default_xmlrpc_port
-        else:
-            self.port = port
+        if not port:
+            port = default_xmlrpc_port
+            
+        self.port = port
+        self.port_file = tempdatafile('xmlrpc_port_file', False)
 
         # check that all resources are available
         ## if kwargs.get('checkResources'):
@@ -173,53 +171,45 @@ class TestXMLRPCServer(object):
 
         currdir = os.path.dirname(__file__)
         self.server_script = path_join(currdir, 'pygrdata_server.py')
-        # create temporary directory for its logs
-        tempdir = TempDir('pygrdata').path
-        self.outname = path_join(tempdir, 'xmlrpc-out.txt')
-        self.errname = path_join(tempdir, 'xmlrpc-err.txt')
     
-        # start the tread
+        # start the thread
         thread = threading.Thread(target=self.run_server)
         thread.start()
         
-        # wait for it to start for 
-        time.sleep(1) 
+        # wait for it to start
+        time.sleep(1)
+
+        # retrieve port info
+        try:
+            ifile = open(self.port_file)
+            try:
+                self.port = int(ifile.read())
+            finally:
+                ifile.close() # make sure to close file no matter what
+        except OSError:
+            assert 0, "cannot get port info from server; is server running?"
 
     def run_server(self):
         'this method blocks, so run it in a separate thread'
-        logger.debug('starting server on port %s', self.port)
-
-        params = dict(
-            port=self.port, 
-            downloadDB=self.downloadDB, 
-            pygrdatapath=self.pygrDataPath,
-            resources = ':'.join(self.pygrDataNames),
-            incoming_flags = " ".join(sys.argv)
-       )
-
-        flags = """%(incoming_flags)s --port=%(port)s \
-        --pygrdatapath=%(pygrdatapath)s \
-        --downloadDB=%(downloadDB)s --resources=%(resources)s""" % params
-
-        flags = ' '.join(flags.split() )
-        # CTB -- warning, these could fail when passed to the os.system
-        # without quoting, IF weird characters are present in TMP or TMPDIR.
-        
-
-        cmd = '%s %s %s > %s 2> %s' % \
-              (sys.executable, self.server_script, flags,
-               self.outname, self.errname)
-        logger.debug('Starting XML-RPC server: ')
-        logger.debug(cmd)
-
+        cmdArgs = (sys.executable, self.server_script) + tuple(sys.argv) \
+                  + ('--port=' + str(self.port),
+                     '--port-file=' + self.port_file,
+                     '--pygrdatapath=' + self.pygrDataPath,
+                     '--downloadDB=' + self.downloadDB,
+                     '--resources=' + ':'.join(self.pygrDataNames))
+        p = classutil.FilePopen(cmdArgs, stdout=classutil.PIPE,
+                                stderr=classutil.PIPE)
         try:
-            os.system(cmd)
-        finally:
-            output = open(self.outname).read()
-            errout = open(self.errname).read()
-
+            logger.debug('Starting XML-RPC server: ')
+            logger.debug(repr(cmdArgs))
+            if p.wait():
+                logger.warn('XML-RPC server command failed!')
+            output = p.stdout.read()
+            errout = p.stderr.read()
             logger.debug('XML-RPC server output: %s' % output)
             logger.debug('XML-RPC server error out: %s' % errout)
+        finally:
+            p.close()
 
         logger.debug('server stopped')
     
@@ -236,15 +226,12 @@ def make_suite(tests):
 
 def mysql_enabled():
     """
-    Detects wether mysql is functional on the current system
+    Detects whether mysql is functional on the current system
     """
-    global SKIP_MESSAGES
-
     try:
         import MySQLdb
     except ImportError, exc:
         msg = 'MySQLdb error: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
     try:
@@ -255,7 +242,6 @@ def mysql_enabled():
         tempcurs.execute('create database if not exists test')
     except Exception, exc:
         msg = 'cannot operate on MySql database: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
 
@@ -266,13 +252,11 @@ def sqlite_enabled():
     """
     Detects whether sqlite3 is functional on the current system
     """
-    global SKIP_MESSAGES
     from pygr.sqlgraph import import_sqlite
     try:
         sqlite = import_sqlite() # from 2.5+ stdlib, or pysqlite2
     except ImportError, exc:
         msg = 'sqlite3 error: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
     return True
@@ -282,6 +266,8 @@ class SQLite_Mixin(object):
     'use this as a base for any test'
     def setUp(self):
         from pygr.sqlgraph import SQLiteServerInfo
+        if not sqlite_enabled():
+            raise SkipTest
         self.sqlite_file = tempdatafile('test_sqlite.db', False)
         self.tearDown(False) # delete the file if it exists
         self.serverInfo = SQLiteServerInfo(self.sqlite_file)
@@ -309,13 +295,10 @@ def blast_enabled():
     """
     Detects whether the blast suite is functional on the current system
     """
-    global SKIP_MESSAGES
-
     try:
         pass
     except ImportError, exc:
         msg = 'blast utilities not enabled: %s' % exc
-        SKIP_MESSAGES.append(msg)
         warn(msg)
         return False
 

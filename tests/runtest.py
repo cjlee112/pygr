@@ -2,12 +2,12 @@
 """
 Test runner for main pygr tests.
 
-Collects all files ending in _test.py and executes them with
-unittest.TextTestRunner.
+Collects all files ending in _test.py and executes them.
 """
 
 import os, sys, re, unittest, shutil, re, shutil
 from testlib import testutil, testoptions
+from testlib.unittest_extensions import PygrTestRunner
 from pygr import logger
 
 def all_tests():
@@ -24,23 +24,28 @@ def all_tests():
 def run(targets, options):
     "Imports and runs the modules names that are contained in the 'targets'"
     
-    success = errors = 0
+    success = errors = skipped = 0
 
     # run the tests by importing the module and getting its test suite
     for name in targets:
         try:
-            testutil.info( 'running tests for module %s' % name )
-            mod = __import__( name )
-            suite = mod.get_suite()
+            testutil.info('running tests for module %s' % name)
+            l = unittest.TestLoader()
+            suite = l.loadTestsFromName(name)
 
-            runner = unittest.TextTestRunner(verbosity=options.verbosity,
-                                             descriptions=0)
-            results = runner.run( suite )
+            runner = PygrTestRunner(verbosity=options.verbosity,
+                                    descriptions=0)
+            
+            results = runner.run(suite)
             
             # count tests and errors
             success += results.testsRun - \
-                       len(results.errors) - len(results.failures)
+                       len(results.errors) - \
+                       len(results.failures) - \
+                       len(results.skipped)
+            
             errors  += len(results.errors) + len(results.failures)
+            skipped += len(results.skipped)
 
             # if we're in strict mode stop on errors
             if options.strict and errors:
@@ -50,17 +55,10 @@ def run(targets, options):
         except ImportError:
             testutil.error( "unable to import module '%s'" % name )
 
-    # each skipped testsuite generates a message
-    skipped = len(testutil.SKIP_MESSAGES)
-    
-    # generate warnings on skipped tests
-    for message in testutil.SKIP_MESSAGES:
-        testutil.warn(message)
-
     # summarize the run
     testutil.info('=' * 59)
     testutil.info('''\
-%s tests passed, %s tests failed, %s suites skipped; %d total''' % \
+%s tests passed, %s tests failed, %s tests skipped; %d total''' % \
                   (success, errors, skipped, success + errors + skipped))
 
     return (success, errors, skipped)

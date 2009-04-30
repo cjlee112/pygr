@@ -438,13 +438,12 @@ class SequenceFileDB(SequenceDB):
     def _create_seqLenDict(self, dictpath, seqpath, reader=None):
         """Create a seqLenDict from 'seqpath' and store in 'dictpath'."""
         seqLenDict = classutil.open_shelve(dictpath, 'n')
-        logger.debug('Building sequence length index...')
-        _store_seqlen_dict(seqLenDict, seqpath, reader)
-        
-        # force a flush; reopen in read-only mode.
-        seqLenDict.close() 
-        seqLenDict = classutil.open_shelve(dictpath, 'r')
-        return seqLenDict
+        try:
+            logger.debug('Building sequence length index...')
+            _store_seqlen_dict(seqLenDict, seqpath, reader)
+        finally:
+            seqLenDict.close() # close after writing, no matter what!
+        return classutil.open_shelve(dictpath, 'r') # re-open read-only
         
     def strslice(self, seqID, start, end, useCache=True):
         """Access slice of a sequence efficiently, using seqLenDict info."""
@@ -675,20 +674,25 @@ cannot create with prefixDict and filename both!''')
             if trypath is None:
                 trypath = [os.path.dirname(filename)]
             ifile = file(filename, 'rU')
-            it = iter(ifile)
-            separator = it.next().strip('\r\n') # remove leading/trailing CR
-            prefixDict = {}
-            for line in it:
-                prefix, filepath=line.strip().split('\t')[:2]
-                try:
-                    dbfile = classutil.search_dirs_for_file(filepath, trypath)
-                    db = dbClass(dbfile)
-                    prefixDict[prefix] = db
-                except IOError:
-                    raise IOError('''\
-unable to open database %s: check path or privileges.
-Set 'trypath' to give a list of directories to search.''' % filepath)
-            ifile.close()
+            try:
+                it = iter(ifile)
+                separator = it.next().strip('\r\n') # remove leading/trailing CR
+                prefixDict = {}
+                for line in it:
+                    prefix, filepath=line.strip().split('\t')[:2]
+                    try:
+                        dbfile = classutil.search_dirs_for_file(filepath, trypath)
+                        db = dbClass(dbfile)
+                    except IOError:
+                        for db in prefixDict.values():
+                            db.close() # close databases before exiting
+                        raise IOError('''\
+    unable to open database %s: check path or privileges.
+    Set 'trypath' to give a list of directories to search.''' % filepath)
+                    else:
+                        prefixDict[prefix] = db
+            finally:
+                ifile.close()
             
         self.separator = separator
         if prefixDict is not None:
@@ -987,6 +991,8 @@ class BlastDB(SequenceFileDB):          # @CTB untested?
     Provides blast() and megablast() methods for searching your seq db.
     Instead of this, you should use the blast.BlastMapping, which provides
     a graph interface to BLAST, or MegablastMapping for megablast.'''
+    def __reduce__(self): # provided only for compatibility w/ 0.7 clients
+        return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __init__(self, filepath=None, blastReady=False, blastIndexPath=None,
                  blastIndexDirs=None, **kwargs):
         "format database and build indexes if needed. Provide filepath or file object"
@@ -1026,7 +1032,7 @@ class BlastDB(SequenceFileDB):          # @CTB untested?
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
     xmlrpc_methods = dict(getSeqLen=0, get_strslice=0, getSeqLenDict=0,
-                          get_db_size=0, get_seqtype=0)
+                          get_db_size=0, get_seqtype=0, strslice='get_strslice')
     def getSeqLen(self,id):
         'get sequence length, or -1 if not found'
         try:
@@ -1095,6 +1101,8 @@ class XMLRPCSequenceDB(SequenceDB):
         self.name = name
         self.seqInfoDict = _SeqLenDictWrapper(self)
         SequenceDB.__init__(self, *args, **kwargs)
+    def __reduce__(self): # provided only for compatibility w/ 0.7 clients
+        return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
     def __getstate__(self): # DO NOT pickle self.itemClass! We provide our own.
         return dict(url=self.url, name=self.name) # just need XMLRPC info
     def __len__(self):

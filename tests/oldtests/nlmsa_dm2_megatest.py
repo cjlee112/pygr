@@ -162,7 +162,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         pygr.Data.addResource('TEST.MSA.UCSC.dm2_multiz15way', msa1)
         pygr.Data.save()
         msa = pygr.Data.getResource('TEST.MSA.UCSC.dm2_multiz15way')
-        newOutputName = os.path.join(testInputDir, 'splicesite_new2.txt')
+        newOutputName = os.path.join(self.path, 'splicesite_new2.txt')
         tmpInputName = self.copyFile(outfileName)
         tmpOutputName = self.copyFile(outputName)
         outfile = open(newOutputName, 'w')

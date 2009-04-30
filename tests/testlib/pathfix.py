@@ -18,9 +18,15 @@ def path_join(*args):
     "Joins and normalizes paths"
     return os.path.abspath(os.path.join(*args))
 
+# we cannot use the main logger, because the import paths 
+# may not be set up yet
+def info(msg):
+    "Prints a message"
+    sys.stderr.write(msg + '\n')
+
 def stop(msg):
     "A fatal unrecoverable error"
-    sys.stderr.write(msg + '\n')
+    info(msg)
     sys.exit()
 
 # get the current directory of the current module
@@ -49,14 +55,21 @@ options, args = parser.parse_args()
 # this makes it less clunky
 use_pathfix = not options.no_pathfix
 
+# stores the error message about the import path
+path_errmsg = None
+
 if use_pathfix:
     # alter the import path
     if options.builddir:
+        path_errmsg = "Importing pygr from platform build path %s" %  pygr_build_dir
         sys.path = [ pygr_build_dir  ] + sys.path 
         required_prefix = pygr_build_dir
     else:
+        path_errmsg = "Importing pygr from source directory %s" % base_dir
         sys.path = [ base_dir  ] + sys.path
         required_prefix = pygr_source_dir
+else:
+    path_errmsg = "Importing pygr from default path"
 
 ###
 
@@ -84,22 +97,33 @@ if options.coverage:
 ###
 
 try:
-    # import the main pygr module
+    # try to import the main pygr module
     import pygr
-except ImportError, exc:
-    stop ("unable to import: %s" %  exc)
-      
-try:
-    # import an extension module
+    from pygr import logger
+    
+    # we have a logger now
+    logger.info("importing pygr from %s" %  pygr.__file__)
+
+    # try to import an extension module
     from pygr import cnestedlist
+
 except ImportError, exc:
     stop("""
-    Unable to import extension modules: '%s'
+    %s
+
+    Error: '%s'
     
-    Either build in place with: python setup.py build_ext -i
+    Possible solutions:
+
+        1. build the extension modules in place with: 
+                     python setup.py build_ext -i
+
+        2. add the -b flag to runtest.py 
+                    (see runtest.py -h for more details)
+
+        3. install a binary version of pygr into the system path
     
-    Or pass the -b flag to runtest.py (see runtest.py -h for more details)
-    """ % exc)
+    """ % (path_errmsg, exc))
 
 if use_pathfix:
     

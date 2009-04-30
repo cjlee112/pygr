@@ -1,7 +1,7 @@
 # test will be skipped if MySqlDB is unavailable
 
 import unittest, string
-from testlib import testutil
+from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import sqlgraph, seqdb, classutil, logger
 
 class SQLSequence_Test(unittest.TestCase):
@@ -12,6 +12,9 @@ class SQLSequence_Test(unittest.TestCase):
     instantiating the SQLSequence objects directly.
     '''
     def setUp(self, serverInfo=None, dbname='test.sqlsequence_test'):
+        if not testutil.mysql_enabled():
+            raise SkipTest, "no MySQL installed"
+        
         createTable = """\
         CREATE TABLE %s
              (primary_id INTEGER PRIMARY KEY %%(AUTO_INCREMENT)s, sequence TEXT)
@@ -84,5 +87,4 @@ def get_suite():
     return testutil.make_suite(tests)
 
 if __name__ == '__main__':
-    suite = get_suite()
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    PygrTestProgram(verbosity=2)

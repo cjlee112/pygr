@@ -6,3 +6,6 @@ import pathfix
 # import rest of test utils.
 import testoptions
 import testutil
+
+# make SkipTest available
+from unittest_extensions import SkipTest, PygrTestProgram

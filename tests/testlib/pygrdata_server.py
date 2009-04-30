@@ -4,6 +4,9 @@ Pygr XMLRPC server test. Recognized flags:
 --port=PORT 
     the port for the server
 
+--port-file
+    the filename to write the port info out to
+
 --pygrdatapath=PYGRDATAPATH 
     the pygr.Data directory
 
@@ -48,6 +51,14 @@ xmlrpc = metabase.ResourceServer(mdb, 'testy',
                                  downloadDB=options.downloadDB,
                                  host='localhost', port=options.port)
 
+# if needed, write out the port information to a file, so that the test runner
+# can retrieve it.
+if options.port_file:
+    print 'writing port information to %s' % options.port_file
+    fp = open(options.port_file, 'w')
+    fp.write("%d" % (xmlrpc.port))
+    fp.close()
+
 # main loop
 def serve_forever(self):
     self.keepRunning = True
@@ -64,7 +75,8 @@ exit_handler = new.instancemethod(exit_now, xmlrpc.server,
                                   xmlrpc.server.__class__)
 
 # register exit handler
-xmlrpc.server.register_function(exit_handler) 
+xmlrpc.server.register_function(exit_handler)
 
 # starts the server and never returns...
+print 'running server on %s:%s' % (xmlrpc.host, xmlrpc.port)
 serve_forever(xmlrpc.server) 
