@@ -365,12 +365,13 @@ class DBServerInfo_Test(TestBase):
         logger.debug('accessing ensembldb.ensembl.org')
         conn = sqlgraph.DBServerInfo(host='ensembldb.ensembl.org',
                                      user='anonymous', passwd='')
-        translationDB = sqlgraph.SQLTable('homo_sapiens_core_47_36i.translation',
-                                          serverInfo=conn)
-        exonDB = sqlgraph.SQLTable('homo_sapiens_core_47_36i.exon',
-                                   serverInfo=conn)
+        try:
+            translationDB = sqlgraph.SQLTable('homo_sapiens_core_47_36i.translation',
+                                              serverInfo=conn)
+            exonDB = sqlgraph.SQLTable('homo_sapiens_core_47_36i.exon',
+                                       serverInfo=conn)
         
-        sql_statement = '''SELECT t3.exon_id FROM
+            sql_statement = '''SELECT t3.exon_id FROM
 homo_sapiens_core_47_36i.translation AS tr,
 homo_sapiens_core_47_36i.exon_transcript AS t1,
 homo_sapiens_core_47_36i.exon_transcript AS t2,
@@ -379,9 +380,12 @@ AND tr.transcript_id = t1.transcript_id AND t1.transcript_id =
 t2.transcript_id AND t2.transcript_id = t3.transcript_id AND t1.exon_id =
 tr.start_exon_id AND t2.exon_id = tr.end_exon_id AND t3.rank >= t1.rank AND
 t3.rank <= t2.rank ORDER BY t3.rank
-            '''
-        translationExons = sqlgraph.GraphView(translationDB, exonDB,
-                                              sql_statement, serverInfo=conn)
+'''
+            translationExons = sqlgraph.GraphView(translationDB, exonDB,
+                                                  sql_statement,
+                                                  serverInfo=conn)
+        except ImportError:
+            raise SkipTest('missing MySQLdb module?')
         translationExons.__doc__ = 'test saving exon graph'
         self.pygrData.Bio.Ensembl.TranslationExons = translationExons
         self.metabase.commit()

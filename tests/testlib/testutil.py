@@ -295,14 +295,15 @@ def blast_enabled():
     """
     Detects whether the blast suite is functional on the current system
     """
+    p = classutil.FilePopen(('blastall',), stdout=classutil.PIPE)
     try:
-        pass
-    except ImportError, exc:
-        msg = 'blast utilities not enabled: %s' % exc
-        warn(msg)
+        p.wait() # try to run the program
+    except OSError:
+        warn('NCBI toolkit (blastall) missing?')
         return False
-
+    p.close()
     return True
+
 
 ###
 
