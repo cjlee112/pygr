@@ -438,13 +438,12 @@ class SequenceFileDB(SequenceDB):
     def _create_seqLenDict(self, dictpath, seqpath, reader=None):
         """Create a seqLenDict from 'seqpath' and store in 'dictpath'."""
         seqLenDict = classutil.open_shelve(dictpath, 'n')
-        logger.debug('Building sequence length index...')
-        _store_seqlen_dict(seqLenDict, seqpath, reader)
-        
-        # force a flush; reopen in read-only mode.
-        seqLenDict.close() 
-        seqLenDict = classutil.open_shelve(dictpath, 'r')
-        return seqLenDict
+        try:
+            logger.debug('Building sequence length index...')
+            _store_seqlen_dict(seqLenDict, seqpath, reader)
+        finally:
+            seqLenDict.close() # close after writing, no matter what!
+        return classutil.open_shelve(dictpath, 'r') # re-open read-only
         
     def strslice(self, seqID, start, end, useCache=True):
         """Access slice of a sequence efficiently, using seqLenDict info."""
@@ -675,20 +674,25 @@ cannot create with prefixDict and filename both!''')
             if trypath is None:
                 trypath = [os.path.dirname(filename)]
             ifile = file(filename, 'rU')
-            it = iter(ifile)
-            separator = it.next().strip('\r\n') # remove leading/trailing CR
-            prefixDict = {}
-            for line in it:
-                prefix, filepath=line.strip().split('\t')[:2]
-                try:
-                    dbfile = classutil.search_dirs_for_file(filepath, trypath)
-                    db = dbClass(dbfile)
-                    prefixDict[prefix] = db
-                except IOError:
-                    raise IOError('''\
-unable to open database %s: check path or privileges.
-Set 'trypath' to give a list of directories to search.''' % filepath)
-            ifile.close()
+            try:
+                it = iter(ifile)
+                separator = it.next().strip('\r\n') # remove leading/trailing CR
+                prefixDict = {}
+                for line in it:
+                    prefix, filepath=line.strip().split('\t')[:2]
+                    try:
+                        dbfile = classutil.search_dirs_for_file(filepath, trypath)
+                        db = dbClass(dbfile)
+                    except IOError:
+                        for db in prefixDict.values():
+                            db.close() # close databases before exiting
+                        raise IOError('''\
+    unable to open database %s: check path or privileges.
+    Set 'trypath' to give a list of directories to search.''' % filepath)
+                    else:
+                        prefixDict[prefix] = db
+            finally:
+                ifile.close()
             
         self.separator = separator
         if prefixDict is not None:
