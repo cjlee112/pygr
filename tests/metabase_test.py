@@ -1,6 +1,6 @@
 from testlib import testutil
 import socket, unittest, os, pickle, datetime
-from pygr import seqdb, cnestedlist, metabase, mapping
+from pygr import seqdb, cnestedlist, metabase, mapping, logger, sqlgraph
 from pygr.downloader import SourceURL, GenericBuilder, uncompress_file, \
      do_unzip, do_gunzip
 
@@ -357,6 +357,45 @@ class InvalidPickle_Test(TestBase):
             raise ValueError(msg)
         except metabase.PygrDataNoModuleError:
             pass
+
+class DBServerInfo_Test(TestBase):
+    def setUp(self):
+        TestBase.setUp(self)
+        logger.debug('accessing ensembldb.ensembl.org')
+        conn = sqlgraph.DBServerInfo(host='ensembldb.ensembl.org',
+                                     user='anonymous', passwd='')
+        translationDB = sqlgraph.SQLTable('homo_sapiens_core_47_36i.translation',
+                                          serverInfo=conn)
+        exonDB = sqlgraph.SQLTable('homo_sapiens_core_47_36i.exon',
+                                   serverInfo=conn)
+        
+        sql_statement = '''SELECT t3.exon_id FROM
+homo_sapiens_core_47_36i.translation AS tr,
+homo_sapiens_core_47_36i.exon_transcript AS t1,
+homo_sapiens_core_47_36i.exon_transcript AS t2,
+homo_sapiens_core_47_36i.exon_transcript AS t3 WHERE tr.translation_id = %s
+AND tr.transcript_id = t1.transcript_id AND t1.transcript_id =
+t2.transcript_id AND t2.transcript_id = t3.transcript_id AND t1.exon_id =
+tr.start_exon_id AND t2.exon_id = tr.end_exon_id AND t3.rank >= t1.rank AND
+t3.rank <= t2.rank ORDER BY t3.rank
+            '''
+        translationExons = sqlgraph.GraphView(translationDB, exonDB,
+                                              sql_statement, serverInfo=conn)
+        translationExons.__doc__ = 'test saving exon graph'
+        self.pygrData.Bio.Ensembl.TranslationExons = translationExons
+        self.metabase.commit()
+        self.metabase.clear_cache()
+    
+    def test_orderBy(self):
+        """Test saving DBServerInfo to metabase"""
+        translationExons = self.pygrData.Bio.Ensembl.TranslationExons()
+        translation = translationExons.sourceDB[15121]
+        exons = translationExons[translation] # do the query
+        result = [e.id for e in exons]
+        correct = [95160,95020,95035,95050,95059,95069,95081,95088,95101,
+                   95110,95172]
+        self.assertEqual(result, correct) # make sure the exact order matches
+
         
 class XMLRPC_Test(TestBase):
     'create an XMLRPC server and access seqdb from it'

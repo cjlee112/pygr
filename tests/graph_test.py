@@ -185,7 +185,7 @@ class SQLiteGraph_Test(testutil.SQLite_Mixin, Mapping_Test):
     def sqlite_load(self):
         createOpts = dict(source_id='int', target_id='int', edge_id='int')
         self.datagraph = sqlgraph.SQLGraph('testgraph',
-                                           cursor=self.cursor,
+                                           serverInfo=self.serverInfo,
                                            dropIfExists=True,
                                            createTable=createOpts)
 

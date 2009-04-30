@@ -1,6 +1,6 @@
 import os, unittest
 from testlib import testutil
-from pygr.sqlgraph import SQLTable,SQLTableNoCache,connect_default_db,\
+from pygr.sqlgraph import SQLTable,SQLTableNoCache,mysql_connect,\
      MapView,GraphView,DBServerInfo,import_sqlite
 from pygr import logger
 
@@ -8,31 +8,27 @@ class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTable
     def __init__(self, *args, **kwargs):
         unittest.TestCase.__init__(self, *args, **kwargs)
-        self.conn,self.cursor = connect_default_db() # share conn for all tests
+        self.serverInfo = DBServerInfo() # share conn for all tests
     def setUp(self):
         self.load_data(writeable=self.writeable)
-    def load_data(self, cursor=None, tableName='test.sqltable_test',
-                  writeable=False):
+    def load_data(self, tableName='test.sqltable_test', writeable=False):
         'create 3 tables and load 9 rows for our tests'
-        if cursor is not None:
-            self.cursor = cursor
-        else: # reuse default cursor
-            cursor = self.cursor
         self.tableName = tableName
         self.joinTable1 = joinTable1 = tableName + '1'
         self.joinTable2 = joinTable2 = tableName + '2'
         createTable = """\
         CREATE TABLE %s (primary_id INTEGER PRIMARY KEY %%(AUTO_INCREMENT)s, seq_id TEXT, start INTEGER, stop INTEGER)
         """ % tableName
-        self.db = self.tableClass(tableName, cursor, dropIfExists=True,
+        self.db = self.tableClass(tableName, dropIfExists=True,
+                                  serverInfo=self.serverInfo,
                                   createTable=createTable,
                                   writeable=writeable)
-        self.sourceDB = self.tableClass(joinTable1, cursor,
+        self.sourceDB = self.tableClass(joinTable1, serverInfo=self.serverInfo,
                                         dropIfExists=True, createTable="""\
         CREATE TABLE %s (my_id INTEGER PRIMARY KEY,
               other_id VARCHAR(16))
         """ % joinTable1)
-        self.targetDB = self.tableClass(joinTable2, cursor,
+        self.targetDB = self.tableClass(joinTable2, serverInfo=self.serverInfo,
                                         dropIfExists=True, createTable="""\
         CREATE TABLE %s (third_id INTEGER PRIMARY KEY,
               other_id VARCHAR(16))
@@ -54,6 +50,7 @@ class SQLTable_Setup(unittest.TestCase):
         self.db.cursor.execute('drop table if exists %s' % self.tableName)
         self.db.cursor.execute('drop table if exists %s' % self.joinTable1)
         self.db.cursor.execute('drop table if exists %s' % self.joinTable2)
+        self.serverInfo.close()
 
 class SQLTable_Test(SQLTable_Setup):
     writeable = False # read-only database interface
@@ -120,7 +117,7 @@ class SQLTable_Test(SQLTable_Setup):
         m = MapView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
-        """ % (self.joinTable1,self.joinTable2), cursor=self.db.cursor)
+        """ % (self.joinTable1,self.joinTable2), serverInfo=self.serverInfo)
         assert m[self.sourceDB[2]] == self.targetDB[7]
         assert m[self.sourceDB[3]] == self.targetDB[99]
         assert self.sourceDB[2] in m
@@ -134,7 +131,7 @@ class SQLTable_Test(SQLTable_Setup):
         m = GraphView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
-        """ % (self.joinTable1,self.joinTable2), cursor=self.db.cursor)
+        """ % (self.joinTable1,self.joinTable2), serverInfo=self.serverInfo)
         d = m[self.sourceDB[4]]
         assert len(d) == 2
         assert self.targetDB[6] in d and self.targetDB[8] in d
@@ -142,11 +139,25 @@ class SQLTable_Test(SQLTable_Setup):
 
 class SQLiteBase(testutil.SQLite_Mixin):
     def sqlite_load(self):
-        self.load_data(self.cursor, 'sqltable_test', writeable=self.writeable)
+        self.load_data('sqltable_test', writeable=self.writeable)
 
 class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
-    def __init__(self, *args, **kwargs):
-        unittest.TestCase.__init__(self, *args, **kwargs)
+    pass
+
+## class SQLitePickle_Test(SQLiteTable_Test):
+##     def setUp(self):
+##         """Pickle / unpickle our serverInfo before trying to use it """
+##         SQLiteTable_Test.setUp(self)
+##         self.serverInfo.close()
+##         import pickle
+##         s = pickle.dumps(self.serverInfo)
+##         del self.serverInfo
+##         self.serverInfo = pickle.loads(s)
+##         self.db = self.tableClass(self.tableName, serverInfo=self.serverInfo)
+##         self.sourceDB = self.tableClass(self.joinTable1,
+##                                         serverInfo=self.serverInfo)
+##         self.targetDB = self.tableClass(self.joinTable2,
+##                                         serverInfo=self.serverInfo)
 
 class SQLTable_NoCache_Test(SQLTable_Test):
     tableClass = SQLTableNoCache
@@ -217,8 +228,7 @@ class SQLTableRW_Test(SQLTable_Setup):
         
 
 class SQLiteTableRW_Test(SQLiteBase, SQLTableRW_Test):
-    def __init__(self, *args, **kwargs):
-        unittest.TestCase.__init__(self, *args, **kwargs)
+    pass
 
 class SQLTableRW_NoCache_Test(SQLTableRW_Test):
     tableClass = SQLTableNoCache

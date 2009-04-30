@@ -235,11 +235,11 @@ def getNameCursor(name=None, connect=None, configFile=None, **kwargs):
             name = argList[0] # USE 1ST ARG AS TABLE NAME
             argnames = ('host','user','passwd') # READ ARGS IN THIS ORDER
             kwargs = list_to_dict(argnames, argList[1:])
-    conn,cursor = connect_default_db(connect, configFile, **kwargs)
+    conn,cursor = mysql_connect(connect, configFile, **kwargs)
     return name,cursor
 
-def connect_default_db(connect=None, configFile=None, **args):
-    'return table name, cursor, connection object'
+def mysql_connect(connect=None, configFile=None, **args):
+    """return connection and cursor objects, using .my.cnf if necessary"""
     kwargs = args.copy() # a copy we can modify
     if 'user' not in kwargs and configFile is None: #Find where config file is
         osname = platform.system()
@@ -1663,56 +1663,62 @@ class TableGroup(dict):
     def __getattr__(self,k):
         return self[k]
 
+def sqlite_connect(*args, **kwargs):
+    sqlite = import_sqlite()
+    connection = sqlite.connect(*args, **kwargs)
+    cursor = connection.cursor()
+    return connection, cursor
+
+# list of database connection functions DBServerInfo knows how to use
+_DBServerModuleDict = dict(MySQLdb=mysql_connect, sqlite=sqlite_connect)
+
 
 class DBServerInfo(object):
     'picklable reference to a database server'
-    def __init__(self, get_connection=None, **kwargs):
+    def __init__(self, moduleName='MySQLdb', *args, **kwargs):
+        if moduleName not in _DBServerModuleDict:
+            raise ValueError('Module name not found in _DBServerModuleDict: '\
+                             + moduleName)
+        self.moduleName = moduleName
+        self.args = args
         self.kwargs = kwargs # connection arguments
-        self.get_connection = get_connection
+
     def cursor(self):
-        'returns cursor to this database server'
+        """returns cursor to this database server"""
         try:
             return self._cursor
         except AttributeError:
-            if self.get_connection is None: # default: use MySQL
-                from MySQLdb import connect
-            else:
-                connect = self.get_connection
-            self._cursor = connect(**self.kwargs).cursor()
+            try:
+                moduleName = self.moduleName
+            except AttributeError:
+                moduleName = 'MySQLdb'
+            connect = _DBServerModuleDict[moduleName]
+            self._connection,self._cursor = connect(*self.args, **self.kwargs)
             return self._cursor
-    def __getstate__(self):
-        'return all picklable arguments'
-        return dict(kwargs=self.kwargs, get_connection=self.get_connection)
 
-
-class SQLiteServerInfo(object):
-    """picklable reference to a sqlite database"""
-    def __init__(self, database, *args, **kwargs):
-        """Takes same arguments as sqlite3.connect()"""
-        if database == ':memory:':
-            raise ValueError('SQLite in-memory database is not picklable!')
-        self.args = (SourceFileName(database),) + args[1:] # save abs path!
-        self.kwargs = kwargs
-    def cursor(self):
-        """Get a cursor for accessing this database """
-        try:
-            return self._cursor
-        except AttributeError:
-            sqlite = import_sqlite()
-            self._connection = sqlite.connect(*self.args, **self.kwargs)
-            self._cursor = self._connection.cursor()
-            return self._cursor
     def close(self):
         """Close file containing this database"""
         self._cursor.close()
         self._connection.close()
         del self._cursor
         del self._connection
+
     def __getstate__(self):
         """return all picklable arguments"""
-        return dict(args=self.args, kwargs=self.kwargs)
-        
+        return dict(args=self.args, kwargs=self.kwargs,
+                    moduleName=self.moduleName)
 
+
+class SQLiteServerInfo(DBServerInfo):
+    """picklable reference to a sqlite database"""
+    def __init__(self, database, *args, **kwargs):
+        """Takes same arguments as sqlite3.connect()"""
+        if database == ':memory:':
+            raise ValueError('SQLite in-memory database is not picklable!')
+        self.args = (SourceFileName(database),) + args # save abs path!
+        self.kwargs = kwargs
+        self.moduleName = 'sqlite'
+        
             
 class MapView(object, UserDict.DictMixin):
     'general purpose 1:1 mapping defined by any SQL query'

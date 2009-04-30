@@ -11,14 +11,16 @@ class SQLSequence_Test(unittest.TestCase):
     SQLSequence objects created by a SQLTable object rather than
     instantiating the SQLSequence objects directly.
     '''
-    def setUp(self, cursor=None, dbname='test.sqlsequence_test'):
+    def setUp(self, serverInfo=None, dbname='test.sqlsequence_test'):
         createTable = """\
         CREATE TABLE %s
              (primary_id INTEGER PRIMARY KEY %%(AUTO_INCREMENT)s, sequence TEXT)
         """ % dbname
         
-        self.db = sqlgraph.SQLTable(dbname, cursor, dropIfExists=True,
-            createTable=createTable, attrAlias=dict(seq='sequence'))
+        self.db = sqlgraph.SQLTable(dbname, serverInfo=serverInfo,
+                                    dropIfExists=True,
+                                    createTable=createTable,
+                                    attrAlias=dict(seq='sequence'))
         
         self.db.cursor.execute("""\
         INSERT INTO %s (sequence)
@@ -63,7 +65,7 @@ class SQLSequence_Test(unittest.TestCase):
 
 class SQLiteSequence_Test(testutil.SQLite_Mixin, SQLSequence_Test):
     def sqlite_load(self):
-        SQLSequence_Test.setUp(self, self.cursor, 'sqlsequence_test')
+        SQLSequence_Test.setUp(self, self.serverInfo, 'sqlsequence_test')
 
 def get_suite():
     "Returns the testsuite"
