@@ -87,7 +87,10 @@ def safe_dispatch(self,name,args):
         try: # TRAP ALL ERRORS TO PREVENT OUR SERVER FROM DYING
             print >>sys.stderr,'XMLRPC:',name,args,\
                   datetime.datetime.now().isoformat(' ') # LOG THE REQUEST
-            m=getattr(self,name) # GET THE BOUND METHOD
+            if self.xmlrpc_methods[name]: # use this as an alias for method
+                m = getattr(self,self.xmlrpc_methods[name])
+            else: # use method name as usual
+                m = getattr(self,name) # GET THE BOUND METHOD
             val=m(*args) # CALL THE METHOD
             sys.stderr.flush() # FLUSH ANY OUTPUT TO OUR LOG
             return val # HAND BACK ITS RETURN VALUE

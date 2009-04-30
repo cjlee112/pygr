@@ -1028,7 +1028,7 @@ class BlastDB(SequenceFileDB):          # @CTB untested?
 class BlastDBXMLRPC(BlastDB):
     'XMLRPC server wrapper around a standard BlastDB'
     xmlrpc_methods = dict(getSeqLen=0, get_strslice=0, getSeqLenDict=0,
-                          get_db_size=0, get_seqtype=0)
+                          get_db_size=0, get_seqtype=0, strslice='get_strslice')
     def getSeqLen(self,id):
         'get sequence length, or -1 if not found'
         try:
