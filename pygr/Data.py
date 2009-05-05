@@ -1,37 +1,37 @@
 
-from pygr import pygrData,pygrSchema
+from pygr import worldbase,worldbaseSchema
 from metabase import ResourceServer, dumps, OneToManyRelation, OneToOneRelation,\
      ManyToManyRelation, PygrDataNotPortableError, PygrDataNotFoundError, \
      PygrDataMismatchError, PygrDataEmptyError, PygrDataReadOnlyError, \
      PygrDataSchemaError, PygrDataNoModuleError, ResourceZone
 
-schema = pygrSchema # ROOT OF OUR SCHEMA NAMESPACE
+schema = worldbaseSchema # ROOT OF OUR SCHEMA NAMESPACE
 
 # PROVIDE TOP-LEVEL NAMES IN OUR RESOURCE HIERARCHY
-Bio = pygrData.Bio
+Bio = worldbase.Bio
 
-getResource = pygrData._mdb # our metabase interface
-addResource = pygrData._mdb.add_resource
+getResource = worldbase._mdb # our metabase interface
+addResource = worldbase._mdb.add_resource
 def addResourceDict(d, layer=None):
     'queue a dict of name:object pairs for saving to specified db layer'
     if layer is not None: # use the named metabase specified by layer
-        mdb = pygrData._mdb.zoneDict[layer] # KeyError if layer not found!
+        mdb = worldbase._mdb.zoneDict[layer] # KeyError if layer not found!
     else: # use default MetabaseList
-        mdb = pygrData._mdb
+        mdb = worldbase._mdb
     for k,v in d.items(): # queue each resource in the dictionary
         mdb.add_resource(k, v)
 
-addSchema = pygrData._mdb.add_schema
-deleteResource = pygrData._mdb.delete_resource
-dir = pygrData._mdb.dir
+addSchema = worldbase._mdb.add_schema
+deleteResource = worldbase._mdb.delete_resource
+dir = worldbase._mdb.dir
 def newServer(*args, **kwargs):
-    return ResourceServer(pygrData._mdb, *args, **kwargs)
-save = pygrData._mdb.commit
-rollback = pygrData._mdb.rollback
-list_pending = pygrData._mdb.list_pending
-loads = pygrData._mdb.loads
-update = pygrData._mdb.update
-clear_cache = pygrData._mdb.clear_cache
+    return ResourceServer(worldbase._mdb, *args, **kwargs)
+save = worldbase._mdb.commit
+rollback = worldbase._mdb.rollback
+list_pending = worldbase._mdb.list_pending
+loads = worldbase._mdb.loads
+update = worldbase._mdb.update
+clear_cache = worldbase._mdb.clear_cache
 
 # TOP-LEVEL NAMES FOR STANDARDIZED LAYERS
 here = ResourceZone(getResource, 'here')
