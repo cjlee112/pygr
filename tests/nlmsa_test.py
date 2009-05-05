@@ -175,7 +175,7 @@ class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
         self._check_results(n)
 
 
-def test_no_seqDict_args(self):
+    def test_no_seqDict_args(self):
         class Bag(object):
             def __init__(self, **kw):
                 self.__dict__.update(kw)
