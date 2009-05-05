@@ -3,7 +3,7 @@ import socket, unittest, os, md5, pickle, datetime
 import testlib
 from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import seqdb, cnestedlist, metabase, mapping
-from pygr import pygrData, pygrSchema
+from pygr import worldbase, worldbaseSchema
 from pygr.downloader import SourceURL, GenericBuilder
 
 try:
@@ -19,7 +19,7 @@ class TestBase(unittest.TestCase):
         self.tempdir = testutil.TempDir('pygrdata')
         if pygrDataPath is None:
             pygrDataPath = self.tempdir.path
-        pygrData.update(pygrDataPath, **kwargs)
+        worldbase.update(pygrDataPath, **kwargs)
         # handy shortcuts
         self.EQ = self.assertEqual
 
@@ -34,11 +34,11 @@ class Download_Test(TestBase):
         url = SourceURL('http://www.doe-mbi.ucla.edu/~leec/test.gz')
         url.__doc__ = 'test download'
 
-        pygrData.add_resource('Bio.Test.Download1', url)
-        pygrData.commit()
+        worldbase.add_resource('Bio.Test.Download1', url)
+        worldbase.commit()
 
         # performs the download            
-        fpath = pygrData.Bio.Test.Download1()
+        fpath = worldbase.Bio.Test.Download1()
         h = testutil.get_file_md5(fpath)
         self.assertEqual(h.hexdigest(), 'f95656496c5182d6cff9a56153c9db73')
         os.remove(fpath)
@@ -78,7 +78,7 @@ class DNAAnnotation_Test(TestBase):
         try:
             db.__doc__ = 'little dna'
 
-            pygrData.Bio.Test.dna = db
+            worldbase.Bio.Test.dna = db
             annoDB = seqdb.AnnotationDB({1:('seq1',5,10,'fred'),
                                          2:('seq1',-60,-50,'bob'),
                                          3:('seq2',-20,-10,'mary')},
@@ -86,7 +86,7 @@ class DNAAnnotation_Test(TestBase):
                                   sliceAttrDict=dict(id=0, start=1, stop=2,
                                                      name=3))
             annoDB.__doc__ = 'trivial annotation'
-            pygrData.Bio.Test.annoDB = annoDB
+            worldbase.Bio.Test.annoDB = annoDB
             nlmsa = cnestedlist.NLMSA(tryannot,'w',pairwiseMode=True,
                                       bidirectional=False)
             try:
@@ -95,11 +95,11 @@ class DNAAnnotation_Test(TestBase):
 
                 nlmsa.build(verbose=False)
                 nlmsa.__doc__ = 'trivial map'
-                pygrData.Bio.Test.map = nlmsa
-                pygrSchema.Bio.Test.map = metabase.ManyToManyRelation(db,
+                worldbase.Bio.Test.map = nlmsa
+                worldbaseSchema.Bio.Test.map = metabase.ManyToManyRelation(db,
                                                        annoDB,bindAttrs=('exons',))
-                pygrData.commit()
-                pygrData.clear_cache()
+                worldbase.commit()
+                worldbase.clear_cache()
             finally:
                 nlmsa.close()
         finally:
@@ -107,11 +107,11 @@ class DNAAnnotation_Test(TestBase):
     
     def test_annotation(self):
         "Annotation test"
-        db = pygrData.Bio.Test.dna()
+        db = worldbase.Bio.Test.dna()
         try:
             s1 = db['seq1']
             l = s1.exons.keys()
-            annoDB = pygrData.Bio.Test.annoDB()
+            annoDB = worldbase.Bio.Test.annoDB()
             assert l == [annoDB[1], -(annoDB[2])]
             assert l[0].sequence == s1[5:10]
             assert l[1].sequence == s1[50:60]
@@ -126,31 +126,31 @@ class DNAAnnotation_Test(TestBase):
             assert l[1].name == 'fred'
         finally:
             db.close() # close SequenceFileDB
-            pygrData.Bio.Test.map().close() # close NLMSA
+            worldbase.Bio.Test.map().close() # close NLMSA
 
 def populate_swissprot():
-    "Populate the current pygrData with swissprot data"
+    "Populate the current worldbase with swissprot data"
     # build BlastDB out of the sequences
     sp_hbb1 = testutil.datafile('sp_hbb1')
     sp = seqdb.BlastDB(sp_hbb1)
     sp.__doc__ = 'little swissprot'
-    pygrData.Bio.Seq.Swissprot.sp42 = sp
+    worldbase.Bio.Seq.Swissprot.sp42 = sp
 
     # also store a fragment
     hbb = sp['HBB1_TORMA']
     ival= hbb[10:35]
     ival.__doc__ = 'fragment'
-    pygrData.Bio.Seq.frag = ival
+    worldbase.Bio.Seq.frag = ival
 
     # build a mapping to itself
     m = mapping.Mapping(sourceDB=sp,targetDB=sp)
     trypsin = sp['PRCA_ANAVA']
     m[hbb] = trypsin
     m.__doc__ = 'map sp to itself'
-    pygrData.Bio.Seq.spmap = m
+    worldbase.Bio.Seq.spmap = m
 
     # create an annotation database and bind as exons attribute
-    pygrSchema.Bio.Seq.spmap = metabase.OneToManyRelation(sp, sp,
+    worldbaseSchema.Bio.Seq.spmap = metabase.OneToManyRelation(sp, sp,
                                                          bindAttrs=('buddy',))
     annoDB = seqdb.AnnotationDB({1:('HBB1_TORMA',10,50)}, sp,
                                 sliceAttrDict=dict(id=0, start=1, stop=2)) 
@@ -165,14 +165,14 @@ def populate_swissprot():
     nlmsa.build(verbose=False)
     annoDB.__doc__ = 'a little annotation db'
     nlmsa.__doc__ = 'a little map'
-    pygrData.Bio.Annotation.annoDB = annoDB
-    pygrData.Bio.Annotation.map = nlmsa
-    pygrSchema.Bio.Annotation.map = \
+    worldbase.Bio.Annotation.annoDB = annoDB
+    worldbase.Bio.Annotation.map = nlmsa
+    worldbaseSchema.Bio.Annotation.map = \
          metabase.ManyToManyRelation(sp, annoDB, bindAttrs=('exons',))
 
 def check_match(self):
-    frag = pygrData.Bio.Seq.frag()
-    correct = pygrData.Bio.Seq.Swissprot.sp42()['HBB1_TORMA'][10:35]
+    frag = worldbase.Bio.Seq.frag()
+    correct = worldbase.Bio.Seq.Swissprot.sp42()['HBB1_TORMA'][10:35]
     assert frag == correct, 'seq ival should match'
     assert frag.__doc__ == 'fragment', 'docstring should match'
     assert str(frag) == 'IQHIWSNVNVVEITAKALERVFYVY', 'letters should match'
@@ -187,21 +187,21 @@ def check_dir(self):
     expected=['Bio.Annotation.annoDB', 'Bio.Annotation.map',
                 'Bio.Seq.Swissprot.sp42', 'Bio.Seq.frag', 'Bio.Seq.spmap']
     expected.sort()
-    found = pygrData.dir('Bio')
+    found = worldbase.dir('Bio')
     found.sort()
     assert found == expected
 
 def check_dir_noargs(self):
-    found = pygrData.dir()
+    found = worldbase.dir()
     found.sort()
-    found2 = pygrData.dir('')
+    found2 = worldbase.dir('')
     found2.sort()
     assert found == found2
 
 def check_dir_download(self):
-    found = pygrData.dir(download=True)
+    found = worldbase.dir(download=True)
     found.sort()
-    found2 = pygrData.dir('', download=True)
+    found2 = worldbase.dir('', download=True)
     found2.sort()
     assert len(found) == 0
     assert found == found2
@@ -210,28 +210,28 @@ def check_dir_re(self):
     expected=['Bio.Annotation.annoDB', 'Bio.Annotation.map',
                 'Bio.Seq.Swissprot.sp42', 'Bio.Seq.frag', 'Bio.Seq.spmap']
     expected.sort()
-    found = pygrData.dir('^Bio', 'r')
+    found = worldbase.dir('^Bio', 'r')
     found.sort()
     assert found == expected
 
     expected = ['Bio.Seq.Swissprot.sp42', 'Bio.Seq.spmap']
     expected.sort()
-    found = pygrData.dir('^Bio\..+\.sp', 'r')
+    found = worldbase.dir('^Bio\..+\.sp', 'r')
     found.sort()
     assert found == expected
 
 def check_bind(self):
-    sp = pygrData.Bio.Seq.Swissprot.sp42()
+    sp = worldbase.Bio.Seq.Swissprot.sp42()
     hbb = sp['HBB1_TORMA']
     trypsin =  sp['PRCA_ANAVA']
     assert hbb.buddy == trypsin, 'automatic schema attribute binding'
 
 def check_bind2(self):
-    sp = pygrData.Bio.Seq.Swissprot.sp42()
+    sp = worldbase.Bio.Seq.Swissprot.sp42()
     hbb = sp['HBB1_TORMA']
     exons = hbb.exons.keys()
     assert len(exons)==1, 'number of expected annotations'
-    annoDB = pygrData.Bio.Annotation.annoDB()
+    annoDB = worldbase.Bio.Annotation.annoDB()
     exon = annoDB[1]
     assert exons[0] == exon, 'test annotation comparison'
     assert exons[0].pathForward is exon,'annotation parent match'
@@ -247,8 +247,8 @@ class Sequence_Test(TestBase):
     def setUp(self, *args, **kwargs):
         TestBase.setUp(self, *args, **kwargs)
         populate_swissprot()
-        pygrData.commit() # finally save everything
-        pygrData.clear_cache() # force all requests to reload
+        worldbase.commit() # finally save everything
+        worldbase.clear_cache() # force all requests to reload
 
     def test_match(self):
         "Test matching sequences"
@@ -270,29 +270,29 @@ class Sequence_Test(TestBase):
         sp_hbb1 = testutil.datafile('sp_hbb1') 
         sp2 = seqdb.BlastDB(sp_hbb1)
         sp2.__doc__ = 'another sp'
-        pygrData.Bio.Seq.sp2 = sp2
-        sp = pygrData.Bio.Seq.Swissprot.sp42()
+        worldbase.Bio.Seq.sp2 = sp2
+        sp = worldbase.Bio.Seq.Swissprot.sp42()
         m = mapping.Mapping(sourceDB=sp,targetDB=sp2)
         m.__doc__ = 'sp -> sp2'
-        pygrData.Bio.Seq.testmap = m
-        pygrSchema.Bio.Seq.testmap = metabase.OneToManyRelation(sp, sp2)
-        pygrData.commit()
+        worldbase.Bio.Seq.testmap = m
+        worldbaseSchema.Bio.Seq.testmap = metabase.OneToManyRelation(sp, sp2)
+        worldbase.commit()
 
-        pygrData.clear_cache()
+        worldbase.clear_cache()
 
         sp3 = seqdb.BlastDB(sp_hbb1)
         sp3.__doc__ = 'sp number 3'
-        pygrData.Bio.Seq.sp3 = sp3
-        sp2 = pygrData.Bio.Seq.sp2()
+        worldbase.Bio.Seq.sp3 = sp3
+        sp2 = worldbase.Bio.Seq.sp2()
         m = mapping.Mapping(sourceDB=sp3,targetDB=sp2)
         m.__doc__ = 'sp3 -> sp2'
-        pygrData.Bio.Seq.testmap2 = m
-        pygrSchema.Bio.Seq.testmap2 = metabase.OneToManyRelation(sp3, sp2)
-        l = pygrData._mdb.resourceCache.keys()
+        worldbase.Bio.Seq.testmap2 = m
+        worldbaseSchema.Bio.Seq.testmap2 = metabase.OneToManyRelation(sp3, sp2)
+        l = worldbase._mdb.resourceCache.keys()
         l.sort()
         assert l == ['Bio.Seq.sp2', 'Bio.Seq.sp3', 'Bio.Seq.testmap2']
-        pygrData.commit()
-        g = pygrData._mdb.writer.storage.graph
+        worldbase.commit()
+        g = worldbase._mdb.writer.storage.graph
         expected = set(['Bio.Annotation.annoDB',
                      'Bio.Seq.Swissprot.sp42', 'Bio.Seq.sp2', 'Bio.Seq.sp3'])
         found = set(g.keys()) 
@@ -307,7 +307,7 @@ class SQL_Sequence_Test(Sequence_Test):
         Sequence_Test.setUp(self, pygrDataPath='mysql:' + self.dbtable,
                             mdbArgs=dict(createLayer='temp'))
     def tearDown(self):
-        testutil.drop_tables(pygrData._mdb.writer.storage.cursor, self.dbtable)
+        testutil.drop_tables(worldbase._mdb.writer.storage.cursor, self.dbtable)
                     
 class InvalidPickle_Test(TestBase):
     
@@ -335,16 +335,16 @@ class XMLRPC_Test(TestBase):
     def setUp(self):
         TestBase.setUp(self)
         populate_swissprot() # save some data
-        pygrData.commit() # finally save everything to metabase
-        pygrData.clear_cache() # force all requests to reload
+        worldbase.commit() # finally save everything to metabase
+        worldbase.clear_cache() # force all requests to reload
 
         res = [ 'Bio.Seq.Swissprot.sp42', 'Bio.Seq.frag', 'Bio.Seq.spmap',
                 'Bio.Annotation.annoDB', 'Bio.Annotation.map' ]
         self.server = testutil.TestXMLRPCServer(res, self.tempdir.path)
     def test_xmlrpc(self):
         "Test XMLRPC"
-        pygrData.clear_cache() # force all future requests to reload
-        pygrData.update("http://localhost:%s" % self.server.port) # from XMLRPC
+        worldbase.clear_cache() # force all future requests to reload
+        worldbase.update("http://localhost:%s" % self.server.port) # from XMLRPC
         
         check_match(self) # run all our tests
         check_dir(self)
@@ -358,8 +358,8 @@ class XMLRPC_Test(TestBase):
         sp2 = seqdb.BlastDB(sb_hbb1)
         sp2.__doc__ = 'another sp'
         try:
-            pygrData.Bio.Seq.sp2 = sp2
-            pygrData.commit()
+            worldbase.Bio.Seq.sp2 = sp2
+            worldbase.commit()
             msg = 'failed to catch bad attempt to write to XMLRPC server'
             raise KeyError(msg)
         except ValueError:

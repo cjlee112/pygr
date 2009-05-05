@@ -1,16 +1,13 @@
 
-# empty __init__.py to mark this as a package
-# does not support: from pygr import *
-
 __version__ = "0.8.0"
 
 try:
-    pygrData
+    worldbase
 except NameError:
     import metabase
     mdb = metabase.MetabaseList() # use default PYGRDATAPATH
-    pygrData = mdb.Data
-    pygrSchema = mdb.Schema
-    pygrZones = mdb.zones
+    worldbase = mdb.Data
+    worldbaseSchema = mdb.Schema
+    worldbaseZones = mdb.zones
 
-__all__ = ('__version__', 'pygrData', 'pygrSchema', 'pygrZones')
+__all__ = ('__version__', 'worldbase', 'worldbaseSchema', 'worldbaseZones')
