@@ -102,8 +102,14 @@ class BetterShelf(shelve.Shelf):
         'avoid using iter provided by shelve/DictMixin, which loads all keys!'
         try:
             return iter(self.dict)
-        except TypeError: # gdbm has wierd iterator behavior...
-            return iter_gdbm(self.dict)
+        except TypeError: # gdbm lacks __iter__ method, so try iter_gdbm()
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            try:
+                self.dict.firstkey
+            except AttributeError: # evidently not a gdbm dict
+                raise exc_value, None, exc_traceback # re-raise original error
+            else: # iterate using gdbm-specific method
+                return iter_gdbm(self.dict)
 
     if sys.version_info < (2, 6): # Python finally added good err msg in 2.6
         def close(self):
