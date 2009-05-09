@@ -1,9 +1,9 @@
 
 from pygr import worldbase,worldbaseSchema
 from metabase import ResourceServer, dumps, OneToManyRelation, OneToOneRelation,\
-     ManyToManyRelation, PygrDataNotPortableError, PygrDataNotFoundError, \
-     PygrDataMismatchError, PygrDataEmptyError, PygrDataReadOnlyError, \
-     PygrDataSchemaError, PygrDataNoModuleError, ResourceZone
+     ManyToManyRelation, WorldbaseNotPortableError, WorldbaseNotFoundError, \
+     WorldbaseMismatchError, WorldbaseEmptyError, WorldbaseReadOnlyError, \
+     WorldbaseSchemaError, WorldbaseNoModuleError, ResourceZone
 
 schema = worldbaseSchema # ROOT OF OUR SCHEMA NAMESPACE
 
@@ -45,9 +45,9 @@ __all__ = ('Bio', 'schema', 'getResource', 'addResource', 'addSchema',
            'deleteResource', 'dir', 'newServer', 'save', 'rollback',
            'list_pending', 'loads', 'dumps', 'update', 'clear_cache',
            'OneToManyRelation', 'ManyToManyRelation',
-           'OneToOneRelation', 'PygrDataNotPortableError',
-           'PygrDataNotFoundError', 'PygrDataMismatchError',
-           'PygrDataEmptyError', 'PygrDataReadOnlyError',
-           'PygrDataSchemaError', 'PygrDataNoModuleError',
+           'OneToOneRelation', 'WorldbaseNotPortableError',
+           'WorldbaseNotFoundError', 'WorldbaseMismatchError',
+           'WorldbaseEmptyError', 'WorldbaseReadOnlyError',
+           'WorldbaseSchemaError', 'WorldbaseNoModuleError',
            'here', 'my', 'system', 'subdir', 'remote', 'MySQL')
 

@@ -6,7 +6,6 @@ import os, unittest
 
 from testlib import testutil, PygrTestProgram, SkipTest
 from pygr import mapping, graphquery, sqlgraph
-import pygr.Data
 
 class Query_Test(unittest.TestCase):
     "Pygr Query tests"
@@ -193,18 +192,20 @@ class SQLiteGraph_Test(testutil.SQLite_Mixin, Mapping_Test):
                                            dropIfExists=True,
                                            createTable=createOpts)
 
-class Splicegraph_Test(unittest.TestCase):
+# test currently unused, requires access to leelab data
+## from pygr import worldbase
+## class Splicegraph_Test(unittest.TestCase):
     
-    def setUp(self):
-        self.sg = pygr.Data.Bio.Annotation.ASAP2.Isoform.HUMAN.\
-                  hg17.splicegraph()
+##     def setUp(self):
+##         self.sg = worldbase.Bio.Annotation.ASAP2.Isoform.HUMAN.\
+##                   hg17.splicegraph()
     
-    def exonskip_megatest(self):
-        'perform exon skip query'
-        query = {0:{1:None,2:None},1:{2:None},2:{}}
-        gq = graphquery.GraphQuery(self.sg, query)
-        l = list(gq)
-        assert len(l) == 11546, 'test exact size of exonskip set'
+##     def exonskip_megatest(self):
+##         'perform exon skip query'
+##         query = {0:{1:None,2:None},1:{2:None},2:{}}
+##         gq = graphquery.GraphQuery(self.sg, query)
+##         l = list(gq)
+##         assert len(l) == 11546, 'test exact size of exonskip set'
 
 if __name__ == '__main__':
     PygrTestProgram(verbosity=2)

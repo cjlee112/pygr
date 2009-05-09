@@ -272,10 +272,10 @@ class BuildMSASlice(object):
 def read_seq_dict(pathstem,trypath=None):
   'read seqDict for NLMSA'
   if os.access(pathstem+'.seqDictP',os.R_OK):
-    from pygr.Data import loads
+    from pygr import worldbase
     ifile = file(pathstem+'.seqDictP', 'rb') # pickle is binary file!
-    try: # LOAD FROM pygr.Data-AWARE PICKLE FILE
-      seqDict = loads(ifile.read())
+    try: # LOAD FROM worldbase-AWARE PICKLE FILE
+      seqDict = worldbase._mdb.loads(ifile.read())
     finally:
       ifile.close()
   elif os.access(pathstem+'.seqDict',os.R_OK): # OLD-STYLE UNION HEADER
@@ -290,7 +290,7 @@ and no seqDict provided as an argument''' % (pathstem,pathstem))
 
 
 def save_seq_dict(pathstem,seqDict):
-  'save seqDict to a pygr.Data-aware pickle file'
+  'save seqDict to a worldbase-aware pickle file'
   from metabase import dumps
   ofile = file(pathstem+'.seqDictP','wb') # pickle is binary file!
   try:
@@ -322,7 +322,7 @@ nlmsa_textdump_unpickler.__safe_for_unpickling__ = 1
   
 class NLMSABuilder(object):
   'when unpickled triggers construction of NLMSA from textdump'
-  _pygr_data_no_cache = True # force pygr.Data to reload this fresh
+  _worldbase_no_cache = True # force worldbase to reload this fresh
   def __init__(self,filepath,**kwargs):
     self.filepath = filepath
     self.kwargs = kwargs

@@ -22,7 +22,7 @@ class OneTimeDescriptor(object):
         try:
             resID = obj._persistent_id # GET ITS RESOURCE ID
         except AttributeError:
-            raise AttributeError('attempt to access pygr.Data attr on non-pygr.Data object')
+            raise AttributeError('attempt to access worldbase attr on non-worldbase object')
         target = self.mdb.get_schema_attr(resID, self.attr) #get from mdb
         obj.__dict__[self.attr] = target # save in __dict__ to evade __setattr__
         return target
@@ -43,7 +43,7 @@ class ItemDescriptor(object):
         try:
             resID = obj.db._persistent_id # GET RESOURCE ID OF DATABASE
         except AttributeError:
-            raise AttributeError('attempt to access pygr.Data attr on non-pygr.Data object')
+            raise AttributeError('attempt to access worldbase attr on non-worldbase object')
         targetDict = self.mdb.get_schema_attr(resID, self.attr)
         if self.invert:
             targetDict = ~targetDict
@@ -69,7 +69,7 @@ class ItemDescriptor(object):
 class ItemDescriptorRW(ItemDescriptor):
     def __set__(self,obj,newTarget):
         if not self.uniqueMapping:
-            raise PygrDataSchemaError('''You attempted to directly assign to a graph mapping
+            raise WorldbaseSchemaError('''You attempted to directly assign to a graph mapping
 (x.graph = y)! Instead, treat the graph like a dictionary: x.graph[y] = edgeInfo''')
         targetDict = self.get_target(obj)
         targetDict[obj] = newTarget
@@ -116,26 +116,26 @@ def getInverseDB(self):
     return self.inverseDB # TRIGGER CONSTRUCTION OF THE TARGET RESOURCE
 
 
-class PygrDataNotPortableError(ValueError):
+class WorldbaseNotPortableError(ValueError):
     'indicates that object has a local data dependency and cannnot be transferred to a remote client'
     pass
-class PygrDataNotFoundError(KeyError):
-    'unable to find a loadable resource for the requested pygr.Data identifier from PYGRDATAPATH'
+class WorldbaseNotFoundError(KeyError):
+    'unable to find a loadable resource for the requested worldbase identifier from PYGRDATAPATH'
     pass
-class PygrDataMismatchError(ValueError):
-    '_persistent_id attr on object no longer matches its assigned pygr.Data ID?!?'
+class WorldbaseMismatchError(ValueError):
+    '_persistent_id attr on object no longer matches its assigned worldbase ID?!?'
     pass
-class PygrDataEmptyError(ValueError):
+class WorldbaseEmptyError(ValueError):
     "user hasn't queued anything, so trying to save or rollback is an error"
     pass
-class PygrDataReadOnlyError(ValueError):
+class WorldbaseReadOnlyError(ValueError):
     'attempt to write data to a read-only resource database'
     pass
-class PygrDataSchemaError(ValueError):
+class WorldbaseSchemaError(ValueError):
     "attempt to set attribute to an object not in the database bound by schema"
     pass
 
-class PygrDataNoModuleError(pickle.PickleError):
+class WorldbaseNoModuleError(pickle.PickleError):
     'attempt to pickle a class from a non-importable module'
     pass
 
@@ -145,7 +145,7 @@ class PygrPickler(pickle.Pickler):
         import types
         try: # check for unpicklable class (i.e. not loaded via a module import)
             if isinstance(obj, types.TypeType) and obj.__module__ == '__main__':
-                raise PygrDataNoModuleError('''You cannot pickle a class from __main__!
+                raise WorldbaseNoModuleError('''You cannot pickle a class from __main__!
 To make this class (%s) picklable, it must be loaded via a regular import
 statement.''' % obj.__name__)
         except AttributeError:
@@ -161,7 +161,7 @@ statement.''' % obj.__name__)
             pass
         for klass in self.badClasses: # CHECK FOR LOCAL DEPENDENCIES
             if isinstance(obj,klass):
-                raise PygrDataNotPortableError('this object has a local data dependency and cannnot be transferred to a remote client')
+                raise WorldbaseNotPortableError('this object has a local data dependency and cannnot be transferred to a remote client')
         return None
     def setRoot(self,obj,sourceIDs={},badClasses=()):
         'set obj as root of pickling tree: genuinely pickle it (not just its id)'
@@ -260,7 +260,7 @@ class MetabaseServer(object):
 
 
 def raise_illegal_save(self,*l):
-    raise PygrDataReadOnlyError('''You cannot save data to a remote XMLRPC server.
+    raise WorldbaseReadOnlyError('''You cannot save data to a remote XMLRPC server.
 Give a user-editable resource database as the first entry in your PYGRDATAPATH!''')
 
 
@@ -280,7 +280,7 @@ class XMLRPCMetabase(object):
         else: # NORMAL MODE TO GET XMLRPC SERVICES
             d=self.server.getResource(id)
         if d=='':
-            raise PygrDataNotFoundError('resource %s not found'%id)
+            raise WorldbaseNotFoundError('resource %s not found'%id)
         try:
             docstring = d['__doc__']
             del d['__doc__']
@@ -349,7 +349,7 @@ table you want to create, and LAYERNAME is the layer name you want to assign it'
             except StandardError:
                 print >>sys.stderr,'''%s
 Database table %s appears to be missing or has no layer name!
-To create this table, call pygr.Data.MySQLMetabase("%s",createLayer=<LAYERNAME>)
+To create this table, call worldbase.MySQLMetabase("%s",createLayer=<LAYERNAME>)
 where <LAYERNAME> is the layer name you want to assign it.
 %s'''  %('!'*40,self.tablename,self.tablename,'!'*40)
                 raise
@@ -374,7 +374,7 @@ where <LAYERNAME> is the layer name you want to assign it.
                             % self.tablename,(id,))
         for location,objdata,docstring in self.cursor.fetchall():
             return objdata,docstring # return first resource found
-        raise PygrDataNotFoundError('unable to construct %s from remote services')
+        raise WorldbaseNotFoundError('unable to construct %s from remote services')
     def __setitem__(self,id,obj):
         'add an object to this resource database'
         s = dumps(obj) # PICKLE obj AND ITS DEPENDENCIES
@@ -390,7 +390,7 @@ where <LAYERNAME> is the layer name you want to assign it.
         'delete this resource and its schema rules'
         if self.cursor.execute('delete from %s where pygr_id=%%s'
                                %self.tablename,(id,))<1:
-            raise PygrDataNotFoundError('no resource %s in this database'%id)
+            raise WorldbaseNotFoundError('no resource %s in this database'%id)
     def registerServer(self,locationKey,serviceDict):
         'register the specified services to mysql database'
         n=0
@@ -461,9 +461,9 @@ class ResourceDBGraphDescr(object):
         return g
 
 class ShelveMetabase(object):
-    '''BerkeleyDB-based storage of pygr.Data resource databases, using the python
+    '''BerkeleyDB-based storage of worldbase resource databases, using the python
     shelve module.  Users will not need to create instances of this class themselves,
-    as pygr.Data automatically creates one for each appropriate entry in your
+    as worldbase automatically creates one for each appropriate entry in your
     PYGRDATAPATH; if the corresponding database file does not already exist, 
     it is automatically created for you.'''
     _pygr_data_version=(0,1,0)
@@ -522,7 +522,7 @@ class ShelveMetabase(object):
             try:
                 del self.db[resID] # DELETE THE SPECIFIED RULE
             except KeyError:
-                raise PygrDataNotFoundError('ID %s not found in %s'
+                raise WorldbaseNotFoundError('ID %s not found in %s'
                                             % (resID,self.dbpath))
             try:
                 del self.db['__doc__.' + resID]
@@ -607,10 +607,10 @@ class MetabaseBase(object):
             saver.add_resource(resID, obj) # add to queue for commit
             obj._saveLocalBuild = False # NO NEED TO SAVE THIS AGAIN
             if hasPending:
-                print >>sys.stderr,'''Saving new resource %s to local pygr.Data...
-You must use pygr.Data.save() to commit!
+                print >>sys.stderr,'''Saving new resource %s to local worldbase...
+You must use worldbase.commit() to commit!
 You are seeing this message because you appear to be in the
-middle of a pygr.Data transaction.  Ordinarily pygr.Data would
+middle of a worldbase transaction.  Ordinarily worldbase would
 automatically commit this new downloaded resource, but doing so
 now would also commit your pending transaction, which you may
 not be ready to do!''' % resID
@@ -698,7 +698,7 @@ not be ready to do!''' % resID
         try:
             schema = schema[attr] # GET SCHEMA FOR THIS SPECIFIC ATTRIBUTE
         except KeyError:
-            raise AttributeError('no pygr.Data schema info for %s.%s' \
+            raise AttributeError('no worldbase schema info for %s.%s' \
                                  % (resID,attr))
         targetID = schema['targetID'] # GET THE RESOURCE ID
         return self(targetID) # actually load the resource
@@ -718,7 +718,7 @@ not be ready to do!''' % resID
         try:
             return self.writer
         except AttributeError:
-            raise PygrDataReadOnlyError('this metabase is read-only!')
+            raise WorldbaseReadOnlyError('this metabase is read-only!')
     def add_resource(self, resID, obj):
         'assign obj as the specified resource ID to our metabase'
         self.get_writer().saver.add_resource(resID, obj)
@@ -735,7 +735,7 @@ not be ready to do!''' % resID
         'add a schema to the list of pending schemas to commit'
         self.get_writer().saver.queue_schema_obj(schemaPath, attr, schemaObj)
     def add_schema(self, resID, schemaObj):
-        'assign a schema relation object to a pygr.Data resource name'
+        'assign a schema relation object to a worldbase resource name'
         l = resID.split('.')
         schemaPath = SchemaPath(self, '.'.join(l[:-1]))
         setattr(schemaPath, l[-1], schemaObj)
@@ -789,7 +789,7 @@ class Metabase(MetabaseBase):
             self.writer = self # record downloaded resources here
         else:
             self.writeable = False
-    def update(self, pygrDataPath=None, debug=None, keepCurrentPath=False):
+    def update(self, worldbasePath=None, debug=None, keepCurrentPath=False):
         if not keepCurrentPath: # metabase has fixed path
             raise ValueError('You cannot change the path of a Metabase')
     def find_resource(self, resID, download=False):
@@ -836,13 +836,13 @@ class ZoneDict(UserDict.DictMixin):
         return self.mdbList.zoneDict.copy()
 
 class MetabaseList(MetabaseBase):
-    '''Primary interface for pygr.Data resource database access.  A single instance
-    of this class is created upon import of the pygr.Data module, accessible as
-    pygr.Data.getResource.  Users normally will have no need to create additional
+    '''Primary interface for worldbase resource database access.  A single instance
+    of this class is created upon import of the worldbase module, accessible as
+    worldbase.getResource.  Users normally will have no need to create additional
     instances of this class themselves.'''
     # DEFAULT PYGRDATAPATH: HOME, CURRENT DIR, XMLRPC IN THAT ORDER
     defaultPath = ['~','.','http://biodb2.bioinformatics.ucla.edu:5000']
-    def __init__(self, pygrDataPath=None, resourceCache=None, separator=',', mdbArgs={}):
+    def __init__(self, worldbasePath=None, resourceCache=None, separator=',', mdbArgs={}):
         '''initializes attrs; does not connect to metabases'''
         if resourceCache is None: # create a cache for loaded resources
             resourceCache = ResourceCache()
@@ -851,7 +851,7 @@ class MetabaseList(MetabaseBase):
         self.mdbArgs = mdbArgs
         self.zoneDict = {}
         self.zones = ZoneDict(self) # interface to dict of zones
-        self.pygrDataPath = pygrDataPath
+        self.worldbasePath = worldbasePath
         self.separator = separator
         self.Data = ResourceRoot(self) # root of namespace
         self.Schema = SchemaPath(self)
@@ -869,26 +869,26 @@ class MetabaseList(MetabaseBase):
                 yield mdb.find_resource(resID, download).next()
             except KeyError: # not in this db
                 pass
-        raise PygrDataNotFoundError('unable to find %s in PYGRDATAPATH' % resID)
+        raise WorldbaseNotFoundError('unable to find %s in PYGRDATAPATH' % resID)
     def get_pygr_data_path(self):
         'get environment var, or default in that order'
         try:
             return os.environ['PYGRDATAPATH']
         except KeyError:
             return self.separator.join(self.defaultPath)
-    def update(self, pygrDataPath=None, debug=None, keepCurrentPath=False,
+    def update(self, worldbasePath=None, debug=None, keepCurrentPath=False,
                mdbArgs=None):
         'get the latest list of resource databases'
-        if keepCurrentPath: # only update if self.pygrDataPath is None
-            pygrDataPath = self.pygrDataPath
-        if pygrDataPath is None: # get environment var or default
-            pygrDataPath = self.get_pygr_data_path()
+        if keepCurrentPath: # only update if self.worldbasePath is None
+            worldbasePath = self.worldbasePath
+        if worldbasePath is None: # get environment var or default
+            worldbasePath = self.get_pygr_data_path()
         if debug is None:
             debug = self.debug
         if mdbArgs is None:
             mdbArgs = self.mdbArgs
-        if not self.ready or self.pygrDataPath != pygrDataPath: # reload
-            self.pygrDataPath = pygrDataPath
+        if not self.ready or self.worldbasePath != worldbasePath: # reload
+            self.worldbasePath = worldbasePath
             try: # disconnect from previous writeable interface if any
                 del self.writer
             except AttributeError:
@@ -899,7 +899,7 @@ class MetabaseList(MetabaseBase):
             except AttributeError:
                 pass
             self.zoneDict = {}
-            for dbpath in pygrDataPath.split(self.separator):
+            for dbpath in worldbasePath.split(self.separator):
                 try: # connect to metabase
                     mdb = Metabase(dbpath, self.resourceCache, self.zoneDict, self,
                                    **mdbArgs)
@@ -1006,7 +1006,7 @@ class ResourceSaver(object):
         self.cache_if_appropriate(resID, obj)
     def cache_if_appropriate(self, resID, obj):
         try:
-            if obj._pygr_data_no_cache: 
+            if obj._worldbase_no_cache: 
                 return # do not cache this object; it is not ready to use!!
         except AttributeError:
             pass
@@ -1023,7 +1023,7 @@ class ResourceSaver(object):
         'save the object as <id>'
         self.check_docstring(obj)
         if obj._persistent_id != resID:
-            raise PygrDataMismatchError('''The _persistent_id attribute for %s has changed!
+            raise WorldbaseMismatchError('''The _persistent_id attribute for %s has changed!
 If you changed it, shame on you!  Otherwise, this should not happen,
 so report the reproducible steps to this error message as a bug report.''' % resID)
         self.mdb.storage[resID] = obj # FINALLY, SAVE THE OBJECT TO THE DATABASE
@@ -1032,12 +1032,12 @@ so report the reproducible steps to this error message as a bug report.''' % res
         'return True if there are resources pending to be committed'
         return len(self.pendingData)>0 or len(self.pendingSchema)>0
     def save_pending(self):
-        'save any pending pygr.Data resources and schema'
+        'save any pending worldbase resources and schema'
         if len(self.pendingData)>0 or len(self.pendingSchema)>0:
             d = self.pendingData
             schemaDict = self.pendingSchema
         else:
-            raise PygrDataEmptyError('there is no data queued for saving!')
+            raise WorldbaseEmptyError('there is no data queued for saving!')
         for resID,obj in d.items(): # now save the data
             self.save_resource(resID, obj)
         for schemaPath,attr,schemaObj in schemaDict.values():# save schema
@@ -1051,7 +1051,7 @@ so report the reproducible steps to this error message as a bug report.''' % res
     def rollback(self):
         'dump any pending data without saving, and restore state of cache'
         if len(self.pendingData)==0 and len(self.pendingSchema)==0:
-            raise PygrDataEmptyError('there is no data queued for saving!')
+            raise WorldbaseEmptyError('there is no data queued for saving!')
         self.mdb.resourceCache.update(self.rollbackData) # RESTORE THE ROLLBACK QUEUE
         self.clear_pending()
     def delete_resource(self, resID): # incorporate this into commit-process?
@@ -1078,15 +1078,15 @@ so report the reproducible steps to this error message as a bug report.''' % res
         try:
             self.save_pending() # SEE WHETHER ANY DATA NEEDS SAVING
             print >>sys.stderr,'''
-WARNING: saving pygr.Data pending data that you forgot to save...
-Remember in the future, you must issue the command pygr.Data.save() to save
-your pending pygr.Data resources to your resource database(s), or alternatively
-pygr.Data.rollback() to dump those pending data without saving them.
+WARNING: saving worldbase pending data that you forgot to save...
+Remember in the future, you must issue the command worldbase.commit() to save
+your pending worldbase resources to your resource database(s), or alternatively
+worldbase.rollback() to dump those pending data without saving them.
 It is a very bad idea to rely on this automatic attempt to save your
 forgotten data, because it is possible that the Python interpreter
 may never call this function at exit (for details see the atexit module
 docs in the Python Library Reference).'''
-        except PygrDataEmptyError:
+        except WorldbaseEmptyError:
             pass
 
 
@@ -1135,7 +1135,7 @@ class ResourceServer(XMLRPCServerBase):
             if skipThis: # HAS NO XMLRPC CLIENT-SERVER CLASS PAIRING
                 try: # SAVE IT AS ITSELF
                     self.client_dict_setitem(clientDict,id,obj,badClasses=nonPortableClasses)
-                except PygrDataNotPortableError:
+                except WorldbaseNotPortableError:
                     pass # HAS NON-PORTABLE LOCAL DEPENDENCIES, SO SKIP IT
                 continue # GO ON TO THE NEXT DATA RESOURCE
             try: # TEST WHETHER obj CAN BE RE-CLASSED TO CLIENT / SERVER
@@ -1225,10 +1225,10 @@ class ResourceRoot(ResourcePath):
     def add_schema(self, resID, schemaObj):
         'queue schema info for saving to primary metabase'
         self._mdb.add_schema(resId, schemaObj)
-    def update(self, pygrDataPath=None, debug=None, keepCurrentPath=False,
+    def update(self, worldbasePath=None, debug=None, keepCurrentPath=False,
                mdbArgs=None):
         'set a new PYGRDATAPATH for accessing metabase(s)'
-        self._mdb.update(pygrDataPath=pygrDataPath, debug=debug,
+        self._mdb.update(worldbasePath=worldbasePath, debug=debug,
                          keepCurrentPath=keepCurrentPath, mdbArgs=mdbArgs)
 
 class ResourceZone(object):
@@ -1244,7 +1244,7 @@ class ResourceZone(object):
             raise ValueError('no zone "%s" available' % self._zoneName)
         if name == 'schema': # get schema root
             return SchemaPath.__getitem__(self, mdb)
-        else: # treat as regular pygr.Data string
+        else: # treat as regular worldbase string
             return ResourcePath.__getitem__(self, mdb, name)
 
 class SchemaPath(ResourcePath):

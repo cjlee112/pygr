@@ -329,7 +329,7 @@ class InvalidPickle_Test(TestBase):
             s = pygr.Data.dumps(self.bad) # should raise exception
             msg = 'failed to catch bad attempt to invalid module ref'
             raise ValueError(msg)
-        except pygr.Data.PygrDataNoModuleError:
+        except pygr.Data.WorldbaseNoModuleError:
             pass
         
 class XMLRPC_Test(TestBase):

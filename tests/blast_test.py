@@ -1,7 +1,7 @@
 from itertools import *
 import unittest
 from testlib import testutil, SkipTest, PygrTestProgram
-import pygr.Data
+from pygr import worldbase
 from pygr import sequence, cnestedlist, seqdb, blast, logger
 
 def check_results(results, correct, formatter, delta=0.01):
@@ -826,12 +826,12 @@ def all_vs_all_blast_save():
         result[repr(k)] = tmpdict.keys()
         result[repr(k)].sort()
     
-    # save it into pygr.Data
+    # save it into worldbase
     data = testutil.TestData()
     data.__doc__ = 'sp_allvall'
     data.result = result
-    pygr.Data.Bio.Blast = data
-    pygr.Data.save()
+    worldbase.Bio.Blast = data
+    worldbase.commit()
 
     #return msa
 

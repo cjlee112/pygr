@@ -173,7 +173,7 @@ since it would be unable to find the file using the relative path.
 To avoid this problem, SourceFileName is saving the current
 working directory path so that it can translate the relative
 path to an absolute path.  In the future, please use absolute
-paths when constructing objects that you intend to save to pygr.Data
+paths when constructing objects that you intend to save to worldbase
 or pickle!''' % str(self)
         return (filename_unpickler,(self.__class__,str(self),
                                     dict(curdir=os.getcwd())))
@@ -352,7 +352,7 @@ def get_bound_subclass(obj, classattr='__class__', subname=None, factories=(),
         pass
     else: # someone else's shadow class, so shadow its parent
         targetClass = targetClass._shadowParent
-    if subname is None: # get a name from pygr.Data ID
+    if subname is None: # get a name from worldbase ID
         subname = obj._persistent_id.split('.')[-1]
     class shadowClass(targetClass):
         __reduce__ = shadow_reducer

@@ -486,7 +486,7 @@ class SQLTableBase(object, UserDict.DictMixin):
                         writeable=0)
     __getstate__ = standard_getstate
     def __setstate__(self,state):
-        # default cursor provisioning by pygr.Data is deprecated!
+        # default cursor provisioning by worldbase is deprecated!
         ## if 'serverInfo' not in state: # hmm, no address for db server?
         ##     try: # SEE IF WE CAN GET CURSOR DIRECTLY FROM RESOURCE DATABASE
         ##         from Data import getResource

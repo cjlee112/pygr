@@ -10,26 +10,26 @@ except NameError:
     from sets import Set as set
 
 class TestBase(unittest.TestCase):
-    "A base class to all pygr.Data test classes"
+    "A base class to all metabase test classes"
 
-    def setUp(self, pygrDataPath=None, **kwargs):
+    def setUp(self, worldbasePath=None, **kwargs):
         # overwrite the PYGRDATAPATH environment variable
         self.tempdir = testutil.TempDir('pygrdata')
-        if pygrDataPath is None:
-            pygrDataPath = self.tempdir.path
-        self.metabase = metabase.MetabaseList(pygrDataPath, **kwargs)
+        if worldbasePath is None:
+            worldbasePath = self.tempdir.path
+        self.metabase = metabase.MetabaseList(worldbasePath, **kwargs)
         self.pygrData = self.metabase.Data
         self.schema = self.metabase.Schema
         # handy shortcuts
         self.EQ = self.assertEqual
 
 class Download_Test(TestBase):
-    "Save seq db and interval to pygr.Data shelve"
+    "Save seq db and interval to metabase shelve"
 
     # tested elsewhere as well, on Linux makes gzip ask for permissions
     # to overwrite
     def test_download(self): 
-        "Downloading of gzipped file using pygr.Data"
+        "Downloading of gzipped file using metabase"
         
         url = SourceURL('http://www.doe-mbi.ucla.edu/~leec/test.gz')
         url.__doc__ = 'test download'
@@ -333,7 +333,7 @@ class SQL_Sequence_Test(Sequence_Test):
             raise SkipTest
         
         self.dbtable = testutil.temp_table_name() # create temp db tables
-        Sequence_Test.setUp(self, pygrDataPath='mysql:' + self.dbtable,
+        Sequence_Test.setUp(self, worldbasePath='mysql:' + self.dbtable,
                             mdbArgs=dict(createLayer='temp'))
     def tearDown(self):
         testutil.drop_tables(self.metabase.writer.storage.cursor, self.dbtable)
@@ -356,7 +356,7 @@ class InvalidPickle_Test(TestBase):
             s = metabase.dumps(self.bad) # should raise exception
             msg = 'failed to catch bad attempt to invalid module ref'
             raise ValueError(msg)
-        except metabase.PygrDataNoModuleError:
+        except metabase.WorldbaseNoModuleError:
             pass
 
 class DBServerInfo_Test(TestBase):
