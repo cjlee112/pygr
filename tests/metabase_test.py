@@ -13,7 +13,7 @@ class TestBase(unittest.TestCase):
     "A base class to all metabase test classes"
 
     def setUp(self, worldbasePath=None, **kwargs):
-        # overwrite the PYGRDATAPATH environment variable
+        # overwrite the WORLDBASEPATH environment variable
         self.tempdir = testutil.TempDir('pygrdata')
         if worldbasePath is None:
             worldbasePath = self.tempdir.path

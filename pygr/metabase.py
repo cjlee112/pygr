@@ -120,7 +120,7 @@ class WorldbaseNotPortableError(ValueError):
     'indicates that object has a local data dependency and cannnot be transferred to a remote client'
     pass
 class WorldbaseNotFoundError(KeyError):
-    'unable to find a loadable resource for the requested worldbase identifier from PYGRDATAPATH'
+    'unable to find a loadable resource for the requested worldbase identifier from WORLDBASEPATH'
     pass
 class WorldbaseMismatchError(ValueError):
     '_persistent_id attr on object no longer matches its assigned worldbase ID?!?'
@@ -261,7 +261,7 @@ class MetabaseServer(object):
 
 def raise_illegal_save(self,*l):
     raise WorldbaseReadOnlyError('''You cannot save data to a remote XMLRPC server.
-Give a user-editable resource database as the first entry in your PYGRDATAPATH!''')
+Give a user-editable resource database as the first entry in your WORLDBASEPATH!''')
 
 
 class XMLRPCMetabase(object):
@@ -464,7 +464,7 @@ class ShelveMetabase(object):
     '''BerkeleyDB-based storage of worldbase resource databases, using the python
     shelve module.  Users will not need to create instances of this class themselves,
     as worldbase automatically creates one for each appropriate entry in your
-    PYGRDATAPATH; if the corresponding database file does not already exist, 
+    WORLDBASEPATH; if the corresponding database file does not already exist, 
     it is automatically created for you.'''
     _pygr_data_version=(0,1,0)
     graph = ResourceDBGraphDescr() # INTERFACE TO SCHEMA GRAPH
@@ -840,7 +840,7 @@ class MetabaseList(MetabaseBase):
     of this class is created upon import of the worldbase module, accessible as
     worldbase.getResource.  Users normally will have no need to create additional
     instances of this class themselves.'''
-    # DEFAULT PYGRDATAPATH: HOME, CURRENT DIR, XMLRPC IN THAT ORDER
+    # DEFAULT WORLDBASEPATH: HOME, CURRENT DIR, XMLRPC IN THAT ORDER
     defaultPath = ['~','.','http://biodb2.bioinformatics.ucla.edu:5000']
     def __init__(self, worldbasePath=None, resourceCache=None, separator=',', mdbArgs={}):
         '''initializes attrs; does not connect to metabases'''
@@ -869,20 +869,23 @@ class MetabaseList(MetabaseBase):
                 yield mdb.find_resource(resID, download).next()
             except KeyError: # not in this db
                 pass
-        raise WorldbaseNotFoundError('unable to find %s in PYGRDATAPATH' % resID)
-    def get_pygr_data_path(self):
+        raise WorldbaseNotFoundError('unable to find %s in WORLDBASEPATH' % resID)
+    def get_worldbase_path(self):
         'get environment var, or default in that order'
         try:
-            return os.environ['PYGRDATAPATH']
+            return os.environ['WORLDBASEPATH']
         except KeyError:
-            return self.separator.join(self.defaultPath)
+            try:
+                return os.environ['PYGRDATAPATH']
+            except KeyError:
+                return self.separator.join(self.defaultPath)
     def update(self, worldbasePath=None, debug=None, keepCurrentPath=False,
                mdbArgs=None):
         'get the latest list of resource databases'
         if keepCurrentPath: # only update if self.worldbasePath is None
             worldbasePath = self.worldbasePath
         if worldbasePath is None: # get environment var or default
-            worldbasePath = self.get_pygr_data_path()
+            worldbasePath = self.get_worldbase_path()
         if debug is None:
             debug = self.debug
         if mdbArgs is None:
@@ -930,13 +933,13 @@ WARNING: error accessing metabase %s.  Continuing...''' % dbpath
                 pass
         return self(resID, **kwargs)
     def registerServer(self,locationKey,serviceDict):
-        'register the serviceDict with the first index server in PYGRDATAPATH'
+        'register the serviceDict with the first index server in WORLDBASEPATH'
         for db in self.resourceDBiter():
             if hasattr(db,'registerServer'):
                 n=db.registerServer(locationKey,serviceDict)
                 if n==len(serviceDict):
                     return n
-        raise ValueError('unable to register services.  Check PYGRDATAPATH')
+        raise ValueError('unable to register services.  Check WORLDBASEPATH')
     def getschema(self, resID):
         'search our resource databases for schema info for the desired ID'
         for mdb in self.mdb:
@@ -1227,7 +1230,7 @@ class ResourceRoot(ResourcePath):
         self._mdb.add_schema(resId, schemaObj)
     def update(self, worldbasePath=None, debug=None, keepCurrentPath=False,
                mdbArgs=None):
-        'set a new PYGRDATAPATH for accessing metabase(s)'
+        'set a new WORLDBASEPATH for accessing metabase(s)'
         self._mdb.update(worldbasePath=worldbasePath, debug=debug,
                          keepCurrentPath=keepCurrentPath, mdbArgs=mdbArgs)
 

@@ -15,7 +15,7 @@ class TestBase(unittest.TestCase):
     "A base class to all pygr.Data test classes"
 
     def setUp(self, pygrDataPath=None, **kwargs):
-        # overwrite the PYGRDATAPATH environment variable
+        # overwrite the WORLDBASEPATH environment variable
         self.tempdir = testutil.TempDir('pygrdata')
         if pygrDataPath is None:
             pygrDataPath = self.tempdir.path

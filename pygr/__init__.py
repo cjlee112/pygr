@@ -5,7 +5,7 @@ try:
     worldbase
 except NameError:
     import metabase
-    mdb = metabase.MetabaseList() # use default PYGRDATAPATH
+    mdb = metabase.MetabaseList() # use default WORLDBASEPATH
     worldbase = mdb.Data
     worldbaseSchema = mdb.Schema
     worldbaseZones = mdb.zones

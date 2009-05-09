@@ -311,7 +311,7 @@ class XMLRPCServerBase(object):
             server=get_connection(url,name)
         if server is not None:
             server.registerServer('%s:%d' % (self.host,self.port),data)
-        else: # DEFAULT: SEARCH PYGRDATAPATH TO FIND INDEX SERVER
+        else: # DEFAULT: SEARCH WORLDBASEPATH TO FIND INDEX SERVER
             from pygr import worldbase
             worldbase._mdb.registerServer('%s:%d' % (self.host,self.port),data)
         
