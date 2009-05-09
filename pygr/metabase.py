@@ -1203,6 +1203,15 @@ class ResourcePath(object):
             del self.__dict__[name]
         except KeyError: # TRY TO DELETE RESOURCE FROM THE DATABASE
             pass # NOTHING TO DO
+    def __dir__(self):
+        """return list of our attributes from worldbase search """
+        l = self._mdb.dir(self._path)
+        d = {}
+        i = len(self._path) + 1
+        for name in l:
+            if name.startswith(self._path):
+                d[name[i:].split('.')[0]] = None
+        return d.keys()
 ResourcePath._pathClass = ResourcePath
 
 class ResourceRoot(ResourcePath):
