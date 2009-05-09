@@ -1,4 +1,8 @@
 
+import warnings
+warnings.warn('pygr.Data is deprecated.  Use "from pygr import worldbase" instead!',
+              DeprecationWarning, stacklevel=2)
+
 from pygr import worldbase
 from metabase import ResourceServer, dumps, OneToManyRelation, OneToOneRelation,\
      ManyToManyRelation, WorldbaseNotPortableError, WorldbaseNotFoundError, \
