@@ -7,7 +7,5 @@ except NameError:
     import metabase
     mdb = metabase.MetabaseList() # use default WORLDBASEPATH
     worldbase = mdb.Data
-    worldbaseSchema = mdb.Schema
-    worldbaseZones = mdb.zones
 
-__all__ = ('__version__', 'worldbase', 'worldbaseSchema', 'worldbaseZones')
+__all__ = ('__version__', 'worldbase')

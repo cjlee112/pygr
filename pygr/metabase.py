@@ -750,8 +750,8 @@ class Metabase(MetabaseBase):
         about what type of metabase this dbpath mapped to.  zoneDict must
         be a dict'''
         self.parent = parent
-        self.Data = ResourceRoot(self) # root of namespace
         self.Schema = SchemaPath(self)
+        self.Data = ResourceRoot(self) # root of namespace
         self.resourceCache = resourceCache
         self.debug = True # single mdb should expose all errors 
         self.download = False
@@ -853,8 +853,8 @@ class MetabaseList(MetabaseBase):
         self.zones = ZoneDict(self) # interface to dict of zones
         self.worldbasePath = worldbasePath
         self.separator = separator
-        self.Data = ResourceRoot(self) # root of namespace
         self.Schema = SchemaPath(self)
+        self.Data = ResourceRoot(self, zones=self.zones) # root of namespace
         self.debug = False # if one load attempt fails, try other metabases
         self.download = False
         self.ready = False
@@ -1207,32 +1207,14 @@ ResourcePath._pathClass = ResourcePath
 
 class ResourceRoot(ResourcePath):
     'provide proxy to public metabase methods'
-    def dir(self, pattern='', matchType='p', asDict=False, download=False):
-        'search metabases using prefix or regexp'
-        return self._mdb.dir(pattern, matchType, asDict, download)
-    def commit(self):
-        'commit any resources queued for saving to primary metabase'
-        self._mdb.commit()
-    def rollback(self):
-        'abandon any resources queued for saving'
-        self._mdb.rollback()
-    def add_resource(self, resID, obj):
-        'queue a resource for saving to primary metabase'
-        self._mdb.add_resource(resID, obj)
-    def delete_resource(self, resID):
-        'delete resource from primary metabase'
-        self._mdb.delete_resource(resID)
-    def clear_cache(self):
-        'clear the pygrData cache so all future requests require a fresh load'
-        self._mdb.clear_cache()
-    def add_schema(self, resID, schemaObj):
-        'queue schema info for saving to primary metabase'
-        self._mdb.add_schema(resId, schemaObj)
-    def update(self, worldbasePath=None, debug=None, keepCurrentPath=False,
-               mdbArgs=None):
-        'set a new WORLDBASEPATH for accessing metabase(s)'
-        self._mdb.update(worldbasePath=worldbasePath, debug=debug,
-                         keepCurrentPath=keepCurrentPath, mdbArgs=mdbArgs)
+    def __init__(self, mdb, base=None, zones=None):
+        ResourcePath.__init__(self, mdb, base)
+        self.__dict__['schema'] = mdb.Schema # AVOID TRIGGERING setattr!
+        if zones is not None:
+            self.__dict__['zones'] = zones
+        for attr in ('dir', 'commit', 'rollback', 'add_resource',
+                     'delete_resource', 'clear_cache', 'add_schema', 'update'):
+            self.__dict__[attr] = getattr(mdb, attr) # mirror metabase methods
 
 class ResourceZone(object):
     'provide pygr.Data old-style interface to resource zones'

@@ -1,11 +1,11 @@
 
-from pygr import worldbase,worldbaseSchema
+from pygr import worldbase
 from metabase import ResourceServer, dumps, OneToManyRelation, OneToOneRelation,\
      ManyToManyRelation, WorldbaseNotPortableError, WorldbaseNotFoundError, \
      WorldbaseMismatchError, WorldbaseEmptyError, WorldbaseReadOnlyError, \
      WorldbaseSchemaError, WorldbaseNoModuleError, ResourceZone
 
-schema = worldbaseSchema # ROOT OF OUR SCHEMA NAMESPACE
+schema = worldbase.schema # ROOT OF OUR SCHEMA NAMESPACE
 
 # PROVIDE TOP-LEVEL NAMES IN OUR RESOURCE HIERARCHY
 Bio = worldbase.Bio
