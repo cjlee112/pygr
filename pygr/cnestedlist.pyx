@@ -1974,8 +1974,8 @@ See the NLMSA documentation for more details.\n''')
       self.save_seq_dict()
     elif verbose:
       sys.stderr.write('''Note: the NLMSA.seqDict was not saved to a file.
-This is not necessary if you intend to save the NLMSA to pygr.Data.
-But if you wish to open this NLMSA independently of pygr.Data,
+This is not necessary if you intend to save the NLMSA to worldbase.
+But if you wish to open this NLMSA independently of worldbase,
 you should call NLMSA.save_seq_dict() to save the seqDict info to a file,
 or in the future pass the saveSeqDict=True option to NLMSA.build().
 
@@ -1983,7 +1983,7 @@ To turn off this message, use the verbose=False option
 ''')
 
   def save_seq_dict(self):
-    'save seqDict to a pygr.Data-aware pickle file'
+    'save seqDict to a worldbase-aware pickle file'
     nlmsa_utils.save_seq_dict(self.pathstem,self.seqDict)
 
   def build(self,**kwargs):
@@ -2043,7 +2043,7 @@ def dump_textfile(pathstem,outfilename=None,verbose=True):
     except AttributeError:
       strcpy(seqDictID,"unknown")
       if verbose:
-        sys.stderr.write('''Warning: Because your seqDict has no pygr.Data ID, there is no
+        sys.stderr.write('''Warning: Because your seqDict has no worldbase ID, there is no
 host-independent way to save it to a textfile for transfer
 to another machine.  Therefore, when loading this textfile
 on the destination machine, you will have to provide the
@@ -2070,13 +2070,13 @@ seqDict argument to textfile_to_binaries() on the destination machine.''')
     for id,d in prefixDict.items(): # SAVE seqDict PREFIX ENTRIES
       strcpy(tmp,id) # CONVERT TO C DATA TYPES FOR fprintf
       try:
-        strcpy(seqDictID,d._persistent_id) # TRY TO GET PYGR.DATA ID
+        strcpy(seqDictID,d._persistent_id) # try to get worldbase ID
       except AttributeError:
         strcpy(seqDictID,"None")
         if pleaseWarn and verbose:
           pleaseWarn = False
           sys.stderr.write('''Warning: Because one or more of the sequence
-databases in the seqDict have no pygr.Data ID, there is no
+databases in the seqDict have no worldbase ID, there is no
 host-independent way to save it to a textfile for transfer
 to another machine.  Therefore, when loading this textfile
 on the destination machine, you will have to provide a dictionary
@@ -2146,9 +2146,9 @@ def textfile_to_binaries(filename,seqDict=None,prefixDict=None,buildpath=''):
     if 0==strcmp(tmp,"unknown"):
       if seqDict is None:
         raise ValueError('You must provide a seqDict for this NLMSA!')
-    elif 0!=strcmp(tmp,"None"): # TRY OBTAINING AS PGYR.DATA ID
-      import pygr.Data
-      seqDict = pygr.Data.getResource(tmp)
+    elif 0!=strcmp(tmp,"None"): # try obtaining as worldbase ID
+      from pygr import worldbase
+      seqDict = worldbase(tmp)
     import classutil,pickle # CREATE THE seqIDdict
     seqIDdict = classutil.open_shelve(basestem+'.seqIDdict','n')
     IDdict = classutil.open_shelve(basestem+'.idDict','n')
@@ -2175,9 +2175,9 @@ def textfile_to_binaries(filename,seqDict=None,prefixDict=None,buildpath=''):
       if 0==strcmp(seqDictID,"None"):
         if tmp not in prefixDict:
           missing.append(tmp) # MISSING A SEQDICT DICTIONARY ENTRY!
-      else: # LOAD IT FROM PYGR.DATA
-        import pygr.Data
-        prefixDict[tmp] = pygr.Data.getResource(seqDictID)
+      else: # load it from worldbase
+        from pygr import worldbase
+        prefixDict[tmp] = worldbase(seqDictID)
     if len(missing)>0:
       raise KeyError('''You must supply sequence database(s) for the
 following prefixes, by passing them in the prefixDict optional

@@ -1203,14 +1203,16 @@ class ResourcePath(object):
             del self.__dict__[name]
         except KeyError: # TRY TO DELETE RESOURCE FROM THE DATABASE
             pass # NOTHING TO DO
-    def __dir__(self):
+    def __dir__(self, prefix=None, start=None):
         """return list of our attributes from worldbase search """
-        l = self._mdb.dir(self._path)
+        if prefix is None:
+            start = len(self._path) + 1 # skip past . separator
+            prefix = self._path
+        l = self._mdb.dir(prefix)
         d = {}
-        i = len(self._path) + 1
         for name in l:
-            if name.startswith(self._path):
-                d[name[i:].split('.')[0]] = None
+            if name.startswith(prefix):
+                d[name[start:].split('.')[0]] = None
         return d.keys()
 ResourcePath._pathClass = ResourcePath
 
@@ -1224,6 +1226,11 @@ class ResourceRoot(ResourcePath):
         for attr in ('dir', 'commit', 'rollback', 'add_resource',
                      'delete_resource', 'clear_cache', 'add_schema', 'update'):
             self.__dict__[attr] = getattr(mdb, attr) # mirror metabase methods
+    def __call__(self, resID, *args, **kwargs):
+        """Construct the requested resource"""
+        return self._mdb(resID, *args, **kwargs)
+    def __dir__(self):
+        return ResourcePath.__dir__(self, '', 0)
 
 class ResourceZone(object):
     'provide pygr.Data old-style interface to resource zones'
