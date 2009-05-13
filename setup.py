@@ -12,7 +12,11 @@ multi-genome alignment data.
 
 import os, sys, stat
 from shutil import copyfile
-from distutils.core import setup, Extension
+try:
+    from setuptools import setup, Extension
+except ImportError:
+    print 'Setuptools not imported, falling back to distutils'
+    from distutils.core import setup, Extension
 
 def error(msg):
     "Fatal errors"
