@@ -13,7 +13,6 @@ multi-genome alignment data.
 import os, sys, stat
 from shutil import copyfile
 from distutils.core import setup, Extension
-from distutils.command.build import build
 
 def error(msg):
     "Fatal errors"
