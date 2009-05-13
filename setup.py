@@ -47,17 +47,23 @@ Topic :: Scientific/Engineering :: Bioinformatics
 # split into lines and filter empty ones
 CLASSIFIERS = filter(None, CLASSIFIERS.splitlines() )
 
-# if pyrex is not present try compiling the C files
-try:
-    from Pyrex.Compiler.Version import version as PYREX_VERSION
-    from Pyrex.Distutils import build_ext
-    if PYREX_VERSION < "0.9.8":
-        error ( "pyrex version >=0.9.8 required, found %s" % PYREX_VERSION )
+# Setuptools should handle all this automatically
+if sys.modules.has_key('setuptools'):
+    # FIXME: how to check Pyrex version here (and do we have to)?
     ext = 'pyx'
-    cmdclass = { 'build_ext': build_ext }
-except ImportError, exc:
-    ext = 'c'
-    cmdclass = {}
+    cmdclass = { }
+else:
+# if pyrex is not present try compiling the C files
+    try:
+        from Pyrex.Compiler.Version import version as PYREX_VERSION
+        from Pyrex.Distutils import build_ext
+        if PYREX_VERSION < "0.9.8":
+            error ( "pyrex version >=0.9.8 required, found %s" % PYREX_VERSION )
+        ext = 'pyx'
+        cmdclass = { 'build_ext': build_ext }
+    except ImportError, exc:
+        ext = 'c'
+        cmdclass = {}
 
 # extension sources 
 seqfmt_src = [ os.path.join('pygr', 'seqfmt.%s' % ext) ]
