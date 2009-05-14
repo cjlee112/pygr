@@ -77,7 +77,8 @@ def main():
     setup(
         name = PYGR_NAME ,
         version= PYGR_VERSION,
-        description = __doc__,
+        description = 'Pygr, a Python graph-database toolkit oriented primarily on bioinformatics applications',
+        long_description = __doc__,
         author = "Christopher Lee",
         author_email='leec@chem.ucla.edu',
         url = 'http://sourceforge.net/projects/pygr',
