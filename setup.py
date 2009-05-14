@@ -82,6 +82,7 @@ def main():
         author = "Christopher Lee",
         author_email='leec@chem.ucla.edu',
         url = 'http://code.google.com/p/pygr/',
+        license = 'New BSD License',
         classifiers = CLASSIFIERS,
 
         packages = [ 'pygr', 'pygr.apps' ],
