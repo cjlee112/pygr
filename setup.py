@@ -81,7 +81,7 @@ def main():
         long_description = __doc__,
         author = "Christopher Lee",
         author_email='leec@chem.ucla.edu',
-        url = 'http://sourceforge.net/projects/pygr',
+        url = 'http://code.google.com/p/pygr/',
         classifiers = CLASSIFIERS,
 
         packages = [ 'pygr', 'pygr.apps' ],
