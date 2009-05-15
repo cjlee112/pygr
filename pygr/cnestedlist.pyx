@@ -1732,7 +1732,12 @@ See the NLMSA documentation for more details.\n''')
     i=0
     for pythonStr,seqInfo in self.seqDict.seqInfoDict.iteritems():
       seqidmap[i].id=strdup(pythonStr)
-      seqidmap[i].length = seqInfo.length
+      try:
+        seqidmap[i].length = seqInfo.length
+      except OverflowError:
+        raise OverflowError('''Sequence too long for 32 bit int: %s, %d
+Something is probably wrong with creation / reading of this sequence.
+Check the input!''' % (pythonStr, seqInfo.length))
       i=i+1
     qsort(seqidmap,nseq0,sizeof(SeqIDMap),seqidmap_qsort_cmp) # SORT BY id
     ns=None
