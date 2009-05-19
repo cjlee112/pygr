@@ -9,17 +9,17 @@ be able to store and query annotations naturally as part of working with
 multi-genome alignments, as a standard operation in comparative genomics.
 Pygr makes this easy::
 
-   for alignedRegion in msa[myRegion]: # FIND ALIGNMENT IN OTHER GENOMES
-     for ival in alignedRegion.exons: # SEE IF THIS CONTAINS ANY ANNOTATED EXONS
-       if ival.orientation>0: # ENSURE ANNOTATION IS ON SAME STRAND AS alignedRegion
-         print 'exon\tID:%d\tSEQ:%s' % (ival.id,str(ival.sequence)) # PRINT ITS SEQUENCE
-         for exon2,splice in ival.next.items(): # LOOK AT ALTERNATIVE SPLICING OF THIS EXON
+   for alignedRegion in msa[myRegion]: # find alignment in other genomes
+     for ival in alignedRegion.exons: # see if this contains any annotated exons
+       if ival.orientation>0: # ensure annotation is on same strand as alignedregion
+         print 'exon\tID:%d\tSEQ:%s' % (ival.id,str(ival.sequence)) # print its sequence
+         for exon2,splice in ival.next.items(): # look at alternative splicing of this exon
            do something...
 
 
 * In the above code, we assumed that there exists a mapping of any genomic
   sequence region (``alignedRegion``) to exon annotations.  This mapping
-  is bound by pygr.Data.schema to the sequence object's ``exons`` attribute.
+  is bound by worldbase.schema to the sequence object's ``exons`` attribute.
   In a moment we will see how to construct such a mapping.
   
 * An annotation is an interval (i.e. it has length, and can be sliced,
@@ -60,7 +60,7 @@ Pygr makes this easy::
   
 * Because pygr can see that ``ival`` is part of the exons annotation database,
   it can apply schema information automatically to it.  In this particular case,
-  it applies the splicegraph schema to it (see example from pygr.Data.schema
+  it applies the splicegraph schema to it (see example from worldbase.schema
   tutorial above), so we can find out what exons it splices to via its ``next``
   attribute.
 
@@ -72,27 +72,27 @@ Suppose you had a set of annotations ``sliceDB`` each consisting of a sequence I
 start, and stop coordinates.  We can easily construct an annotation database
 from this::
 
-   from pygr import seqdb,cnestedlist
-   annoDB = seqdb.AnnotationDB(sliceDB,genome) # CREATE THE ANNOTATION DB
-   nlmsa = cnestedlist.NLMSA('exonAnnot','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
-                             pairwiseMode=True,bidirectional=False)
-   for a in annoDB.itervalues(): # SAVE ALL ANNOTATION INTERVALS
-     nlmsa.addAnnotation(a) # ADD ALIGNMENT BETWEEN ival AND ann INTERVALS
-   nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
+   from pygr import annotation, cnestedlist, worldbase, metabase
+   annoDB = annotation.AnnotationDB(sliceDB, genome) # construct from slice db
+   nlmsa = cnestedlist.NLMSA('exonAnnot','w', # store seq->annot mapping as an alignment
+                             pairwiseMode=True, bidirectional=False)
+   for a in annoDB.itervalues(): # save all annotation intervals
+     nlmsa.addAnnotation(a) # add alignment between ival and ann intervals
+   nlmsa.build() # write indexes for the alignment
    annoDB.__doc__ = 'exon annotation on the human genome'
-   pygr.Data.Bio.Genomics.ASAP2.exons = annoDB # ADD AS A PYGR.DATA RESOURCE
+   worldbase.Bio.Genomics.ASAP2.exons = annoDB # add to worldbase
    nlmsa.__doc__ = 'map human genome regions to contained exons'
-   pygr.Data.Bio.Genomics.ASAP2.exonmap = nlmsa # NOW SAVE MAPPING AND SCHEMA
-   pygr.Data.schema.Bio.Genomics.ASAP2.exonmap = \
-         pygr.Data.ManyToManyRelation(genome,annoDB,bindAttrs=('exons'))
-   pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
+   worldbase.Bio.Genomics.ASAP2.exonmap = nlmsa # now save mapping and schema
+   worldbase.schema.Bio.Genomics.ASAP2.exonmap = \
+         metabase.ManyToManyRelation(genome, annoDB, bindAttrs=('exons'))
+   worldbase.commit() # save all pending data to the resource database
 
 
 * NLMSA provides an efficient, high-performance way to store and
   query huge annotation databases.  The mapping is stored on disk but is
   accessed with high-speed indexing.
   
-* More importantly, however, a pygr.Data user need never even be
+* More importantly, however, a worldbase user need never even be
   aware that an NLMSA is being used to provide this mapping.  As far as
   users are concerned, all they need to know is that any sequence object from ``genome``
   has an ``exons`` attribute that automatically gives a list of exon
@@ -109,7 +109,7 @@ from this::
   items of ``genome`` that translates to ``g.exons=nlmsa[g]``.
   
 * In the above example, we assumed that ``genome`` was obtained
-  from pygr.Data (and thus a pygr.Data resource ID).  If not, we would first
+  from worldbase (and thus a worldbase resource ID).  If not, we would first
   have to add it, just as we did for ``annoDB``.
   
 * Note that we only bound an attribute (``exons``, to the
@@ -134,23 +134,25 @@ What if someone provided you with a set of "exon annotations" in the form
 of short sequences representing the exons, rather than actual genomic
 coordinates?  Again, pygr makes this mapping extremely easy to save::
 
-   from pygr import seqdb,cnestedlist
-   annoDB = seqdb.AnnotationDB(None, genome, 'exon', # CREATE THE ANNOTATION DB
-                               filename='exonAnnot',mode='c') # STORE ON DISK
-   nlmsa = cnestedlist.NLMSA('exonMap','w', # STORE SEQ->ANNOT MAPPING AS AN ALIGNMENT
-                             pairwiseMode=True,bidirectional=False)
-   for id,s in exonSeqs.items(): # SAVE ALL ANNOTATION INTERVALS
-     for ann in annoDB.add_homology(s,'megablast',id=id,maxseq=1,minIdentity=98,maxLoss=2):
+   from pygr import annotation, cnestedlist, blast, worldbase, metabase
+   annoDB = annotation.AnnotationDB(None, genome, 'exon', # create the annotation db
+                                    filename='exonAnnot', mode='c') # store on disk
+   nlmsa = cnestedlist.NLMSA('exonMap','w', # store seq->annot mapping as an alignment
+                             pairwiseMode=True, bidirectional=False)
+   megablast = blast.MegablastMapping(genome) # query object for searching genome
+   for annID,s in exonSeqs.items(): # save all annotation intervals
+     for ann in annoDB.add_homology(s, search=megablast, id=annID, maxseq=1, 
+                                    minIdentity=98, maxLoss=2):
        nlmsa.addAnnotation(ann)
-   nlmsa.build() # WRITE INDEXES FOR THE ALIGNMENT
-   annoDB.close() # SAVE ALL OUR ANNOTATION DATA TO DISK
+   nlmsa.build() # write indexes for the alignment
+   annoDB.close() # save all our annotation data to disk
    annoDB.__doc__ = 'exon annotation on the human genome'
-   pygr.Data.Bio.Genomics.ASAP2.exons = annoDB # ADD AS A PYGR.DATA RESOURCE
+   worldbase.Bio.Genomics.ASAP2.exons = annoDB # add as a worldbase resource
    nlmsa.__doc__ = 'map human genome regions to contained exons'
-   pygr.Data.Bio.Genomics.ASAP2.exonmap = nlmsa # NOW SAVE MAPPING AND SCHEMA
-   pygr.Data.schema.Bio.Genomics.ASAP2.exonmap = \
-         pygr.Data.ManyToManyRelation(genome, annoDB, bindAttrs=('exons',))
-   pygr.Data.save() # SAVE ALL PENDING DATA TO THE RESOURCE DATABASE
+   worldbase.Bio.Genomics.ASAP2.exonmap = nlmsa # now save mapping and schema
+   worldbase.schema.Bio.Genomics.ASAP2.exonmap = \
+         metabase.ManyToManyRelation(genome, annoDB, bindAttrs=('exons',))
+   worldbase.commit() # save all pending data to the metabase
 
 
 
@@ -162,13 +164,11 @@ coordinates?  Again, pygr makes this mapping extremely easy to save::
   argument, we make it create a Python shelve disk file to store the dictionary.
   
 * The :meth:`add_homology()` method takes a sequence or string argument,
-  and performs a homology search against ``genome``.  This requires that
-  our ``genome`` provide a method attribute matching our search name
-  ('megablast'), which must return an alignment object.  For a :class:`BlastDB`
-  object we could use either its :meth:`blast` or :meth:`megablast` methods.
+  and performs a homology search using the *search* argument
+  (``megablast``), which when called must return an alignment object.  
   Since we have provided an *id*, it will be used as
   the id for the annotation.  The remaining arguments are passed to the
-  homology search and filtering functions; see the :class:`BlastDB` and
+  homology search and filtering functions; see the :class:`MegablastMapping` and
   :meth:`NLMSASlice.keys` documentation for full details of the options you
   can use.  These specific arguments indicate that only the top hit should
   be processed (maxseq=1), that it must have at least 98\% identity to the
@@ -181,5 +181,5 @@ coordinates?  Again, pygr makes this mapping extremely easy to save::
   save all of the annotation data to disk.  Otherwise, the Python shelve file might be
   left in an incomplete state.
   
-* We save pygr.Data resource and schema information as before.
+* We save worldbase resource and schema information as before.
   
