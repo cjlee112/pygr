@@ -13,6 +13,7 @@ Contents:
     :maxdepth: 3
 
     guidelist
+    whatsnew
     reference/sequence    
     reference/seqdb
     reference/annotation
