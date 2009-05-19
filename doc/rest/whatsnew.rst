@@ -256,9 +256,9 @@ here, thoroughly refactoring it in the process.
     protein.
 
 * Use :class:`blast.MegablastMapping` for megablast (nucleotide vs. nucleotide
-  with repeat masking.
+  with repeat masking).
 
-* The blast parser now return alignment group information, i.e. it indicaates
+* The blast parser now returns alignment group information, i.e. it indicates
   the beginning and end of each BLAST alignment block, which is required
   for reporting blastx results correctly.
 
