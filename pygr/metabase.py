@@ -719,9 +719,14 @@ not be ready to do!''' % resID
             return self.writer
         except AttributeError:
             raise WorldbaseReadOnlyError('this metabase is read-only!')
-    def add_resource(self, resID, obj):
-        'assign obj as the specified resource ID to our metabase'
-        self.get_writer().saver.add_resource(resID, obj)
+    def add_resource(self, resID, obj=None):
+        """assign obj as the specified resource ID to our metabase.
+        if obj is None, treat resID as a dictionary whose keys are
+        resource IDs and values are the objects to save."""
+        if obj is None:
+            self.get_writer().saver.add_resource_dict(resID)
+        else:
+            self.get_writer().saver.add_resource(resID, obj)
     def delete_resource(self, resID):
         'delete specified resource ID from our metabase'
         self.get_writer().saver.delete_resource(resID)
@@ -1014,7 +1019,7 @@ class ResourceSaver(object):
         except AttributeError:
             pass
         self.mdb.resourceCache[resID] = obj # SAVE TO OUR CACHE
-    def addResourceDict(self, d):
+    def add_resource_dict(self, d):
         'queue a dict of name:object pairs for saving to metabase'
         for k,v in d.items():
             self.add_resource(k, v)
