@@ -221,7 +221,7 @@ here, thoroughly refactoring it in the process.
 * To pass additional parameters for controlling the BLAST search,
   use the :class:`blast.BlastMapping` as a callable (function) object
   to which you pass these parameters as arguments.  The result will
-  be an :class:`NLMSA` alignment object.
+  be an :class:`cnestedlist.NLMSA` alignment object.
 
 * You can also use this to pass a dictionary containing multiple
   sequences to be used as queries.  Since the blastall program
