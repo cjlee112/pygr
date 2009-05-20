@@ -193,6 +193,10 @@ AnnotationDB
    memory (e.g. if you iterate over all or a large fraction of the annotations
    in the database).
 
+   *autoGC=True* makes :class:`AnnotationDB` automatically
+   flush unused annotations
+   from the cache using :class:`classutil.RecentValueDictionary`.
+
    Note: the argument *itemAttrDict* is deprecated, and does nothing.  Do
    not use it, as there is currently no need.  The annotation and slice
    objects will automatically reflect whatever attributes are present on
