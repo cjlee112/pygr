@@ -438,6 +438,93 @@ requests that the resource be downloaded to their local computer.
   previously existing rule.
   
 
+worldbase Schema Concepts
+-------------------------
+Parallel to the worldbase namespace, worldbase maintains a schema namespace
+that records schema information for worldbase resources.  Broadly speaking,
+*schema* is any relationship that holds true over a set of data in a given
+collection (e.g. in the human genome, "genes have exons", a one-to-many relation).
+In traditional (relational) databases, this schema information is usually
+represented by *entity-relationship diagrams* showing foreign-key
+relationships between tables.  A worldbase resource is a collection
+of objects (referred to in these docs as a "container" or "database");
+thus in pygr, schema is a relation between worldbase resources, i.e.
+a relationship that holds true between the items of one worldbase resource
+and the items of another.  For examples, items in a "genes" resource
+might each have a mapping to a subset of items in an "exons" resource.
+This is achieved in worldbase by adding the mapping object itself as a worldbase
+resource, and then specifying its schema to worldbase (in this example,
+its schema would be a one-to-many relation between the "genes"
+resource and the "exons" resource).  Adding the mapping object
+as a worldbase resource, and adding its schema information, are
+two separate steps::
+
+   worldbase.Bio.Genomics.ASAP2.hg17.geneExons = geneToExons # SAVE MAPPING
+   worldbase.schema.Bio.Genomics.ASAP2.hg17.geneExons = \
+     metabase.OneToManyRelation(genes,exons,bindAttrs=('exons','gene'))
+   worldbase.commit() # SAVE ALL PENDING DATA AND SCHEMA TO METABASE
+
+assuming that ``genes`` and ``exons`` are the worldbase resources
+that are being mapped.  This would allow a user to obtain the mapping
+from worldbase and use it just as you'd expect, e.g. assuming that
+``gene`` is an item from ``genes``::
+
+   geneToExons = worldbase.Bio.Genomics.ASAP2.hg17.geneExons()
+   myexons = geneToExons[gene] # GET THE SET OF EXONS FOR THIS GENE
+
+In practice, worldbase accomplishes this by automatically setting
+``geneToExon``'s ``sourceDB`` and ``targetDB`` attributes
+to point to the ``genes`` and ``exons`` resources, respectively.
+
+Since most users find it easier to remember object-oriented behavior
+(e.g. "a gene has an exons attribute", rather than "there exists a
+mapping between gene objects and exon objects, called geneToExons"),
+worldbase provides an option to bind attributes of the mapped
+resource items.  In the example above, we bound an :attr:`exons` attribute
+to each item of ``genes``, which automatically performs this mapping,
+e.g. we can iterate over all exons in a given gene as easily as::
+
+   for exon in gene.exons: # gene.exons IS EQUIVALENT TO geneToExons[gene]
+     # DO SOMETHING...
+
+Note: in this usage, the user does not even need to know about the
+existence of the ``geneToExons`` resource; worldbase will load it
+automatically when the user attempts to access the ``gene.exons``
+attribute.  It can do this because it knows the schema of the worldbase
+resources!
+
+One additional aspect of worldbase schema relations goes a bit beyond
+ordinary mapping: a mapping between one object (source) and another
+(target) can have *edge information* that describes this specific
+relationship.  For example, the connection
+between one exon and another in the alternative splicing of an mRNA
+isoform, is a *splice*.  For alternative splicing analysis, it is
+actually crucial to have detailed information about the splice (e.g.
+what experimental evidence exists for that splice; what tissues it was
+observed, in what fraction of isoforms etc.) in addition to the exons.
+Therefore, worldbase allows us to save edge information also as part
+of the schema, e.g. for a ``splicegraph`` representing the set of
+all splices (edges) between pairs of exons (nodes), we can
+store the schema as follows::
+
+   worldbase.Bio.Genomics.ASAP2.hg17.splicegraph = splicegraph # ADD A NEW RESOURCE
+   worldbase.schema.Bio.Genomics.ASAP2.hg17.splicegraph = \
+     metabase.ManyToManyRelation(exons,exons,splices, # ADD ITS SCHEMA RELATIONS
+                                  bindAttrs=('next','previous','exons'))
+   worldbase.commit() # SAVE ALL PENDING DATA AND SCHEMA TO METABASE
+
+This type of mapping ("edge" relations between pairs of "nodes")
+is referred to in mathematics as a *graph*, and has very general
+utility for many applications.  For further information on graphs in
+pygr, see the tutorial or the :mod:`mapping` module reference below.
+
+What information does worldbase schema actually store?  In practice,
+the primary information stored is *attribute* relations:
+i.e. for a specified resource ID, a specified attribute name
+should be added to the resource object (or to items obtained
+from it), which in turn maps to some specified target resource
+(or items of that resource).
+
 
 
 Convenience functions
