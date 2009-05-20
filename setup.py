@@ -49,7 +49,8 @@ CLASSIFIERS = filter(None, CLASSIFIERS.splitlines() )
 
 # Setuptools should handle all this automatically
 if sys.modules.has_key('setuptools'):
-    # FIXME: how to check Pyrex version here (and do we have to)?
+    import pkg_resources
+    pkg_resources.require('Pyrex>=0.9.8')
     ext = 'pyx'
     cmdclass = { }
 else:
