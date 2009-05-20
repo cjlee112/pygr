@@ -148,7 +148,7 @@ improve documentation.
   interface, using UserDict.DictMixin.
 
 * :class:`seqdb.SequenceDB` caching has been improved in several ways.  First,
-  by default, it uses a :class:`WeakValueDictionary` as its object cache.
+  by default, it uses a :class:`classutil.RecentValueDictionary` as its object cache.
   Thus, when the user drops all references to a given row object, it
   will be automatically flushed from the cache.  Second, as a general
   Pygr standard, the method :meth:`clear_cache()` will clear all entries
@@ -183,7 +183,7 @@ We created a new :mod:`annotation` module and moved existing
     can align it, measure its sequence similarity to another sequence etc.
 
 * :class:`annotation.AnnotationDB` caching has been improved in several ways.  First,
-  by default, it uses a :class:`WeakValueDictionary` as its object cache.
+  by default, it uses a :class:`classutil.RecentValueDictionary` as its object cache.
   Thus, when the user drops all references to a given row object, it
   will be automatically flushed from the cache.  Second, as a general
   Pygr standard, the method :meth:`clear_cache()` will clear all entries
@@ -289,7 +289,7 @@ sqlgraph
   its attribute value(s) in the usual Python way.
 
 * :class:`sqlgraph.SQLTable` caching has been improved in several ways.  First,
-  by default, it uses a :class:`WeakValueDictionary` as its object cache.
+  by default, it uses a :class:`classutil.RecentValueDictionary` as its object cache.
   Thus, when the user drops all references to a given row object, it
   will be automatically flushed from the cache.  Second, as a general
   Pygr standard, the method :meth:`clear_cache()` will clear all entries
