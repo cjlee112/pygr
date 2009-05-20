@@ -15,7 +15,7 @@ Tutorials
 
     tutorials/sequence
     tutorials/alignment
-    tutorials/pygrdata
+    tutorials/worldbase
     tutorials/annotation
     tutorials/graphquery
     tutorials/annotating-yeast
