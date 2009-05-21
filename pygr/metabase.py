@@ -1229,7 +1229,8 @@ class ResourceRoot(ResourcePath):
         if zones is not None:
             self.__dict__['zones'] = zones
         for attr in ('dir', 'commit', 'rollback', 'add_resource',
-                     'delete_resource', 'clear_cache', 'add_schema', 'update'):
+                     'delete_resource', 'clear_cache', 'add_schema',
+                     'update', 'list_pending'):
             self.__dict__[attr] = getattr(mdb, attr) # mirror metabase methods
     def __call__(self, resID, *args, **kwargs):
         """Construct the requested resource"""
