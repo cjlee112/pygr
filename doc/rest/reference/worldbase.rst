@@ -38,6 +38,7 @@ scientific data, and the term "metabase" to refer to the generic concept
 of a "metadata database" as defined above.
 
 Note: you import ``worldbase`` like this::
+
    from pygr import worldbase
 
 You cannot ``import pygr.worldbase`` because it is a Python object,
@@ -209,7 +210,7 @@ and to find what they're looking for.  We are adopting the following conventions
   controlled vocabulary for species names, e.g. "HUMAN" for human.  For more
   information, see the Swissprot website
   \url{http://www.expasy.org/cgi-bin/speclist}.
-*  Often a database may itself contain many different resources.  These
+* Often a database may itself contain many different resources.  These
   individual resource names are simply appended to the worldbase name, for example,
   the ASAP database contains a resource called ``exons``.  This would be
   accessed as "Bio.Genomics.ASAP.asap2.exons".  This pattern can be extended,
@@ -232,7 +233,7 @@ Existing Area categories:
   including microarray data.
 
 You may obtain a directory of available resources available using
-the ``worldbase.dir``() function::
+the :func:`dir()` function::
 
    >>> worldbase.dir('Bio.Seq.Swiss')
    ['Bio.Seq.Swissprot.sp42']
@@ -247,9 +248,9 @@ Please report new category names to us so we can add them to the list.
 How does worldbase access metabases?
 ---------------------------------------------
 The list of metabases is read from the environment variable
-PYGRDATAPATH.  If this variable is empty or missing, the default path
+WORLDBASEPATH.  If this variable is empty or missing, the default path
 for worldbase to search is the user's home directory (\$HOME) and
-current directory, in that order.  PYGRDATAPATH should be a comma separated list
+current directory, in that order.  WORLDBASEPATH should be a comma separated list
 of "resource path" strings, which must be one of the following:
 
 * A directory path (e.g. /usr/local/pygrdata), in which worldbase should
@@ -428,7 +429,7 @@ requests that the resource be downloaded to their local computer.
                        withIndex=True)
      server.serve_forever() # START THE SERVICE...
   
-  You can also directly call the server method :meth:`read_download_db`(path)
+  You can also directly call the server method :meth:`read_download_db(path)`
   to read a list of downloadable resources from a shelve specified by
   the *path*.  Resources from the new file will be added to
   the current list of downloadable resources.
@@ -527,6 +528,53 @@ from it), which in turn maps to some specified target resource
 
 
 
+Metabase Zone Names: worldbase.zones
+------------------------------------
+
+You can think of each metabase as representing a specific "zone of
+accessibility"; that is, a metabase in a directory belonging to a specific
+user can only be written to by that user; a shelve metabase on a specific
+computer can only be accessed from that computer; a MySQL metabase
+can only be accessed by users who can access that MySQL server; 
+an XMLRPC metabase server can be accessed by anyone with an Internet
+connection.  Logically, each metabase should store metadata about
+resources that are in the same "access zone" as it (that way, the ability
+to access the metabase is equivalent to the ability to access any
+of the resources that it catalogs).  Thus, a user's "personal metabase"
+would catalog his/her private resources; a computer's metabase would
+catalog resources available on that system to any user; a MySQL
+metabase would catalog resources stored in that MySQL server;
+an XMLRPC metabase would catalog resources that it makes available
+online.  In the future, Pygr will provide a wide variety of tools
+for "publishing" resources by copying them from one zone to another.
+
+For the moment, Pygr gives a basic mechanism for accessing a
+specific metabase by its zone name.  You can then read and write to
+that specific metabase (using either its :attr:`metabase.Metabase.Data` attribute
+or :meth:`metabase.Metabase.add_resource()` and related methods).
+  
+``worldbase.zones`` is a dictionary of zone names each with its associated
+:class:`metabase.Metabase`.  Default zone names include:
+  
+* the first metabase whose path is given relative to
+  your home directory is ``my``; 
+
+* the first one whose path is given
+  relative to current directory is ``here``;
+
+* the first one whose path is given
+  relative to the root directory / is ``system``;
+  
+* the first entry that begins with a relative path
+  (ie. a local file path that does not fit any of the preceding
+  definitions) is ``subdir``;
+
+* the first one whose path begins "http://" is ``remote``;
+
+* the first one whose path begins "mysql:" is ``MySQL``.
+  
+
+
 Convenience functions
 ---------------------
 
@@ -565,28 +613,19 @@ Convenience functions
 
 
 
-.. function:: delete_resource(id,layer=None)
+.. function:: delete_resource(resID)
 
-   Delete resource *id* from the metabase specified by
-   *layer* if provided (or the default metabase otherwise).
+   Delete resource *resID* from the (default) metabase.
    Also delete its associated schema information.
 
 
-.. function:: commit(layer=None)
+.. function:: commit()
 
-   Saves all pending worldbase additions to the metabase.
-   If *layer* is not specified, each resource will be saved to the
-   layer it was added to, or to the default layer if none was specified
-   at the time of addition.  If *layer* is not None, it forces all
-   pending data to be saved specifically to that layer.  You can call
-   ``worldbase.commit()`` multiple times with different *layer*
-   values to make the same set of data (transaction) be saved to each
-   of the specified metabases.
-
+   Commit all pending resource / schema additions to the metabase.
 
 .. function:: rollback()
 
-   Dumps all pending worldbase additions (since the last ``save()``
+   Dumps all pending worldbase additions (since the last ``commit()``
    or ``rollback()``) without adding them to the metabase.
 
 
@@ -598,14 +637,13 @@ Convenience functions
    pending.
 
 
-.. function:: add_schema(name,schemaObj,layer=None)
+.. function:: add_schema(resID, schemaObj)
 
    Add a schema object for the worldbase resource indicated by the
-   string passed as *name*, to the specified *layer* if provided
-   (or the default metabase otherwise).  For example::
+   string passed as *resID*, to the default metabase.  For example::
 
       addSchema('Bio.Genomics.ASAP2.hg17.geneExons',
-      metabase.OneToManyRelation(genes,exons,bindAttrs=('exons','gene')))
+                metabase.OneToManyRelation(genes,exons,bindAttrs=('exons','gene')))
       worldbase.commit() # SAVE ALL PENDING DATA AND SCHEMA TO METABASE
 
 
@@ -614,16 +652,37 @@ the metabase until you call ``worldbase.commit()``.
 
 .. function:: update(newpath)
 
+   Change the ``WORLDBASEPATH`` to *newpath*.
+
+.. function:: clear_cache()
+
+   Clear the cache of resources that have been
+   loaded during this session.  This forces any subsequent resource requests
+   to (re)load a new object.
+
 ``worldbase`` also provides a directory function for searching
 for resource names that begin with a given stem, either in all
 databases, or in a specific layer:
 
-.. function:: dir(prefix,layer=None,asDict=False)
+.. function:: dir(pattern='', matchType='p', asDict=False, download=False)
 
-   get list or dict of resources beginning with the specified string.
-   If the optional *asDict* argument is True, then they are returned
-   as a dictionary whose keys are resource names, and whose values are their
-   descriptions (taken from the resource object's :attr:`__doc__` string).
-   Otherwise they are returned as a list.
+   Return a list of dictionary of all resources that match the specified
+   prefix or regular expression *pattern*.
+
+   *matchType='p'* specifies a prefix pattern.
+
+   *matchType='r'* specifies a regular expression pattern.
+ 
+   *asDict=True* causes the result to be returned as a dictionary of
+   resID:info pairs, providing additional information about each resource.
+
+   *download=True* will restrict the search to downloadable resources.
+
+
+.. attribute:: _mdb
+
+   This allows you to access the :class:`metabase.MetabaseList` internal
+   interface for ``worldbase``.  See the :mod:`metabase` module docs for 
+   detailed information on this interface.
 
 

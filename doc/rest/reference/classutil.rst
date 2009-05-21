@@ -175,13 +175,13 @@ SourceFileName
    *s*: a file path string.
 
    A subclass of ``str``, specifically for recording file path strings.
-   ``worldbase`` uses this in a couple ways:
+   :mod:`worldbase` uses this in a couple ways:
 
-   * when data is saved to ``worldbase``, it automatically recognizes
+   * when data is saved to :mod:`worldbase`, it automatically recognizes
      that this class cannot be transported via XMLRPC (i.e. a reference to
      a local file will not be valid / accessible on a remote computer).
 
-   * when data is saved to ``worldbase``, it automatically recognizes
+   * when data is saved to :mod:`worldbase`, it automatically recognizes
      non-absolute path strings (e.g. in UNIX, a path that does not begin with /)
      and saves information about the current directory, so that if a 
      future user is in a different directory when trying to unpickle this
@@ -191,14 +191,14 @@ SourceFileName
    In all other respects it simply behaves like a string.
 
    We recommend that whenever you are creating objects that you might later
-   want to save to ``worldbase``, you should use this class for storing any
+   want to save to :mod:`worldbase`, you should use this class for storing any
    strings that are actually file paths.
 
 
 Pickling Convenience Methods
 ----------------------------
 
-``worldbase`` relies on Python pickling.  To make it easier to provide
+:mod:`worldbase` relies on Python pickling.  To make it easier to provide
 correct pickling / unpickling methods for classes that you write, 
 Pygr provides a standard __getstate__ and __setstate__ method:
 

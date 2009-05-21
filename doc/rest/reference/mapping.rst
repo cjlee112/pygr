@@ -165,7 +165,7 @@ Collection
 ----------
 
 Provides a :class:`dict`-like container that can be directly saved as a
-container in ``worldbase``.  Ordinary :class:`dict` instances cannot be
+container in :mod:`worldbase`.  Ordinary :class:`dict` instances cannot be
 conveniently saved as worldbase resources, because they do not allow
 attributes to be saved (which is required for storing worldbase information
 like _persistent_id and itemClass), and because older versions of Python
