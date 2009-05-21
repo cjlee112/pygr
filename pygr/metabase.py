@@ -939,10 +939,10 @@ WARNING: error accessing metabase %s.  Continuing...''' % dbpath
         return self(resID, **kwargs)
     def registerServer(self,locationKey,serviceDict):
         'register the serviceDict with the first index server in WORLDBASEPATH'
-        for db in self.resourceDBiter():
-            if hasattr(db,'registerServer'):
-                n=db.registerServer(locationKey,serviceDict)
-                if n==len(serviceDict):
+        for mdb in self.mdb:
+            if hasattr(mdb.storage, 'registerServer'):
+                n = mdb.storage.registerServer(locationKey, serviceDict)
+                if n == len(serviceDict):
                     return n
         raise ValueError('unable to register services.  Check WORLDBASEPATH')
     def getschema(self, resID):
