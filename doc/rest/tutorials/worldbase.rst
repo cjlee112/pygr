@@ -39,7 +39,7 @@ worldbase name::
    from pygr import worldbase # module provides access to our data namespace
    hg17 = worldbase.Bio.Seq.Genome.HUMAN.hg17() # find the resource
 
-This example illustrates some key points about ``worldbase``:
+This example illustrates some key points about :mod:`worldbase`:
 
 * The call syntax (``hg17()``) emphasizes that this acts like a Python
   constructor: it constructs a Python object for us (in this case, the
@@ -85,7 +85,7 @@ biodb2.bioinformatics.ucla.edu server.
 
 download=True Mode
 ^^^^^^^^^^^^^^^^^^
-``worldbase`` provides powerful automation for allowing you to have
+:mod:`worldbase` provides powerful automation for allowing you to have
 both the convenience of obtaining resources automatically from
 remote servers, but also the performance of local resources
 stored on your computer(s).  If you specify the optional
@@ -113,16 +113,16 @@ Understanding worldbase
 ^^^^^^^^^^^^^^^^^^^^^^^
 How does worldbase work?
 
-* ``worldbase`` uses the
+* :mod:`worldbase` uses the
   power of Python pickling to figure out automatically what to import.
-  Anything that Python can pickle, ``worldbase`` can save.
+  Anything that Python can pickle, :mod:`worldbase` can save.
 
-* You should think of ``worldbase`` not as a conventional *database*
+* You should think of :mod:`worldbase` not as a conventional *database*
   (a container for storing a large set of a specific kind of data)
   but rather as a *metadata database*, i.e. a container for storing
   *metadata* describing various datasets (which are typically stored in
   other databases).  By "metadata" we mean information about the *content*
-  of a particular dataset (this is what allows ``worldbase`` to reload it
+  of a particular dataset (this is what allows :mod:`worldbase` to reload it
   automatically for the user, without the user having to know what classes
   to import or how to construct the object correctly), and about its
   *relations* with other datasets (dependencies, cross-references; for 
@@ -134,14 +134,14 @@ How does worldbase work?
   merely stores a small amount of metadata pointing to that database
   and describing its relations with other datasets.
 
-* ``worldbase`` is a collection of one or more metabases representing
+* :mod:`worldbase` is a collection of one or more metabases representing
   different zones of access -- typically one metabase belonging to
   the user, representing his/her personal data; another metabase
   in a system-wide location, representing data stored on this system
   and available to all its users; and a remote metabase representing resources
   available from the Internet.
 
-* ``worldbase`` is designed to work with any back-end database that stores
+* :mod:`worldbase` is designed to work with any back-end database that stores
   actual data, and with a variety of ways of storing metabases.  Typical
   pygr back-end databases include MySQL, sqlite, Python shelve, pygr
   NLMSA, pygr SequenceFileDB, etc., but you can use anything you want --
@@ -149,7 +149,7 @@ How does worldbase work?
   Python methods).  Currently, metabases can be stored in Python shelve,
   MySQL, or a remote XMLRPC service.
 
-* Where are metabases actually retrieved from?  ``worldbase`` looks at
+* Where are metabases actually retrieved from?  :mod:`worldbase` looks at
   the environment variable ``WORLDBASEPATH`` to get a list
   of local and remote metabases in which to look up any resource name
   that you try to load.  For example, in the shell you might set::
@@ -165,7 +165,7 @@ How does worldbase work?
 
 Saving Data Dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^
-``worldbase`` is smart about figuring out data resource dependencies.
+:mod:`worldbase` is smart about figuring out data resource dependencies.
 For example, you could just save a 17-genome alignment in a single step
 as follows::
 

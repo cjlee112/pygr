@@ -132,7 +132,7 @@ AnnotationDB
    to be returned from the AnnotationDB.__getitem__.  You can extend the
    behavior of annotation objects by subclassing :class:`AnnotationSeq`.
    If the AnnotationDB participates in important schema relations,
-   ``worldbase`` may add properties to the *itemClass* that implement
+   :mod:`worldbase` may add properties to the *itemClass* that implement
    its schema relations to other database containers.  (See the reference
    docs on :mod:`metabase` below for details).
 
@@ -140,7 +140,7 @@ AnnotationDB
    objects returned from the AnnotationDB.__getitem__.  You can extend the
    behavior of annotation objects by subclassing :class:`AnnotationSlice`.
    If the AnnotationDB participates in important schema relations,
-   ``worldbase`` may add properties to the *itemSliceClass* that implement
+   :mod:`worldbase` may add properties to the *itemSliceClass* that implement
    its schema relations to other database containers.  (See the reference
    docs on :mod:`metabase` below for details).
 
