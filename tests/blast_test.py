@@ -1436,6 +1436,19 @@ class BlastParsers_Test(BlastBase):
         check_results(results, correct,
                       lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
 
+    def test_multiblast_parser_long(self):
+        "Testing multiblast parser with long input"
+        longerFile = testutil.datafile('sp_all_hbb')
+        sp_all_hbb = seqdb.SequenceFileDB(longerFile)
+
+        multiblast_output = open(testutil.datafile('multiblast_long_output.txt'), 'r')
+        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
+                               bidirectional=False)
+        al = blast.read_interval_alignment(multiblast_output, sp_all_hbb,
+                                           blast.BlastIDIndex(self.prot), al)
+        multiblast_output.close()
+        al.build()
+
     def test_blastx_parser(self):
         "Testing blastx parser"
         blastx_output = open(testutil.datafile('blastx_output.txt'), 'r')
