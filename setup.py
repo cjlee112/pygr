@@ -49,9 +49,12 @@ CLASSIFIERS = filter(None, CLASSIFIERS.splitlines() )
 
 # Setuptools should handle all this automatically
 if sys.modules.has_key('setuptools'):
-    import pkg_resources
-    pkg_resources.require('Pyrex>=0.9.8')
-    ext = 'pyx'
+    try:
+        import pkg_resources
+        pkg_resources.require('Pyrex>=0.9.8')
+        ext = 'pyx'
+    except pkg_resources.DistributionNotFound:
+        ext = 'c'
     cmdclass = { }
 else:
 # if pyrex is not present try compiling the C files
