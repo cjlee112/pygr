@@ -29,13 +29,12 @@ on-disk.  In pygr, all we have to do is change the mode flag to 'w' (implying *w
 a file)::
 
    from pygr import cnestedlist,seqdb
-   msa = cnestedlist.NLMSA('all_vs_all',mode='w',bidirectional=False) # ON-DISK
-   sp = seqdb.SequenceFileDB('sp') # OPEN SWISSPROT DATABASE
-   blastmap = blast.BlastMapping(sp) # CREATE BLAST MAPPING OBJECT
-   for id,s in sp.iteritems(): # FOR EVERY SEQUENCE IN SWISSPROT
-       blastmap(s,msa,expmax=1e-10) # GET STRONG HOMOLOGS, SAVE ALIGNMENT IN msa
-   msa.build(saveSeqDict=True) # BUILD & SAVE ALIGNMENT + SEQUENCE INDEXES
-   # msa READY TO QUERY NOW...
+   msa = cnestedlist.NLMSA('all_vs_all', mode='w', bidirectional=False) # on-disk
+   sp = seqdb.SequenceFileDB('sp') # open swissprot database
+   blastmap = blast.BlastMapping(sp) # create blast mapping object
+   blastmap(None, msa, queryDB=sp, expmax=1e-10) # query with each seq in queryDB
+   msa.build(saveSeqDict=True) # build & save alignment indexes
+   # msa ready to query now...
 
 Again you can see how pygr makes it quite simple to do a large analysis
 and create a powerful resource (an all-vs-all alignment database).
@@ -53,19 +52,19 @@ A couple of points deserve comment:
   index files called 'all_vs_all'.
   
 * ``bidirectional=False``: whenever you store an alignment relationship
-  $S \rightarrow T$, this can either be *unidirectional* or *bidirectional*.
-  Unidirectional means only $S \rightarrow T$ is stored; bidirectional means
-  both $S \rightarrow T$ and $T \rightarrow S$ are stored (i.e. you can both query
-  with S (and get T), and query with T (and get S).  In general, you want
+  ``S`` --> ``T``, this can either be *unidirectional* or *bidirectional*.
+  Unidirectional means only the ``S`` to ``T`` mapping is stored; bidirectional means
+  both ``S`` to ``T`` and ``T`` to ``S`` are stored (i.e. you can both query
+  with ``S`` (and get ``T``), and query with ``T`` (and get ``S``).  In general, you want
   a unidirectional alignment storage when *directionality matters*.  For
-  example, in a BLAST all vs. all search the alignment of S and T that you get
-  when you blast S against the database (finding T, among others) may well be
-  different from the alignment of S and T that you get when you blast T against
-  the database (finding S, among others).  If you stored the all-vs-all alignment
-  using bidirectional storage, querying ``msa`` with S would get TWO alignments
-  to T: one from the $S \rightarrow T$ BLAST search results, and one from the
-  $T \rightarrow S$ BLAST search results.  This simply reflects the fact that
-  the all vs all BLAST stored two alignments of S and T into ``msa``.
+  example, in a BLAST all vs. all search the alignment of ``S`` and ``T`` that you get
+  when you blast ``S`` against the database (finding ``T``, among others) may well be
+  different from the alignment of ``S`` and ``T`` that you get when you blast ``T`` against
+  the database (finding ``S``, among others).  If you stored the all-vs-all alignment
+  using bidirectional storage, querying ``msa`` with ``S`` would get *two* alignments
+  to ``T``: one from the ``S`` to ``T`` BLAST search results, and one from the
+  ``T`` to ``S`` BLAST search results.  This simply reflects the fact that
+  the all vs all BLAST stored two alignments of ``S`` and ``T`` into ``msa``.
   What this highlights is that BLAST is not a true multiple sequence alignment
   algorithm (among other things, it is not symmetric: you can get different
   mappings in one direction vs. the other).
@@ -78,6 +77,10 @@ A couple of points deserve comment:
   its results into that alignment, rather than creating its own alignment holder
   for us.  In this way we can make it store many different BLAST searches into
   a single alignment database.
+
+* Supplying the ``queryDB`` argument allows you to run multiple queries at
+  once; ``queryDB`` is expected to be a dictionary whose values are the 
+  sequence objects you wish to use as queries to the :class:`BlastMapping`.
   
 * To make the NLMSA algorithm scalable, pygr defers construction of the alignment
   indexes until the alignment is complete.  We trigger this by calling its build()
@@ -160,7 +163,7 @@ Example: Mapping an entire gene set onto a new genome version
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To illustrate how Pygr can perform a big task with a little code, here is an example that maps a set of gene sequences onto a new version of the genome, using megablast to do the mapping, and a relational database to store the results.  Moreover, since mapping 80,000 gene clusters takes a fair amount of time, the calculation is parallelized to run over a large number of compute nodes simultaneously::
 
-   import pygr.Data
+   from pygr import worldbase
    from pygr.apps.leelabdb import * # this accesses our databases
    from pygr import coordinator     # this provides parallelization support
 
@@ -168,19 +171,19 @@ To illustrate how Pygr can perform a big task with a little code, here is an exa
                     result_table='GENOME_ALIGNMENT.hg17_cluster_JUN03_all',
                     rmOpts=",**kwargs):
        "CLIENT FUNCTION: map clusters one by one"
-       # CONSTRUCT RESOURCE FOR US IF NEEDED
-       genome = pygr.Data.Bio.Seq.Genome.HUMAN.hg17()
-       # LOAD DB SCHEMA
+       # construct resource for us if needed
+       genome = worldbase.Bio.Seq.Genome.HUMAN.hg17()
+       # load db schema
        (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna,
        protein, clusterExons,clusterSplices) = getSpliceGraphFromDB(spliceCalcs[dbname])
-       # NOW MAP CLUSTER SEQUENCES ONE BY ONE TO OUR NEW genome
+       # now map cluster sequences one by one to our new genome
        for cluster_id in server:
-           g = genomic_seq[cluster_id] # GET THE OLD GENOMIC SEQUENCE FOR THIS CLUSTER
-           m = genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # MASK, BLAST, READ INTO m
-           # SAVE ALIGNMENT m TO DATABASE TABLE result_table USING cursor
+           g = genomic_seq[cluster_id] # get the old genomic sequence for this cluster
+           m = genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # mask, blast, read into m
+           # save alignment m to database table result_table using cursor
            createTableFromRepr(m.repr_dict(),result_table,clusters.cursor,
                                {'src_id':'varchar(12)','dest_id':'varchar(12)'})
-           yield cluster_id # WE MUST FUNCTION AS GENERATOR TO KEEP ERROR TRAPPING
+           yield cluster_id # we must function as generator to keep error trapping
    		         # HAPPY
 
    def serve_clusters(dbname='HUMAN_SPLICE_03',

@@ -36,10 +36,9 @@ def catalog_downloads(url,fileFilter,fileNamer,fileDocumenter,klass):
             d[fileNamer(s)] = o
     return d
 
-def save_NLMSA_downloaders(url,fileFilter=lambda x: x.endswith(".txt.gz"),
+def save_NLMSA_downloaders(url, fileFilter=lambda x: x.endswith(".txt.gz"),
                            resourceStem='Bio.MSA.UCSC.',
-                           fileDocumenter=None,layer=None,
-                           fileNamer=None):
+                           fileDocumenter=None, fileNamer=None):
     'save NLMSA downloader / builder objects for a set of downloadable textdump files'
     if fileDocumenter is None:
         fileDocumenter = lambda x: 'NLMSA alignment '+x
@@ -53,8 +52,8 @@ def save_NLMSA_downloaders(url,fileFilter=lambda x: x.endswith(".txt.gz"),
         nlmsa = NLMSABuilder(o)
         nlmsa.__doc__ = fileDocumenter(resID)
         d[resID[:-4]] = nlmsa # remove .txt suffix
-    import pygr.Data
-    pygr.Data.addResourceDict(d,layer)
-    pygr.Data.save()
+    from pygr import worldbase
+    worldbase.add_resource(d)
+    worldbase.commit()
     return d # just in case the user wants to see what was saved
 

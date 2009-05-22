@@ -27,9 +27,9 @@ Pygr tries to provide a very "Pythonic" model for sequences.  This python interp
 Several points:
 
   
-* Slices of a sequence object (e.g. s[1:10] or s[-8:]) are themselves sequence objects.
+* Slices of a sequence object (e.g. ``s[1:10]`` or ``s[-8:]``) are themselves sequence objects.
   
-* The string value of a sequence object (e.g. str(s)) is just the sequence itself (as a string).
+* The string value of a sequence object (e.g. ``str(s)``) is just the sequence itself (as a string).
   
 
 
@@ -44,9 +44,9 @@ as well as the two nucleotides consituting the splice site itself.
 It also prints the conservation of the two exonic region (between ``ss1``
 and ``ss2``::
 
-   import pygr.Data # FINDS DATA WHEREVER IT'S REGISTERED
-   msa = pygr.Data.Bio.MSA.UCSC.hg17_multiz17way() # SANTA CRUZ 17-GENOME ALIGNMENT
-   exons = pygr.Data.Leelab.ASAP2.hg17.exons() # ASAP2 HUMAN EXONS
+   from pygr import worldbase # FINDS DATA WHEREVER IT'S REGISTERED
+   msa = worldbase.Bio.MSA.UCSC.hg17_multiz17way() # SANTA CRUZ 17-GENOME ALIGNMENT
+   exons = worldbase.Leelab.ASAP2.hg17.exons() # ASAP2 HUMAN EXONS
    idDict = ~(msa.seqDict) # INVERSE: MAPS SEQ --> STRING IDENTIFIER
    def printConservation(id,label,site):
        for src,dest,edge in msa[site].edges(mergeMost=True):
@@ -159,8 +159,8 @@ A few notes:
   of the site in human and in the aligned genome.
   
 * it's worth noting that the actual sequence string comparisons are being
-  done using a completely different database mechanism (either Pygr's
-  simple ``pureseq`` text format, or (before release 0.5) NCBI's ``fastacmd``),
+  done using a completely different database mechanism 
+  (Pygr's simple ``pureseq`` text format),
   not the ``cnestedlist`` database.  Basically, each genome is being queried
   as a separate sequence database, represented in Pygr by the
   :class:`SequenceFileDB` class.  Pygr makes this complex set of multi-database
@@ -180,12 +180,12 @@ A few notes:
   addition to obtain the "union" of two intervals, e.g. ``ss1+ss2``.
   This obtains a single interval that covers both of the input intervals.
   
-* When the print  statement requests str() representations of these sequence objects, Pygr uses fseek() to extract just the right piece of the corresponding chromosomes from the 17 BLAST databases representing all the different genomes.
+* When the print statement requests str() representations of these sequence objects, Pygr uses fseek() to extract just the right piece of the corresponding chromosomes from the 17 BLAST databases representing all the different genomes.
   
 * Given the high speed of the NLMSA alignment query, it turns out that the
   operation of reading sequence strings from the sequence databases (in this
-  case, for printing them in printConservation() and calculating the percent identity
-  in pIdentity()) is the rate-limiting step for this analysis.  I.e. this analysis
+  case, for printing them in ``printConservation()`` and calculating the percent identity
+  in ``pIdentity()``) is the rate-limiting step for this analysis.  I.e. this analysis
   spends far more time waiting for disk I/O to read a particular piece of sequence
   than it does running the NLMSA alignment queries.  To solve this problem, Pygr
   provides a mechanism for intelligent caching of sequence data.  Whenever you
@@ -277,21 +277,28 @@ This example introduces the use of a Pygr alignment object to store the mapping 
 
 
   
-* We can construct a SequenceFileDB object from any FASTA formatted sequence file.
-  It acts as a Python dictionary mapping sequence IDs to the associated sequence objects (i.e. if 'CYGB_HUMAN' is a sequence ID in sp, then db['CYGB_HUMAN'] is the sequence object for that sequence.
+* We can construct a :class:`SequenceFileDB` object
+  from any FASTA formatted sequence file.
+  It acts as a Python dictionary mapping sequence IDs to the associated
+  sequence objects (i.e. if 'CYGB_HUMAN' is a sequence ID in sp,
+  then db['CYGB_HUMAN'] is the sequence object for that sequence.
   
-* When you work with such sequence objects, slicing etc. happens in the usual way, creating new sequence objects.
+* When you work with such sequence objects, slicing etc. happens in the usual
+  way, creating new sequence objects.
   
-* Only when you ask for actual sequence (by taking str(s)) does it obtain a sequence string from the database.  This is done using fseek() system call to obtain just the selected slice.  So you can efficiently obtain a substring of a sequence, even if that sequence is an entire chromosome.
+* Only when you ask for actual sequence (by taking ``str(s)``) does it obtain
+  a sequence string from the database.  This is done using ``fseek()`` system
+  call to obtain just the selected slice.  So you can efficiently obtain a
+  substring of a sequence, even if that sequence is an entire chromosome.
   
 * Any sequence database object can be used as a "target" for a homology
   search such as BLAST.  In Pygr, BLAST searches are just another kind
   of mapping, that maps a sequence object to similar sequences in the
-  target database.  You instantiate a BlastMapping object to do this by
-  simply passing the target database as an argument to the BlastMapping
-  constructor.
+  target database.  You instantiate a :class:`BlastMapping` object to do this by
+  simply passing the target database as an argument to the
+  :class:`BlastMapping` constructor.
   
-* When you first create the BlastMapping object, it looks for existing BLAST database files associated with the FASTA file 'sp'.  If present, it uses them.  If not, it will create them automatically if the user actually tries to run a BLAST query.  Pygr builds BLAST database files using the NCBI program formatdb (Pygr figures out whether the sequences are nucleotide or protein, and gives formatdb the appropriate command line options).
+* When you first create the :class:`BlastMapping` object, it looks for existing BLAST database files associated with the FASTA file 'sp'.  If present, it uses them.  If not, it will create them automatically if the user actually tries to run a BLAST query.  Pygr builds BLAST database files using the NCBI program formatdb (Pygr figures out whether the sequences are nucleotide or protein, and gives formatdb the appropriate command line options).
   
 * When you search the :class:`BlastMapping` object with a given query (sequence) object, it obtains the actual string of the object, and uses it to run a BLAST search.  It determines the type (nucleotide or protein) of the sequence object, and uses the appropriate search method (in this case blastp).  You can pass optional arguments for controlling BLAST.  It then reads the results into a Pygr multiple sequence alignment object, which stores the alignments as sets of matched intervals.  Specifically, it is a graph, whose nodes are sequence intervals (i.e. sequence objects that typically represent only part of a sequence), and whose edges represent an alignment between a pair of intervals.  To illustrate this, we ran a for-loop over all the "edge relations" in this graph, and printed them out.  This is a tuple of 3 values: ``src`` and ``dest`` are the two aligned sequence intervals, and ``edge`` provides a convenient interface to information about their relationship (e.g. \%identity, etc.).
   
@@ -301,6 +308,6 @@ This example introduces the use of a Pygr alignment object to store the mapping 
      >>> al = blastmap(s, expmax=1e-10, maxseq=5) # expectation score cutoff, etc.
   
   
-* Note: print converts its arguments to strings (i.e. calls str() on them), so we used ``repr(src)`` to get a "string representation" of each sequence interval.  When print calls str() on individual sequence interval objects returned by the BLAST search, the sequence database will efficiently obtain the specific sequence slice representing that interval (typically, using fseek() and caching).
+* Note: print converts its arguments to strings (i.e. calls ``str()`` on them), so we used ``repr(src)`` to get a "string representation" of each sequence interval.  When print calls str() on individual sequence interval objects returned by the BLAST search, the sequence database will efficiently obtain the specific sequence slice representing that interval (typically, using fseek() and caching).
 
 

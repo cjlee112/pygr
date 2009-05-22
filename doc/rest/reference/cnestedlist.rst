@@ -248,7 +248,7 @@ Construction Methods:
    will call :meth:`nlmsa_utils.read_seq_dict()` to try to obtain it from files
    associated with the NLMSA.  It first looks for a file *pathstem*``.seqDictP``
    that is simply a pickle of the *seqDict* data.  If this is not found, it
-   next looks for a file *pathstem*``.seqDict`` that is a :class:`prefixUnionDict`
+   next looks for a file *pathstem*``.seqDict`` that is a :class:`seqdb.prefixUnionDict`
    header file for opening all the sequence database files for you automatically.
    This header file will itself specify a list of sequence database files; the
    *trypath* option, if provided, specifies a list of directories in which to look for these
@@ -308,16 +308,16 @@ Construction Methods:
 
    *mafFiles* can be used to specify a list of
    filenames containing a multiple sequence alignment in the UCSC MAF format,
-   for saving as a new NLMSA (i.e. *mode='w'*).
-   Note that this automatically sets *pairwiseMode*=False.  After the MAF
-   data are read, it will automatically call the build() method to construct
+   for saving as a new NLMSA (i.e. ``mode='w'``).
+   Note that this automatically sets ``pairwiseMode=False``.  After the MAF
+   data are read, it will automatically call the :meth:`NLMSA.build()` method to construct
    the alignment index files.
 
    *axtFiles* can be used to specify a list of
    filenames containing a set of pairwise alignments in UCSC axtNet format,
-   for saving as a new NLMSA (i.e. *mode='w'*).
-   Note that this automatically sets *pairwiseMode*=True.  After the axtNet
-   data are read, it will automatically call the build() method to construct
+   for saving as a new NLMSA (i.e. ``mode='w'``).
+   Note that this automatically sets ``pairwiseMode=True``.  After the axtNet
+   data are read, it will automatically call the :meth:`NLMSA.build()` method to construct
    the alignment index files.
 
    *bidirectionalRule* allows the user to provide a function that has
@@ -371,7 +371,7 @@ Construction Methods:
 
 
 
-.. method:: __iadd__(sequence)
+.. method:: NLMSA.__iadd__(sequence)
 
    As part of constructing an alignment, adds *sequence* to the alignment graph,
    so that you can subsequently save specific alignments of intervals of
@@ -381,14 +381,14 @@ Construction Methods:
    will raise a :exc:`KeyError`.
 
 
-.. method:: addAnnotation(annotation)
+.. method:: NLMSA.addAnnotation(annotation)
 
    adds an alignment relationship to *annotation* from its underlying
    sequence interval.  Note: to use this, the NLMSA must have been created with the
    *pairwiseMode=True* option.
 
 
-.. method:: __getitem__(seqInterval)
+.. method:: NLMSA.__getitem__(seqInterval)
 
    prepare to store an alignment relationship for the sequence interval *seqInterval*,
    i.e. get a BuildMSASlice object representing *seqInterval*, to which you can
@@ -407,15 +407,15 @@ Construction Methods:
 
 
 
-.. method:: build(buildInPlace=True,saveSeqDict=False,verbose=True)
+.. method:: NLMSA.build(buildInPlace=True,saveSeqDict=False,verbose=True)
 
    to construct the final nested list databases,
    after all the desired alignment intervals have been saved (using the
    :meth:`iadd/getitem` above).  This method
    simply calls the build() method on all the constituent NLMSASequence objects
-   in this alignment.  NOTE: you do not need to call :meth:`build()` if
+   in this alignment.  NOTE: you do not need to call :meth:`NLMSA.build()` if
    you provided a *mafFiles* constructor argument, since that automatically
-   calls :meth:`build()`.
+   calls :meth:`NLMSA.build()`.
 
    *buildInPlace=False* forces it to use an older NLMSA construction method
    (higher memory usage, but more tested).  The new in-place construction method
@@ -435,7 +435,7 @@ Construction Methods:
    To suppress printing of these messages, use *verbose=False*.
 
 
-.. method:: save_seq_dict()
+.. method:: NLMSA.save_seq_dict()
 
    Forces saving of the NLMSA's seqDict to a disk file named 'FILESTEM.seqDictP'
    (where FILESTEM is the base path to your NLMSA files).  This is unnecessary
@@ -450,7 +450,7 @@ Construction Methods:
 
 Alignment Usage Methods:
 
-.. method:: __getitem__(s1)
+.. method:: NLMSA.__getitem__(s1)
 
    get the alignment slice for the sequence interval *s1*,
    i.e. get an NLMSASlice object representing the set of intervals aligned to *s1*.
@@ -459,7 +459,7 @@ Alignment Usage Methods:
    region of the LPO coordinate system.
 
 
-.. method:: doSlice(s1)
+.. method:: NLMSA.doSlice(s1)
 
    If you subclass NLMSA and provide a :meth:`doSlice` method, the NLMSA will
    call your :meth:`doSlice(seq)` method to find alignment results for ``seq``,
@@ -469,11 +469,23 @@ Alignment Usage Methods:
 
 
 
-* :attr:`seqs`: This attribute provides a dictionary of the sequences in
-  the NLMSA, whose keys are top-level sequence objects, and whose values are
-  the associated NLMSASequence object for each sequence.  Ordinarily you will have
-  no need to access the NLMSASequence object directly; only do so if you know what
-  you're doing (details below).  This dictionary is of type NLMSASeqDict (see below).
+.. attribute:: NLMSA.seqDict
+   
+   This attribute provides the dictionary mapping sequence IDs to sequence
+   objects contained in this alignment.  You can request its inverse mapping,
+   as a convenient way of getting the sequence ID for any sequence object
+   in the alignment.  For example::
+
+      d = ~(nlmsa.seqDict) # get the inverse mapping
+      print d[myseq]  # get myseq's ID or raise KeyError if not in nlmsa.seqDict
+
+.. attribute:: NLMSA.seqs
+
+   This attribute provides a dictionary of the sequences in
+   the NLMSA, whose keys are top-level sequence objects, and whose values are
+   the associated NLMSASequence object for each sequence.  Ordinarily you will have
+   no need to access the NLMSASequence object directly; only do so if you know what
+   you're doing (details below).  This dictionary is of type NLMSASeqDict (see below).
   
 
 
@@ -579,22 +591,26 @@ These two classes, provided by the separate :mod:`xnestedlist` module,
 provide an XMLRPC client-server mechanism for querying NLMSA databases
 over a network.
 
-:class:`NLMSAServer` is constructed exactly the same as a normal :class:`NLMSA`;
-it *is* a normal NLMSA with just two methods added for serving XMLRPC client
-requests.  See the :class:`coordinator.XMLRPCServerBase` reference
-documentation below for details about starting an XMLRPC server.
+.. class:: NLMSAServer(pathstem=", mode='r', seqDict=None, mafFiles=None, axtFiles=None, maxOpenFiles=1024, maxlen=None, nPad=1000000, maxint=41666666, trypath=None, bidirectional=True, pairwiseMode= -1, bidirectionalRule=nlmsa_utils.prune_self_mappings, maxLPOcoord=None)
 
-:class:`NLMSAClient` provides a read-only client interface for querying
-data in a remote :class:`NLMSAServer`.  It takes two extra arguments for
-its constructor: *url*, the URL for the XMLRPC server; *name*,
-the name of the NLMSAServer server object in the XMLRPC server's dictionary.
-For example, to use an NLMSA stored on a remote XMLRPC server,
-assuming that ``myPrefixUnion`` stores a dictionary of all the
-sequence databases used by that NLMSA alignment, would just be::
+   is constructed exactly the same as a normal :class:`NLMSA`;
+   it *is* a normal NLMSA with just two methods added for serving XMLRPC client
+   requests.  See the :class:`coordinator.XMLRPCServerBase` reference
+   documentation below for details about starting an XMLRPC server.
 
-   from pygr import xnestedlist
-   nlmsa = xnestedlist.NLMSAClient(url='http://leelab.mbi.ucla.edu:5000',
-                                   name='ucsc17',seqDict=myPrefixUnion)
+.. class:: NLMSAClient(url=None, name=None, idDictClass=dict, **kwargs)
+
+   provides a read-only client interface for querying
+   data in a remote :class:`NLMSAServer`.  It takes two extra arguments for
+   its constructor: *url*, the URL for the XMLRPC server; *name*,
+   the name of the NLMSAServer server object in the XMLRPC server's dictionary.
+   For example, to use an NLMSA stored on a remote XMLRPC server,
+   assuming that ``myPrefixUnion`` stores a dictionary of all the
+   sequence databases used by that NLMSA alignment, would just be::
+
+      from pygr import xnestedlist
+      nlmsa = xnestedlist.NLMSAClient(url='http://leelab.mbi.ucla.edu:5000',
+                                      name='ucsc17', seqDict=myPrefixUnion)
 
 
 
@@ -638,16 +654,17 @@ sequence databases in the most efficient way.  Here's how it works:
   you drop it, its associated cache information will also be automatically deleted,
   freeing up memory.
 
+.. class:: NLMSASlice(ns, start, stop, id= -1, offset=0, seq=None)
 
-An NLMSASlice acts like a dictionary whose keys are
-sequence intervals that are aligned to this region, and whose values are
-:class:`Seq2SeqEdge` objects providing detailed information about the alignment of
-the target interval (key) to the source interval (the sequence interval
-used to create the NLMSASlice in the first place).  You can use this
-dictionary interface in several ways:
+   An NLMSASlice acts like a dictionary whose keys are
+   sequence intervals that are aligned to this region, and whose values are
+   :class:`sequence.Seq2SeqEdge` objects providing detailed information about the alignment of
+   the target interval (key) to the source interval (the sequence interval
+   used to create the NLMSASlice in the first place).  You can use this
+   dictionary interface in several ways:
 
 
-.. method:: __iter__()
+.. method:: NLMSASlice.__iter__()
 
    iterates over all sequence intervals that have
    a 1:1 mapping (i.e. a block of alignment containing no indels) to
@@ -655,7 +672,7 @@ dictionary interface in several ways:
 
 
 
-.. method:: keys(maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeMost=False, mergeAll=False, maxsize=500000000, minAlignSize=None, maxAlignSize=None, pIdentityMin=None, ivalMethod=None, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs)
+.. method:: NLMSASlice.keys(maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeMost=False, mergeAll=False, maxsize=500000000, minAlignSize=None, maxAlignSize=None, pIdentityMin=None, ivalMethod=None, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs)
 
    Provides a more general interface than *iter()*, with two types of
    group-by capabilities, "group-by" operations on the alignment intervals
@@ -735,7 +752,7 @@ dictionary interface in several ways:
    *ivalMethod*,
    if not None, allows the user to provide a Python function that performs
    interval grouping.  Specifically it is called as
-   \function{ivalMethod(l, ns,msaSlice=self, **kwargs)}, where *l* is the
+   ``ivalMethod(l, ns, msaSlice=self, **kwargs)``, where *l* is the
    list of intervals for NLMSASequence *ns* within the current slice
    *msaSlice*; all other args are passed as a dict in *kwargs*.
 
@@ -772,7 +789,7 @@ dictionary interface in several ways:
 
 
 
-.. method:: iteritems(**kwargs)
+.. method:: NLMSASlice.iteritems(**kwargs)
 
    same keys as *iter*, but for each provides the source interval
    to target interval mapping (:class:`Seq2SeqEdge`).
@@ -780,7 +797,7 @@ dictionary interface in several ways:
 
 
 
-.. method:: edges(**kwargs)
+.. method:: NLMSASlice.edges(**kwargs)
 
    same interval mappings as *iteritems*, but for
    each provides a tuple of three objects:
@@ -792,7 +809,7 @@ dictionary interface in several ways:
 
 
 
-.. method:: __getitem__(s1)
+.. method:: NLMSASlice.__getitem__(s1)
 
    treats *s1* as a key (target sequence
    interval), and returns an :class:`Seq2SeqEdge` object providing detailed
@@ -801,7 +818,7 @@ dictionary interface in several ways:
 
 
 
-.. method:: __len__()
+.. method:: NLMSASlice.__len__()
 
    returns the number of distinct sequences that
    are aligned to the source interval.  *Note*: this is NOT necessarily
@@ -817,19 +834,21 @@ several additional methods and attributes:
 
 
 
-* :attr:`letters`: this attribute provides an interface to
-  the individual alignment columns (NLMSANode objects) containing the
-  source interval, in order from *start* to *stop*.  This provides
-  an easy way to obtain detailed information about the letter-to-letter
-  alignment of different sequences within this region of the alignment.
-  For details on the kinds of information you can obtain for each
-  alignment column, see NLMSANode, below.
+.. attribute:: NLMSASlice.letters
+
+   this attribute provides an interface to
+   the individual alignment columns (NLMSANode objects) containing the
+   source interval, in order from *start* to *stop*.  This provides
+   an easy way to obtain detailed information about the letter-to-letter
+   alignment of different sequences within this region of the alignment.
+   For details on the kinds of information you can obtain for each
+   alignment column, see NLMSANode, below.
   
-  It also provides a graph interface to subset of the partial order alignment
-  graph corresponding to this slice.  For details, see NLMSASliceLetters, below.
+   It also provides a graph interface to subset of the partial order alignment
+   graph corresponding to this slice.  For details, see NLMSASliceLetters, below.
 
 
-.. method:: split(**kwargs)
+.. method:: NLMSASlice.split(**kwargs)
 
    this method provides a way to perform group-by operations on the slice;
    the output of split() is one or more NLMSASlice objects; if the
@@ -839,7 +858,7 @@ several additional methods and attributes:
    For further details on group-by operations, see :meth:`keys()` above.
 
 
-.. method:: regions(**kwags)
+.. method:: NLMSASlice.regions(**kwags)
 
    performs the same group-by analysis as *split()*, but replaces
    the source interval by the corresponding interval in the LPO.  The main
@@ -857,7 +876,7 @@ several additional methods and attributes:
    Uses same group-by arguments as :meth:`keys()`.
 
 
-.. method:: groupByIntervals(maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeMost=False, maxsize=500000000, mergeAll=True, ivalMethod=None, pIdentityMin=None, minAlignSize=None, maxAlignSize=None,**kwargs)
+.. method:: NLMSASlice.groupByIntervals(maxgap=0, maxinsert=0, mininsert= 0, filterSeqs=None, mergeMost=False, maxsize=500000000, mergeAll=True, ivalMethod=None, pIdentityMin=None, minAlignSize=None, maxAlignSize=None,**kwargs)
 
    This method performs the interval grouping analysis for all the iterators
    described above.  Users will not need to call it directly.  Its arguments
@@ -872,7 +891,7 @@ several additional methods and attributes:
    method below.
 
 
-.. method:: filterIvalConservation(seqIntervals,pIdentityMin=None,filterFun=None,**kwargs)
+.. method:: NLMSASlice.filterIvalConservation(seqIntervals,pIdentityMin=None,filterFun=None,**kwargs)
 
    This method is used by :meth:`groupByIntervals()` to filter the results
    using the specified *filterFun* filter function, which should either
@@ -884,7 +903,7 @@ several additional methods and attributes:
    place by :meth:`filterIvalConservation`, which always returns *None*.
 
 
-.. method:: conservationFilter(seq,m,pIdentityMin=None,minAlignSize=None,maxAlignSize=None,**kwargs)
+.. method:: NLMSASlice.conservationFilter(seq,m,pIdentityMin=None,minAlignSize=None,maxAlignSize=None,**kwargs)
 
    Tests an alignment mapping *m* for the specified size and sequence
    identity criteria.  Returns the (possibly clipped) interval *m* if
@@ -895,7 +914,7 @@ several additional methods and attributes:
    using :meth:`Seq2SeqEdge.conservedSegment()`.
 
 
-.. method:: groupBySequences(seqIntervals, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs)
+.. method:: NLMSASlice.groupBySequences(seqIntervals, sourceOnly=False, indelCut=False, seqGroups=None, minAligned=1, pMinAligned=0., seqMethod=None, **kwargs)
 
    This method performs the sequence grouping analysis for all the iterators
    described above.  *seqIntervals* must be a dictionary of sequences
@@ -906,7 +925,7 @@ several additional methods and attributes:
 
 
 
-.. method:: matchIntervals(seq=None)
+.. method:: NLMSASlice.matchIntervals(seq=None)
 
    this method returns the set of
    1:1 match intervals for the target sequence *seq* (or all
@@ -916,7 +935,7 @@ several additional methods and attributes:
    aligned.
 
 
-.. method:: findSeqEnds(seq)
+.. method:: NLMSASlice.findSeqEnds(seq)
 
    returns the largest possible interval of
    *seq* that is aligned to this slice, i.e. it merges all
@@ -927,6 +946,7 @@ several additional methods and attributes:
 
 NLMSASliceLetters
 -----------------
+
 represents the *letters* graph of a specific NLMSASlice.  It is
 a graph whose nodes are the NLMSANode objects in this slice, and whose
 edges are sequence.LetterEdge objects. *Note*: currently the edge objects

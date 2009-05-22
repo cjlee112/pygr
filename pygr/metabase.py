@@ -719,9 +719,14 @@ not be ready to do!''' % resID
             return self.writer
         except AttributeError:
             raise WorldbaseReadOnlyError('this metabase is read-only!')
-    def add_resource(self, resID, obj):
-        'assign obj as the specified resource ID to our metabase'
-        self.get_writer().saver.add_resource(resID, obj)
+    def add_resource(self, resID, obj=None):
+        """assign obj as the specified resource ID to our metabase.
+        if obj is None, treat resID as a dictionary whose keys are
+        resource IDs and values are the objects to save."""
+        if obj is None:
+            self.get_writer().saver.add_resource_dict(resID)
+        else:
+            self.get_writer().saver.add_resource(resID, obj)
     def delete_resource(self, resID):
         'delete specified resource ID from our metabase'
         self.get_writer().saver.delete_resource(resID)
@@ -934,10 +939,10 @@ WARNING: error accessing metabase %s.  Continuing...''' % dbpath
         return self(resID, **kwargs)
     def registerServer(self,locationKey,serviceDict):
         'register the serviceDict with the first index server in WORLDBASEPATH'
-        for db in self.resourceDBiter():
-            if hasattr(db,'registerServer'):
-                n=db.registerServer(locationKey,serviceDict)
-                if n==len(serviceDict):
+        for mdb in self.mdb:
+            if hasattr(mdb.storage, 'registerServer'):
+                n = mdb.storage.registerServer(locationKey, serviceDict)
+                if n == len(serviceDict):
                     return n
         raise ValueError('unable to register services.  Check WORLDBASEPATH')
     def getschema(self, resID):
@@ -1014,7 +1019,7 @@ class ResourceSaver(object):
         except AttributeError:
             pass
         self.mdb.resourceCache[resID] = obj # SAVE TO OUR CACHE
-    def addResourceDict(self, d):
+    def add_resource_dict(self, d):
         'queue a dict of name:object pairs for saving to metabase'
         for k,v in d.items():
             self.add_resource(k, v)
@@ -1224,7 +1229,8 @@ class ResourceRoot(ResourcePath):
         if zones is not None:
             self.__dict__['zones'] = zones
         for attr in ('dir', 'commit', 'rollback', 'add_resource',
-                     'delete_resource', 'clear_cache', 'add_schema', 'update'):
+                     'delete_resource', 'clear_cache', 'add_schema',
+                     'update', 'list_pending'):
             self.__dict__[attr] = getattr(mdb, attr) # mirror metabase methods
     def __call__(self, resID, *args, **kwargs):
         """Construct the requested resource"""
