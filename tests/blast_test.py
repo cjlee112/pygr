@@ -768,7 +768,7 @@ class Blastx_Test(BlastBase):
     def test_blastx_parser(self):
         "Testing blastx parser"
         blastx_output = open(testutil.datafile('blastx_output.txt'), 'r')
-        results = blast.BlastxResults(blastx_output, {
+        results = blast.blastx_results(blastx_output, {
             'gi|171854975|dbj|AB364477.1|' :
             self.dna['gi|171854975|dbj|AB364477.1|'] },
             blast.BlastIDIndex(self.prot))
