@@ -1475,6 +1475,37 @@ class BlastParsers_Test(BlastBase):
                       lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
                                 t[2].pIdentity()))
 
+    def test_tblastn_parser(self):
+        "Testing tblastn parser"
+        tblastn_output = open(testutil.datafile('tblastn_output.txt'), 'r')
+        result = blast.read_interval_alignment(tblastn_output, { 'HBB1_XENLA' :
+                                                                self.prot['HBB1_XENLA']
+                                                                },
+                                               blast.BlastIDIndex(self.dna),
+                                               groupIntervals=blast.generate_tblastn_ivals
+                                              )[self.prot['HBB1_XENLA']]
+        tblastn_output.close()
+        src, dest, edge = iter(result.edges()).next()
+        
+        self.assertEqual(str(src),
+            'LTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAHGEK'
+            'VVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYTPELHAAY'
+            'EHLFDAIADALGKGYH')
+        self.assertEqual(str(dest),
+            'LTDAEKAAVSGLWGKVNSDEVGGEALGRLLVVYPWTQRYFDSFGDLSSASAIMGNAKVKAHGKK'
+            'VITAFNEGLNHLDSLKGTFASLSELHCDKLHVDPENFRLLGNMIVIVLGHHLGKDFTPAAQAAF'
+            'QKVMAGVATALAHKYH')
+        self.assertEqual(str(dest.sequence),
+            'CTGACTGATGCTGAGAAGGCTGCTGTCTCTGGCCTGTGGGGAAAGGTGAACTCCGATGAAGTTG'
+            'GTGGTGAGGCCCTGGGCAGGCTGCTGGTTGTCTACCCTTGGACCCAGAGGTACTTTGATAGCTT'
+            'TGGAGACCTATCCTCTGCCTCTGCTATCATGGGTAATGCCAAAGTGAAGGCCCATGGCAAGAAA'
+            'GTGATAACTGCCTTTAACGAGGGCCTGAATCACTTGGACAGCCTCAAGGGCACCTTTGCCAGCC'
+            'TCAGTGAGCTCCACTGTGACAAGCTCCATGTGGATCCTGAGAACTTCAGGCTCCTGGGCAATAT'
+            'GATCGTGATTGTGCTGGGCCACCACCTGGGCAAGGATTTCACCCCCGCTGCACAGGCTGCCTTC'
+            'CAGAAGGTGATGGCTGGAGTGGCCACTGCCCTGGCTCACAAGTACCAC')
+        
+        self.assertAlmostEqual(edge.pIdentity(), 0.451, 3)
+
 
 # not used currently
 def all_vs_all_blast_save():
