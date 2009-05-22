@@ -169,7 +169,8 @@ class BlastHitParser(object):
             self.nline += 1
             if self.is_valid_hit() and \
                (is_line_start('>',line) or is_line_start(' Score =',line) \
-                or is_line_start('  Database:',line)):
+                or is_line_start('  Database:',line) \
+                or is_line_start('Query=',line)):
                 yield CoordsGroupStart() # bracket with grouping markers
                 for t in self.generate_intervals(): # REPORT THIS ALIGNMENT
                     yield t # GENERATE ALL ITS INTERVAL MATCHES

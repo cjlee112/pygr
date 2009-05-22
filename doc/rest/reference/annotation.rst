@@ -1,5 +1,5 @@
 :mod:`annotation` --- Annotation database interfaces
-=============================================
+====================================================
 
 .. module:: annotation
    :synopsis: Annotation database interfaces.
@@ -10,6 +10,17 @@
 This module provides a general interface (:class:`AnnotationDB`) 
 for sequence annotation databases.
 This interface follows several principles:
+
+* Pygr's approach to annotation is explicitly "database-centric".
+  That is, rather than constructing annotation objects one by one,
+  you instead specify a *sliceDB* database of annotation coordinates;
+  each *sliceDB* value marks a contiguous interval on a specified sequence
+  ID, to be marked as one annotation.  *sliceDB* should follow a dict-like
+  interface; it maps an annotation ID key to a coordinate interval value.
+  Next, you provide a *seqDB* sequence database containing the sequence
+  objects to be annotated.  Finally, you construct an
+  :class:`annotation.AnnotationDB` with both of these arguments;
+  given an annotation ID, it returns a annotation object.
 
 * An *annotation object* acts like a sliceable interval
   (representing the region of sequence that it annotates)
@@ -27,8 +38,8 @@ This interface follows several principles:
 * An annotation will generally have additional attributes that
   describe its specific biological information; for example,
   a gene annotation might have a :attr:`symbol` attribute giving
-  its gene symbol.  These annotation-specific attributes are provided
-  by a *sliceDB*; see below for details.
+  its gene symbol.  These annotation-specific attributes are accessed
+  from the associated *sliceDB* value for that annotation; see below for details.
   
 * You can always obtain the actual sequence object corresponding
   to an annotation object or slice, by simply requesting its
@@ -40,7 +51,7 @@ This interface follows several principles:
   also be sliced.  More generally, an annotation is itself a coordinate
   system that can be sliced, negated (only for nucleotide sequence
   annotations, to obtain the opposite strand), and have a length
-  (obtainable as usual via the builtin ``len``() function).
+  (obtainable as usual via the builtin ``len()`` function).
   
 * Annotation objects provide a consistent interface
   to the annotation coordinate system, based on the :class:`SeqPath`
@@ -54,7 +65,7 @@ This interface follows several principles:
   original annotation in the usual way, by accessing the :attr:`pathForward`
   attribute of any annotation slice.
   
-* One difference is that you cannot obtain the string value
+* One difference is that you (usually) cannot obtain the string value
   (letters of the corresponding sequence) directly from an annotation
   object or slice.  Instead, you must first obtain the corresponding
   sequence slice, via its :attr:`sequence` attribute, to which
@@ -84,8 +95,7 @@ This interface follows several principles:
      for a in nlmsa[s]: # FIND ANNOTATIONS THAT MAP TO s
        # DO SOMETHING...
   
-  
-* Based on your pygr.Data schema, an annotation object may
+* Based on your worldbase schema, an annotation object may
   have other attributes that connect it to other data.
   For example, an object ``e`` representing an exon annotation
   might have attributes that link it
@@ -95,7 +105,7 @@ This interface follows several principles:
 AnnotationDB
 ------------
 
-.. class:: AnnotationDB(sliceDB, seqDB, annotationType=None, itemClass=AnnotationSeq, itemSliceClass=AnnotationSlice, itemAttrDict=None, sliceAttrDict=dict(), filename=None, mode='r', maxCache=None)
+.. class:: AnnotationDB(sliceDB, seqDB, annotationType=None, itemClass=AnnotationSeq, itemSliceClass=AnnotationSlice, sliceAttrDict=dict(), filename=None, mode='r', maxCache=None)
 
    Constructs an annotation database using several arguments:
 
@@ -122,17 +132,17 @@ AnnotationDB
    to be returned from the AnnotationDB.__getitem__.  You can extend the
    behavior of annotation objects by subclassing :class:`AnnotationSeq`.
    If the AnnotationDB participates in important schema relations,
-   pygr.Data may add properties to the *itemClass* that implement
+   :mod:`worldbase` may add properties to the *itemClass* that implement
    its schema relations to other database containers.  (See the reference
-   docs on :mod:`pygr.Data` below for details).
+   docs on :mod:`metabase` below for details).
 
    *itemSliceClass*: the class to use for slices of annotation
    objects returned from the AnnotationDB.__getitem__.  You can extend the
    behavior of annotation objects by subclassing :class:`AnnotationSlice`.
    If the AnnotationDB participates in important schema relations,
-   pygr.Data may add properties to the *itemSliceClass* that implement
+   :mod:`worldbase` may add properties to the *itemSliceClass* that implement
    its schema relations to other database containers.  (See the reference
-   docs on :mod:`pygr.Data` below for details).
+   docs on :mod:`metabase` below for details).
 
    *sliceAttrDict*, a dictionary providing the attribute name aliases
    for attributes on annotation objects to access attributes or tuple values
@@ -144,10 +154,10 @@ AnnotationDB
 
    would make it use ``s.chromosome,s.gen_start,s.gen_stop`` as the ID and interval
    coordinates for each slice information object ``s``.  Note: the start,stop
-   coordinates should follow the :class:`SeqPath` sign convention, i.e. positive
+   coordinates should follow the :class:`sequence.SeqPath` sign convention, i.e. positive
    coordinates mean an interval on the positive strand, and negative coordinates
    mean an interval on the negative strand (i.e. the reverse complement of
-   the positive strand.  See the reference documentation on :class:`SeqPath` above
+   the positive strand.  See the reference documentation on :class:`sequence.SeqPath` above
    for details).
 
    If the sliceAttrDict (or sliceInfo object directly) provides a :attr:`orientation`
@@ -171,20 +181,30 @@ AnnotationDB
    for the individual annotations.
 
    *filename*, if not None, indicates a Python shelve file to store the
-   sliceDB info.  It will be opened according to the *mode* argument;
+   *sliceDB* info.  It will be opened according to the *mode* argument;
    see the Python :mod:`shelve` docs for details.  Note: if you write data
-   to an AnnotationDB stored using a shelve, you *must* call its
+   to an :class:`AnnotationDB` stored using a shelve, you *must* call its
    :meth:`close()` method to ensure that all data is saved to the Python
    shelve file!
 
    *maxCache*, if not None, specifies the maximum number of annotation
    objects to keep in the cache.  For large databases, this is an important
-   parameter for ensuring that the AnnotationDB will not consume too much
+   parameter for ensuring that the :class:`AnnotationDB` will not consume too much
    memory (e.g. if you iterate over all or a large fraction of the annotations
    in the database).
 
+   *autoGC=True* makes :class:`AnnotationDB` automatically
+   flush unused annotations
+   from the cache using :class:`classutil.RecentValueDictionary`.
 
-.. method:: __getitem__(id)
+   Note: the argument *itemAttrDict* is deprecated, and does nothing.  Do
+   not use it, as there is currently no need.  The annotation and slice
+   objects will automatically reflect whatever attributes are present on
+   your associated *sliceDB* objects; see :class:`AnnotationSeq`
+   below for details.
+
+
+.. method:: AnnotationDB.__getitem__(id)
 
    Get the annotation object with primary key *id*.  This annotation object
    is both a sequence interval (representing the region of sequence that it
@@ -193,42 +213,66 @@ AnnotationDB
    from the slice information object, that give useful information about this
    annotation).
 
+Saving New Annotations
+----------------------
 
-Note: to save new annotations to the AnnotationDB, use either of the following two
+Ordinarily, you use an :class:`AnnotationDB` as a read-only database; i.e.
+you use it simply to access annotations derived from data already stored in
+the *sliceDB*.
+
+To save *new* annotations to the :class:`AnnotationDB`, 
+what you are really doing is
+saving new coordinate information to the *sliceDB*.  You could do that directly,
+but :class:`AnnotationDB` provides methods for doing this more
+conveniently.  It will even run homology searches for you and automatically
+turn the results into new annotations.  To use these methods:
+
+* *sliceDB* must be writeable.
+
+* alternatively, if you pass *sliceDB=None*, :class:`AnnotationDB` will
+  try to create a new shelve for you, using the *filename* and *mode* 
+  optional arguments.
+
+To save a new annotation, use either of the following two convenience
 methods, instead of :meth:`__setitem__`, which is not permitted (because
 there would be no way of guaranteeing that the annotation object provided
 by the user could be stored persistently).
 
-.. method:: new_annotation(k,sliceInfo)
+.. method:: AnnotationDB.new_annotation(k,sliceInfo)
 
    Use this method to save new annotations to an :class:`AnnotationDB`,
    instead of using ``annoDB[k] = v``, which is not permitted.
    Creates a new annotation with ID *k*, based on *sliceInfo*,
    which must provide a sequence ID, start, stop, either by attribute
-   names or integer indices (as specified by the sliceAttrDict),
+   names or integer indices (as specified by the *sliceAttrDict*),
    and any addition attributes that we want to associate with this annotation.
-   *sliceInfo* is saved in the :class:`AnnotationDB`'s sliceDB.
+   *sliceInfo* is saved in the :class:`AnnotationDB` 's *sliceDB*.
    Returns an annotation object associated with *sliceInfo*.
 
 
-.. method:: add_homology(seq, search='blast', id=None, idFormat='\%s_\%d', autoIncrement=False, maxAnnot=999999, maxLoss=None, sliceInfo=None, **kwargs)
+.. method:: AnnotationDB.add_homology(seq, search, id=None, idFormat='\%s_\%d', autoIncrement=False, maxAnnot=999999, maxLoss=None, sliceInfo=None, **kwargs)
 
    Search for homology to *seq* in the sequence database self.seqDB
    using the named method specified by the *search* argument,
-   and filtered using the NLMSASlice.keys() function, and store
+   and filtered using the :meth:`cnestedlist.NLMSASlice.keys()`
+   function, and store
    them as new annotations in the annotation database.
 
    *seq* can be a string or sequence object or slice.
 
-   *search* can be a string, in which case it will be treated as an
-   attribute name for a method on self.seqDB to run the homology search.
-   Alternatively, *search* must be a function that runs the homology search.
-   Either way, the search function must take a sequence object as its
+   *search* should be a homology search object such as
+   :class:`blast.BlastMapping` that can be used as a callable function.
+   The *search* function must take a sequence object as its
    first argument, and optional keyword arguments for controlling its
    search parameters.  Note: since both searching and filtering keyword
    arguments are passed as a single dictionary, the function should not
    die on unexpected keyword arguments.  The function must return an
-   alignment object (e.g. NLMSA).
+   alignment object (e.g. :class:`cnestedlist.NLMSA`).
+
+   Deprecated: *search* can be a string, in which case it will be treated as an
+   attribute name for a method on ``self.seqDB`` to run the homology search.
+   This only works if ``self.seqDB`` is the deprecated class 
+   :class:`blast.BlastDB`.
 
    *id* if not None, will be used as the annotation ID.  Otherwise,
    the *seq.id* will be used as the annotation ID.
@@ -257,12 +301,15 @@ by the user could be stored persistently).
 
    You can (and should) specify many additional arguments for controlling
    the homology search, and results filtering.  For the former, see the list
-   of arguments for BlastDB.blast() and BlastDB.megablast().  For the latter,
-   see the list of arguments for NLMSASlice.keys().
+   of arguments for :class:`blast.BlastMapping` and related variants in
+   the :mod:`blast` module.  For results filtering,
+   see the list of arguments for :meth:`cnestedlist.NLMSASlice.keys()`.
 
    :meth:`add_homology()` returns a list of the annotation objects
    created as a result of the homology search.
 
+Iterating over Annotations
+--------------------------
 
 For iteration over annotations in a very large annotation database, it is
 important to understand how to control the caching of annotation objects.
@@ -271,31 +318,90 @@ and :meth:`itervalues()` simply iterate over the annotation, applying
 the *maxCache* limit to the total number of annotations that will be
 kept in cache at any one time.
 
-.. method:: iteritems()
+.. method:: AnnotationDB.iteritems()
 
 
-.. method:: itervalues()
+.. method:: AnnotationDB.itervalues()
 
 
 By contrast, :meth:`items()` and :meth:`values()`
 force loading of all annotations in the entire database into cache, since
 that is what these methods require.
 
-.. method:: items()
+.. method:: AnnotationDB.items()
 
 
-.. method:: values()
+.. method:: AnnotationDB.values()
 
 
 Finally, :meth:`__iter__()` and :meth:`keys()` just obtain the
 list of annotation IDs, without loading anything into the cache.
 
-.. method:: close()
+.. method:: AnnotationDB.close()
 
    You must call this method to ensure that any data added to the AnnotationDB
    will be written to its Python shelve file on disk.
    This method is irrelevant, but harmless,
    if you are instead using an in-memory dictionary as storage.
+
+
+Annotation Classes
+------------------
+
+.. class:: AnnotationSeq(id, db, parent, start, stop)
+
+   The base class for annotations.  *id* specifies the annotation ID, 
+   and *db* must be the :class:`AnnotationDB` instance that contains this
+   annotation.  *parent* must be the sequence object that this annotation
+   is associated with, and *start*, *stop* specify the coordinates for
+   the annotation interval within that sequence's coordinate system
+   (following Pygr's standard positive-negative coordinate convention,
+   in which positive coordintes refer to the positive strand, and 
+   negative coordinates refer to the negative strand).
+
+.. method:: AnnotationSeq.__getattr__(attr)
+
+   :class:`AnnotationSeq` does *not* use the
+   :func:`classutil.get_bound_subclass()` mechanism for reflecting attributes
+   on the *sliceDB* object (see :class:`AnnotationDB` details above)
+   to its associated :class:`AnnotationSeq` instance.  Instead,
+   the old-style ``__getattr__`` mechanism is used.  Thus any named attributes
+   of the *sliceDB* object can be accessed also on the 
+   associated :class:`AnnotationSeq` object.  Note: currently,
+   they are only accessible via a direct request for a named attribute,
+   not through ``dir()`` introspection.
+
+.. class:: AnnotationSlice(path, start=0, stop=None, step=None, reversePath=None, relativeToStart=False, absoluteCoords=False)
+
+   The base class for annotation slices.  Can be subclassed.
+   Uses the same ``__getattr__`` mechanism as :class:`AnnotationSeq`,
+   so it too reflects all named attributes on its associated
+   *sliceDB* object.
+
+
+.. class:: TranslationAnnot(id, db, parent, start, stop)
+
+   A subclass of :class:`AnnotationSeq` specifically for
+   representing protein Open Reading Frames (ORFs).  It differs from a regular
+   annotation in two respects:
+
+   * it represents a *translation* of the sequence interval it
+     annotates.  Therefore its length is 1/3 that of the sequence
+     interval it annotates.
+
+   * Unlike a regular annotation, you *can* request its string value
+     (using ``str()``).  The result will be the amino acid translation
+     of the selected ORF interval.  Thus an ORF annotation object
+     can be treated like a sequence object in all respects -- you
+     can align it, measure its sequence similarity to another sequence etc.
+
+   Translation (ORF) annotations are used for representing the results
+   of :class:`blast.BlastxMapping` searches and any blast search whose
+   results are actually a translation of the input sequence (such as tblastn).
+
+.. class:: TranslationAnnotSlice(path, start=0, stop=None, step=None, reversePath=None, relativeToStart=False, absoluteCoords=False)
+
+   A subclass of :class:`AnnotationSlice` for ORF annotations.
 
 
 

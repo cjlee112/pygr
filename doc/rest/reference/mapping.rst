@@ -1,5 +1,5 @@
 :mod:`mapping` --- Basic graph database and query interfaces
-==================================================
+============================================================
 
 .. module:: mapping
    :synopsis: Basic graph database interfaces.
@@ -79,17 +79,17 @@ This class provides a graph interface that can work with external storage
 typically, a BerkeleyDB file, based on storing node ID and
 edgeID values in the external storage instead of the python objects themselves.
 
-.. class:: Graph(saveDict=None,dictClass=dict,writeNow=False,filename=None,sourceDB=None,targetDB=None,edgeDB=None,intKeys=False,simpleKeys=False,unpack_edge=None,**kwargs)
+.. class:: Graph(saveDict=None, dictClass=dict, writeNow=False, filename=None, sourceDB=None, targetDB=None, edgeDB=None, intKeys=False, simpleKeys=False, unpack_edge=None, **kwargs)
 
    *filename*, if provided, gives a path to a BerkeleyDB file to use as the
    storage for the graph.  If the file does not exist, it will be created automatically.
-   If the *intKeys*=True option is provided, this will be an :class:`IntShelve`,
+   If the ``intKeys=True`` option is provided, this will be an :class:`IntShelve`,
    which allows the use of :class:`int` values as keys.  Otherwise a regular Python
    :class:`shelve` will be used (via the :class:`PicklableShelve` class),
    which only allows string keys.  Note that in this case you *must*
    call the Graph's :meth:`close()` method when you are done adding nodes / edges,
    to ensure that all the data is written to disk (unless you are using the
-   *writeNow*=True option, see below).
+   ``writeNow=True`` option, see below).
 
    The *writeNow*=True option makes all
    writing operations atomic; i.e. the shelve file is opened read-only, and
@@ -115,7 +115,7 @@ edgeID values in the external storage instead of the python objects themselves.
 
    *sourceDB*, if provided, must be a database container (dictionary interface) whose
    keys are source node IDs, and whose values are the associated node objects.
-   If no *sourceDB* is provided, that implies *simpleKey*=True.
+   If no *sourceDB* is provided, that implies ``simpleKey=True``.
 
    *targetDB*, if provided, must be a database container (dictionary interface) whose
    keys are target node IDs, and whose values are the associated node objects.
@@ -124,19 +124,19 @@ edgeID values in the external storage instead of the python objects themselves.
    keys are edge IDs, and whose values are the associated edge objects.
 
 
-.. method:: __iadd__(node)
+.. method:: Graph.__iadd__(node)
 
    Add *node* to the graph, with no edges.  *node* must be an
    item of *sourceDB*.
 
 
-.. method:: __delitem__(node)
+.. method:: Graph.__delitem__(node)
 
    Delete *node* from the graph, and its edges.  *node* must be a
    source node in the graph.  :meth:`__isub__` does exactly the same thing.
 
 
-.. method:: close()
+.. method:: Graph.close()
 
    If you chose to use a Python :mod:`shelve` as the actual storage, you used
    the default setting of *writeNow*``=False``, and you
@@ -145,74 +145,80 @@ edgeID values in the external storage instead of the python objects themselves.
    be pending, once you have finished writing data to the graph.  Failure to do
    so may leave the shelve index file in an incomplete and corrupted state.
 
+.. attribute:: edges
 
-The object's :attr:`edges` attribute provides an interface to iterating
-over or querying its edge dictionary.
+   provides an interface to iterating
+   over or querying its edge dictionary.
 
 dictGraph
 ---------
 
-:class:`dictGraph` is Pygr's in-memory graph class.  For persistent
-graph storage and query (e.g. stored in a relational database table
-or BerkeleyDB file), see the :class:`Graph` class above.
+.. class:: dictGraph(schema=None, domain=None, range=None)
 
-This class provides all the standard behaviors described above.  The current reference implementation uses standard Python dict objects to store the graph.  All the usual Mapping protocol methods can be used on dictGraph objects (top-level interface, in the examples above graph) and dictEdge objects (second-level interface; in the examples above graph[node]).
+   Pygr's in-memory graph class.  For persistent
+   graph storage and query (e.g. stored in a relational database table
+   or BerkeleyDB file), see the :class:`Graph` class above.
+
+   This class provides all the standard behaviors described above.  The current reference implementation uses standard Python dict objects to store the graph.  All the usual Mapping protocol methods can be used on dictGraph objects (top-level interface, in the examples above graph) and dictEdge objects (second-level interface; in the examples above graph[node]).
 
 Collection
 ----------
+
 Provides a :class:`dict`-like container that can be directly saved as a
-container in pygr.Data.  Ordinary :class:`dict` instances cannot be
-conveniently saved as pygr.Data resources, because they do not allow
-attributes to be saved (which is required for storing pygr.Data information
+container in :mod:`worldbase`.  Ordinary :class:`dict` instances cannot be
+conveniently saved as worldbase resources, because they do not allow
+attributes to be saved (which is required for storing worldbase information
 like _persistent_id and itemClass), and because older versions of Python
 have a bug that affects pickling of dicts with cyclic references (i.e. contents
-that refer to the container).  :class:`pygr.Data.Collection` provides a drop-in
+that refer to the container).  :class:`Collection` provides a drop-in
 substitute that uses :class:`dict` or a Python :class:`shelve`
 as its internal storage, and provides
 a full dict-like interface externally.  It takes several arguments:
 
 .. class:: Collection(saveDict=None, dictClass=dict, fileName=None, mode=None, writeback=False, **kwargs)
 
-*saveDict*, if not None, is the internal mapping to use as our storage.
+   *saveDict*, if not None, is the internal mapping to use as our storage.
 
-*filename*: if provided, is a file path to a shelve (BerkeleyDB) file to
-  store the data in.  NOTE: if you add data to a Collection stored in such a file,
-you *must* call the Collection's :meth:`close()` method to ensure
-that all the data will be saved to the Python shelve.  Otherwise, the
-Python shelve file might be left in an incomplete state.
-NOTE: opening a collection with the *filename* option will cause
-it to use the PicklableShelve or IntShelve class for the Collection.
+   *filename*: if provided, is a file path to a shelve (BerkeleyDB) file to
+   store the data in.  NOTE: if you add data to a Collection stored in such a file,
+   you *must* call the Collection's :meth:`close()` method to ensure
+   that all the data will be saved to the Python shelve.  Otherwise, the
+   Python shelve file might be left in an incomplete state.
+   NOTE: opening a collection with the *filename* option will cause
+   it to use the PicklableShelve or IntShelve class for the Collection.
 
-*mode* is passed to the Python :meth:`shelve.open()` function
-to control whether *filename* is opened in read, write or create mode;
-see the Python :mod:`shelve` module documentation for details.  If *mode*
-is None, it will first try to open the shelve in mode 'r' (read-only),
-but if the file is missing, will open it in mode 'c' (create).
+   *mode* is passed to the Python :meth:`shelve.open()` function
+   to control whether *filename* is opened in read, write or create mode;
+   see the Python :mod:`shelve` module documentation for details.  If *mode*
+   is None, it will first try to open the shelve in mode 'r' (read-only),
+   but if the file is missing, will open it in mode 'c' (create).
 
-*writeback* is passed to the Python :meth:`shelve.open()` function
-to control the saving of data to the shelve.
-See the Python :mod:`shelve` module documentation for details.
-The default *writeback=True* setting can consume large amounts of
-memory if you are writing a lot of data to the shelve.  To avoid
-this problem, use *writeback=False*; note that this means updates
-to the shelve will only be saved when you explicitly set an item
-in the Collection (e.g. ``collection[k] = v``; specifically, if
-``v`` is a mutable object, subsequently changing the contents of
-``v`` will not automatically update the :mod:`shelve`, whereas
-it would be with *writeback=True*).
+   *writeback* is passed to the Python :meth:`shelve.open()` function
+   to control the saving of data to the shelve.
+   See the Python :mod:`shelve` module documentation for details.
+   The default *writeback=True* setting can consume large amounts of
+   memory if you are writing a lot of data to the shelve.  To avoid
+   this problem, use *writeback=False*; note that this means updates
+   to the shelve will only be saved when you explicitly set an item
+   in the Collection (e.g. ``collection[k] = v``; specifically, if
+   ``v`` is a mutable object, subsequently changing the contents of
+   ``v`` will not automatically update the :mod:`shelve`, whereas
+   it would be with *writeback=True*).
 
-*dictClass*: if provided, is the class to use for storage of the dict data.
+   *dictClass*: if provided, is the class to use for storage of the dict data.
 
-For example::
+   *itemClass*: class to use for storing the values in the dictionary.
 
-   ens_genes = pygr.Data.Collection(itemClass=Transcript) # DICTIONARY OF GENES
-   ens_genes[gene_id] = gene
+   For example::
 
-pygr.Data generally needs to know the :class:`itemClass` of items stored
-inside a resource, so that it can add shadow attributes (by adding properties,
-directly to the itemClass).
+      ens_genes = mapping.Collection(itemClass=Transcript) # DICTIONARY OF GENES
+      ens_genes[gene_id] = gene
 
-.. method:: close()
+   Pygr generally needs to know the :class:`itemClass` of items stored
+   inside a resource, so that it can add shadow attributes (by adding properties,
+   directly to the itemClass).
+
+.. method:: Collection.close()
 
    You must call this method to ensure that any data added to the Collection
    will be written to its Python shelve file on disk.
@@ -278,7 +284,7 @@ Python dictionary, providing all the standard methods of the Mapping Protocol.
    *dictClass*: if not None, is the class to use for storage of the dict data.
 
 
-.. method:: close()
+.. method:: Mapping.close()
 
    You must call this method to ensure that any data added to the Mapping
    will be written to its Python shelve file on disk.
@@ -295,12 +301,12 @@ Here's an example usage::
        gene = ens_genes[exon.transcript_id]
        exons = gene_exons.get(gene, [])
        exons.append(exon)
-       gene_exons[gene] = exons # SAVE EXPANDED EXON MAPPING LIST
-   # SAVE TO PYGR DATA, AND CREATE GENES -> EXONS SCHEMA RELATION
-   pygr.Data.Bio.Titus.Test1.GeneExons = gene_exons
-   pygr.Data.schema.Bio.Titus.Test1.GeneExons = \
-        pygr.Data.OneToManyRelation(ens_genes,exon_db,bindAttrs=('exons','gene'))
-   pygr.Data.save() # SAVE ALL PENDING DATA AND SCHEMA TO RESOURCE DATABASE
+       gene_exons[gene] = exons # save expanded exon mapping list
+   # save to worldbase, and create genes -> exons schema relation
+   worldbase.Bio.Titus.Test1.GeneExons = gene_exons
+   worldbase.schema.Bio.Titus.Test1.GeneExons = \
+        metabase.OneToManyRelation(ens_genes,exon_db,bindAttrs=('exons','gene'))
+   worldbase.commit() # save all pending data and schema to metabase
 
 
 PicklableShelve
@@ -328,14 +334,14 @@ it in read-only mode.
    should specify a TWO letter mode string: the first letter to
    indicate what mode the shelve should be initially opened in, and
    the second to indicate the mode to open the shelve during unpickling.
-   e.g. *mode*='nr': to create an empty shelve (writable),
+   e.g. ``mode='nr'``: to create an empty shelve (writable),
    which in future will be re-opened read-only.
 
    Single letter *mode* values such as 'n' (create empty file), 'c'
    (open read-write, but create if missing), and 'w' (open read-write)
    are permitted, but will default to read-only for re-opening the file
    in *future* unpickling operations.  Use a two-letter *mode*
-   if you want the file re-opened in read-write mode; e.g. *mode*='nw'
+   if you want the file re-opened in read-write mode; e.g. ``mode='nw'``
    to create an empty file now and re-open it in read-write mode in future
    unpickling operations.
 
@@ -350,14 +356,14 @@ it in read-only mode.
    attempt to re-open it read-only.
 
 
-.. method:: reopen(mode='r')
+.. method:: PicklableShelve.reopen(mode='r')
 
    Re-open the shelve file in the specified *mode* and also save this
    *mode* as the mode for re-opening the shelve file in future unpickling
    operations.
 
 
-.. method:: close()
+.. method:: PicklableShelve.close()
 
    After saving data into a :class:`PicklableShelve` you must "commit" the transaction
    by calling its :meth:`close()` method, which will ensure that all pending data
@@ -376,7 +382,7 @@ storage, that can accept :class:`int` values as keys.
    mode.
 
 
-.. method:: close()
+.. method:: IntShelve.close()
 
    After saving data into a :class:`IntShelve` you must "commit" the transaction
    by calling its :meth:`close()` method, which will ensure that all pending data

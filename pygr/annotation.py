@@ -230,9 +230,9 @@ saved directly to the sliceDB.''')
         'forces load of all annotation objects into cache'
         return [self.sliceAnnotation(k,sliceInfo,limitCache=False)
                 for (k,sliceInfo) in self.sliceDB.items()]
-    def add_homology(self,seq,search='blast',id=None,idFormat='%s_%d',
-                     autoIncrement=False,maxAnnot=999999,
-                     maxLoss=None,sliceInfo=None,**kwargs):
+    def add_homology(self, seq, search, id=None, idFormat='%s_%d',
+                     autoIncrement=False, maxAnnot=999999,
+                     maxLoss=None, sliceInfo=None, **kwargs):
         'find homology in our seq db and add as annotations'
         try: # ENSURE THAT sliceAttrDict COMPATIBLE WITH OUR TUPLE FORMAT
             if self.sliceAttrDict['id'] != 0:

@@ -13,11 +13,13 @@ Contents:
     :maxdepth: 3
 
     guidelist
+    whatsnew
     reference/sequence    
     reference/seqdb
     reference/annotation
     reference/blast
     reference/cnestedlist
+    reference/worldbase
     reference/metabase
     reference/downloader
     reference/sqlgraph

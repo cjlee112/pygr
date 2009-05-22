@@ -25,7 +25,7 @@ It provides an XMLRPC method :meth:`methodCall` that takes an object name,
 method name, and arguments, and if the call is permitted by its security
 rules, calls the designated method on that object.
 
-.. class:: XMLRPCServerBase(name,host=None,port=5000,logRequests=False)
+.. class:: XMLRPCServerBase(name, host=None, port=5000, logRequests=False)
 
    *name* is an arbitrary string identifier for the XMLRPC server.
 
@@ -40,18 +40,18 @@ rules, calls the designated method on that object.
    a flag determining whether it outputs verbose log information.
 
 
-.. method:: __setitem__(name,obj)
+.. method:: XMLRPCServerBase.__setitem__(name,obj)
 
    Save *obj* as the service called *name* in this XMLRPC server.
    *obj* must have an :attr:`xmlrpc_methods` dictionary whose
    keys are the names of its methods that XMLRPC clients are allowed
    to call.
 
-.. method:: __delitem__(name)
+.. method:: XMLRPCServerBase.__delitem__(name)
 
    Delete the service called *name* in this XMLRPC server.
 
-.. method:: register(url=None,name='index',server=None)
+.. method:: XMLRPCServerBase.register(url=None,name='index',server=None)
 
    Send information describing the services in this XMLRPC server,
    stored by the user on its :attr:`registrationData` attribute,
@@ -68,7 +68,7 @@ rules, calls the designated method on that object.
    by calling its ``getResource.registerServer`` method with the
    same arguments.
 
-.. method:: serve_forever()
+.. method:: XMLRPCServerBase.serve_forever()
 
    Start the XMLRPC server, after detaching it from
    stdin, stdout and stderr; this call will never exit.
@@ -77,18 +77,18 @@ rules, calls the designated method on that object.
 This XMLRPC server provides several interface methods to
 XMLRPC clients contacting it:
 
-.. method:: objectList()
+.. method:: XMLRPCServerBase.objectList()
 
    Returns a dictionary of its server objects, whose keys are their
    names, and whose values are in turn dictionaries whose keys are
    their allowed method names.
 
-.. method:: objectInfo(objname)
+.. method:: XMLRPCServerBase.objectInfo(objname)
 
    Returns a dictionary whose keys are the allowed method names for
    the server object named *objname*.
 
-.. method:: methodCall(objname,methodname,args)
+.. method:: XMLRPCServerBase.methodCall(objname,methodname,args)
 
    Calls the designated method on the named server object, with the
    provided *args*, and returns its result to the XMLRPC client.
@@ -112,13 +112,13 @@ on the server object).
    Makes a connection to the XMLRPC server running on the specified *url*,
    typically consisting of both a host name and port number.
 
-.. method:: __getitem__(name)
+.. method:: XMLRPCClient.__getitem__(name)
 
    Obtain a client object for the server object specified by *name*.
    It will be decorated with the set of methods on the server object
    that are allowed to be accessed by XMLRPC.
 
-.. function:: get_connection(url, name)
+.. function:: XMLRPCClient.get_connection(url, name)
 
    As a convenience, the :mod:`coordinator` module provides a function
    :func:`get_connection` that provides an efficient connection to XMLRPC
