@@ -689,51 +689,6 @@ class Blast_Test(BlastBase):
         blastmap(None, al, queryDB=sp_all_hbb) # all vs all
         al.build() # construct the alignment indexes
 
-    def test_blast_parser(self):
-        "Testing blast parser"
-        blastp_output = open(testutil.datafile('blastp_output.txt'), 'r')
-        results = blast.read_interval_alignment(blastp_output, { 'HBB1_XENLA' :
-                                                                self.prot['HBB1_XENLA']
-                                                               },
-                                                blast.BlastIDIndex(self.prot))[self.prot['HBB1_XENLA']]
-        blastp_output.close()
-        correct =[('HBB1_XENLA', 'HBB0_PAGBO', 0.44055944055944057),
-                  ('HBB1_XENLA', 'HBB1_ANAMI', 0.45323741007194246),
-                  ('HBB1_XENLA', 'HBB1_CYGMA', 0.46715328467153283),
-                  ('HBB1_XENLA', 'HBB1_IGUIG', 0.48951048951048953),
-                  ('HBB1_XENLA', 'HBB1_MOUSE', 0.44444444444444442),
-                  ('HBB1_XENLA', 'HBB1_ONCMY', 0.39436619718309857),
-                  ('HBB1_XENLA', 'HBB1_PAGBO', 0.44055944055944057),
-                  ('HBB1_XENLA', 'HBB1_RAT', 0.45833333333333331),
-                  ('HBB1_XENLA', 'HBB1_SPHPU', 0.4825174825174825),
-                  ('HBB1_XENLA', 'HBB1_TAPTE', 0.47222222222222221),
-                  ('HBB1_XENLA', 'HBB1_TORMA', 0.33333333333333331),
-                  ('HBB1_XENLA', 'HBB1_TORMA', 0.35714285714285715),
-                  ('HBB1_XENLA', 'HBB1_TORMA', 0.37777777777777777),
-                  ('HBB1_XENLA', 'HBB1_TRICR', 0.49305555555555558),
-                  ('HBB1_XENLA', 'HBB1_UROHA', 0.3776223776223776),
-                  ('HBB1_XENLA', 'HBB1_VAREX', 0.5174825174825175),
-                  ('HBB1_XENLA', 'HBB1_XENBO', 0.96551724137931039),
-                  ('HBB1_XENLA', 'HBB1_XENTR', 0.75),
-                  ('HBB1_XENLA', 'MYG_DIDMA', 0.30434782608695654),
-                  ('HBB1_XENLA', 'MYG_DIDMA', 0.33333333333333331),
-                  ('HBB1_XENLA', 'MYG_DIDMA', 0.39130434782608697),
-                  ('HBB1_XENLA', 'MYG_ELEMA', 0.22857142857142856),
-                  ('HBB1_XENLA', 'MYG_ELEMA', 0.33333333333333331),
-                  ('HBB1_XENLA', 'MYG_ELEMA', 0.36363636363636365),
-                  ('HBB1_XENLA', 'MYG_ERIEU', 0.29999999999999999),
-                  ('HBB1_XENLA', 'MYG_ERIEU', 0.30985915492957744),
-                  ('HBB1_XENLA', 'MYG_ERIEU', 0.39130434782608697),
-                  ('HBB1_XENLA', 'MYG_ESCGI', 0.2608695652173913),
-                  ('HBB1_XENLA', 'MYG_ESCGI', 0.33333333333333331),
-                  ('HBB1_XENLA', 'MYG_ESCGI', 0.375),
-                  ('HBB1_XENLA', 'MYG_GALCR', 0.30434782608695654),
-                  ('HBB1_XENLA', 'MYG_GALCR', 0.33333333333333331),
-                  ('HBB1_XENLA', 'MYG_GALCR', 0.39130434782608697)] 
-
-        check_results([results], correct,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
-
 
 class Blastx_Test(BlastBase):
     def test_blastx(self):
@@ -764,32 +719,6 @@ class Blastx_Test(BlastBase):
             raise AssertionError('failed to trap blastp in BlastxMapping')
         except ValueError:
             pass
-
-    def test_blastx_parser(self):
-        "Testing blastx parser"
-        blastx_output = open(testutil.datafile('blastx_output.txt'), 'r')
-        results = blast.blastx_results(blastx_output, {
-            'gi|171854975|dbj|AB364477.1|' :
-            self.dna['gi|171854975|dbj|AB364477.1|'] },
-            blast.BlastIDIndex(self.prot))
-        blastx_output.close()
-        correct = [(146, 146, 438, 0.979), (146, 146, 438, 0.911),
-                   (146, 146, 438, 0.747), (146, 146, 438, 0.664),
-                   (146, 146, 438, 0.623), (146, 146, 438, 0.596),
-                   (145, 145, 435, 0.510), (143, 143, 429, 0.531),
-                   (146, 146, 438, 0.473), (146, 146, 438, 0.473),
-                   (146, 146, 438, 0.486), (144, 144, 432, 0.451),
-                   (145, 145, 435, 0.455), (144, 144, 432, 0.451),
-                   (146, 146, 438, 0.466), (146, 146, 438, 0.459),
-                   (52, 52, 156, 0.442), (90, 90, 270, 0.322),
-                   (23, 23, 69, 0.435), (120, 120, 360, 0.283),
-                   (23, 23, 69, 0.435), (120, 120, 360, 0.258),
-                   (23, 23, 69, 0.435), (120, 120, 360, 0.275),
-                   (23, 23, 69, 0.435), (120, 120, 360, 0.267)]
-
-        check_results(results, correct,
-                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
-                                t[2].pIdentity()))
                 
 
 class Blastn_Test(BlastBase):
@@ -863,6 +792,79 @@ class Blastn_Test(BlastBase):
                         == it.next()
         finally:
             fp.close()
+
+
+class BlastParsers_Test(BlastBase):
+    def test_blastp_parser(self):
+        "Testing blastp parser"
+        blastp_output = open(testutil.datafile('blastp_output.txt'), 'r')
+        results = blast.read_interval_alignment(blastp_output, { 'HBB1_XENLA' :
+                                                                self.prot['HBB1_XENLA']
+                                                               },
+                                                blast.BlastIDIndex(self.prot))[self.prot['HBB1_XENLA']]
+        blastp_output.close()
+        correct =[('HBB1_XENLA', 'HBB0_PAGBO', 0.44055944055944057),
+                  ('HBB1_XENLA', 'HBB1_ANAMI', 0.45323741007194246),
+                  ('HBB1_XENLA', 'HBB1_CYGMA', 0.46715328467153283),
+                  ('HBB1_XENLA', 'HBB1_IGUIG', 0.48951048951048953),
+                  ('HBB1_XENLA', 'HBB1_MOUSE', 0.44444444444444442),
+                  ('HBB1_XENLA', 'HBB1_ONCMY', 0.39436619718309857),
+                  ('HBB1_XENLA', 'HBB1_PAGBO', 0.44055944055944057),
+                  ('HBB1_XENLA', 'HBB1_RAT', 0.45833333333333331),
+                  ('HBB1_XENLA', 'HBB1_SPHPU', 0.4825174825174825),
+                  ('HBB1_XENLA', 'HBB1_TAPTE', 0.47222222222222221),
+                  ('HBB1_XENLA', 'HBB1_TORMA', 0.33333333333333331),
+                  ('HBB1_XENLA', 'HBB1_TORMA', 0.35714285714285715),
+                  ('HBB1_XENLA', 'HBB1_TORMA', 0.37777777777777777),
+                  ('HBB1_XENLA', 'HBB1_TRICR', 0.49305555555555558),
+                  ('HBB1_XENLA', 'HBB1_UROHA', 0.3776223776223776),
+                  ('HBB1_XENLA', 'HBB1_VAREX', 0.5174825174825175),
+                  ('HBB1_XENLA', 'HBB1_XENBO', 0.96551724137931039),
+                  ('HBB1_XENLA', 'HBB1_XENTR', 0.75),
+                  ('HBB1_XENLA', 'MYG_DIDMA', 0.30434782608695654),
+                  ('HBB1_XENLA', 'MYG_DIDMA', 0.33333333333333331),
+                  ('HBB1_XENLA', 'MYG_DIDMA', 0.39130434782608697),
+                  ('HBB1_XENLA', 'MYG_ELEMA', 0.22857142857142856),
+                  ('HBB1_XENLA', 'MYG_ELEMA', 0.33333333333333331),
+                  ('HBB1_XENLA', 'MYG_ELEMA', 0.36363636363636365),
+                  ('HBB1_XENLA', 'MYG_ERIEU', 0.29999999999999999),
+                  ('HBB1_XENLA', 'MYG_ERIEU', 0.30985915492957744),
+                  ('HBB1_XENLA', 'MYG_ERIEU', 0.39130434782608697),
+                  ('HBB1_XENLA', 'MYG_ESCGI', 0.2608695652173913),
+                  ('HBB1_XENLA', 'MYG_ESCGI', 0.33333333333333331),
+                  ('HBB1_XENLA', 'MYG_ESCGI', 0.375),
+                  ('HBB1_XENLA', 'MYG_GALCR', 0.30434782608695654),
+                  ('HBB1_XENLA', 'MYG_GALCR', 0.33333333333333331),
+                  ('HBB1_XENLA', 'MYG_GALCR', 0.39130434782608697)]
+
+        check_results([results], correct,
+                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+
+    def test_blastx_parser(self):
+        "Testing blastx parser"
+        blastx_output = open(testutil.datafile('blastx_output.txt'), 'r')
+        results = blast.blastx_results(blastx_output, {
+            'gi|171854975|dbj|AB364477.1|' :
+            self.dna['gi|171854975|dbj|AB364477.1|'] },
+            blast.BlastIDIndex(self.prot))
+        blastx_output.close()
+        correct = [(146, 146, 438, 0.979), (146, 146, 438, 0.911),
+                   (146, 146, 438, 0.747), (146, 146, 438, 0.664),
+                   (146, 146, 438, 0.623), (146, 146, 438, 0.596),
+                   (145, 145, 435, 0.510), (143, 143, 429, 0.531),
+                   (146, 146, 438, 0.473), (146, 146, 438, 0.473),
+                   (146, 146, 438, 0.486), (144, 144, 432, 0.451),
+                   (145, 145, 435, 0.455), (144, 144, 432, 0.451),
+                   (146, 146, 438, 0.466), (146, 146, 438, 0.459),
+                   (52, 52, 156, 0.442), (90, 90, 270, 0.322),
+                   (23, 23, 69, 0.435), (120, 120, 360, 0.283),
+                   (23, 23, 69, 0.435), (120, 120, 360, 0.258),
+                   (23, 23, 69, 0.435), (120, 120, 360, 0.275),
+                   (23, 23, 69, 0.435), (120, 120, 360, 0.267)]
+
+        check_results(results, correct,
+                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
+                                t[2].pIdentity()))
 
 
 # not used currently
