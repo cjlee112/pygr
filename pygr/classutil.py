@@ -207,11 +207,8 @@ def search_dirs_for_file(filepath, pathlist=()):
                   %(filepath,pathlist))
 
 def default_tmp_path():
-    'find out default location for temp files, e.g. /tmp'
-    for tmp in ['/tmp','/usr/tmp']: # RETURN THE 1ST WRITABLE LOCATION
-        if os.access(tmp,os.W_OK):
-            return tmp
-    return os.path.dirname(os.tempnam()) # GRR. ASK PYTHON WHERE tmp IS...
+    import tempfile
+    return tempfile.gettempdir()
 
 def report_exception():
     'print string message from exception to stderr'

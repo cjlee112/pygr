@@ -659,8 +659,8 @@ class Coordinator(object):
     On the server all output is logged to name.log,
     and successfully completed task IDs are stored in name.success,
     and error task IDs are stored in name.error
-    On the clients all output is logged to /usr/tmp/name_#.log.
-    """
+    On the clients all output is logged to the file name_#.log in the user's
+    and/or system-specific temporary directory."""
     xmlrpc_methods={'start_processors':0,'register_client':0,'unregister_client':0,
                     'report_success':0,'report_error':0,'next':0,
                     'get_status':0,'set_max_clients':0,'stop_client':0}
@@ -736,6 +736,7 @@ class Coordinator(object):
 
     def start_client(self,host):
         "start a processor on a client node"
+        import tempfile
         if len(self.clients)>=self.ncpu_limit:
             print >>sys.stderr,'start_client: blocked, CPU limit', \
                   len(self.clients),self.ncpu_limit
@@ -764,7 +765,7 @@ class Coordinator(object):
             sshopts=self.hosts[host].sshopts # GET sshopts VIA XMLRPC
         except AttributeError:
             sshopts=''
-        logfile='/usr/tmp/%s_%d.log' % (self.name,self.iclient)
+        logfile=os.path.join(tempfile.gettempdir(), '%s_%d.log' % (self.name, self.iclient))
         # PASS OUR KWARGS ON TO THE CLIENT PROCESSOR
         kwargs=' '.join(['--%s=%s'%(k,v) for k,v in self.kwargs.items()])
         cmd='cd %s;%s %s --url=http://%s:%d --rc_url=%s --logfile=%s %s %s' \
