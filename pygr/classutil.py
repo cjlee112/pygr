@@ -117,7 +117,16 @@ except ImportError:
                     cmd = '(%s) >& %s' % (cmd, mkarg(self._stderr_path))
                 else:
                     cmd = cmd + ' 2> ' + mkarg(self._stderr_path)
+            try:
+                workDir = self.kwargs['cwd']
+            except KeyError:
+                workDir = None
+            if workDir:
+                oldwd = os.getcwd()
+                os.chdir(workDir)
             returncode = os.system(cmd)
+            if workDir:
+                os.chdir(oldwd)
             self._close_file('stdin')
             self._rewind_for_reading(self.stdout)
             self._rewind_for_reading(self.stderr)
