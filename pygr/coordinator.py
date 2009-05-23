@@ -167,7 +167,7 @@ def detach_as_demon_process(self):
     "standard UNIX technique c/o Jurgen Hermann's Python Cookbook recipe"
     # CREATE AN APPROPRIATE ERRORLOG FILEPATH
     if not hasattr(self,'errlog') or self.errlog is False:
-        self.errlog=os.getcwd()+'/'+self.name+'.log'
+        self.errlog = os.path.join(os.getcwd(), self.name + '.log')
     try_fork() # DISCONNECT FROM PARENT PROCESS
     #os.chdir("/")
     os.setsid() # CREATE A NEW SESSION WITH NO CONTROLLING TERMINAL
@@ -176,7 +176,7 @@ def detach_as_demon_process(self):
     sys.stdout=file(self.errlog,'a') # DEMONIZE BY REDIRECTING ALL OUTPUT TO LOG
     sys.stderr=sys.stdout
 
-def serve_forever(self,demonize=True):
+def serve_forever(self):
     'start the service -- this will run forever'
     import datetime
     print >>sys.stderr,"START_SERVER:%s %s" %(self.name,datetime.datetime.
