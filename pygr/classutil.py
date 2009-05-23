@@ -107,6 +107,11 @@ except ImportError:
         def wait(self):
             self._rewind_for_reading(self.stdin)
             args = map(mkarg, self.args[0])
+            try: # works on unix & cygwin but not normal windows
+                workDir = self.kwargs['cwd'] # directory to run child in
+                args = ['(cd', mkarg(workDir), ';'] + args + [')']
+            except KeyError:
+                pass
             if self.args[3]: # redirect stdin
                 args += ['<', mkarg(self._stdin_path)]
             if self.args[4]: # redirect stdout
@@ -114,19 +119,10 @@ except ImportError:
             cmd = ' '.join(args)
             if self.args[5]: # redirect stderr
                 if CSH_REDIRECT:
-                    cmd = '(%s) >& %s' % (cmd, mkarg(self._stderr_path))
+                    cmd = '( %s ) >& %s' % (cmd, mkarg(self._stderr_path))
                 else:
                     cmd = cmd + ' 2> ' + mkarg(self._stderr_path)
-            try:
-                workDir = self.kwargs['cwd']
-            except KeyError:
-                workDir = None
-            if workDir:
-                oldwd = os.getcwd()
-                os.chdir(workDir)
             returncode = os.system(cmd)
-            if workDir:
-                os.chdir(oldwd)
             self._close_file('stdin')
             self._rewind_for_reading(self.stdout)
             self._rewind_for_reading(self.stderr)
