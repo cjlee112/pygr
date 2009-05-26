@@ -3671,11 +3671,11 @@ The expression m[db['MYG_CHICK']] obtains the "edge information" for the graph r
   filepath of the FASTA file associated with the BlastDB.
   The default value of this attribute on the \class{BlastDB} class is 
 \begin{verbatim}
-['FILEPATH',os.getcwd,os.path.expanduser,pygr.classutil.default_tmp_path]
+['FILEPATH',os.getcwd,os.path.expanduser,tempfile.gettempdir()]
 \end{verbatim}
 This corresponds to: self.filepath, current directory, the user's HOME
-directory, and the default temporary directory used by the Python 
-function \method{os.tempnam}().
+directory, and the first user- and/or system-specific temporary directory returned
+by the Python function \method{tempfile.gettempdir}().
 \end{funcdesc}
 
 Useful methods:

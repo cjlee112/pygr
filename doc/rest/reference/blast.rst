@@ -140,11 +140,11 @@ Use :class:`BlastMapping` for the following BLAST modes:
      filepath of the FASTA file associated with the BlastDB.
      The default value of this attribute is::
 
-        ['FILEPATH',os.getcwd,os.path.expanduser,pygr.classutil.default_tmp_path]
+        ['FILEPATH',os.getcwd,os.path.expanduser,tempfile.gettempdir()]
 
      This corresponds to: self.filepath, current directory, the user's HOME
-     directory, and the default temporary directory used by the Python
-     function :meth:`os.tempnam()`.
+     directory, and the first user- and/or system-specific temporary directory
+     returned by the Python function :meth:`tempfile.gettempdir()`.
 
 
 Useful methods:

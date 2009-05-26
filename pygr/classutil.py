@@ -206,10 +206,6 @@ def search_dirs_for_file(filepath, pathlist=()):
     raise IOError('unable to open %s from any location in %s'
                   %(filepath,pathlist))
 
-def default_tmp_path():
-    import tempfile
-    return tempfile.gettempdir()
-
 def report_exception():
     'print string message from exception to stderr'
     import traceback

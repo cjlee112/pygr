@@ -171,9 +171,10 @@ class BlastMapping(object):
             return self.blastIndexPath
         except AttributeError:
             return self.filepath
-    # DEFAULT: BUILD INDEX FILES IN self.filepath . HOME OR /tmp 
+    # DEFAULT: BUILD INDEX FILES IN self.filepath . HOME OR APPROPRIATE
+    # USER-/SYSTEM-SPECIFIC TEMPORARY DIRECTORY
     blastIndexDirs = ['FILEPATH',os.getcwd,os.path.expanduser,
-                      classutil.default_tmp_path]
+                      tempfile.gettempdir()]
     def blast_index_paths(self):
         'iterate over possible blast index directories'
         try: # 1ST TRY ACTUAL SAVED LOCATION IF ANY
