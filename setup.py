@@ -41,7 +41,7 @@ Operating System :: POSIX :: Linux
 Operating System :: Unix
 Programming Language :: Python
 Topic :: Scientific/Engineering
-Topic :: Scientific/Engineering :: Bioinformatics
+Topic :: Scientific/Engineering :: Bio-Informatics
 """
 
 # split into lines and filter empty ones
