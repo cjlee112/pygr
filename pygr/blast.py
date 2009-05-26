@@ -452,9 +452,7 @@ class BlastxMapping(BlastMapping):
     consolidates all the hits into a single alignment object).
     BlastxMapping does this because blastx may find multiple ORFs
     in the query sequence; due to this complication it is simplest
-    to simply return the hits one at a time exactly as blastx reports them.
-    Running a query on this class returns a BlastxResults object
-    which provides an interface to iterate through the hits one by one.'''
+    to simply return the hits one at a time exactly as blastx reports them.'''
     def __call__(self, seq, blastpath='blastall',
                  blastprog=None, expmax=0.001, maxseq=None, verbose=None,
                  opts='', xformSrc=True, xformDest=False, **kwargs):

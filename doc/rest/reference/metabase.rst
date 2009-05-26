@@ -351,13 +351,65 @@ XMLRPC Resource Server
    :class:`coordinator.XMLRPCServerBase` constructor.
    For details see that section below.
 
-   DEPRECATED
-   Once you create a server using this method, you start it using its
-   :meth:`serve_forever()` method.  If the server does not provide its
+   If the server does not provide its
    own index (i.e. *withIndex=False*), then you should first register
    it to your local metabase server (so that clients of that server
    will know about the new services your new server is providing), by
-   calling its :meth:`register()` method.
+   calling its :meth:`ResourceServer.register()` method.
+
+.. method:: ResourceServer.register(url=None, name='index', server=None)
+
+   *server* if not None, must be a :class:`XMLRPCMetabase` or 
+   :class:`MySQLMetabase` object representing a metabase server that
+   you want to register with.
+
+   *url* if not None, specifies a XMLRPC service (served by a
+   :class:`ResourceServer` running on that URL) to which you want to
+   register.
+
+   If both are None, it will try to register via :mod:`worldbase`,
+   to the first server in your WORLDBASEPATH that accepts the 
+   registration.
+
+   *name* provides the name you want to register as.
+
+.. method:: ResourceServer.serve_forever(demonize=True)
+
+   Use this method to start the XMLRPC service.
+
+   *demonize=True* will cause the process to detach as a background
+   demon.  Use this mode for a non-interactive Python process.
+
+   *demonize=False* will run the server as a Python thread,
+   so that you can continue to use your interactive Python prompt
+   *while the server is running*.  This will *not* work if Python
+   was run in non-interactive mode (the server will immediately die).
+
+   To make it easy to manage your
+   XMLRPC server using the command line, we recommend that you
+   run it in an interactive Python interpreter session as follows:
+
+   * in the interactive shell, start Python within
+     the ``screen`` utility::
+
+        screen python
+
+   * in the interactive Python shell, import whatever script(s) you
+     need to create your :class:`ResourceServer` object.
+
+   * start the server in interactive mode::
+
+        myserver.serve_forever(False)
+
+     This runs the server in a separate Python thread, immediately
+     returning control to your interactive Python prompt.
+
+   * Detach from your session using the ``screen`` key sequence **Ctrl-A D**
+
+   * At any later time use the ``screen -r`` command to re-attach to
+     this interactive session, if you wish to execute Python commands
+     altering the contents of the server, reloading it etc.  This will
+     work even if you have logged out in the meantime.
 
 ResourceCache
 -------------

@@ -12,8 +12,11 @@ multi-genome alignment data.
 
 import os, sys, stat
 from shutil import copyfile
-from distutils.core import setup, Extension
-from distutils.command.build import build
+try:
+    from setuptools import setup, Extension
+except ImportError:
+    print 'Setuptools not imported, falling back to distutils'
+    from distutils.core import setup, Extension
 
 def error(msg):
     "Fatal errors"
@@ -44,17 +47,27 @@ Topic :: Scientific/Engineering :: Bioinformatics
 # split into lines and filter empty ones
 CLASSIFIERS = filter(None, CLASSIFIERS.splitlines() )
 
+# Setuptools should handle all this automatically
+if sys.modules.has_key('setuptools'):
+    try:
+        import pkg_resources
+        pkg_resources.require('Pyrex>=0.9.8')
+        ext = 'pyx'
+    except pkg_resources.DistributionNotFound:
+        ext = 'c'
+    cmdclass = { }
+else:
 # if pyrex is not present try compiling the C files
-try:
-    from Pyrex.Compiler.Version import version as PYREX_VERSION
-    from Pyrex.Distutils import build_ext
-    if PYREX_VERSION < "0.9.8":
-        error ( "pyrex version >=0.9.8 required, found %s" % PYREX_VERSION )
-    ext = 'pyx'
-    cmdclass = { 'build_ext': build_ext }
-except ImportError, exc:
-    ext = 'c'
-    cmdclass = {}
+    try:
+        from Pyrex.Compiler.Version import version as PYREX_VERSION
+        from Pyrex.Distutils import build_ext
+        if PYREX_VERSION < "0.9.8":
+            error ( "pyrex version >=0.9.8 required, found %s" % PYREX_VERSION )
+        ext = 'pyx'
+        cmdclass = { 'build_ext': build_ext }
+    except ImportError, exc:
+        ext = 'c'
+        cmdclass = {}
 
 # extension sources 
 seqfmt_src = [ os.path.join('pygr', 'seqfmt.%s' % ext) ]
@@ -68,10 +81,12 @@ def main():
     setup(
         name = PYGR_NAME ,
         version= PYGR_VERSION,
-        description = __doc__,
+        description = 'Pygr, a Python graph-database toolkit oriented primarily on bioinformatics applications',
+        long_description = __doc__,
         author = "Christopher Lee",
         author_email='leec@chem.ucla.edu',
-        url = 'http://sourceforge.net/projects/pygr',
+        url = 'http://code.google.com/p/pygr/',
+        license = 'New BSD License',
         classifiers = CLASSIFIERS,
 
         packages = [ 'pygr', 'pygr.apps' ],
