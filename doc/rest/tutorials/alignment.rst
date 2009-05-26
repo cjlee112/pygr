@@ -4,16 +4,28 @@ Storing Alignments
 Alignment Basics
 ^^^^^^^^^^^^^^^^
 
-Pygr multiple alignment objects can be treated as mappings of sequence intervals onto sequence intervals.  Here is a very simple example, showing basic operations for constructing an alignment::
+Pygr multiple alignment objects can be treated as mappings of sequence 
+intervals onto sequence intervals.  Here is a very simple example, 
+showing basic operations for constructing an alignment::
 
    >>> from pygr import cnestedlist
-   >>> m2 = cnestedlist.NLMSA('myo',mode='memory') # an empty alignment, in-memory
-   >>> m2 += s # add sequence s to the alignment
+   >>>
+   >>> # build an empty alignment, in-memory
+   >>> m2 = cnestedlist.NLMSA('myo',mode='memory') 
+   >>>
+   >>> # add sequence s to the alignment
+   >>> m2 += s 
    >>> ival = s[100:160] # AN INTERVAL OF s
-   >>> m2[ival] += db['MYG_CHICK'][83:143] # add an edge mapping interval s -> an interval of MYG_CHICK
-   >>> m2[ival] += db['MYG_CANFA'][45:105] # add an additional edge
-   >>> m2.build() # done constructing the alignment.  Initialize for query.
-   >>> for s2 in m2[ival[:10]]: # get aligned seqs for the first 10 letters of ival...
+   >>>
+   >>> # add an edge mapping interval s -> an interval of MYG_CHICK
+   >>> m2[ival] += db['MYG_CHICK'][83:143] 
+   >>> m2[ival] += db['MYG_CANFA'][45:105] 
+   >>>
+   >>> # done constructing the alignment.  Initialize for query.
+   >>> m2.build() 
+   >>>
+   >>> # get aligned seqs for the first 10 letters of ival...
+   >>> for s2 in m2[ival[:10]]: 
    ...     print repr(s2)
    ...
    MYG_CHICK[83:93]
