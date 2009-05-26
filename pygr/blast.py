@@ -433,6 +433,10 @@ def blastx_results(ofile, srcDB, destDB, xformSrc=True, xformDest=False,
     l = []
     for t in generate_tblastn_ivals(alignedIvals, xformSrc, xformDest):
         if isinstance(t, CoordsGroupStart):
+            for slice in l:
+                yield slice
+                
+            l = []
             al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
         elif isinstance(t, CoordsGroupEnd): # process all ivals in this hit
             al.build()
@@ -441,7 +445,9 @@ def blastx_results(ofile, srcDB, destDB, xformSrc=True, xformDest=False,
             al += t[0]
             al[t[0]][t[1]] = None # save their alignment
             queryORF = t[0].path
-    return l
+
+    for slice in l:
+        yield slice
 
 class BlastxMapping(BlastMapping):
     '''use this mapping class for blastx or tblastx queries.
