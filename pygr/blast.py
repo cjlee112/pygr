@@ -68,7 +68,6 @@ def process_blast(cmd, seq, seqDB, al=None, seqString=None, queryDB=None,
         if queryDB is not None:
             al = read_interval_alignment(p.stdout, queryDB, seqDB, al, **kwargs)
         else:
-            print kwargs
             al = read_interval_alignment(p.stdout, {seqID:seq}, seqDB, al,
                                          **kwargs)
     finally:

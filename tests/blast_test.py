@@ -4,11 +4,19 @@ from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import worldbase
 from pygr import sequence, cnestedlist, seqdb, blast, logger
 
-def check_results(results, correct, formatter, delta=0.01):
+def check_results(results, correct, formatter, delta=0.01,
+                  reformatCorrect=False):
     found = []
     for result in results:
         for t in result.edges():
             found.append(formatter(t))
+
+    if reformatCorrect: # reformat these data too
+        found2 = []
+        for result in correct:
+            for t in result.edges():
+                found2.append(formatter(t))
+        correct = found2
 
     # order it identically
     correct.sort()
@@ -678,6 +686,17 @@ class Blast_Test(BlastBase):
 
         check_results(results, correct,
                       lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+
+        # redo the search in single sequence blast mode
+        al2 = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
+                               bidirectional=False)
+        for seq in self.prot.values():
+            blastmap(seq, al2) # all vs all, one by one
+        al2.build() # construct the alignment indexes
+        results2 = [al2[seq] for seq in self.prot.values()]
+        check_results(results, results2,
+                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()),
+                      reformatCorrect=True)
     def test_multiblast_long(self):
         "testing multi sequence blast with long db to assess thread safety, see issue 79"
         longerFile = testutil.datafile('sp_all_hbb')
