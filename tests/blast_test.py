@@ -798,11 +798,13 @@ class BlastParsers_Test(BlastBase):
     def test_blastp_parser(self):
         "Testing blastp parser"
         blastp_output = open(testutil.datafile('blastp_output.txt'), 'r')
-        results = blast.read_interval_alignment(blastp_output, { 'HBB1_XENLA' :
+        try:
+            results = blast.read_interval_alignment(blastp_output, { 'HBB1_XENLA' :
                                                                 self.prot['HBB1_XENLA']
                                                                },
                                                 blast.BlastIDIndex(self.prot))[self.prot['HBB1_XENLA']]
-        blastp_output.close()
+        finally:
+            blastp_output.close()
         correct =[('HBB1_XENLA', 'HBB0_PAGBO', 0.44055944055944057),
                   ('HBB1_XENLA', 'HBB1_ANAMI', 0.45323741007194246),
                   ('HBB1_XENLA', 'HBB1_CYGMA', 0.46715328467153283),
@@ -843,11 +845,13 @@ class BlastParsers_Test(BlastBase):
     def test_multiblast_parser(self):
         "Testing multiblast parser"
         multiblast_output = open(testutil.datafile('multiblast_output.txt'), 'r')
-        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
-                               bidirectional=False)
-        al = blast.read_interval_alignment(multiblast_output, self.prot,
-                                     blast.BlastIDIndex(self.prot), al)
-        multiblast_output.close()
+        try:
+            al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
+                                   bidirectional=False)
+            al = blast.read_interval_alignment(multiblast_output, self.prot,
+                                               blast.BlastIDIndex(self.prot), al)
+        finally:
+            multiblast_output.close()
         al.build()
         results = [al[seq] for seq in self.prot.values()]
         correct = [('HBB0_PAGBO', 'HBB1_ANAMI', 0.66896551724137931),
@@ -1442,21 +1446,25 @@ class BlastParsers_Test(BlastBase):
         sp_all_hbb = seqdb.SequenceFileDB(longerFile)
 
         multiblast_output = open(testutil.datafile('multiblast_long_output.txt'), 'r')
-        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
-                               bidirectional=False)
-        al = blast.read_interval_alignment(multiblast_output, sp_all_hbb,
-                                           blast.BlastIDIndex(self.prot), al)
-        multiblast_output.close()
+        try:
+            al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
+                                   bidirectional=False)
+            al = blast.read_interval_alignment(multiblast_output, sp_all_hbb,
+                                               blast.BlastIDIndex(self.prot), al)
+        finally:
+            multiblast_output.close()
         al.build()
 
     def test_blastx_parser(self):
         "Testing blastx parser"
         blastx_output = open(testutil.datafile('blastx_output.txt'), 'r')
-        results = blast.blastx_results(blastx_output, {
-            'gi|171854975|dbj|AB364477.1|' :
-            self.dna['gi|171854975|dbj|AB364477.1|'] },
-            blast.BlastIDIndex(self.prot))
-        blastx_output.close()
+        try:
+            results = blast.blastx_results(blastx_output, {
+                'gi|171854975|dbj|AB364477.1|' :
+                self.dna['gi|171854975|dbj|AB364477.1|'] },
+                                           blast.BlastIDIndex(self.prot))
+        finally:
+            blastx_output.close()
         correct = [(146, 146, 438, 0.979), (146, 146, 438, 0.911),
                    (146, 146, 438, 0.747), (146, 146, 438, 0.664),
                    (146, 146, 438, 0.623), (146, 146, 438, 0.596),
@@ -1478,13 +1486,15 @@ class BlastParsers_Test(BlastBase):
     def test_tblastn_parser(self):
         "Testing tblastn parser"
         tblastn_output = open(testutil.datafile('tblastn_output.txt'), 'r')
-        result = blast.read_interval_alignment(tblastn_output, { 'HBB1_XENLA' :
-                                                                self.prot['HBB1_XENLA']
-                                                                },
-                                               blast.BlastIDIndex(self.dna),
-                                               groupIntervals=blast.generate_tblastn_ivals
-                                              )[self.prot['HBB1_XENLA']]
-        tblastn_output.close()
+        try:
+            result = blast.read_interval_alignment(tblastn_output, { 'HBB1_XENLA' :
+                                                                     self.prot['HBB1_XENLA']
+                                                                     },
+                                                   blast.BlastIDIndex(self.dna),
+                                                   groupIntervals=blast.generate_tblastn_ivals
+                                                   )[self.prot['HBB1_XENLA']]
+        finally:
+            tblastn_output.close()
         src, dest, edge = iter(result.edges()).next()
         
         self.assertEqual(str(src),
