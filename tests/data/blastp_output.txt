@@ -1,0 +1,483 @@
+BLASTP 2.2.20 [Feb-08-2009]
+
+
+Reference: Altschul, Stephen F., Thomas L. Madden, Alejandro A. Schaffer, 
+Jinghui Zhang, Zheng Zhang, Webb Miller, and David J. Lipman (1997), 
+"Gapped BLAST and PSI-BLAST: a new generation of protein database search
+programs",  Nucleic Acids Res. 25:3389-3402.
+
+Reference for compositional score matrix adjustment: Altschul, Stephen F., 
+John C. Wootton, E. Michael Gertz, Richa Agarwala, Aleksandr Morgulis,
+Alejandro A. Schaffer, and Yi-Kuo Yu (2005) "Protein database searches
+using compositionally adjusted substitution matrices", FEBS J. 272:5101-5109.
+
+Query= HBB1_XENLA
+         (145 letters)
+
+Database: data/sp_hbb1
+           24 sequences; 4549 total letters
+
+Searching..................................................done
+
+
+
+                                                                 Score    E
+Sequences producing significant alignments:                      (bits) Value
+
+HBB1_XENLA Hemoglobin beta-1 chain (Major).                           303   2e-86
+HBB1_XENBO Hemoglobin beta-1 chain (Major).                           295   4e-84
+HBB1_XENTR Hemoglobin beta-1 chain.                                   237   1e-66
+HBB1_IGUIG Hemoglobin beta-1 chain.                                   152   7e-41
+HBB1_VAREX Hemoglobin beta-I chain.                                   150   2e-40
+HBB1_TRICR Hemoglobin beta-1 chain (Major).                           147   1e-39
+HBB1_RAT Hemoglobin beta chain, major-form.                           145   4e-39
+HBB1_MOUSE Hemoglobin beta-1 chain (B1) (Major).                      143   3e-38
+HBB1_SPHPU Hemoglobin beta-1 chain.                                   142   4e-38
+HBB1_TAPTE Hemoglobin beta-1 chain (Major).                           137   2e-36
+HBB0_PAGBO Hemoglobin beta-0 chain (HB 0).                            133   3e-35
+HBB1_ANAMI Hemoglobin beta-1 chain.                                   131   1e-34
+HBB1_PAGBO Hemoglobin beta-1 chain (HB 1).                            131   1e-34
+HBB1_CYGMA Hemoglobin beta-1 chain.                                   129   4e-34
+HBB1_ONCMY Hemoglobin beta-I chain.                                   124   2e-32
+HBB1_UROHA Hemoglobin beta-1 chain (Fragments).                       114   1e-29
+HBB1_TORMA Hemoglobin beta-1 chain.                                    84   1e-20
+MYG_GALCR Myoglobin.                                                   52   8e-11
+MYG_ERIEU Myoglobin.                                                   52   9e-11
+MYG_DIDMA Myoglobin.                                                   50   4e-10
+MYG_ESCGI Myoglobin.                                                   41   2e-07
+MYG_ELEMA Myoglobin.                                                   39   1e-06
+
+>HBB1_XENLA Hemoglobin beta-1 chain (Major).
+          Length = 145
+
+ Score =  303 bits (775), Expect = 2e-86,   Method: Compositional matrix adjust.
+ Identities = 145/145 (100%), Positives = 145/145 (100%)
+
+Query: 1   GLTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVA 60
+           GLTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVA
+Sbjct: 1   GLTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVA 60
+
+Query: 61  AHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEE 120
+           AHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEE
+Sbjct: 61  AHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEE 120
+
+Query: 121 YTPELHAAYEHLFDAIADALGKGYH 145
+           YTPELHAAYEHLFDAIADALGKGYH
+Sbjct: 121 YTPELHAAYEHLFDAIADALGKGYH 145
+
+
+>HBB1_XENBO Hemoglobin beta-1 chain (Major).
+          Length = 145
+
+ Score =  295 bits (755), Expect = 4e-84,   Method: Compositional matrix adjust.
+ Identities = 140/145 (96%), Positives = 143/145 (98%)
+
+Query: 1   GLTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVA 60
+           GLTAHDRQLINSTWGK+CAKTIG+EALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVA
+Sbjct: 1   GLTAHDRQLINSTWGKVCAKTIGKEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVA 60
+
+Query: 61  AHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEE 120
+           AHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDP NFKRFGGCLSI+LAR FHEE
+Sbjct: 61  AHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPCNFKRFGGCLSISLARQFHEE 120
+
+Query: 121 YTPELHAAYEHLFDAIADALGKGYH 145
+           YTPELHAAYEHLFDAIADALGKGYH
+Sbjct: 121 YTPELHAAYEHLFDAIADALGKGYH 145
+
+
+>HBB1_XENTR Hemoglobin beta-1 chain.
+          Length = 146
+
+ Score =  237 bits (605), Expect = 1e-66,   Method: Compositional matrix adjust.
+ Identities = 108/144 (75%), Positives = 125/144 (86%)
+
+Query: 2   LTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAA 61
+           LTA +RQLI  TW K+CAKT+G++ALG +L+TYPWTQRYFSSFGNL+S +A+FHN AVA 
+Sbjct: 3   LTAKERQLITGTWSKICAKTLGKQALGSMLYTYPWTQRYFSSFGNLSSIEAIFHNAAVAT 62
+
+Query: 62  HGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEY 121
+           HGEKV+TSIGEAIKHMDDIKGYYAQLSKYHSETLHVDP NFKRF  C  I++A+   E++
+Sbjct: 63  HGEKVLTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPYNFKRFCSCTIISMAQTLQEDF 122
+
+Query: 122 TPELHAAYEHLFDAIADALGKGYH 145
+           TPEL AA+E LF AIADALGKGYH
+Sbjct: 123 TPELQAAFEKLFAAIADALGKGYH 146
+
+
+>HBB1_IGUIG Hemoglobin beta-1 chain.
+          Length = 146
+
+ Score =  152 bits (383), Expect = 7e-41,   Method: Compositional matrix adjust.
+ Identities = 70/143 (48%), Positives = 98/143 (68%)
+
+Query: 3   TAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAH 62
+           TA ++QLI   WGK+    IG E L  LL  YPWTQR+F  FGNL++A A+  N  V AH
+Sbjct: 4   TAEEKQLITQVWGKIDVAQIGGETLACLLVVYPWTQRFFPDFGNLSNAAAICGNAKVKAH 63
+
+Query: 63  GEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYT 122
+           G+KV+TS G+A+K++D+IK  +A+LS+ H + LHVDP+NF+  G  +   LA HF +++T
+Sbjct: 64  GKKVLTSFGDAVKNLDNIKDTFAKLSELHCDKLHVDPVNFRLLGNVMITRLAAHFGKDFT 123
+
+Query: 123 PELHAAYEHLFDAIADALGKGYH 145
+           P  HAA++ L  A+A AL + YH
+Sbjct: 124 PACHAAFQKLTGAVAHALARRYH 146
+
+
+>HBB1_VAREX Hemoglobin beta-I chain.
+          Length = 146
+
+ Score =  150 bits (379), Expect = 2e-40,   Method: Compositional matrix adjust.
+ Identities = 74/143 (51%), Positives = 97/143 (67%)
+
+Query: 3   TAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAH 62
+           TA ++QLI S WGK+    IG E L  LL  YPWTQR FS FGNL+S  A+  N  V AH
+Sbjct: 4   TAEEKQLICSLWGKIDVGLIGGETLAGLLVIYPWTQRQFSHFGNLSSPTAIAGNPRVKAH 63
+
+Query: 63  GEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYT 122
+           G+KV+TS G+AIK++D+IK  +A+LS+ H + LHVDP NFK  G  L I LA H  +E+T
+Sbjct: 64  GKKVLTSFGDAIKNLDNIKDTFAKLSELHCDKLHVDPTNFKLLGNVLVIVLADHHGKEFT 123
+
+Query: 123 PELHAAYEHLFDAIADALGKGYH 145
+           P  HAAY+ L + ++ +L + YH
+Sbjct: 124 PAHHAAYQKLVNVVSHSLARRYH 146
+
+
+>HBB1_TRICR Hemoglobin beta-1 chain (Major).
+          Length = 145
+
+ Score =  147 bits (372), Expect = 1e-39,   Method: Compositional matrix adjust.
+ Identities = 71/144 (49%), Positives = 93/144 (64%)
+
+Query: 2   LTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAA 61
+            T  + Q I+   GK+    +G EALGRL+   PWT+RYF SFG+L+SA+A+ HN  VA+
+Sbjct: 2   FTNDESQHIHDVCGKIPVDQVGAEALGRLILVNPWTRRYFKSFGDLSSAEAIQHNPKVAS 61
+
+Query: 62  HGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEY 121
+           HG KV+ SI EA+KH+DD+K YYA LS  H + L+VDP NFK FGG +SI    H   +Y
+Sbjct: 62  HGAKVMHSIAEAVKHLDDLKAYYADLSTIHCKKLYVDPANFKLFGGIVSIVTGMHLGTDY 121
+
+Query: 122 TPELHAAYEHLFDAIADALGKGYH 145
+           T +  AA+E     +  AL  GYH
+Sbjct: 122 TAQKQAAFEKFLHHVEAALATGYH 145
+
+
+>HBB1_RAT Hemoglobin beta chain, major-form.
+          Length = 146
+
+ Score =  145 bits (367), Expect = 4e-39,   Method: Compositional matrix adjust.
+ Identities = 66/144 (45%), Positives = 93/144 (64%)
+
+Query: 2   LTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAA 61
+           LT  ++  +N  WGK+    +G EALGRLL  YPWTQRYF SFG+L+SA A+  N  V A
+Sbjct: 3   LTDAEKAAVNGLWGKVNPDDVGGEALGRLLVVYPWTQRYFDSFGDLSSASAIMGNPKVKA 62
+
+Query: 62  HGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEY 121
+           HG+KV+ +  + +KH+D++KG +A LS+ H + LHVDP NF+  G  + I L  H  +E+
+Sbjct: 63  HGKKVINAFNDGLKHLDNLKGTFAHLSELHCDKLHVDPENFRLLGNMIVIVLGHHLGKEF 122
+
+Query: 122 TPELHAAYEHLFDAIADALGKGYH 145
+           TP   AA++ +   +A AL   YH
+Sbjct: 123 TPCAQAAFQKVVAGVASALAHKYH 146
+
+
+>HBB1_MOUSE Hemoglobin beta-1 chain (B1) (Major).
+          Length = 146
+
+ Score =  143 bits (360), Expect = 3e-38,   Method: Compositional matrix adjust.
+ Identities = 64/144 (44%), Positives = 93/144 (64%)
+
+Query: 2   LTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAA 61
+           LT  ++  ++  WGK+ +  +G EALGRLL  YPWTQRYF SFG+L+SA A+  N  V A
+Sbjct: 3   LTDAEKAAVSCLWGKVNSDEVGGEALGRLLVVYPWTQRYFDSFGDLSSASAIMGNAKVKA 62
+
+Query: 62  HGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEY 121
+           HG+KV+T+  + + H+D +KG +A LS+ H + LHVDP NF+  G  + I L  H  +++
+Sbjct: 63  HGKKVITAFNDGLNHLDSLKGTFASLSELHCDKLHVDPENFRLLGNMIVIVLGHHLGKDF 122
+
+Query: 122 TPELHAAYEHLFDAIADALGKGYH 145
+           TP   AA++ +   +A AL   YH
+Sbjct: 123 TPAAQAAFQKVVAGVATALAHKYH 146
+
+
+>HBB1_SPHPU Hemoglobin beta-1 chain.
+          Length = 146
+
+ Score =  142 bits (359), Expect = 4e-38,   Method: Compositional matrix adjust.
+ Identities = 69/143 (48%), Positives = 93/143 (65%)
+
+Query: 3   TAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAH 62
+           TA ++ L+ S W K+    IG EALGRLL  YPWTQR+F+ FGNL+SA A+  N  V AH
+Sbjct: 4   TAEEKHLLGSLWAKVDVADIGGEALGRLLVVYPWTQRFFADFGNLSSATAICGNPRVKAH 63
+
+Query: 63  GEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYT 122
+           G+KV T  GEA+KH+D++K  +A LS+ H + LHVD  NFK  G  + + LA   H+ +T
+Sbjct: 64  GKKVFTMFGEALKHLDNLKETFASLSELHCDKLHVDTENFKLLGNLVIVVLAARLHDSFT 123
+
+Query: 123 PELHAAYEHLFDAIADALGKGYH 145
+           P   AA+  L  ++A AL + YH
+Sbjct: 124 PAAQAAFHKLAYSVAHALARRYH 146
+
+
+>HBB1_TAPTE Hemoglobin beta-1 chain (Major).
+          Length = 146
+
+ Score =  137 bits (344), Expect = 2e-36,   Method: Compositional matrix adjust.
+ Identities = 68/144 (47%), Positives = 96/144 (66%)
+
+Query: 2   LTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAA 61
+           LT  ++  + + W K+    +G EALGRLL  YPWTQR+F SFG+L++A AV  N  V A
+Sbjct: 3   LTGEEKAAVLALWDKVDEDKVGGEALGRLLVVYPWTQRFFDSFGDLSTAAAVMGNPKVKA 62
+
+Query: 62  HGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEY 121
+           HG+KV+ S G+ + H+DD+K  +AQLS+ H + LHVDP NF+  G  L + LA+ F + +
+Sbjct: 63  HGKKVLHSFGDGVHHLDDLKVTFAQLSELHCDKLHVDPENFRLLGNVLVVVLAQQFGKAF 122
+
+Query: 122 TPELHAAYEHLFDAIADALGKGYH 145
+           TPEL AAY+ +   +A+AL   YH
+Sbjct: 123 TPELQAAYQKVVAGVANALAHKYH 146
+
+
+>HBB0_PAGBO Hemoglobin beta-0 chain (HB 0).
+          Length = 146
+
+ Score =  133 bits (334), Expect = 3e-35,   Method: Compositional matrix adjust.
+ Identities = 63/143 (44%), Positives = 84/143 (58%)
+
+Query: 3   TAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAH 62
+           T  +R  I   + KL    +G   L R L  YPWTQRYF+ FGNL +A A+  N  V+ H
+Sbjct: 4   TDFERATIKDIFSKLEYDVVGPATLARCLVVYPWTQRYFAKFGNLYTATAIAENAMVSKH 63
+
+Query: 63  GEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYT 122
+           G  ++  +  A+K+MDDIK  YA+LS  HSE LHVDP NFK    CL+I +A  F   +T
+Sbjct: 64  GITILHGLDRAVKNMDDIKNTYAELSVLHSEKLHVDPDNFKLLADCLTIVVAARFGSAFT 123
+
+Query: 123 PELHAAYEHLFDAIADALGKGYH 145
+            E+ AA+E     +  +LG+ YH
+Sbjct: 124 GEVQAAFEKFMAVVVSSLGRQYH 146
+
+
+>HBB1_ANAMI Hemoglobin beta-1 chain.
+          Length = 146
+
+ Score =  131 bits (329), Expect = 1e-34,   Method: Compositional matrix adjust.
+ Identities = 63/139 (45%), Positives = 85/139 (61%)
+
+Query: 6   DRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAHGEK 65
+           +R +I S +  L  + IG +AL R L  YPWTQRYF SFGNL++  A+  N  +AAHG K
+Sbjct: 7   ERAVIISIFAGLDYEDIGPKALSRCLIVYPWTQRYFGSFGNLSTPAAIMGNPKIAAHGIK 66
+
+Query: 66  VVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYTPEL 125
+           V+  +   +K+MD+IK  Y +LS  HSETLHVDP NFK    CL+I +A      +TP+ 
+Sbjct: 67  VLHGLDRGVKNMDNIKDAYTELSILHSETLHVDPDNFKLLADCLTIVVAAKMGCAFTPDT 126
+
+Query: 126 HAAYEHLFDAIADALGKGY 144
+             A++     +  ALGK Y
+Sbjct: 127 QLAFQKFLAVVVSALGKQY 145
+
+
+>HBB1_PAGBO Hemoglobin beta-1 chain (HB 1).
+          Length = 146
+
+ Score =  131 bits (329), Expect = 1e-34,   Method: Compositional matrix adjust.
+ Identities = 63/143 (44%), Positives = 88/143 (61%)
+
+Query: 3   TAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAH 62
+           T  +R +I+  +  L  + IG +AL R L  YPWTQR+FS FGNL +A+++  N  VAAH
+Sbjct: 4   TDKERSIISDIFSHLDYEDIGPKALSRCLIVYPWTQRHFSGFGNLYNAESIIGNANVAAH 63
+
+Query: 63  GEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYT 122
+           G KV+  +   +K+MD+I+  YA LS  HSE LHVDP NFK    C++I LA    + +T
+Sbjct: 64  GIKVLHGLDRGLKNMDNIEATYADLSTLHSEKLHVDPDNFKLLADCITIVLAAKMGQAFT 123
+
+Query: 123 PELHAAYEHLFDAIADALGKGYH 145
+            E+  A++     +  ALGK YH
+Sbjct: 124 AEIQGAFQKFLAVVVSALGKQYH 146
+
+
+>HBB1_CYGMA Hemoglobin beta-1 chain.
+          Length = 146
+
+ Score =  129 bits (324), Expect = 4e-34,   Method: Compositional matrix adjust.
+ Identities = 64/137 (46%), Positives = 84/137 (61%)
+
+Query: 9   LINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAHGEKVVT 68
+           +IN  +  L    IG +AL R L  YPWTQR+FS FGNL +A+A+  N  VAAHG KV+ 
+Sbjct: 10  IINDIFSHLDYDDIGPKALSRCLIVYPWTQRHFSGFGNLYNAEAIIGNANVAAHGIKVLH 69
+
+Query: 69  SIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYTPELHAA 128
+            +   +K+MD+I   YA+LS  HSE LHVDP NFK    C++I LA    + +T E  AA
+Sbjct: 70  GLDRGLKNMDNIVDAYAELSTLHSEKLHVDPDNFKLLSDCITIVLAAKLGKAFTAETQAA 129
+
+Query: 129 YEHLFDAIADALGKGYH 145
+           ++     +  ALGK YH
+Sbjct: 130 FQKFMAVVVSALGKQYH 146
+
+
+>HBB1_ONCMY Hemoglobin beta-I chain.
+          Length = 146
+
+ Score =  124 bits (310), Expect = 2e-32,   Method: Compositional matrix adjust.
+ Identities = 56/142 (39%), Positives = 84/142 (59%)
+
+Query: 3   TAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAH 62
+           T  ++  I++ WGK+    IG  AL R+L  YPWTQRYF SFGN+++  A+  N  VAAH
+Sbjct: 4   TDAEKSTISAVWGKVNIDEIGPLALARVLIVYPWTQRYFGSFGNVSTPAAIMGNPKVAAH 63
+
+Query: 63  GEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYT 122
+           G+ V  ++ +A+K+M +I   Y  LS+ H+  L VDP NF+     L+I +A  F   +T
+Sbjct: 64  GKVVCGALDKAVKNMGNILATYKSLSETHANKLFVDPDNFRVLADVLTIVIAAKFGASFT 123
+
+Query: 123 PELHAAYEHLFDAIADALGKGY 144
+           PE+ A ++     +  A+G  Y
+Sbjct: 124 PEIQATWQKFMKVVVAAMGSRY 145
+
+
+>HBB1_UROHA Hemoglobin beta-1 chain (Fragments).
+          Length = 146
+
+ Score =  114 bits (285), Expect = 1e-29,   Method: Compositional matrix adjust.
+ Identities = 54/143 (37%), Positives = 80/143 (55%)
+
+Query: 3   TAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAH 62
+           TA ++ LIN+ WGK+   ++G E L  LL  YPWTQR+F  FGNL++  A+ +N      
+Sbjct: 4   TAEEKALINAYWGKVDVGSVGGETLANLLVVYPWTQRFFEDFGNLSTPSAILNNPKXXXX 63
+
+Query: 63  GEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYT 122
+              V+TS G+A+K++D++     +LS+YH   LHVDP+NF+  G  L    A +F +   
+Sbjct: 64  XXXVITSFGDALKNLDNVXXXXXKLSEYHCNKLHVDPVNFRLLGDVLITLSAANFGKXXX 123
+
+Query: 123 PELHAAYEHLFDAIADALGKGYH 145
+                    L   +A AL + YH
+Sbjct: 124 XXXXXXXXXLVGVVAHALARRYH 146
+
+
+>HBB1_TORMA Hemoglobin beta-1 chain.
+          Length = 142
+
+ Score = 84.3 bits (207), Expect = 1e-20,   Method: Compositional matrix adjust.
+ Identities = 49/146 (33%), Positives = 72/146 (49%), Gaps = 6/146 (4%)
+
+Query: 1   GLTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFG-NLNSADAVFHNEAV 59
+            LT  + +LI   W  +    I  +AL R+ + YPWT R F+SF  N  ++D   H+ AV
+Sbjct: 2   SLTDEEIRLIQHIWSNVNVVEITAKALERVFYVYPWTTRLFTSFNHNFKASDKQVHDHAV 61
+
+Query: 60  AAHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHE 119
+                 V  +I  AI  + DI   ++ LS  H + L VD  NF   G    + LA    +
+Sbjct: 62  -----NVSNAISAAIGDLHDINKNFSALSTKHQKKLGVDTSNFMLLGQAFLVELAALEKD 116
+
+Query: 120 EYTPELHAAYEHLFDAIADALGKGYH 145
+           ++TP+ H A   LF+ + +AL   YH
+Sbjct: 117 KFTPQYHKAALKLFEVVTEALSCQYH 142
+
+
+>MYG_GALCR Myoglobin.
+          Length = 153
+
+ Score = 52.4 bits (124), Expect = 8e-11,   Method: Compositional matrix adjust.
+ Identities = 34/107 (31%), Positives = 54/107 (50%), Gaps = 3/107 (2%)
+
+Query: 1   GLTAHDRQLINSTWGKLCAKTIG--QEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEA 58
+           GL+  + QL+   WGK+ A   G  Q+ L RL   +P T   F  F NL +AD +  +E 
+Sbjct: 1   GLSDGEWQLVLKIWGKVEADLAGHGQDVLIRLFTAHPETLEKFDKFKNLKTADEMKASED 60
+
+Query: 59  VAAHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRF 105
+           +  HG  V+T++G  +K     +     L++ H+ T H  P+ +  F
+Sbjct: 61  LKKHGVTVLTALGGILKKKGQHEAEIKPLAQSHA-TKHKIPVKYLEF 106
+
+
+>MYG_ERIEU Myoglobin.
+          Length = 153
+
+ Score = 52.0 bits (123), Expect = 9e-11,   Method: Compositional matrix adjust.
+ Identities = 34/107 (31%), Positives = 54/107 (50%), Gaps = 3/107 (2%)
+
+Query: 1   GLTAHDRQLINSTWGKLCAKTIG--QEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEA 58
+           GL+  + QL+ + WGK+ A   G  QE L RL   +P T   F  F +L S D +  +E 
+Sbjct: 1   GLSDGEWQLVLNVWGKVEADIPGHGQEVLIRLFKDHPETLEKFDKFKHLKSEDEMKSSED 60
+
+Query: 59  VAAHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRF 105
+           +  HG  V+T++G  +K     +   A L++ H+   H  P+ +  F
+Sbjct: 61  LKKHGTTVLTALGGILKKKGQHEAQLAPLAQSHANK-HKIPVKYLEF 106
+
+
+>MYG_DIDMA Myoglobin.
+          Length = 153
+
+ Score = 49.7 bits (117), Expect = 4e-10,   Method: Compositional matrix adjust.
+ Identities = 34/107 (31%), Positives = 54/107 (50%), Gaps = 3/107 (2%)
+
+Query: 1   GLTAHDRQLINSTWGKLCAKTIG--QEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEA 58
+           GL+  + QL+ + WGK+ A   G  QE L RL   +P T   F  F +L S D +  +E 
+Sbjct: 1   GLSDGEWQLVLNAWGKVEADIPGHGQEVLIRLFKGHPETLEKFDKFKHLKSEDEMKASED 60
+
+Query: 59  VAAHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRF 105
+           +  HG  V+T++G  +K   + +     L++ H+ T H   + F  F
+Sbjct: 61  LKKHGATVLTALGNILKKKGNHEAELKPLAQSHA-TKHKISVQFLEF 106
+
+
+>MYG_ESCGI Myoglobin.
+          Length = 153
+
+ Score = 40.8 bits (94), Expect = 2e-07,   Method: Compositional matrix adjust.
+ Identities = 28/100 (28%), Positives = 48/100 (48%), Gaps = 3/100 (3%)
+
+Query: 8   QLINSTWGKLCAKTIG--QEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAHGEK 65
+           QL+ + W K+ A   G  Q+ L RL   +P T   F  F +L +   +  +E +  HG  
+Sbjct: 8   QLVLNIWAKVEADVAGHGQDILIRLFKGHPETLEKFDKFKHLKTEAEMKASEDLKKHGNT 67
+
+Query: 66  VVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRF 105
+           V+T++G  +K     +     L++ H+ T H  P+ +  F
+Sbjct: 68  VLTALGGILKKKGHHEAELKPLAQSHA-TKHKIPIKYLEF 106
+
+
+>MYG_ELEMA Myoglobin.
+          Length = 153
+
+ Score = 38.5 bits (88), Expect = 1e-06,   Method: Compositional matrix adjust.
+ Identities = 28/107 (26%), Positives = 50/107 (46%), Gaps = 3/107 (2%)
+
+Query: 1   GLTAHDRQLINSTWGKLCAKTI--GQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEA 58
+           GL+  + +L+  TWGK+ A     G+    RL   +P T   F  F +L +   +  +E 
+Sbjct: 1   GLSDGEWELVLKTWGKVEADIPGHGETVFVRLFTGHPETLEKFDKFKHLKTEGEMKASED 60
+
+Query: 59  VAAHGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRF 105
+           +   G  V+T++G  +K     +     L++ H+ T H  P+ +  F
+Sbjct: 61  LKKQGVTVLTALGGILKKKGHHEAEIQPLAQSHA-TKHKIPIKYLEF 106
+
+
+  Database: data/sp_hbb1
+    Posted date:  Mar 4, 2009 12:10 PM
+  Number of letters in database: 4549
+  Number of sequences in database:  24
+  
+Lambda     K      H
+   0.321    0.135    0.427 
+
+Gapped
+Lambda     K      H
+   0.267   0.0410    0.140 
+
+
+Matrix: BLOSUM62
+Gap Penalties: Existence: 11, Extension: 1
+Number of Sequences: 24
+Number of Hits to DB: 2640
+Number of extensions: 110
+Number of successful extensions: 23
+Number of sequences better than 1.0e-03: 22
+Number of HSP's gapped: 22
+Number of HSP's successfully gapped: 22
+Length of query: 145
+Length of database: 4549
+Length adjustment: 38
+Effective length of query: 107
+Effective length of database: 3637
+Effective search space:   389159
+Effective search space used:   389159
+Neighboring words threshold: 11
+Window for multiple hits: 40
+X1: 16 ( 7.4 bits)
+X2: 38 (14.6 bits)
+X3: 64 (24.7 bits)
+S1: 41 (21.9 bits)
+S2: 63 (28.9 bits)
