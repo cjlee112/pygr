@@ -766,7 +766,7 @@ alignment intervals to an NLMSA after calling its build() method.''')
           start = maskStart
         if end>maskEnd:# CLIP END TO MASKED REGION
           targetEnd = targetEnd+maskEnd-end
-          end = MaskEnd
+          end = maskEnd
       elif filterSeqs is not None: # CLIP TARGET SEQ INTERVAL
         target = self.get_seq_interval(nl, self.im[i].target_id,
                                        targetStart, targetEnd)

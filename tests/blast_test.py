@@ -812,6 +812,18 @@ class Blastn_Test(BlastBase):
         finally:
             fp.close()
 
+    def test_maskEnd(self):
+        """
+        This tests against a minor bug in cnestedlist where maskEnd
+        is used to clip the end to the mask region.
+        """
+        db = seqdb.SequenceFileDB('data/gapping.fa')
+        blastmap = blast.BlastMapping(db)
+        ungapped = db['ungapped']
+        gapped = db['gapped']
+        results = blastmap[gapped]
+        
+        results[ungapped]
 
 class BlastParsers_Test(BlastBase):
     def test_blastp_parser(self):
