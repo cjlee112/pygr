@@ -1450,10 +1450,30 @@ class BlastParsers_Test(BlastBase):
             al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                    bidirectional=False)
             al = blast.read_interval_alignment(multiblast_output, sp_all_hbb,
-                                               blast.BlastIDIndex(self.prot), al)
+                                               self.prot, al)
         finally:
             multiblast_output.close()
         al.build()
+
+        results = []
+        for seq in sp_all_hbb.values():
+            try:
+                results.append(al[seq])
+            except KeyError:
+                pass
+        correctfile = file(testutil.datafile('multiblast_long_correct.txt'), 'r')
+        try:
+            correct = []
+            for line in correctfile:
+                t = line.split()
+                correct.append((t[0], t[1], float(t[2])))
+        finally:
+            correctfile.close()
+        check_results(results, correct,
+                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+
+        
+
 
     def test_blastx_parser(self):
         "Testing blastx parser"
