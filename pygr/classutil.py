@@ -105,11 +105,25 @@ except ImportError:
             pass
             
     class FilePopen(FilePopenBase):
-        'this subclass fakes subprocess.Popen.wait() using os.system()'
+        """this subclass fakes subprocess.Popen.wait() using os.system()
+        purely for Python 2.3!!
+        Partially supports the following Popen arguments:
+
+        cwd: works on unix, cygwin and windows, but stdin/stdout/stderr
+             with relative paths may fail on windows if cwd changes the
+             directory.
+
+        env: properly propagates new or changed environment variable
+             settings on unix and cygwin, but not *deleted* env vars.
+             Not supported on Windows."""
         def wait(self):
             self._rewind_for_reading(self.stdin)
             args = map(mkarg, self.args[0])
-            try: # works on unix & cygwin but not normal windows
+            if 'env' in self.kwargs: # handle env settings on unix, cygwin
+                for k,v in self.kwargs['env'].items(): # prepend to command
+                    if k not in os.environ or os.environ[k] != v:
+                        args = [k + '=' + mkarg(v)] + args
+            try:
                 workDir = self.kwargs['cwd'] # directory to run child in
                 args = ['(cd', mkarg(workDir), CMD_SEPARATOR] + args + [')']
             except KeyError:
