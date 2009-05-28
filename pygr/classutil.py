@@ -91,11 +91,13 @@ except ImportError:
     CSH_REDIRECT = False # SH style redirection is default
     import platform
     if platform.system() == 'Windows':
+        CMD_SEPARATOR = '&&'
         def mkarg(arg):
             """Very basic quoting of arguments for Windows """
             return '"' + arg + '"'
     else: # UNIX 
         from commands import mkarg
+        CMD_SEPARATOR = ';'
         try:
             if os.environ['SHELL'].endswith('csh'):
                 CSH_REDIRECT = True
@@ -109,7 +111,7 @@ except ImportError:
             args = map(mkarg, self.args[0])
             try: # works on unix & cygwin but not normal windows
                 workDir = self.kwargs['cwd'] # directory to run child in
-                args = ['(cd', mkarg(workDir), ';'] + args + [')']
+                args = ['(cd', mkarg(workDir), CMD_SEPARATOR] + args + [')']
             except KeyError:
                 pass
             if self.args[3]: # redirect stdin
