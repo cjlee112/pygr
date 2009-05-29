@@ -572,6 +572,9 @@ cdef class NLMSASlice:
   def __hash__(self):
     return id(self)
 
+  def __repr__(self):
+    return "<NLMSASlice object at 0x%x (seq=%s)>" % (id(self), self.seq.id,)
+
   def __dealloc__(self):
     'remember: dealloc cannot call other methods!'
     if self.im:
@@ -1682,6 +1685,9 @@ See the NLMSA documentation for more details.\n''')
         raise ValueError('Sorry!  Query interval spans multiple LPOs!')
       for ns,myslice in l: # ONLY RETURN ONE SLICE OBJECT
           return NLMSASlice(ns,myslice.start,myslice.stop)
+
+  def __iter__(self):
+    raise NotImplementedError, 'you cannot iterate over NLMSAs'
 
   def __iadd__(self,seq):
     'add seq to our union'
