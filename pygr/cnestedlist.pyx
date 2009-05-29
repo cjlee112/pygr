@@ -572,6 +572,9 @@ cdef class NLMSASlice:
   def __hash__(self):
     return id(self)
 
+  def __repr__(self):
+    return "<NLMSASlice object at 0x%x (seq=%s)>" % (id(self), self.seq.id,)
+
   def __dealloc__(self):
     'remember: dealloc cannot call other methods!'
     if self.im:

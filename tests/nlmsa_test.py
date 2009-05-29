@@ -95,6 +95,17 @@ class NLMSA_Test(unittest.TestCase):
         except NotImplementedError:
             pass
 
+    def test_slice_repr(self):
+        "Ask for an informative __repr__ on NLMSASlice objects"
+        
+        slice = self.nlmsa[self.s]
+        r = repr(slice)
+        assert 'seq=a' in r
+        
+        slice = self.nlmsa[self.s2]
+        r = repr(slice)
+        assert 'seq=b' in r
+
 class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
     def setUp(self):
         seqdb_name = testutil.datafile('alignments.fa')
