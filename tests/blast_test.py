@@ -87,7 +87,7 @@ class Blast_Test(BlastBase):
         
         al.build() # construct the alignment indexes
         results = [al[seq] for seq in self.prot.values()]
-        check_results(results, megablastp_correct_results,
+        check_results(results, blastp_correct_results_big,
                       lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
 
     def test_multiblast_single(self):
@@ -102,7 +102,7 @@ class Blast_Test(BlastBase):
             
         al.build() # construct the alignment indexes
         results = [al[seq] for seq in self.prot.values()]
-        check_results(results, megablastp_correct_results,
+        check_results(results, blastp_correct_results_big,
                       lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
         
     def test_multiblast_long(self):
@@ -465,7 +465,7 @@ blastp_correct_results = \
                    ('HBB1_XENLA', 'HBB1_UROHA', 0.3776223776223776),
                    ('HBB1_XENLA', 'HBB1_TORMA', 0.33333333333333331)]
 
-megablastp_correct_results = \
+blastp_correct_results_big = \
                            [('HBB0_PAGBO', 'MYG_ELEMA', 0.2857142857142857),
                    ('HBB0_PAGBO', 'MYG_GALCR', 0.30434782608695654),
                    ('HBB0_PAGBO', 'MYG_DIDMA', 0.2608695652173913),
