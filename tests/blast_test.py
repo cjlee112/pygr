@@ -79,16 +79,26 @@ class Blast_Test(BlastBase):
 
     def test_multiblast(self):
         "testing multi sequence blast"
+        results = self.get_multiblast_results()
+        check_results(results, blastp_correct_results_big,
+                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+
+    def get_multiblast_results(self):
+        """return saved results or generate them if needed;
+        results are saved so we only do this time-consuming operation once"""
+        try: # return saved results if available
+            return self.saved_multiblast_results
+        except AttributeError:
+            pass
         blastmap = blast.BlastMapping(self.prot, verbose=False)
         al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                bidirectional=False)
         
-        blastmap(None, al, queryDB=self.prot) # all vs all
+        blastmap(al=al, queryDB=self.prot) # all vs all
         
         al.build() # construct the alignment indexes
-        results = [al[seq] for seq in self.prot.values()]
-        check_results(results, blastp_correct_results_big,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+        self.saved_multiblast_results = [al[seq] for seq in self.prot.values()]
+        return self.saved_multiblast_results
 
     def test_multiblast_single(self):
         "Test multi-sequence BLAST results, for BLASTs run one by one."
@@ -102,8 +112,10 @@ class Blast_Test(BlastBase):
             
         al.build() # construct the alignment indexes
         results = [al[seq] for seq in self.prot.values()]
-        check_results(results, blastp_correct_results_big,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+        results_multi = self.get_multiblast_results()
+        check_results(results, results_multi,
+                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()),
+                      reformatCorrect=True)
         
     def test_multiblast_long(self):
         "testing multi sequence blast with long db"
