@@ -1683,6 +1683,9 @@ See the NLMSA documentation for more details.\n''')
       for ns,myslice in l: # ONLY RETURN ONE SLICE OBJECT
           return NLMSASlice(ns,myslice.start,myslice.stop)
 
+  def __iter__(self):
+    raise NotImplementedError, 'you cannot iterate over NLMSAs'
+
   def __iadd__(self,seq):
     'add seq to our union'
     self.seqs.saveSeq(seq)
