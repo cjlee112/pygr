@@ -87,6 +87,15 @@ class Blast_Test(BlastBase):
 
         check_results([results], correct,
                       lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+
+    def test_no_query(self):
+        blastmap = blast.BlastMapping(self.dna, verbose=False)
+        try:
+            blastmap()
+            assert 0, "should fail before this"
+        except ValueError:
+            pass
+
     def test_multiblast(self):
         "testing multi sequence blast"
         blastmap = blast.BlastMapping(self.prot, verbose=False)

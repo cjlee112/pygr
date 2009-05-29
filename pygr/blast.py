@@ -255,10 +255,12 @@ To turn off this message, use the verbose=False option''' % methodname
         'get one sequence obj from queryDB'
         seqID = iter(queryDB).next() # get 1st seq ID
         return queryDB[seqID]
-    def __call__(self, seq, al=None, blastpath='blastall',
+    def __call__(self, seq=None, al=None, blastpath='blastall',
                  blastprog=None, expmax=0.001, maxseq=None, verbose=None,
                  opts=(), queryDB=None, **kwargs):
         "Run blast search for seq in database, return aligned intervals"
+        if seq is None and queryDB is None:
+            raise ValueError("we need a sequence or db to use as query!")
         if queryDB is not None:
             seq = self.get_seq_from_queryDB(queryDB)
         self.warn_about_self_masking(seq, verbose)
