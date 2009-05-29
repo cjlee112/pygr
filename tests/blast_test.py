@@ -47,6 +47,9 @@ class BlastBase(unittest.TestCase):
 
 
 class Blast_Test(BlastBase):
+    """
+    Test basic BLAST stuff (using blastp).
+    """
     def test_blastp(self):
         "Testing blastp"
         blastmap = blast.BlastMapping(self.prot, verbose=False)
@@ -68,25 +71,28 @@ class Blast_Test(BlastBase):
         blastmap = blast.BlastMapping(self.prot, verbose=False)
         al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                bidirectional=False)
+        
         blastmap(None, al, queryDB=self.prot) # all vs all
+        
         al.build() # construct the alignment indexes
         results = [al[seq] for seq in self.prot.values()]
-
-        correct = megablastp_correct_results
-
         check_results(results, megablastp_correct_results,
                       lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
 
-        # redo the search in single sequence blast mode
-        al2 = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
+    def test_multiblast_single(self):
+        "Test multi-sequence BLAST results, for BLASTs run one by one."
+
+        blastmap = blast.BlastMapping(self.prot, verbose=False)
+        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                bidirectional=False)
+        
         for seq in self.prot.values():
-            blastmap(seq, al2) # all vs all, one by one
-        al2.build() # construct the alignment indexes
-        results2 = [al2[seq] for seq in self.prot.values()]
-        check_results(results, results2,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()),
-                      reformatCorrect=True)
+            blastmap(seq, al) # all vs all, one by one
+            
+        al.build() # construct the alignment indexes
+        results = [al[seq] for seq in self.prot.values()]
+        check_results(results, megablastp_correct_results,
+                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
         
     def test_multiblast_long(self):
         "testing multi sequence blast with long db"
@@ -124,6 +130,9 @@ class Blastx_Test(BlastBase):
                       lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
                                 t[2].pIdentity()))
 
+    def test_blastx_no_blastp(self):
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+
         try:
             results = blastmap[self.prot['HBB1_MOUSE']]
             raise AssertionError('failed to trap blastp in BlastxMapping')
@@ -131,7 +140,7 @@ class Blastx_Test(BlastBase):
             pass
 
 
-class Blastn_Test(BlastBase):
+class Tblastn_Test(BlastBase):
     def test_tblastn(self):
         "Blastn test"
         blastmap = blast.BlastMapping(self.dna, verbose=False)
@@ -157,6 +166,7 @@ class Blastn_Test(BlastBase):
         
         self.assertAlmostEqual(edge.pIdentity(), 0.451, 3)
 
+    def test_tblastn_no_blastx(self):
         blastmap = blast.BlastMapping(self.prot)
         try:
             results = blastmap[self.dna['gi|171854975|dbj|AB364477.1|']]
