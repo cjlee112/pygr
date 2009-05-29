@@ -66,6 +66,17 @@ class Blast_Test(BlastBase):
         except ValueError:
             pass
 
+    def test_both_seq_and_db(self):
+        "Testing blastp"
+        blastmap = blast.BlastMapping(self.prot, verbose=False)
+        seq = self.prot['HBB1_XENLA']
+
+        try:
+            blastmap(seq=seq, queryDB=self.prot)
+            assert 0, "should fail before this"
+        except ValueError:
+            pass
+
     def test_multiblast(self):
         "testing multi sequence blast"
         blastmap = blast.BlastMapping(self.prot, verbose=False)
