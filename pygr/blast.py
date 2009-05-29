@@ -201,7 +201,7 @@ class BlastMapping(object):
         notFirst = False
         for filepath in self.blast_index_paths():
             if notFirst:
-                print >>sys.stderr,'Trying next entry in self.blastIndexDirs...'
+                logger.info('Trying next entry in self.blastIndexDirs...')
             notFirst = True
             try: # BUILD IN TARGET DIRECTORY
                 return self.run_formatdb(filepath)
@@ -225,7 +225,7 @@ class BlastMapping(object):
             return
         try:
             if seq.db is self.seqDB:
-                print >>sys.stderr,'''
+                logger.warning('''
 WARNING: your query sequence is part of this database.  Pygr alignments
 normally do not report self-matches, i.e. the alignment of a sequence interval
 to itself, so only homologies to OTHER sequences in the database
@@ -236,7 +236,7 @@ sequence object and use that as your query, e.g.
 query = sequence.Sequence(str(seq),"myquery")
 results = db.%s(query)
 
-To turn off this message, use the verbose=False option''' % methodname
+To turn off this message, use the verbose=False option''' % methodname)
         except AttributeError:
             pass
     def blast_program(self, seq, blastprog):
