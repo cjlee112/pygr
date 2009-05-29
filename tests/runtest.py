@@ -75,7 +75,11 @@ if __name__ == '__main__':
 
     # get rid of the .py ending in case full module names were passed in
     # the command line
-    targets = [ t.rstrip(".py") for t in targets ]
+    stripped_targets = []
+    for t in targets:
+        if t.endswith('.py'): t = t[:-3]
+        stripped_targets.append(t)
+    targets = stripped_targets
 
     if options.port:
         testutil.default_xmlrpc_port = options.port
