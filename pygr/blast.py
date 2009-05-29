@@ -1,4 +1,3 @@
-import sys
 import os, tempfile, glob
 import classutil, logger
 from sequtil import *
