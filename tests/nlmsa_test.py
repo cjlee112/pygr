@@ -66,6 +66,7 @@ class NLMSA_Test(unittest.TestCase):
         testnlmsa = testutil.tempdatafile('testnlmsa')
         msa = cnestedlist.NLMSA(testnlmsa, mode='w', pairwiseMode=True,
                                 bidirectional=False)
+        # @CTB should there be something else here?  What is this testing?
 
 class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
     def setUp(self):
@@ -90,9 +91,7 @@ class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
         assert b[0:8] in l
         assert c[0:8] in l
 
-        
-        
-    def test_simple(self):           # @CTB doesn't work
+    def test_simple(self):
         # first set of intervals
         db = self.db
 
