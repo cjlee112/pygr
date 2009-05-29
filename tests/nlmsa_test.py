@@ -1,6 +1,6 @@
 import unittest
 from testlib import testutil, PygrTestProgram
-from pygr import cnestedlist, nlmsa_utils, seqdb
+from pygr import cnestedlist, nlmsa_utils, seqdb, sequence
 
 class NestedList_Test(unittest.TestCase):
     "Basic cnestedlist class tests"
@@ -34,7 +34,7 @@ class NestedList_Test(unittest.TestCase):
         # fails on windows
         #tempdir.remove()  @CTB
 
-class NLMSA_Test(unittest.TestCase):
+class NLMSA_SimpleTests(unittest.TestCase):
 
     def setUp(self):
         pass
@@ -67,6 +67,44 @@ class NLMSA_Test(unittest.TestCase):
         msa = cnestedlist.NLMSA(testnlmsa, mode='w', pairwiseMode=True,
                                 bidirectional=False)
         # @CTB should there be something else here?  What is this testing?
+
+class NLMSA_Test(unittest.TestCase):
+    def setUp(self):
+        s = sequence.Sequence('ATGGACAGAGATGACAGATGAC', 'a')
+        s2 = sequence.Sequence('ATGGGAGCAGCATGACAGATGAC', 'b')
+
+        # make a non-empty NLMSA
+        nlmsa = cnestedlist.NLMSA('foo', mode='memory', pairwiseMode=True)
+        nlmsa += s
+        nlmsa[s] += s2
+        nlmsa.build()
+
+        self.s = s
+        self.s2 = s2
+        self.nlmsa = nlmsa
+
+    def test_iter(self):
+        "Iteration of NLMSA objects should return reasonable error."
+
+        # try iterating over it
+        try:
+            for x in self.nlmsa:
+                break                   # should fail before this
+
+            assert 0, "should not be able to iterate over NLMSA"
+        except NotImplementedError:
+            pass
+
+    def test_slice_repr(self):
+        "Ask for an informative __repr__ on NLMSASlice objects"
+        
+        slice = self.nlmsa[self.s]
+        r = repr(slice)
+        assert 'seq=a' in r
+        
+        slice = self.nlmsa[self.s2]
+        r = repr(slice)
+        assert 'seq=b' in r
 
 class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
     def setUp(self):

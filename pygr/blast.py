@@ -5,6 +5,7 @@ from parse_blast import BlastHitParser
 from seqdb import write_fasta, read_fasta
 from nlmsa_utils import CoordsGroupStart, CoordsGroupEnd, read_aligned_coords
 from annotation import AnnotationDB, TranslationAnnot, TranslationAnnotSlice
+import cnestedlist
 
 # NCBI HAS THE NASTY HABIT OF TREATING THE IDENTIFIER AS A BLOB INTO
 # WHICH THEY STUFF FIELD AFTER FIELD... E.G. gi|1234567|foobarU|NT_1234567|...
@@ -27,8 +28,8 @@ def read_interval_alignment(ofile, srcDB, destDB, al=None, **kwargs):
     "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
     needToBuild = False
     if al is None:
-        import cnestedlist
-        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
+        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
+                               bidirectional=False)
         needToBuild = True
     p = BlastHitParser()
     al.add_aligned_intervals(p.parse_file(ofile), srcDB, destDB,
@@ -199,8 +200,7 @@ class BlastMapping(object):
         notFirst = False
         for filepath in self.blast_index_paths():
             if notFirst:
-                import sys
-                print >>sys.stderr,'Trying next entry in self.blastIndexDirs...'
+                logger.info('Trying next entry in self.blastIndexDirs...')
             notFirst = True
             try: # BUILD IN TARGET DIRECTORY
                 return self.run_formatdb(filepath)
@@ -224,8 +224,7 @@ class BlastMapping(object):
             return
         try:
             if seq.db is self.seqDB:
-                import sys
-                print >>sys.stderr,'''
+                logger.warning('''
 WARNING: your query sequence is part of this database.  Pygr alignments
 normally do not report self-matches, i.e. the alignment of a sequence interval
 to itself, so only homologies to OTHER sequences in the database
@@ -236,7 +235,7 @@ sequence object and use that as your query, e.g.
 query = sequence.Sequence(str(seq),"myquery")
 results = db.%s(query)
 
-To turn off this message, use the verbose=False option''' % methodname
+To turn off this message, use the verbose=False option''' % methodname)
         except AttributeError:
             pass
     def blast_program(self, seq, blastprog):
@@ -255,10 +254,14 @@ To turn off this message, use the verbose=False option''' % methodname
         'get one sequence obj from queryDB'
         seqID = iter(queryDB).next() # get 1st seq ID
         return queryDB[seqID]
-    def __call__(self, seq, al=None, blastpath='blastall',
+    def __call__(self, seq=None, al=None, blastpath='blastall',
                  blastprog=None, expmax=0.001, maxseq=None, verbose=None,
                  opts=(), queryDB=None, **kwargs):
         "Run blast search for seq in database, return aligned intervals"
+        if seq is None and queryDB is None:
+            raise ValueError("we need a sequence or db to use as query!")
+        if seq and queryDB:
+            raise ValueError("both a sequence AND a db provided for query")
         if queryDB is not None:
             seq = self.get_seq_from_queryDB(queryDB)
         self.warn_about_self_masking(seq, verbose)
@@ -422,7 +425,6 @@ def blastx_results(ofile, srcDB, destDB, xformSrc=True, xformDest=False,
     '''store blastx or tblastx results as a list of individual hits.
     Each hit is stored as the usual NLMSASlice interface (e.g.
     use its edges() method to get src,dest,edgeInfo tuples'''
-    import cnestedlist
     p = BlastHitParser()
     alignedIvals = read_aligned_coords(p.parse_file(ofile), srcDB, destDB,
                                        dict(id='src_id', start='src_start',
