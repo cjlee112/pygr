@@ -105,6 +105,36 @@ class Blast_Test(BlastBase):
         blastmap(None, al, queryDB=sp_all_hbb) # all vs all
         al.build() # construct the alignment indexes
 
+    def test_maskEnd(self):
+        """
+        This tests against a minor bug in cnestedlist where maskEnd
+        is used to clip the end to the mask region.
+        """
+        db = seqdb.SequenceFileDB('data/gapping.fa')
+        blastmap = blast.BlastMapping(db)
+        ungapped = db['ungapped']
+        gapped = db['gapped']
+        results = blastmap[gapped]
+        
+        results[ungapped]
+
+    def test_no_bidirectional(self):
+        db = seqdb.SequenceFileDB('data/gapping.fa')
+        gapped = db['gapped']
+        ungapped = db['ungapped']
+        
+        blastmap = blast.BlastMapping(db)
+        al = blastmap(queryDB=db)
+        slice = al[gapped]
+
+        found_once = False
+        for src, dest, edge in al[gapped].edges():
+            if src == gapped[0:40] and dest == ungapped[0:40]:
+                assert not found_once, \
+                       "BLAST results should not be bidirectional"
+                found_once = True
+
+        assert found_once, "should have found this match exactly once!"
 
 class Blastx_Test(BlastBase):
     def test_blastx(self):
@@ -206,19 +236,6 @@ class Tblastn_Test(BlastBase):
                         == it.next()
         finally:
             fp.close()
-
-    def test_maskEnd(self):
-        """
-        This tests against a minor bug in cnestedlist where maskEnd
-        is used to clip the end to the mask region.
-        """
-        db = seqdb.SequenceFileDB('data/gapping.fa')
-        blastmap = blast.BlastMapping(db)
-        ungapped = db['ungapped']
-        gapped = db['gapped']
-        results = blastmap[gapped]
-        
-        results[ungapped]
 
 class BlastParsers_Test(BlastBase):
     def test_blastp_parser(self):

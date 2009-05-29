@@ -1,3 +1,4 @@
+import sys
 import os, tempfile, glob
 import classutil, logger
 from sequtil import *
@@ -5,6 +6,7 @@ from parse_blast import BlastHitParser
 from seqdb import write_fasta, read_fasta
 from nlmsa_utils import CoordsGroupStart, CoordsGroupEnd, read_aligned_coords
 from annotation import AnnotationDB, TranslationAnnot, TranslationAnnotSlice
+import cnestedlist
 
 # NCBI HAS THE NASTY HABIT OF TREATING THE IDENTIFIER AS A BLOB INTO
 # WHICH THEY STUFF FIELD AFTER FIELD... E.G. gi|1234567|foobarU|NT_1234567|...
@@ -27,8 +29,8 @@ def read_interval_alignment(ofile, srcDB, destDB, al=None, **kwargs):
     "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
     needToBuild = False
     if al is None:
-        import cnestedlist
-        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
+        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
+                               bidirectional=False)
         needToBuild = True
     p = BlastHitParser()
     al.add_aligned_intervals(p.parse_file(ofile), srcDB, destDB,
@@ -199,7 +201,6 @@ class BlastMapping(object):
         notFirst = False
         for filepath in self.blast_index_paths():
             if notFirst:
-                import sys
                 print >>sys.stderr,'Trying next entry in self.blastIndexDirs...'
             notFirst = True
             try: # BUILD IN TARGET DIRECTORY
@@ -224,7 +225,6 @@ class BlastMapping(object):
             return
         try:
             if seq.db is self.seqDB:
-                import sys
                 print >>sys.stderr,'''
 WARNING: your query sequence is part of this database.  Pygr alignments
 normally do not report self-matches, i.e. the alignment of a sequence interval
@@ -424,7 +424,6 @@ def blastx_results(ofile, srcDB, destDB, xformSrc=True, xformDest=False,
     '''store blastx or tblastx results as a list of individual hits.
     Each hit is stored as the usual NLMSASlice interface (e.g.
     use its edges() method to get src,dest,edgeInfo tuples'''
-    import cnestedlist
     p = BlastHitParser()
     alignedIvals = read_aligned_coords(p.parse_file(ofile), srcDB, destDB,
                                        dict(id='src_id', start='src_start',
