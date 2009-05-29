@@ -11,3 +11,13 @@ build
 *.pureseq
 *.seqlen
 tempdir
+*.nhr
+*.nin
+*.nsd
+*.nsi
+*.nsq
+*.phr
+*.pin
+*.psd
+*.psi
+*.psq
