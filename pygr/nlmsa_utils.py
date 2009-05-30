@@ -407,7 +407,7 @@ def add_aligned_intervals(al, alignedCoords, srcDB=None, destDB=None,
 
   # apply grouping function if present  
   if groupIntervals is not None:
-    alignedIvals = groupIntervals(alignedIvals, **kwargs)
+    alignedIvals = groupIntervals(alignedIvals)
 
   # for each pair of aligned intervals, save them into the alignment.
   for t in alignedIvals:
