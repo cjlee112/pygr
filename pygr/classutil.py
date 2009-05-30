@@ -521,19 +521,31 @@ class RecentValueDictionary(WeakValueDictionary):
         WeakValueDictionary.clear(self)
 
 
-            
+def make_attribute_interface(d):
+    """
+    If 'd' contains int values, use them to index tuples.
+
+    If 'd' contains str values, use them to retrieve attributes from an obj.
+
+    If all else fails, emulate a normal 'getattr'.
+    """
+    if len(d):
+        v = d.values()[0]
+        if isinstance(v, int):
+            return AttrFromTuple(d)
+        elif isinstance(v, str):
+            return AttrFromObject(d)
+
+    return AttributeInterface(d)        # @CTB could we just return 'getattr'?
+    
 class AttributeInterface(object):
-  '''getattr interface that can work with objects (if attrDict has string values)
-  or tuples (if attrDict has integer values)'''
+  '''getattr-like interface that can work with objects or tuples.
+
+  See subclasses AttrFromTuple / AttrFromObject, below.
+  '''
   def __init__(self, attrDict):
     self.attrDict = attrDict
-    try:
-      if isinstance(attrDict.values()[0], int):
-        self.__class__ = self._tupleClass
-      elif isinstance(attrDict.values()[0], str):
-        self.__class__ = self._objectClass
-    except IndexError:
-      pass
+    
   def __call__(self, obj, attr, default=None):
     'regular getattr from obj'
     try:
@@ -541,6 +553,7 @@ class AttributeInterface(object):
     except AttributeError:
         if default is not None:
             return default
+        # @CTB should there be a 'raise' here?
 
 class AttrFromTuple(AttributeInterface):
   def __call__(self, obj, attr, default=None):
@@ -562,9 +575,6 @@ class AttrFromObject(AttributeInterface):
         except KeyError:
             if default is not None:
                 return default
-
-AttributeInterface._tupleClass = AttrFromTuple
-AttributeInterface._objectClass = AttrFromObject
 
 def kwargs_filter(kwargs, allowed):
     'return dictionary of kwargs filtered by list allowed'

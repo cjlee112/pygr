@@ -352,8 +352,8 @@ def read_aligned_coords(alignedCoords, srcDB, destDB,
                         alignedIvalsAttrs=_default_ivals_attrs):
   '''Read id, start, stop, ori info from alignedCoords and generate intervals.
   '''
-  
-  getAttr = classutil.AttributeInterface(alignedIvalsAttrs) # extract our attrs
+
+  getAttr = classutil.make_attribute_interface(alignedIvalsAttrs)
   
   for ivals in alignedCoords:
     if isinstance(ivals, (CoordsGroupStart,CoordsGroupEnd)):
