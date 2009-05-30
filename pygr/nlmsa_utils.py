@@ -372,19 +372,24 @@ def read_aligned_coords(alignedCoords, srcDB, destDB,
     except TypeError:
       srcData = ivals # extract both src and dest from ivals object
       destSet = [ivals]
+
+    id = getAttr(srcData, 'id')
+    start = getAttr(srcData, 'start')
+    stop = getAttr(srcData, 'stop')
+    ori = getAttr(srcData, 'ori', 1)    # default orientation: +
+
+    srcIval = get_interval(srcDB[id], start, stop, ori)
       
-    srcIval = get_interval(srcDB[getAttr(srcData, 'id')],
-                           getAttr(srcData, 'start'),
-                           getAttr(srcData, 'stop'),
-                           getAttr(srcData, 'ori', 1)) # default ori: +
-    
-    for destData in destSet: # get the remaining intervals
-      destIval = get_interval(destDB[getAttr(destData, 'idDest')],
-                              getAttr(destData, 'startDest'),
-                              getAttr(destData, 'stopDest'),
-                              getAttr(destData, 'oriDest', 1)) # default ori: +
+    for destData in destSet: # get the dest interval(s) and yield w/src.
+      idDest = getAttr(destData, 'idDest')
+      startDest = getAttr(destData, 'startDest')
+      stopDest = getAttr(destData, 'stopDest')
+      oriDest = getAttr(destData, 'oriDest', 1) # default orientation: +
+      
+      destIval = get_interval(destDB[idDest], startDest, stopDest, oriDest)
       
       yield srcIval, destIval # generate aligned intervals
+      
 
 def add_aligned_intervals(al, alignedCoords, srcDB=None, destDB=None,
                           groupIntervals=None, **kwargs):
@@ -406,10 +411,13 @@ def add_aligned_intervals(al, alignedCoords, srcDB=None, destDB=None,
 
   # for each pair of aligned intervals, save them into the alignment.
   for t in alignedIvals:
+    # is 't' a marker object for the start or end of a group of coordinates?
     if isinstance(t, (CoordsGroupStart, CoordsGroupEnd)):
       continue # ignore grouping markers
-    al += t[0]
-    al[t[0]][t[1]] = None # save their alignment
+    
+    (src, dest) = t
+    al += src
+    al[src][dest] = None                # save their alignment
 
 
 class CoordsGroupStart(object):
