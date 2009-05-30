@@ -384,7 +384,7 @@ def read_aligned_coords(alignedCoords, srcDB, destDB,
                               getAttr(destData, 'stopDest'),
                               getAttr(destData, 'oriDest', 1)) # default ori: +
       
-      yield srcIval, destIval, None # generate aligned intervals
+      yield srcIval, destIval # generate aligned intervals
 
 def add_aligned_intervals(al, alignedCoords, srcDB=None, destDB=None,
                           groupIntervals=None, **kwargs):

@@ -413,7 +413,7 @@ def generate_tblastn_ivals(alignedIvals, xformSrc=False, xformDest=True,
                 destIvals = get_orf_slices(destIvals, **kwargs)
             it = iter(srcIvals)
             for dest in destIvals: # recombine src,dest pairs
-                yield (it.next(),dest,None)  # no edge info
+                yield (it.next(), dest)  # no edge info
             yield t # pass through grouping marker in case anyone cares
         else: # just keep accumulating all the ivals for this hit
             srcIvals.append(t[0])
