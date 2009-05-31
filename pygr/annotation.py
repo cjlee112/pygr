@@ -141,7 +141,7 @@ maxCache specfies the maximum number of annotation objects to keep in the cache.
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(sliceDB=0,seqDB=0,annotationType=0, autoGC=0,
                         itemClass=0,itemSliceClass=0,sliceAttrDict=0,maxCache=0)
-    def __hash__(self):
+    def __hash__(self):                 # @CTB unnecessary??
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
     def __getitem__(self,k):
