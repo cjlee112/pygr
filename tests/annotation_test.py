@@ -235,10 +235,46 @@ class Translation_Test(unittest.TestCase):
                           itemSliceClass=annotation.TranslationAnnotSlice,
                           sliceAttrDict=dict(id=0, start=1, stop=2))
 
-        aa2 = aa_db.new_annotation('bar', (self.FLIM.id, 0, 12))
-        orf = aa_db['bar']
-        assert str(orf) == 'FLIM'
-        assert str(orf[1:3].sequence) == 'CTAATT'
+        aa = aa_db.new_annotation('bar', (self.FLIM.id, 0, 12))
+        assert str(aa) == 'FLIM'
+        assert str(aa[1:3].sequence) == 'CTAATT'
+
+    def test_positive_frames(self):
+        aa_db = annotation.AnnotationDB({}, self.db,
+                          itemClass=annotation.TranslationAnnot,
+                          itemSliceClass=annotation.TranslationAnnotSlice,
+                          sliceAttrDict=dict(id=0, start=1, stop=2))
+
+        f1 = aa_db.new_annotation('f1', (self.FLIM.id, 0, 12))
+        assert str(f1) == 'FLIM'
+        assert f1.frame == +1
+        
+        f2 = aa_db.new_annotation('f2', (self.FLIM.id, 1, 10))
+        assert str(f2) == 'F*L'
+        assert f2.frame == +2
+
+        f3 = aa_db.new_annotation('f3', (self.FLIM.id, 2, 11))
+        assert str(f3) == 'SNY'
+        assert f3.frame == +3
+
+    def test_negative_frames(self):
+        aa_db = annotation.AnnotationDB({}, self.db,
+                          itemClass=annotation.TranslationAnnot,
+                          itemSliceClass=annotation.TranslationAnnotSlice,
+                          sliceAttrDict=dict(id=0, start=1, stop=2,
+                                             orientation=3))
+
+        f1 = aa_db.new_annotation('f1', (self.FLIM.id, 0, 12, -1))
+        assert str(f1) == 'HN*K'
+        assert f1.frame == -2
+        
+        f2 = aa_db.new_annotation('f2', (self.FLIM.id, 1, 10, -1))
+        assert str(f2) == '*LE'
+        assert f2.frame == -1
+
+        f3 = aa_db.new_annotation('f3', (self.FLIM.id, 2, 11, -1))
+        assert str(f3) == 'IIR'
+        assert f3.frame == -3
 
 if __name__ == '__main__':
     PygrTestProgram(verbosity=2)

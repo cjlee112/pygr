@@ -72,6 +72,16 @@ class TranslationAnnotSeqDescr(object):
     def __get__(self,obj,objtype):
         return absoluteSlice(obj._anno_seq, obj._anno_start, obj._anno_stop)
 
+class TranslationAnnotFrameDescr(object):
+    """Get the frame of this protein translation, relative to original DNA."""
+    def __get__(self, obj, objtype):
+        orig = obj.pathForward.sequence
+        if orig.orientation > 0:
+            frame = (orig.start % 3) + 1
+        else:
+            return -((orig.start + 1) % 3 + 1)
+        return frame
+
 class TranslationAnnot(AnnotationSeq):
     'annotation representing aa translation of a given nucleotide interval'
     def __init__(self, id, db, parent, start, stop):
@@ -79,6 +89,7 @@ class TranslationAnnot(AnnotationSeq):
         self.stop /= 3
         self._anno_stop = stop
     sequence = TranslationAnnotSeqDescr()
+    frame = TranslationAnnotFrameDescr()
     _seqtype = PROTEIN_SEQTYPE
     def strslice(self, start, stop):
         'get the aa translation of our associated ORF'
@@ -95,6 +106,7 @@ class TranslationAnnotSliceDescr(object):
 
 class TranslationAnnotSlice(AnnotationSlice):
     sequence = TranslationAnnotSliceDescr()
+    frame = TranslationAnnotFrameDescr()
 
 
 class AnnotationDB(object, UserDict.DictMixin):
