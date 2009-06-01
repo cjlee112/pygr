@@ -21,6 +21,13 @@ class AnnotationSeq_Test(unittest.TestCase):
 
         self.annot = self.db['X']
 
+    def test_orientation_index_error(self):
+        db = self.db
+        db.sliceAttrDict = dict(id=0, start=1, stop=2, orientation=3)
+
+        # index error should be caught silently, so this should succeed.
+        db.new_annotation('some name', ('seq', 5, 8))
+
     def test_cmp(self):
         assert cmp(self.annot, None) == -1
         assert cmp(self.annot, self.annot) == 0

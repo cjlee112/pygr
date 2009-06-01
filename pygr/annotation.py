@@ -169,17 +169,21 @@ saved directly to the sliceDB.''')
         'create an annotation object based on the input sliceInfo'
         start = int(self.getSliceAttr(sliceInfo,'start'))
         stop = int(self.getSliceAttr(sliceInfo,'stop'))
+        
         try:
-            if int(self.getSliceAttr(sliceInfo,'orientation'))<0 and start>=0:
-                start,stop = (-stop,-start) # NEGATIVE ORIENTATION COORDINATES
-        except AttributeError:
-            pass
+            orientation = self.getSliceAttr(sliceInfo, 'orientation')
+            orientation = int(orientation)
+            if orientation < 0 and start >= 0:
+                start,stop = (-stop, -start) # NEGATIVE ORIENTATION COORDINATES
+        except (AttributeError, IndexError):
+            pass                        # ok if no orientation is specified.
+        
         if start>=stop:
             raise IndexError('annotation %s has zero or negative length [%s:%s]!'
                              %(k,start,stop))
-        return self.itemClass(k, self,
-                              self.seqDB[self.getSliceAttr(sliceInfo,'id')],
-                              start, stop)
+        seq_id = self.getSliceAttr(sliceInfo, 'id')
+        seq = self.seqDB[seq_id]
+        return self.itemClass(k, self, seq, start, stop)
     def sliceAnnotation(self,k,sliceInfo,limitCache=True):
         'create annotation and cache it'
         a = self.get_annot_obj(k, sliceInfo)
