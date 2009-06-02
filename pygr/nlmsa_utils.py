@@ -312,9 +312,11 @@ def prune_self_mappings(src_prefix,dest_prefix,is_bidirectional):
 def nlmsa_textdump_unpickler(filepath,kwargs):
   from cnestedlist import textfile_to_binaries,NLMSA
   logger.info('Saving NLMSA indexes from textdump: %s' % filepath)
-  path = textfile_to_binaries(filepath,
-                      buildpath=classutil.get_env_or_cwd('PYGRDATABUILDDIR'),
-                              **kwargs)
+  try:
+    buildpath = os.environ['WORLDBASEBUILDDIR']
+  except KeyError:
+    buildpath = classutil.get_env_or_cwd('PYGRDATABUILDDIR')
+  path = textfile_to_binaries(filepath, buildpath=buildpath, **kwargs)
   o = NLMSA(path) # NOW OPEN IN READ MODE FROM THE SAVED INDEX FILESET
   o._saveLocalBuild = True # MARK THIS FOR SAVING IN LOCAL PYGR.DATA
   return o
