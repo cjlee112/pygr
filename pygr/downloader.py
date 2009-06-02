@@ -168,8 +168,11 @@ def download_unpickler(path,filename,kwargs):
     import urllib,classutil,os
     if filename is None:
         filename = os.path.basename(path)
-    filepath = os.path.join(classutil.get_env_or_cwd('PYGRDATADOWNLOAD'),\
-        filename)
+    try:
+        dl_dir = os.environ['WORLDBASEDOWNLOAD']
+    except KeyError:
+        dl_dir = classutil.get_env_or_cwd('PYGRDATADOWNLOAD')
+    filepath = os.path.join(dl_dir, filename)
     logger.info('Beginning download of %s to %s...' % (path, filepath))
     t = urllib.urlretrieve(path,filepath,download_monitor)
     logger.info('Download done.')
@@ -182,7 +185,7 @@ download_unpickler.__safe_for_unpickling__ = 1
 
 class SourceURL(object):
     '''unpickling this object will trigger downloading of the desired path,
-    which will be cached to PYGRDATADOWNLOAD directory if any.
+    which will be cached to WORLDBASEDOWNLOAD directory if any.
     The value returned from unpickling will simply be the path to the
     downloaded file, as a SourceFileName'''
     _worldbase_no_cache = True # force worldbase to always re-load this class
