@@ -206,6 +206,10 @@ class BlastMapping(object):
                 return self.run_formatdb(filepath)
             except (IOError,OSError): # BUILD FAILED 
                 classutil.report_exception() # REPORT IT AND CONTINUE
+        # @CTB shouldn't we check to make sure that at least one formatdb
+        # succeeded?  Of course, it may be that we don't need to run
+        # formatdb because the database exists... so, what, just report
+        # the blastall error?
             
     def raw_fasta_stream(self, ifile=None, idFilter=None):
         'return a stream of fasta-formatted sequences, and ID filter function if needed'

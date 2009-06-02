@@ -290,18 +290,27 @@ def temp_table_name(dbname='test'):
 def drop_tables(cursor, tablename):
     cursor.execute('drop table if exists %s' % tablename)
     cursor.execute('drop table if exists %s_schema' % tablename)
-                
+
+_blast_enabled = None                  # cache results of blast_enabled()
+
 def blast_enabled():
     """
     Detects whether the blast suite is functional on the current system
     """
+    global _blast_enabled
+    if _blast_enabled is not None:
+        return _blast_enabled
+
     p = classutil.FilePopen(('blastall',), stdout=classutil.PIPE)
     try:
         p.wait() # try to run the program
     except OSError:
         warn('NCBI toolkit (blastall) missing?')
+        _blast_enabled = False
         return False
     p.close()
+
+    _blast_enabled = True
     return True
 
 
