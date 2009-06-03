@@ -72,6 +72,16 @@ class TranslationAnnotSeqDescr(object):
     def __get__(self,obj,objtype):
         return absoluteSlice(obj._anno_seq, obj._anno_start, obj._anno_stop)
 
+class TranslationAnnotFrameDescr(object):
+    """Get the frame of this protein translation, relative to original DNA."""
+    def __get__(self, obj, objtype):
+        orig = obj.pathForward.sequence
+        if orig.orientation > 0:
+            frame = (orig.start % 3) + 1
+        else:
+            return -((orig.start + 1) % 3 + 1)
+        return frame
+
 class TranslationAnnot(AnnotationSeq):
     'annotation representing aa translation of a given nucleotide interval'
     def __init__(self, id, db, parent, start, stop):
@@ -79,6 +89,7 @@ class TranslationAnnot(AnnotationSeq):
         self.stop /= 3
         self._anno_stop = stop
     sequence = TranslationAnnotSeqDescr()
+    frame = TranslationAnnotFrameDescr()
     _seqtype = PROTEIN_SEQTYPE
     def strslice(self, start, stop):
         'get the aa translation of our associated ORF'
@@ -95,6 +106,7 @@ class TranslationAnnotSliceDescr(object):
 
 class TranslationAnnotSlice(AnnotationSlice):
     sequence = TranslationAnnotSliceDescr()
+    frame = TranslationAnnotFrameDescr()
 
 
 class AnnotationDB(object, UserDict.DictMixin):
@@ -141,7 +153,7 @@ maxCache specfies the maximum number of annotation objects to keep in the cache.
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(sliceDB=0,seqDB=0,annotationType=0, autoGC=0,
                         itemClass=0,itemSliceClass=0,sliceAttrDict=0,maxCache=0)
-    def __hash__(self):
+    def __hash__(self):                 # @CTB unnecessary??
         'ALLOW THIS OBJECT TO BE USED AS A KEY IN DICTS...'
         return id(self)
     def __getitem__(self,k):
@@ -169,17 +181,21 @@ saved directly to the sliceDB.''')
         'create an annotation object based on the input sliceInfo'
         start = int(self.getSliceAttr(sliceInfo,'start'))
         stop = int(self.getSliceAttr(sliceInfo,'stop'))
+        
         try:
-            if int(self.getSliceAttr(sliceInfo,'orientation'))<0 and start>=0:
-                start,stop = (-stop,-start) # NEGATIVE ORIENTATION COORDINATES
-        except AttributeError:
-            pass
+            orientation = self.getSliceAttr(sliceInfo, 'orientation')
+            orientation = int(orientation)
+            if orientation < 0 and start >= 0:
+                start,stop = (-stop, -start) # NEGATIVE ORIENTATION COORDINATES
+        except (AttributeError, IndexError):
+            pass                        # ok if no orientation is specified.
+        
         if start>=stop:
             raise IndexError('annotation %s has zero or negative length [%s:%s]!'
                              %(k,start,stop))
-        return self.itemClass(k, self,
-                              self.seqDB[self.getSliceAttr(sliceInfo,'id')],
-                              start, stop)
+        seq_id = self.getSliceAttr(sliceInfo, 'id')
+        seq = self.seqDB[seq_id]
+        return self.itemClass(k, self, seq, start, stop)
     def sliceAnnotation(self,k,sliceInfo,limitCache=True):
         'create annotation and cache it'
         a = self.get_annot_obj(k, sliceInfo)

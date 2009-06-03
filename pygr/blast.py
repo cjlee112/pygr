@@ -384,8 +384,12 @@ def get_orf_slices(ivals, **kwargs):
     except StopIteration:
         raise ValueError('empty ivals list!')
     seqDB = region.db
+
+    # construct a covering ival by taking the union of all ivals
     for ival in it:
-        region = region + ival # get total union of all intervals
+        region = region + ival
+
+    # retrieve or create a translation db that will automatically 
     try:
         translationDB = seqDB.translationDB
     except AttributeError: # create a new TranslationAnnot DB
@@ -393,8 +397,14 @@ def get_orf_slices(ivals, **kwargs):
                                      itemSliceClass=TranslationAnnotSlice,
                                      sliceAttrDict=dict(id=0,start=1,stop=2))
         seqDB.translationDB = translationDB
+
+    # create an annotation representing the entire translated ORF, named
+    # uniquely by taking the length of the database.
     a = translationDB.new_annotation(str(len(translationDB)),
                                      (region.id, region.start, region.stop))
+
+    # now, for each of the ORF intervals, construct a new annotation ival
+    # and keep.
     l = []
     for ival in ivals: # transform to slices of our ORF annotation
         aval = a[(ival.start - region.start)/3 :
