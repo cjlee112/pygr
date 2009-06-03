@@ -36,9 +36,6 @@ def check_results(results, correct, formatter, delta=0.01,
 
 class BlastBase(unittest.TestCase):
     def setUp(self):
-        if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
         hbb1_mouse = testutil.datafile('hbb1_mouse.fa')
         sp_hbb1 = testutil.datafile('sp_hbb1')
 
@@ -54,6 +51,9 @@ class Blast_Test(BlastBase):
     """
     def test_blastp(self):
         "Testing blastp"
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         blastmap = blast.BlastMapping(self.prot, verbose=False)
         results = blastmap[self.prot['HBB1_XENLA']]
 
@@ -90,6 +90,9 @@ class Blast_Test(BlastBase):
         results are saved so we only do this time-consuming operation once"""
         global _multiblast_results
 
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+
         if not _multiblast_results:
             logger.info("running expensive multiblast")
             blastmap = blast.BlastMapping(self.prot, verbose=False)
@@ -105,7 +108,9 @@ class Blast_Test(BlastBase):
 
     def test_multiblast_single(self):
         "Test multi-sequence BLAST results, for BLASTs run one by one."
-
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         blastmap = blast.BlastMapping(self.prot, verbose=False)
         al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                bidirectional=False)
@@ -122,6 +127,9 @@ class Blast_Test(BlastBase):
         
     def test_multiblast_long(self):
         "testing multi sequence blast with long db"
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         longerFile = testutil.datafile('sp_all_hbb')
 
         sp_all_hbb = seqdb.SequenceFileDB(longerFile)
@@ -136,6 +144,9 @@ class Blast_Test(BlastBase):
         This tests against a minor bug in cnestedlist where maskEnd
         is used to clip the end to the mask region.
         """
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         db = seqdb.SequenceFileDB('data/gapping.fa')
         blastmap = blast.BlastMapping(db)
         ungapped = db['ungapped']
@@ -145,6 +156,9 @@ class Blast_Test(BlastBase):
         results[ungapped]
 
     def test_no_bidirectional(self):
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         db = seqdb.SequenceFileDB('data/gapping.fa')
         gapped = db['gapped']
         ungapped = db['ungapped']
@@ -165,6 +179,9 @@ class Blast_Test(BlastBase):
 class Blastx_Test(BlastBase):
     def test_blastx(self):
         "Testing blastx"
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
         
         correct = [(146, 146, 438, 0.979), (146, 146, 438, 0.911),
@@ -199,6 +216,9 @@ class Blastx_Test(BlastBase):
 class Tblastn_Test(BlastBase):
     def test_tblastn(self):
         "Blastn test"
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         blastmap = blast.BlastMapping(self.dna, verbose=False)
         result = blastmap[self.prot['HBB1_XENLA']]
         src, dest, edge = iter(result.edges()).next()
@@ -232,6 +252,9 @@ class Tblastn_Test(BlastBase):
 
     def test_megablast(self):
         '''test megablast'''
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         blastmap = blast.MegablastMapping(self.dna, verbose=False)
         # must use copy of sequence to get "self matches" from NLMSA...
         query = seqdb.Sequence(str(self.dna['gi|171854975|dbj|AB364477.1|']),
