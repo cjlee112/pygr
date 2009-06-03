@@ -135,6 +135,8 @@ class BlastHitParser(object):
         return self.query_seq and self.subject_seq
     def generate_intervals(self):
         "generate interval tuples for the current alignment"
+        yield CoordsGroupStart() # bracket with grouping markers
+        
         query_ori,query_factor=get_ori_letterunit(self.query_start,\
                   self.query_end,self.query_seq,self.gapchar)
         subject_ori,subject_factor=get_ori_letterunit(self.subject_start,\
@@ -163,6 +165,9 @@ class BlastHitParser(object):
                                         s_start, i_subject,
                                         query_ori, query_factor,
                                         subject_ori, subject_factor)
+
+        yield CoordsGroupEnd()
+
     def parse_file(self,myfile):
         "generate interval tuples by parsing BLAST output from myfile"
         for line in myfile:
@@ -171,10 +176,8 @@ class BlastHitParser(object):
                (is_line_start('>',line) or is_line_start(' Score =',line) \
                 or is_line_start('  Database:',line) \
                 or is_line_start('Query=',line)):
-                yield CoordsGroupStart() # bracket with grouping markers
                 for t in self.generate_intervals(): # REPORT THIS ALIGNMENT
                     yield t # GENERATE ALL ITS INTERVAL MATCHES
-                yield CoordsGroupEnd()
                 self.reset() # RESET TO START A NEW ALIGNMENT
             if is_line_start('Query=',line):
                 self.save_query(line)
