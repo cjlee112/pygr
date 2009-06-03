@@ -40,7 +40,7 @@ alignments (e.g. an all vs. all BLAST analysis) we may prefer to store the align
 on-disk.  In pygr, all we have to do is change the mode flag to 'w' (implying *write*
 a file)::
 
-   from pygr import cnestedlist,seqdb
+   from pygr import cnestedlist, seqdb, blast
    msa = cnestedlist.NLMSA('all_vs_all', mode='w', bidirectional=False) # on-disk
    sp = seqdb.SequenceFileDB('sp') # open swissprot database
    blastmap = blast.BlastMapping(sp) # create blast mapping object

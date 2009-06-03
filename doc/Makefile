@@ -13,6 +13,8 @@ DOC_DIR=rest
 BUILD_DIR=html_new
 EPYDOC_DIR=$(BUILD_DIR)/epydoc
 
+all: newdocs
+
 pygr: html/pygr/pygr.html 
 html/pygr/pygr.html: $(PYGRFILES) perl/distutils.perl 
 	$(MKHTML) --dir html/pygr --split 4 pygr/pygr.tex
