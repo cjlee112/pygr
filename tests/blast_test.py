@@ -46,6 +46,8 @@ class BlastBase(unittest.TestCase):
         self.prot = seqdb.SequenceFileDB(sp_hbb1)
 
 
+_multiblast_results = None
+
 class Blast_Test(BlastBase):
     """
     Test basic BLAST stuff (using blastp).
@@ -86,19 +88,20 @@ class Blast_Test(BlastBase):
     def get_multiblast_results(self):
         """return saved results or generate them if needed;
         results are saved so we only do this time-consuming operation once"""
-        try: # return saved results if available
-            return self.saved_multiblast_results
-        except AttributeError:
-            pass
-        blastmap = blast.BlastMapping(self.prot, verbose=False)
-        al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
-                               bidirectional=False)
-        
-        blastmap(al=al, queryDB=self.prot) # all vs all
-        
-        al.build() # construct the alignment indexes
-        self.saved_multiblast_results = [al[seq] for seq in self.prot.values()]
-        return self.saved_multiblast_results
+        global _multiblast_results
+
+        if not _multiblast_results:
+            logger.info("running expensive multiblast")
+            blastmap = blast.BlastMapping(self.prot, verbose=False)
+            al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
+                                   bidirectional=False)
+
+            blastmap(al=al, queryDB=self.prot) # all vs all
+
+            al.build() # construct the alignment indexes
+            _multiblast_results = [al[seq] for seq in self.prot.values()]
+            
+        return _multiblast_results
 
     def test_multiblast_single(self):
         "Test multi-sequence BLAST results, for BLASTs run one by one."
