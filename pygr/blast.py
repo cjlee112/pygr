@@ -500,13 +500,18 @@ class BlastxMapping(BlastMapping):
             raise ValueError('Use BlastMapping for ' + blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
         seqID,p = start_blast(cmd, seq, seqDict=queryDB) # run the command
-        if queryDB is None:
-            srcDB = { seqID: seq }
-        else:
-            srcDB = queryDB
-        pipeline = (TblastnTransform(xformSrc, xformDest), blastx_results)
-        return read_blast_alignment(p.stdout, srcDB, self.idIndex,
-                                    pipeline=pipeline) # save the results
+        try:
+            if queryDB is None:
+                srcDB = { seqID: seq }
+            else:
+                srcDB = queryDB
+            pipeline = (TblastnTransform(xformSrc, xformDest), blastx_results,
+                        list) # load results to list before p.close()!!
+            results = read_blast_alignment(p.stdout, srcDB, self.idIndex,
+                                           pipeline=pipeline) # save the results
+        finally:
+            p.close() # close our PIPE files
+        return results
 
     def __getitem__(self, k):
         return self(k)

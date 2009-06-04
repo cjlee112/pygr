@@ -357,7 +357,7 @@ class BlastParsers_Test(BlastBase):
 
     def test_blastx_parser(self):
         "Testing blastx parser"
-        pipeline = (blast.TblastnTransform(True, False), blast.blastx_results)
+        pipeline = (blast.TblastnTransform(True, False), blast.blastx_results, list)
         blastx_output = open(testutil.datafile('blastx_output.txt'), 'r')
         seq_dict =  { 'gi|171854975|dbj|AB364477.1|' :
                       self.dna['gi|171854975|dbj|AB364477.1|'] }
