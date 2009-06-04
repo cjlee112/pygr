@@ -131,34 +131,32 @@ class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
 
     def test_simple(self):
         # first set of intervals
-        db = self.db
-
         ivals = [(('a', 0, 8, 1), ('b', 0, 8, 1),),
                  (('a', 12, 20, 1), ('c', 0, 8, 1)),]
 
         n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True)
 
-        n.add_aligned_intervals(alignedIvals=ivals, srcDB=db, destDB=db,
-                                alignedIvalsAttrs=dict(id=0, start=1,
-                                stop=2, idDest=0, startDest=1,
-                                stopDest=2, ori=3, oriDest=3))
+        alignedIvalsAttrs = dict(id=0, start=1, stop=2, idDest=0, startDest=1,
+                                 stopDest=2, ori=3, oriDest=3)
+        cti = nlmsa_utils.CoordsToIntervals(self.db, self.db,
+                                            alignedIvalsAttrs)
+        n.add_aligned_intervals(cti(ivals))
         n.build()
 
         self._check_results(n)
 
     def test_simple_no_ori(self):
         # first set of intervals
-        db = self.db
-
         ivals = [(('a', 0, 8,), ('b', 0, 8,),),
                  (('a', 12, 20,), ('c', 0, 8,)),]
 
         n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True)
 
-        n.add_aligned_intervals(alignedIvals=ivals, srcDB=db, destDB=db,
-                                alignedIvalsAttrs=dict(id=0, start=1,
-                                                       stop=2, idDest=0,
-                                                       startDest=1,stopDest=2))
+        alignedIvalsAttrs = dict(id=0, start=1, stop=2, idDest=0, startDest=1,
+                                 stopDest=2)
+        cti = nlmsa_utils.CoordsToIntervals(self.db, self.db,
+                                            alignedIvalsAttrs)
+        n.add_aligned_intervals(cti(ivals))
         n.build()
 
         self._check_results(n)
@@ -182,7 +180,8 @@ class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
 
         n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True)
 
-        n.add_aligned_intervals(alignedIvals=ivals, srcDB=db, destDB=db)
+        cti = nlmsa_utils.CoordsToIntervals(self.db, self.db)
+        n.add_aligned_intervals(cti(ivals))
         n.build()
 
         self._check_results(n)
@@ -205,8 +204,8 @@ class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
 
         n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True)
 
-        n.add_aligned_intervals(alignedIvals=ivals, srcDB=db, destDB=db,
-                                alignedIvalsAttrs={}) # @CTB empty dict??
+        cti = nlmsa_utils.CoordsToIntervals(self.db, self.db, {})
+        n.add_aligned_intervals(cti(ivals))
         n.build()
 
         self._check_results(n)
@@ -231,7 +230,8 @@ class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
         n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True,
                               seqDict=db)
 
-        n.add_aligned_intervals(alignedIvals=ivals)
+        cti = nlmsa_utils.CoordsToIntervals(self.db)
+        n.add_aligned_intervals(cti(ivals))
         n.build()
 
 if __name__ == '__main__':

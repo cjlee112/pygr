@@ -3,7 +3,7 @@ import classutil, logger
 from sequtil import *
 from parse_blast import BlastHitParser
 from seqdb import write_fasta, read_fasta
-from nlmsa_utils import CoordsGroupStart, CoordsGroupEnd, read_aligned_coords
+from nlmsa_utils import CoordsGroupStart, CoordsGroupEnd, CoordsToIntervals
 from annotation import AnnotationDB, TranslationAnnot, TranslationAnnotSlice
 import cnestedlist
 
@@ -24,23 +24,35 @@ def blast_program(query_type,db_type):
     return progs[query_type][db_type]
 
 
-def read_interval_alignment(ofile, srcDB, destDB, al=None, **kwargs):
-    "Read tab-delimited interval mapping between seqs from the 2 sets of seqs"
+def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None):
+    """apply sequence of transforms to input read from ofile:
+    BlastHitParser; CoordsToIntervals; save_interval_alignment OR [pipeline]
+    If pipeline is not None, it must be a list of filter functions each
+    taking a single argument and returning an iterator or iterable result object"""
+    p = BlastHitParser()
+    d = dict(id='src_id', start='src_start', stop='src_end', ori='src_ori',
+             idDest='dest_id', startDest='dest_start',
+             stopDest='dest_end', oriDest='dest_ori')
+    cti = CoordsToIntervals(srcDB, destDB, d)
+    alignedIvals = cti(p.parse_file(ofile))
+    if pipeline is None:
+        result = save_interval_alignment(alignedIvals, al)
+    else: # apply all the filters in our pipeline one by one
+        result = alignedIvals
+        for f in pipeline:
+            result = f(result)
+    if p.nline == 0: # no blast output??
+        raise IOError('no BLAST output.  Check that blastall is in your PATH')
+    return result
+
+def save_interval_alignment(alignedIvals, al=None):
+    """Save alignedIvals to al, or a new in-memory NLMSA"""
     needToBuild = False
     if al is None:
         al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                bidirectional=False)
         needToBuild = True
-    p = BlastHitParser()
-    al.add_aligned_intervals(p.parse_file(ofile), srcDB, destDB,
-                             alignedIvalsAttrs=
-                             dict(id='src_id', start='src_start',
-                                  stop='src_end', ori='src_ori',
-                                  idDest='dest_id', startDest='dest_start',
-                                  stopDest='dest_end', oriDest='dest_ori'),
-                             **kwargs)
-    if p.nline == 0: # NO BLAST OUTPUT??
-        raise IOError('no BLAST output.  Check that blastall is in your PATH')
+    al.add_aligned_intervals(alignedIvals)
     if needToBuild:
         al.build()
     return al
@@ -67,9 +79,9 @@ def process_blast(cmd, seq, seqDB, al=None, seqString=None, queryDB=None,
     seqID,p = start_blast(cmd, seq, seqString, seqDict=queryDB, **popenArgs)
     try:
         if queryDB is not None:
-            al = read_interval_alignment(p.stdout, queryDB, seqDB, al, **kwargs)
+            al = read_blast_alignment(p.stdout, queryDB, seqDB, al, **kwargs)
         else:
-            al = read_interval_alignment(p.stdout, {seqID:seq}, seqDB, al,
+            al = read_blast_alignment(p.stdout, {seqID:seq}, seqDB, al,
                                          **kwargs)
     finally:
         p.close() # close our PIPE files
@@ -274,12 +286,13 @@ To turn off this message, use the verbose=False option''' % methodname)
         blastprog = self.blast_program(seq, blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
         if blastprog=='tblastn': # apply ORF transformation to results
-            return process_blast(cmd, seq, self.idIndex, al, queryDB=queryDB,
-                                 groupIntervals=generate_tblastn_ivals)
+            pipeline = (TblastnTransform(), save_interval_alignment)
         elif blastprog=='blastx':
             raise ValueError("Use BlastxMapping for " + blastprog)
         else:
-            return process_blast(cmd, seq, self.idIndex, al, queryDB=queryDB)
+            pipeline = None
+        return process_blast(cmd, seq, self.idIndex, al, queryDB=queryDB,
+                             pipeline=pipeline)
 
 class MegablastMapping(BlastMapping):
     def __call__(self, seq, al=None, blastpath='megablast', expmax=1e-20,
@@ -376,7 +389,7 @@ class BlastIDIndex(object):
         except KeyError: # translate to the correct ID
             return self.seqDB[self.get_real_id(seqID)]
 
-def get_orf_slices(ivals, **kwargs):
+def get_orf_slices(ivals):
     'create list of TranslationAnnotation slices from union of seq ivals'
     it = iter(ivals)
     try:
@@ -412,43 +425,38 @@ def get_orf_slices(ivals, **kwargs):
         l.append(aval)
     return l
 
-def generate_tblastn_ivals(alignedIvals, xformSrc=False, xformDest=True,
-                           **kwargs):
-    'process target nucleotide ivals into TranslationAnnot slices'
-    for t in alignedIvals: # read aligned protein:nucleotide ival pairs
-        if isinstance(t, CoordsGroupStart):
-            yield t # pass through grouping marker in case anyone cares
-            srcIvals = []
-            destIvals = []
-        elif isinstance(t, CoordsGroupEnd): # process all ivals in this hit
-            if xformSrc: # transform to TranslationAnnot
-                srcIvals = get_orf_slices(srcIvals, **kwargs)
-            if xformDest: # transform to TranslationAnnot
-                destIvals = get_orf_slices(destIvals, **kwargs)
-            it = iter(srcIvals)
-            for dest in destIvals: # recombine src,dest pairs
-                yield (it.next(), dest)  # no edge info
-            yield t # pass through grouping marker in case anyone cares
-        else: # just keep accumulating all the ivals for this hit
-            srcIvals.append(t[0])
-            destIvals.append(t[1])
+class TblastnTransform(object):
+    def __init__(self, xformSrc=False, xformDest=True):
+        self.xformSrc = xformSrc
+        self.xformDest = xformDest
+
+    def __call__(self, alignedIvals):
+        'process target nucleotide ivals into TranslationAnnot slices'
+        for t in alignedIvals: # read aligned protein:nucleotide ival pairs
+            if isinstance(t, CoordsGroupStart):
+                yield t # pass through grouping marker in case anyone cares
+                srcIvals = []
+                destIvals = []
+            elif isinstance(t, CoordsGroupEnd): # process all ivals in this hit
+                if self.xformSrc: # transform to TranslationAnnot
+                    srcIvals = get_orf_slices(srcIvals)
+                if self.xformDest: # transform to TranslationAnnot
+                    destIvals = get_orf_slices(destIvals)
+                it = iter(srcIvals)
+                for dest in destIvals: # recombine src,dest pairs
+                    yield (it.next(), dest)  # no edge info
+                yield t # pass through grouping marker in case anyone cares
+            else: # just keep accumulating all the ivals for this hit
+                srcIvals.append(t[0])
+                destIvals.append(t[1])
 
 
-def blastx_results(ofile, srcDB, destDB, xformSrc=True, xformDest=False,
-                   **kwargs):
+def blastx_results(alignedIvals):
     '''store blastx or tblastx results as a list of individual hits.
     Each hit is stored as the usual NLMSASlice interface (e.g.
     use its edges() method to get src,dest,edgeInfo tuples'''
-    p = BlastHitParser()
-    alignedIvals = read_aligned_coords(p.parse_file(ofile), srcDB, destDB,
-                                       dict(id='src_id', start='src_start',
-                                            stop='src_end', ori='src_ori',
-                                            idDest='dest_id',
-                                            startDest='dest_start',
-                                            stopDest='dest_end',
-                                            oriDest='dest_ori'))
     l = []
-    for t in generate_tblastn_ivals(alignedIvals, xformSrc, xformDest):
+    for t in alignedIvals:
         if isinstance(t, CoordsGroupStart):
             al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True)
         elif isinstance(t, CoordsGroupEnd): # process all ivals in this hit
@@ -484,7 +492,8 @@ class BlastxMapping(BlastMapping):
             raise ValueError('Use BlastMapping for ' + blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
         seqID,p = start_blast(cmd, seq) # run the command
-        return blastx_results(p.stdout, {seqID:seq}, self.idIndex, xformSrc,
-                              xformDest, **kwargs) # save the results
+        pipeline = (TblastnTransform(xformSrc, xformDest), blastx_results)
+        return read_blast_alignment(p.stdout, {seqID:seq}, self.idIndex,
+                                    pipeline=pipeline) # save the results
     def __getitem__(self, k):
         return self(k)

@@ -1519,7 +1519,7 @@ cdef class NLMSA:
         self.initLPO() # CREATE AS MANY LPOs AS WE NEED
         self.newSequence(is_union=1) # SO HE NEEDS AN INITIAL UNION
       if alignedIvals is not None:
-        self.add_aligned_intervals(alignedIvals, **kwargs)
+        self.add_aligned_intervals(alignedIvals)
         self.build()
     elif mode=='memory': # CONSTRUCT IN-MEMORY
       if self.seqDict is None:
@@ -1531,7 +1531,7 @@ cdef class NLMSA:
       self.newSequence(is_union=1) # CREATE INITIAL UNION
       self.lpo_id=0
       if alignedIvals is not None:
-        self.add_aligned_intervals(alignedIvals, **kwargs)
+        self.add_aligned_intervals(alignedIvals)
         self.build()
     elif mode!='xmlrpc':
       raise ValueError('unknown mode %s' % mode)
@@ -1698,9 +1698,9 @@ See the NLMSA documentation for more details.\n''')
     ival = a.sequence # GET PURE SEQUENCE INTERVAL
     self.__iadd__(ival) # ADD SEQ AS A NODE IN OUR ALIGNMENT
     self[ival].__iadd__(a) # ADD ALIGNMENT BETWEEN ival AND ANNOTATION
-  def add_aligned_intervals(self, alignedIvals, *args, **kwargs):
-    'add ID/coords in alignedIvals to this alignment'
-    nlmsa_utils.add_aligned_intervals(self, alignedIvals, *args, **kwargs)
+  def add_aligned_intervals(self, alignedIvals):
+    'add alignedIvals to this alignment'
+    nlmsa_utils.add_aligned_intervals(self, alignedIvals)
 
   cdef void free_seqidmap(self,int nseq0,SeqIDMap *seqidmap):
     cdef int i

@@ -348,78 +348,69 @@ def get_interval(seq,start,end,ori):
 
 
 _default_ivals_attrs = dict(idDest='id', startDest='start',
-                           stopDest='stop', oriDest='ori')
+                            stopDest='stop', oriDest='ori')
 
-def read_aligned_coords(alignedCoords, srcDB, destDB,
-                        alignedIvalsAttrs=_default_ivals_attrs):
-  '''Read id, start, stop, ori info from alignedCoords and generate intervals.
-  '''
+class CoordsToIntervals(object):
+    '''Transforms coord objects to (ival1,ival2) aligned interval pairs
+    The intervals can come in in two forms:
+    First, as a list, with [src, dest1, dest2, dest3] information;
+    or second, as an object, with attributes specifying src/dest info.
+    '''
+    def __init__(self, srcDB, destDB=None,
+                 alignedIvalsAttrs=_default_ivals_attrs):
+        self.srcDB = srcDB
+        if destDB:
+            self.destDB = destDB
+        else:
+            self.destDB = srcDB
+        self.getAttr = classutil.make_attribute_interface(alignedIvalsAttrs)
 
-  getAttr = classutil.make_attribute_interface(alignedIvalsAttrs)
-  
-  for ivals in alignedCoords:
-    if isinstance(ivals, (CoordsGroupStart,CoordsGroupEnd)):
-      yield ivals # just pass grouping-info through
-      continue
+    def __call__(self, alignedCoords):
+        '''Read id, start, stop, ori info from alignedCoords and generate intervals.
+        '''
+        for c in alignedCoords:
+            if isinstance(c, (CoordsGroupStart,CoordsGroupEnd)):
+                yield c # just pass grouping-info through
+                continue
 
-    #
-    # the intervals can come in in two forms:
-    #   first, as a list, with [src, dest1, dest2, dest3] information;
-    #   or second, as an object, with attributes specifying src/dest info.
-    #
+            try:
+                srcData = c[0] # align everything to the first interval
+                destSet = c[1:]
+            except TypeError:
+                srcData = c # extract both src and dest from ivals object
+                destSet = [c]
+
+            id = self.getAttr(srcData, 'id')
+            start = self.getAttr(srcData, 'start')
+            stop = self.getAttr(srcData, 'stop')
+            ori = self.getAttr(srcData, 'ori', 1)    # default orientation: +
+
+            srcIval = get_interval(self.srcDB[id], start, stop, ori)
+      
+            for destData in destSet: # get the dest interval(s) and yield w/src.
+                idDest = self.getAttr(destData, 'idDest')
+                startDest = self.getAttr(destData, 'startDest')
+                stopDest = self.getAttr(destData, 'stopDest')
+                oriDest = self.getAttr(destData, 'oriDest', 1) # default orientation: +
+      
+                destIval = get_interval(self.destDB[idDest], startDest,
+                                        stopDest, oriDest)
+      
+                yield srcIval, destIval # generate aligned intervals
+      
+
+def add_aligned_intervals(al, alignedIvals):
+    '''Save a set of aligned intervals to alignment.
+    '''
+    # for each pair of aligned intervals, save them into the alignment.
+    for t in alignedIvals:
+        # is 't' a marker object for start or end of a group of coordinates?
+        if isinstance(t, (CoordsGroupStart, CoordsGroupEnd)):
+            continue # ignore grouping markers
     
-    try:
-      srcData = ivals[0] # align everything to the first interval
-      destSet = ivals[1:]
-    except TypeError:
-      srcData = ivals # extract both src and dest from ivals object
-      destSet = [ivals]
-
-    id = getAttr(srcData, 'id')
-    start = getAttr(srcData, 'start')
-    stop = getAttr(srcData, 'stop')
-    ori = getAttr(srcData, 'ori', 1)    # default orientation: +
-
-    srcIval = get_interval(srcDB[id], start, stop, ori)
-      
-    for destData in destSet: # get the dest interval(s) and yield w/src.
-      idDest = getAttr(destData, 'idDest')
-      startDest = getAttr(destData, 'startDest')
-      stopDest = getAttr(destData, 'stopDest')
-      oriDest = getAttr(destData, 'oriDest', 1) # default orientation: +
-      
-      destIval = get_interval(destDB[idDest], startDest, stopDest, oriDest)
-      
-      yield srcIval, destIval # generate aligned intervals
-      
-
-def add_aligned_intervals(al, alignedCoords, srcDB=None, destDB=None,
-                          groupIntervals=None, **kwargs):
-  '''Save a set of aligned intervals to alignment.
-
-  Apply groupIntervals() function if provided.
-  '''
-  if srcDB is None: # get all seqs from the existing seqDict
-    srcDB = al.seqDict
-  if destDB is None: # use same input set as source
-    destDB = srcDB
-
-  # convert alignedCoords into a set of tuples.
-  alignedIvals = read_aligned_coords(alignedCoords, srcDB, destDB, **kwargs)
-
-  # apply grouping function if present  
-  if groupIntervals is not None:
-    alignedIvals = groupIntervals(alignedIvals)
-
-  # for each pair of aligned intervals, save them into the alignment.
-  for t in alignedIvals:
-    # is 't' a marker object for the start or end of a group of coordinates?
-    if isinstance(t, (CoordsGroupStart, CoordsGroupEnd)):
-      continue # ignore grouping markers
-    
-    (src, dest) = t
-    al += src
-    al[src][dest] = None                # save their alignment
+        (src, dest) = t
+        al += src
+        al[src][dest] = None                # save their alignment
 
 
 class CoordsGroupStart(object):

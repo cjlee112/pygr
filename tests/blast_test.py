@@ -294,8 +294,8 @@ class BlastParsers_Test(BlastBase):
         seq_dict = { 'HBB1_XENLA' : self.prot['HBB1_XENLA'] }
         prot_index = blast.BlastIDIndex(self.prot)        
         try:
-            alignment = blast.read_interval_alignment(blastp_output, seq_dict,
-                                                      prot_index)
+            alignment = blast.read_blast_alignment(blastp_output, seq_dict,
+                                                   prot_index)
             results = alignment[self.prot['HBB1_XENLA']]
         finally:
             blastp_output.close()
@@ -311,9 +311,8 @@ class BlastParsers_Test(BlastBase):
         try:
             al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                    bidirectional=False)
-            al = blast.read_interval_alignment(multiblast_output, self.prot,
-                                               blast.BlastIDIndex(self.prot),
-                                               al)
+            al = blast.read_blast_alignment(multiblast_output, self.prot,
+                                            blast.BlastIDIndex(self.prot), al)
         finally:
             multiblast_output.close()
         al.build()
@@ -332,8 +331,8 @@ class BlastParsers_Test(BlastBase):
         try:
             al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                    bidirectional=False)
-            al = blast.read_interval_alignment(multiblast_output, sp_all_hbb,
-                                               self.prot, al)
+            al = blast.read_blast_alignment(multiblast_output, sp_all_hbb,
+                                            self.prot, al)
         finally:
             multiblast_output.close()
         al.build()
@@ -358,13 +357,15 @@ class BlastParsers_Test(BlastBase):
 
     def test_blastx_parser(self):
         "Testing blastx parser"
+        pipeline = (blast.TblastnTransform(True, False), blast.blastx_results)
         blastx_output = open(testutil.datafile('blastx_output.txt'), 'r')
         seq_dict =  { 'gi|171854975|dbj|AB364477.1|' :
                       self.dna['gi|171854975|dbj|AB364477.1|'] }
         try:
-            results = blast.blastx_results(blastx_output,
-                                           seq_dict,
-                                           blast.BlastIDIndex(self.prot))
+            results = blast.read_blast_alignment(blastx_output,
+                                                 seq_dict,
+                                                 blast.BlastIDIndex(self.prot),
+                                                 pipeline=pipeline)
         finally:
             blastx_output.close()
         correct = [(146, 146, 438, 0.979), (146, 146, 438, 0.911),
@@ -387,16 +388,13 @@ class BlastParsers_Test(BlastBase):
 
     def test_tblastn_parser(self):
         "Testing tblastn parser"
-        tblastn_output = open(testutil.datafile('tblastn_output.txt'), 'r')
         seq_dict = { 'HBB1_XENLA' : self.prot['HBB1_XENLA'] }
         dna_id = blast.BlastIDIndex(self.dna)
+        tblastn_output = open(testutil.datafile('tblastn_output.txt'), 'r')
         try:
-            al = blast.read_interval_alignment(tblastn_output,
-                                                   seq_dict,
-                                                   dna_id,
-                                                   
-                                                   groupIntervals=blast.generate_tblastn_ivals
-                                                   )
+            pipeline = (blast.TblastnTransform(), blast.save_interval_alignment)
+            al = blast.read_blast_alignment(tblastn_output, seq_dict, dna_id,
+                                            pipeline=pipeline)
             result = al[self.prot['HBB1_XENLA']]
         finally:
             tblastn_output.close()
