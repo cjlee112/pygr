@@ -55,6 +55,33 @@ def check_results_relaxed_blastp(results, correct, formatter, delta=0.01,
             correct_high.append(result)
     assert testutil.approximate_cmp(correct_high, results_high, delta) == 0
 
+def check_results_relaxed_blastx(results, correct, formatter, delta=0.01,
+                                 reformatCorrect=False, allowedLengthDiff=0):
+    results = reformat_results(results, formatter)
+
+    if reformatCorrect: # reformat these data too
+        correct = reformat_results(correct, formatter)
+    else:
+        correct.sort()
+
+    # Length of output
+    assert abs(len(results) - len(correct)) <= allowedLengthDiff
+
+    # Format check
+    for result in results:
+        assert 3 * result[0] == result[2]
+        assert (0. < result[3] and result[3] <= 1.)
+
+    # High-identity comparison
+    results_high = correct_high = []
+    for result in results:
+        if result[3] > 0.5:
+            results_high.append(result)
+    for result in correct:
+        if result[3] > 0.5:
+            correct_high.append(result)
+    assert testutil.approximate_cmp(correct_high, results_high, delta) == 0
+
 def reformat_results(results, formatter):
     reffed = []
     for result in results:
@@ -232,10 +259,9 @@ class Blastx_Test(BlastBase):
                    (23, 23, 69, 0.435), (120, 120, 360, 0.267)]
         
         results = blastmap[self.dna['gi|171854975|dbj|AB364477.1|']]
-        # FIXME: relax this check
-        check_results(results, correct,
+        check_results_relaxed_blastx(results, correct,
                       lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
-                                t[2].pIdentity()))
+                                t[2].pIdentity()), allowedLengthDiff=2)
 
     def test_blastx_no_blastp(self):
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
