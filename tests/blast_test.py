@@ -39,7 +39,7 @@ def check_results_relaxed_blastp(results, correct, formatter, delta=0.01,
     assert abs(len(results) - len(correct)) <= allowedLengthDiff
 
     # Format check
-    key_re = re.compile('^[A-Z]{3}[A-Z0-9]?_[A-Z]{2,5}')
+    key_re = re.compile('^[A-Z]{3}[A-Z0-9]?_[A-Z]{2,5}$')
     for result in results:
         assert key_re.search(result[0])
         assert key_re.search(result[1])
