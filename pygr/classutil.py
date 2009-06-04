@@ -527,7 +527,7 @@ def make_attribute_interface(d):
 
     If 'd' contains str values, use them to retrieve attributes from an obj.
 
-    If all else fails, emulate a normal 'getattr'.
+    If d empty, use standard 'getattr'.
     """
     if len(d):
         v = d.values()[0]
@@ -535,46 +535,35 @@ def make_attribute_interface(d):
             return AttrFromTuple(d)
         elif isinstance(v, str):
             return AttrFromObject(d)
+        raise ValueError('dictionary values must be int or str!')
 
-    return AttributeInterface(d)        # @CTB could we just return 'getattr'?
+    return getattr
     
-class AttributeInterface(object):
-  '''getattr-like interface that can work with objects or tuples.
-
-  See subclasses AttrFromTuple / AttrFromObject, below.
-  '''
-  def __init__(self, attrDict):
-    self.attrDict = attrDict
+class AttrFromTuple(object):
+    def __init__(self, attrDict):
+        self.attrDict = attrDict
     
-  def __call__(self, obj, attr, default=None):
-    'regular getattr from obj'
-    try:
-        return getattr(obj, attr)
-    except AttributeError:
-        if default is not None:
-            return default
-        # @CTB should there be a 'raise' here?
-
-class AttrFromTuple(AttributeInterface):
-  def __call__(self, obj, attr, default=None):
-    'getattr from tuple obj'
-    try:
-        return obj[self.attrDict[attr]]
-    except (IndexError, KeyError):
-        if default is not None:
-            return default
-
-class AttrFromObject(AttributeInterface):
-  def __call__(self, obj, attr, default=None):
-    'getattr with attribute name aliases'
-    try:
-        return getattr(obj, self.attrDict[attr])
-    except KeyError:
+    def __call__(self, obj, attr, default=None):
+        'getattr from tuple obj'
         try:
-            return getattr(obj, attr)
-        except KeyError:
+            return obj[self.attrDict[attr]]
+        except (IndexError, KeyError):
             if default is not None:
                 return default
+        raise AttributeError("object has no attribute '%s'" % attr)
+
+class AttrFromObject(AttrFromTuple):
+    def __call__(self, obj, attr, default=None):
+        'getattr with attribute name aliases'
+        try:
+            return getattr(obj, self.attrDict[attr])
+        except KeyError:
+            try:
+                return getattr(obj, attr)
+            except KeyError:
+                if default is not None:
+                    return default
+        raise AttributeError("object has no attribute '%s'" % attr)
 
 def kwargs_filter(kwargs, allowed):
     'return dictionary of kwargs filtered by list allowed'
