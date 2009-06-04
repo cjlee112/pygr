@@ -191,6 +191,8 @@ class BlastHitParser(object):
                 self.save_query_line(line)
             elif is_line_start('Sbjct:',line):
                 self.save_subject_line(line)
+        if self.nline == 0: # no blast output??
+            raise IOError('no BLAST output.  Check that blastall is in your PATH')
 
 if __name__=='__main__':
     import sys

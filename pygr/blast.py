@@ -41,8 +41,6 @@ def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None):
         result = alignedIvals
         for f in pipeline:
             result = f(result)
-    if p.nline == 0: # no blast output??
-        raise IOError('no BLAST output.  Check that blastall is in your PATH')
     return result
 
 def save_interval_alignment(alignedIvals, al=None):
@@ -485,8 +483,12 @@ class BlastxMapping(BlastMapping):
     to simply return the hits one at a time exactly as blastx reports them.'''
     def __call__(self, seq, blastpath='blastall',
                  blastprog=None, expmax=0.001, maxseq=None, verbose=None,
-                 opts='', xformSrc=True, xformDest=False, **kwargs):
+                 opts='', queryDB=None, xformSrc=True, xformDest=False,
+                 **kwargs):
         'perform blastx or tblastx query'
+        if queryDB is not None:
+            seq = self.get_seq_from_queryDB(queryDB)
+            
         self.warn_about_self_masking(seq, verbose)
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
@@ -497,9 +499,14 @@ class BlastxMapping(BlastMapping):
         elif blastprog != 'blastx':
             raise ValueError('Use BlastMapping for ' + blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
-        seqID,p = start_blast(cmd, seq) # run the command
+        seqID,p = start_blast(cmd, seq, seqDict=queryDB) # run the command
+        if queryDB is None:
+            srcDB = { seqID: seq }
+        else:
+            srcDB = queryDB
         pipeline = (TblastnTransform(xformSrc, xformDest), blastx_results)
-        return read_blast_alignment(p.stdout, {seqID:seq}, self.idIndex,
+        return read_blast_alignment(p.stdout, srcDB, self.idIndex,
                                     pipeline=pipeline) # save the results
+
     def __getitem__(self, k):
         return self(k)
