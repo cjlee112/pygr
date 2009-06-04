@@ -7,24 +7,15 @@ from pygr.nlmsa_utils import CoordsGroupStart,CoordsGroupEnd
 
 def check_results(results, correct, formatter, delta=0.01,
                   reformatCorrect=False):
-    found = []
-    for result in results:
-        for t in result.edges():
-            found.append(formatter(t))
+    results = reformat_results(results, formatter)
 
     if reformatCorrect: # reformat these data too
-        found2 = []
-        for result in correct:
-            for t in result.edges():
-                found2.append(formatter(t))
-        correct = found2
-
-    # order it identically
-    correct.sort()
-    found.sort()
+        correct = reformat_results(correct, formatter)
+    else:
+        correct.sort()
 
     # this is to help troubleshooting the mismatches if there are any
-    mismatch = [ (a, b) for a, b in zip(correct, found) if
+    mismatch = [ (a, b) for a, b in zip(correct, results) if
                  testutil.approximate_cmp([a], [b], delta)]
     if mismatch:
         logger.warn('blast mismatches found')
@@ -32,7 +23,16 @@ def check_results(results, correct, formatter, delta=0.01,
             logger.warn('%s != %s' % m)
 
     # this is the actual test
-    assert testutil.approximate_cmp(correct, found, delta) == 0
+    assert testutil.approximate_cmp(correct, results, delta) == 0
+
+def reformat_results(results, formatter):
+    reffed = []
+    for result in results:
+        for t in result.edges():
+            reffed.append(formatter(t))
+    reffed.sort()
+    return reffed
+
 
 class BlastBase(unittest.TestCase):
     def setUp(self):
