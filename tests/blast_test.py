@@ -280,28 +280,12 @@ class Tblastn_Test(BlastBase):
             raise SkipTest, "no BLAST installed"
         
         blastmap = blast.BlastMapping(self.dna, verbose=False)
+        correct = [(144, 144, 432, 0.451)]
+
         result = blastmap[self.prot['HBB1_XENLA']]
-        src, dest, edge = iter(result.edges()).next()
-        
-        # FIXME: relax these checks
-        self.assertEqual(str(src),
-            'LTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAHGEK'
-            'VVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYTPELHAAY'
-            'EHLFDAIADALGKGYH')
-        self.assertEqual(str(dest),
-            'LTDAEKAAVSGLWGKVNSDEVGGEALGRLLVVYPWTQRYFDSFGDLSSASAIMGNAKVKAHGKK'
-            'VITAFNEGLNHLDSLKGTFASLSELHCDKLHVDPENFRLLGNMIVIVLGHHLGKDFTPAAQAAF'
-            'QKVMAGVATALAHKYH')
-        self.assertEqual(str(dest.sequence),
-            'CTGACTGATGCTGAGAAGGCTGCTGTCTCTGGCCTGTGGGGAAAGGTGAACTCCGATGAAGTTG'
-            'GTGGTGAGGCCCTGGGCAGGCTGCTGGTTGTCTACCCTTGGACCCAGAGGTACTTTGATAGCTT'
-            'TGGAGACCTATCCTCTGCCTCTGCTATCATGGGTAATGCCAAAGTGAAGGCCCATGGCAAGAAA'
-            'GTGATAACTGCCTTTAACGAGGGCCTGAATCACTTGGACAGCCTCAAGGGCACCTTTGCCAGCC'
-            'TCAGTGAGCTCCACTGTGACAAGCTCCATGTGGATCCTGAGAACTTCAGGCTCCTGGGCAATAT'
-            'GATCGTGATTGTGCTGGGCCACCACCTGGGCAAGGATTTCACCCCCGCTGCACAGGCTGCCTTC'
-            'CAGAAGGTGATGGCTGGAGTGGCCACTGCCCTGGCTCACAAGTACCAC')
-        
-        self.assertAlmostEqual(edge.pIdentity(), 0.451, 3)
+        check_results_relaxed_blastx([result], correct,
+                      lambda t:(len(t[1]), len(t[0]), len(t[1].sequence),
+                                t[2].pIdentity()))
 
     def test_tblastn_no_blastx(self):
         blastmap = blast.BlastMapping(self.prot)
