@@ -1,0 +1,9 @@
+python-pygr (0.8.0-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Marek Szuba <Marek.Szuba@ucla.edu>  Fri,  5 Jun 2009 12:07:34 -0700
+
+Local variables:
+mode: debian-changelog
+End:
