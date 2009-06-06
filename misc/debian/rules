@@ -51,7 +51,7 @@ binary-indep:
 
 # Build architecture-dependent files here.
 binary-arch: install
-	dh_installdocs -A README doc/html_new/*
+	dh_installdocs -A README
 #	dh_installchangelogs ChangeLog
 	dh_strip
 	dh_compress
