@@ -25,10 +25,13 @@ def blast_program(query_type,db_type):
 
 
 def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None):
-    """apply sequence of transforms to input read from ofile:
+    """Apply sequence of transforms to read input from 'ofile'.
+    
     BlastHitParser; CoordsToIntervals; save_interval_alignment OR [pipeline]
     If pipeline is not None, it must be a list of filter functions each
-    taking a single argument and returning an iterator or iterable result object"""
+    taking a single argument and returning an iterator or iterable result
+    object.
+    """
     p = BlastHitParser()
     d = dict(id='src_id', start='src_start', stop='src_end', ori='src_ori',
              idDest='dest_id', startDest='dest_start',
@@ -56,7 +59,7 @@ def save_interval_alignment(alignedIvals, al=None):
     return al
 
 def start_blast(cmd, seq, seqString=None, seqDict=None, **kwargs):
-    "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
+    """Run blast and return results."""
     p = classutil.FilePopen(cmd, stdin=classutil.PIPE, stdout=classutil.PIPE,
                             **kwargs)
     if seqString is None:
@@ -73,7 +76,7 @@ def start_blast(cmd, seq, seqString=None, seqDict=None, **kwargs):
 
 def process_blast(cmd, seq, seqDB, al=None, seqString=None, queryDB=None,
                   popenArgs={}, **kwargs):
-    "run blast, pipe in sequence, pipe out aligned interval lines, return an alignment"
+    """Run blast and return an alignment."""
     seqID,p = start_blast(cmd, seq, seqString, seqDict=queryDB, **popenArgs)
     try:
         if queryDB is not None:
@@ -144,7 +147,7 @@ class BlastMapping(object):
         al = self(k, **kwargs) # run BLAST & get NLMSA storing results
         return al[k] # return NLMSASlice representing these results
     def test_db_location(self, filepath):
-        'check whether BLAST index files ready for use; return self.blastReady status'
+        '''check whether BLAST index files ready for use; return status.'''
         if not os.access(filepath+'.nsd',os.R_OK) \
                and not os.access(filepath+'.psd',os.R_OK) \
                and not os.access(filepath+'.00.nsd',os.R_OK) \
@@ -222,7 +225,10 @@ class BlastMapping(object):
         # the blastall error?
             
     def raw_fasta_stream(self, ifile=None, idFilter=None):
-        'return a stream of fasta-formatted sequences, and ID filter function if needed'
+        '''Return a stream of fasta-formatted sequences.
+
+        Optionally, apply an ID filter function if supplied.
+        '''
         if ifile is not None: # JUST USE THE STREAM WE ALREADY HAVE OPEN
             return ifile,idFilter
         try: # DEFAULT: JUST READ THE FASTA FILE, IF IT EXISTS
@@ -302,7 +308,9 @@ class MegablastMapping(BlastMapping):
         self.warn_about_self_masking(seq, verbose, 'megablast')
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
-        masked_seq = repeat_mask(seq,rmPath,rmOpts)  # MASK REPEATS TO lowercase
+
+        # mask repeats to lowercase
+        masked_seq = repeat_mask(seq,rmPath,rmOpts)
         cmd = [blastpath] + maskOpts \
               + ['-d', self.get_blast_index_path(),
                  '-D', '2', '-e', '%e' % float(expmax)] + list(opts)
@@ -328,9 +336,13 @@ class BlastIDIndex(object):
     sub-identifiers to the true FASTA ID."""
     def __init__(self, seqDB):
         self.seqDB = seqDB
-    id_delimiter='|' # FOR UNPACKING NCBI IDENTIFIERS AS WORKAROUND FOR BLAST ID CRAZINESS
+    # FOR UNPACKING NCBI IDENTIFIERS AS WORKAROUND FOR BLAST ID CRAZINESS
+    id_delimiter='|'
     def unpack_id(self,id):
-        "NCBI packs identifier like gi|123456|gb|A12345|other|nonsense. Return as list"
+        """Return |-packed NCBI identifiers as unpacked list.
+
+        NCBI packs identifier like gi|123456|gb|A12345|other|nonsense.
+        Return as list."""
         return id.split(self.id_delimiter)
 
     def index_unpacked_ids(self,unpack_f=None):
@@ -360,7 +372,8 @@ class BlastIDIndex(object):
             if id is not None: # OK THERE ARE REAL MAPPINGS STORED, SO USE THIS
                 self._unpacked_dict=t # SAVE THE MAPPING TO REAL IDENTIFIERS
                 return
-        self._unpacked_dict={} # NO NON-TRIVIAL MAPPINGS, SO JUST SAVE EMPTY MAPPING
+        # NO NON-TRIVIAL MAPPINGS, SO JUST SAVE EMPTY MAPPING            
+        self._unpacked_dict={}
 
     def get_real_id(self,bogusID,unpack_f=None):
         "try to translate an id that NCBI has mangled to the real sequence id"
@@ -507,8 +520,9 @@ class BlastxMapping(BlastMapping):
                 srcDB = queryDB
             pipeline = (TblastnTransform(xformSrc, xformDest), blastx_results,
                         list) # load results to list before p.close()!!
+            # save the results            
             results = read_blast_alignment(p.stdout, srcDB, self.idIndex,
-                                           pipeline=pipeline) # save the results
+                                           pipeline=pipeline)
         finally:
             p.close() # close our PIPE files
         return results

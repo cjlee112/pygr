@@ -365,7 +365,8 @@ _default_ivals_attrs = dict(idDest='id', startDest='start',
                             stopDest='stop', oriDest='ori')
 
 class CoordsToIntervals(object):
-    '''Transforms coord objects to (ival1,ival2) aligned interval pairs
+    '''Transforms coord objects to (ival1,ival2) aligned interval pairs.
+    
     The intervals can come in in two forms:
     First, as a list, with [src, dest1, dest2, dest3] information;
     or second, as an object, with attributes specifying src/dest info.
@@ -380,7 +381,9 @@ class CoordsToIntervals(object):
         self.getAttr = classutil.make_attribute_interface(alignedIvalsAttrs)
 
     def __call__(self, alignedCoords):
-        '''Read id, start, stop, ori info from alignedCoords and generate intervals.
+        '''Read interval info from alignedCoords and generate actual intervals.
+
+        Information read is id, start, stop, and orientation (ori).
         '''
         for c in alignedCoords:
             if isinstance(c, (CoordsGroupStart,CoordsGroupEnd)):
@@ -400,12 +403,13 @@ class CoordsToIntervals(object):
             ori = self.getAttr(srcData, 'ori', 1)    # default orientation: +
 
             srcIval = get_interval(self.srcDB[id], start, stop, ori)
-      
-            for destData in destSet: # get the dest interval(s) and yield w/src.
+
+            # get the dest interval(s) and yield w/src.
+            for destData in destSet:
                 idDest = self.getAttr(destData, 'idDest')
                 startDest = self.getAttr(destData, 'startDest')
                 stopDest = self.getAttr(destData, 'stopDest')
-                oriDest = self.getAttr(destData, 'oriDest', 1) # default orientation: +
+                oriDest = self.getAttr(destData, 'oriDest', 1) # default ori: +
       
                 destIval = get_interval(self.destDB[idDest], startDest,
                                         stopDest, oriDest)
