@@ -142,9 +142,9 @@ class BlastMapping(object):
             self.formatdb()
     def __repr__(self):
         return "<BlastMapping '%s'>" % (self.filepath)
-    def __getitem__(self, k, **kwargs):
+    def __getitem__(self, k):
         'return NLMSASlice representing BLAST results'
-        al = self(k, **kwargs) # run BLAST & get NLMSA storing results
+        al = self.__call__(k) # run BLAST & get NLMSA storing results
         return al[k] # return NLMSASlice representing these results
     def test_db_location(self, filepath):
         '''check whether BLAST index files ready for use; return status.'''
@@ -299,6 +299,8 @@ To turn off this message, use the verbose=False option''' % methodname)
                              pipeline=pipeline)
 
 class MegablastMapping(BlastMapping):
+    def __repr__(self):
+        return "<MegablastMapping '%s'>" % (self.filepath)
     def __call__(self, seq, al=None, blastpath='megablast', expmax=1e-20,
                  maxseq=None, minIdentity=None,
                  maskOpts=['-U', 'T', '-F', 'm'],
@@ -494,11 +496,17 @@ class BlastxMapping(BlastMapping):
     BlastxMapping does this because blastx may find multiple ORFs
     in the query sequence; due to this complication it is simplest
     to simply return the hits one at a time exactly as blastx reports them.'''
-    def __call__(self, seq, blastpath='blastall',
+    def __repr__(self):
+        return "<BlastxMapping '%s'>" % (self.filepath)
+    def __call__(self, seq=None, blastpath='blastall',
                  blastprog=None, expmax=0.001, maxseq=None, verbose=None,
                  opts='', queryDB=None, xformSrc=True, xformDest=False,
                  **kwargs):
         'perform blastx or tblastx query'
+        if seq is None and queryDB is None:
+            raise ValueError("we need a sequence or db to use as query!")
+        if seq and queryDB:
+            raise ValueError("both a sequence AND a db provided for query")
         if queryDB is not None:
             seq = self.get_seq_from_queryDB(queryDB)
             
@@ -528,4 +536,4 @@ class BlastxMapping(BlastMapping):
         return results
 
     def __getitem__(self, k):
-        return self(k)
+        return self.__call__(k)

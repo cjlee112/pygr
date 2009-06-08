@@ -60,6 +60,10 @@ class Blast_Test(BlastBase):
         check_results([results], blastp_correct_results,
                       lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
 
+    def test_repr(self):
+        blastmap = blast.BlastMapping(self.prot, verbose=False)
+        assert '<BlastMapping' in repr(blastmap)
+        
     def test_no_query(self):
         blastmap = blast.BlastMapping(self.dna, verbose=False)
         try:
@@ -203,12 +207,35 @@ class Blastx_Test(BlastBase):
                       lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
                                 t[2].pIdentity()))
 
+    def test_repr(self):
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+        assert '<BlastxMapping' in repr(blastmap)
+
     def test_blastx_no_blastp(self):
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         try:
             results = blastmap[self.prot['HBB1_MOUSE']]
             raise AssertionError('failed to trap blastp in BlastxMapping')
+        except ValueError:
+            pass
+
+    def test_no_query(self):
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+        try:
+            blastmap()
+            assert 0, "should fail before this"
+        except ValueError:
+            pass
+
+    def test_both_seq_and_db(self):
+        "Testing blastp"
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+        seq = self.prot['HBB1_XENLA']
+
+        try:
+            blastmap(seq=seq, queryDB=self.prot)
+            assert 0, "should fail before this"
         except ValueError:
             pass
 
@@ -266,6 +293,10 @@ class Tblastn_Test(BlastBase):
         found = [(len(t[0]), len(t[1])) for t in result.edges()]
         assert found == [(444, 444)]
 
+    def test_megablast_repr(self):
+        blastmap = blast.MegablastMapping(self.dna, verbose=False)
+        assert '<MegablastMapping' in repr(blastmap)
+        
     def test_bad_subject(self):
         "Test bad subjects"
 
