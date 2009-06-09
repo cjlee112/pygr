@@ -521,50 +521,49 @@ class RecentValueDictionary(WeakValueDictionary):
         WeakValueDictionary.clear(self)
 
 
-            
-class AttributeInterface(object):
-  '''getattr interface that can work with objects (if attrDict has string values)
-  or tuples (if attrDict has integer values)'''
-  def __init__(self, attrDict):
-    self.attrDict = attrDict
-    try:
-      if isinstance(attrDict.values()[0], int):
-        self.__class__ = self._tupleClass
-      elif isinstance(attrDict.values()[0], str):
-        self.__class__ = self._objectClass
-    except IndexError:
-      pass
-  def __call__(self, obj, attr, default=None):
-    'regular getattr from obj'
-    try:
-        return getattr(obj, attr)
-    except AttributeError:
-        if default is not None:
-            return default
+def make_attribute_interface(d):
+    """
+    If 'd' contains int values, use them to index tuples.
 
-class AttrFromTuple(AttributeInterface):
-  def __call__(self, obj, attr, default=None):
-    'getattr from tuple obj'
-    try:
-        return obj[self.attrDict[attr]]
-    except (IndexError, KeyError):
-        if default is not None:
-            return default
+    If 'd' contains str values, use them to retrieve attributes from an obj.
 
-class AttrFromObject(AttributeInterface):
-  def __call__(self, obj, attr, default=None):
-    'getattr with attribute name aliases'
-    try:
-        return getattr(obj, self.attrDict[attr])
-    except KeyError:
+    If d empty, use standard 'getattr'.
+    """
+    if len(d):
+        v = d.values()[0]
+        if isinstance(v, int):
+            return AttrFromTuple(d)
+        elif isinstance(v, str):
+            return AttrFromObject(d)
+        raise ValueError('dictionary values must be int or str!')
+
+    return getattr
+    
+class AttrFromTuple(object):
+    def __init__(self, attrDict):
+        self.attrDict = attrDict
+    
+    def __call__(self, obj, attr, default=None):
+        'getattr from tuple obj'
         try:
-            return getattr(obj, attr)
-        except KeyError:
+            return obj[self.attrDict[attr]]
+        except (IndexError, KeyError):
             if default is not None:
                 return default
+        raise AttributeError("object has no attribute '%s'" % attr)
 
-AttributeInterface._tupleClass = AttrFromTuple
-AttributeInterface._objectClass = AttrFromObject
+class AttrFromObject(AttrFromTuple):
+    def __call__(self, obj, attr, default=None):
+        'getattr with attribute name aliases'
+        try:
+            return getattr(obj, self.attrDict[attr])
+        except KeyError:
+            try:
+                return getattr(obj, attr)
+            except KeyError:
+                if default is not None:
+                    return default
+        raise AttributeError("object has no attribute '%s'" % attr)
 
 def kwargs_filter(kwargs, allowed):
     'return dictionary of kwargs filtered by list allowed'
