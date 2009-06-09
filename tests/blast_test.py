@@ -46,7 +46,8 @@ def check_results_relaxed_blastp(results, correct, formatter, delta=0.01,
         assert (0. < result[2] and result[2] <= 1.)
 
     # High-identity comparison
-    results_high = correct_high = []
+    results_high = []
+    correct_high = []
     for result in results:
         if result[2] > 0.5:
             results_high.append(result)
@@ -73,7 +74,8 @@ def check_results_relaxed_blastx(results, correct, formatter, delta=0.01,
         assert (0. < result[3] and result[3] <= 1.)
 
     # High-identity comparison
-    results_high = correct_high = []
+    results_high = []
+    correct_high = []
     for result in results:
         if result[3] > 0.5:
             results_high.append(result)
