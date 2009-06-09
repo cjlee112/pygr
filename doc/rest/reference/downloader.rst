@@ -7,13 +7,13 @@
 .. sectionauthor:: Christopher Lee <leec@chem.ucla.edu>
 
 The downloader module supports automatic download of resources,
-primarily for pygr.Data.  It consists of several pieces:
+primarily for worldbase.  It consists of several pieces:
 
 * :class:`SourceURL`: use this class to create a picklable reference
   to a resource that can be downloaded from a specific URL.
   
 * download_unpickler: Unpickling the
-  SourceURL object (e.g. when it is retrieved from pygr.Data) will trigger
+  SourceURL object (e.g. when it is retrieved from worldbase) will trigger
   downloading of the resource from this URL, as a local file.  That means
   that the unpickled form of the SourceURL is simply the local filename
   where the resource is now stored.
@@ -29,7 +29,7 @@ primarily for pygr.Data.  It consists of several pieces:
 
 SourceURL
 ---------
-This class exists solely to be saved in pygr.Data (or any other
+This class exists solely to be saved in worldbase (or any other
 pickle-based persistence storage) so that unpickling the object
 will trigger automatic download of a desired URL.
 
@@ -54,24 +54,24 @@ will trigger automatic download of a desired URL.
 
 
 Here is an example of saving a downloadable file reference to
-pygr.Data::
+worldbase::
 
-   dfile = pygr.Data.SourceURL('http://biodb.bioinformatics.ucla.edu/PYGRDATA/dm2_multiz9way.txt.gz')
+   dfile = downloader.SourceURL('http://biodb.bioinformatics.ucla.edu/PYGRDATA/dm2_multiz9way.txt.gz')
    dfile.__doc__ = 'DM2 based nine genome alignment from UCSC in textfile dump format'
-   pygr.Data.Bio.MSA.UCSC.dm2_multiz9way.txt = dfile # SAVE AS RESOURCE NAME
+   worldbase.Bio.MSA.UCSC.dm2_multiz9way.txt = dfile # SAVE AS RESOURCE NAME
    nbuilder = NLMSABuilder(dfile) # will make NLMSA from this when unpickled
    nbuilder.__doc__ = 'DM2 based nine genome alignment from UCSC'
-   pygr.Data.Bio.MSA.UCSC.dm2_multiz9way = nbuilder
-   pygr.Data.save()
+   worldbase.Bio.MSA.UCSC.dm2_multiz9way = nbuilder
+   worldbase.commit()
 
 
-When this object is retrieved from pygr.Data, that will trigger
+When this object is retrieved from worldbase, that will trigger
 construction of the binary indexes (in a location that can be
 controlled by the PYGRDATABUILDDIR environment variable).  The product
 of the unpickling will simply be a properly initialized NLMSA object
 using these index files. i.e.::
 
-   nlmsa = pygr.Data.Bio.MSA.UCSC.dm2_multiz9way(download=True) # get the download
+   nlmsa = worldbase.Bio.MSA.UCSC.dm2_multiz9way(download=True) # get the download
 
 
 NLMSABuilder
@@ -106,7 +106,7 @@ GenericBuilder
 
    *classname* should be a string specifying the name of
    the class to be used for building the resource when this
-   object is unpickled by pygr.Data.  As a security precaution,
+   object is unpickled by worldbase.  As a security precaution,
    this class name is checked against the unpickler's list of
    allowed target classes.  Currently, the only
    allowed target class is 'BlastDB'.

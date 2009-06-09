@@ -64,8 +64,8 @@ rules, calls the designated method on that object.
    object (or XMLRPC connection to such a database) providing a
    :meth:`registerServer` method that takes two arguments,
    a *locationKey* and the registration data.  Otherwise,
-   it tries to connect to pygr.Data's default resource database
-   by calling its ``getResource.registerServer`` method with the
+   it tries to connect to worldbase's default resource database
+   by calling its :meth:`registerServer()` method with the
    same arguments.
 
 .. method:: XMLRPCServerBase.serve_forever()

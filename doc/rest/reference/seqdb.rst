@@ -304,7 +304,7 @@ a given sequence object is derived from the :class:`PrefixUnionDict`
    THIS METHOD IS DEPRECATED, because it is restricted to
    assuming that all sequence dictionaries it contains
    are of a single class.  We recommend that you instead save
-   it to pygr.Data, or pickle it directly using pygr.Data.dumps().
+   it to worldbase, or pickle it directly using :func:`metabase.dumps()`.
 
    Save a header file for this union, to reopen later.
    It saves the separator character, and a list of prefixes

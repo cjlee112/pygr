@@ -424,7 +424,7 @@ Construction Methods:
 
    *saveSeqDict=True* forces it to write the NLMSA's seqDict (dictionary
    of sequences that are included in the alignment) to disk.  This is unnecessary
-   if you intend to store the NLMSA in pygr.Data, as pygr.Data will automatically
+   if you intend to store the NLMSA in worldbase, as worldbase will automatically
    save the NLMSA's seqDict as part of that process.  However, if you plan on
    re-opening the NLMSA directly from disk, you should save the seqDict
    to disk by passing this option, or by directly calling the NLMSA's
@@ -439,11 +439,11 @@ Construction Methods:
 
    Forces saving of the NLMSA's seqDict to a disk file named 'FILESTEM.seqDictP'
    (where FILESTEM is the base path to your NLMSA files).  This is unnecessary
-   if you intend to store the NLMSA in pygr.Data, as pygr.Data will automatically
+   if you intend to store the NLMSA in worldbase, as worldbase will automatically
    save the NLMSA's seqDict as part of that process.  The seqDictP file format
-   is a pygr.Data-aware pickle; that is, references to any pygr.Data resources
-   will simply be saved by their pygr.Data IDs, and loaded in the usual
-   pygr.Data way.
+   is a worldbase-aware pickle; that is, references to any worldbase resources
+   will simply be saved by their worldbase IDs, and loaded in the usual
+   worldbase way.
 
 
 
@@ -534,18 +534,18 @@ from this text format.  This can be useful for
 
    Note: :meth:`dump_textfile` attempts to save information about the seqDict
    (or, alternatively, the PrefixUnionDict dictionary of multiple sequence
-   databases), using their pygr.Data IDs if possible.
+   databases), using their worldbase IDs if possible.
    Specifically, for a PrefixUnionDict (i.e. multiple sequence databases in
    one NLMSA), it saves a dictionary of the prefixes
-   for each sequence database in the NLMSA, with its pygr.Data ID if it has one.
-   Assigning a pygr.Data ID to each sequence database has the great advantage that
+   for each sequence database in the NLMSA, with its worldbase ID if it has one.
+   Assigning a worldbase ID to each sequence database has the great advantage that
    the reconstruction method :meth:`textfile_to_binaries()` can simply request
-   pygr.Data for these IDs on the destination machine, automatically.  By contrast,
-   if a sequence database has no pygr.Data ID, the user will have to supply that
+   worldbase for these IDs on the destination machine, automatically.  By contrast,
+   if a sequence database has no worldbase ID, the user will have to supply that
    sequence database manually on the destination machine.  In this case,
    :meth:`dump_textfile` will print a warning message to stderr explaining
    what the user must do.  This provides yet another reason why it's a good idea
-   to assign a pygr.Data ID to any sequence database that is a well-defined,
+   to assign a worldbase ID to any sequence database that is a well-defined,
    commonly used public resource.
 
 
@@ -559,15 +559,15 @@ from this text format.  This can be useful for
    of RAM memory.
 
    Handling of sequence databases: :meth:`textfile_to_binaries` will attempt to
-   obtain any needed sequence databases using their pygr.Data ID if assigned.
+   obtain any needed sequence databases using their worldbase ID if assigned.
    If you obtain a :class:`PygrDataNotFoundError`, this simply means that one
-   of the pygr.Data IDs was not found in any of your pygr.Data resource
+   of the worldbase IDs was not found in any of your worldbase resource
    databases.  In this case, you must either add it to one of your resource
    databases, or add a resource database that does contain it to your PYGRDATAPATH,
    then re-run :meth:`textfile_to_binaries`.
 
    On the other hand, if any of the needed sequence databases were NOT assigned
-   a pygr.Data ID, then you will have to provide that sequence database(s)
+   a worldbase ID, then you will have to provide that sequence database(s)
    manually to the :meth:`textfile_to_binaries()` function, either via
    its *seqDict* argument (if the NLMSA contains only one sequence database),
    or via its *prefixDict* argument (if the NLMSA contains multiple sequence
@@ -577,7 +577,7 @@ from this text format.  This can be useful for
    individual sequence database prefixes in the original NLMSA PrefixUnionDict,
    and whose associated values are the appropriate sequence database to use
    for each specified prefix.  You only need to provide those sequence databases
-   that :meth:`textfile_to_binaries()` is unable to obtain from pygr.Data.
+   that :meth:`textfile_to_binaries()` is unable to obtain from worldbase.
    When in doubt, just run :meth:`textfile_to_binaries()` without the *prefixDict*
    argument, and it will raise an error message listing the prefixes that you
    need to provide.
