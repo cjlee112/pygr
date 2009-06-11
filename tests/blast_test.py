@@ -87,7 +87,7 @@ def check_results_relaxed_blastx(results, correct, formatter, delta=0.01,
 def reformat_results(results, formatter):
     reffed = []
     for result in results:
-        for t in result.edges():
+        for t in result.edges(mergeMost=True):
             reffed.append(formatter(t))
     reffed.sort()
     return reffed
