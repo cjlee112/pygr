@@ -27,7 +27,8 @@ def check_results(results, correct, formatter, delta=0.01,
     assert testutil.approximate_cmp(correct, results, delta) == 0
 
 def check_results_relaxed_blastp(results, correct, formatter, delta=0.01,
-                                 reformatCorrect=False, allowedLengthDiff=0):
+                                 reformatCorrect=False, allowedLengthDiff=0,
+                                 identityMin=0.6):
     results = reformat_results(results, formatter)
 
     if reformatCorrect: # reformat these data too
@@ -49,15 +50,16 @@ def check_results_relaxed_blastp(results, correct, formatter, delta=0.01,
     results_high = []
     correct_high = []
     for result in results:
-        if result[2] > 0.5:
+        if result[2] > identityMin:
             results_high.append(result)
     for result in correct:
-        if result[2] > 0.5:
+        if result[2] > identityMin:
             correct_high.append(result)
     assert testutil.approximate_cmp(correct_high, results_high, delta) == 0
 
 def check_results_relaxed_blastx(results, correct, formatter, delta=0.01,
-                                 reformatCorrect=False, allowedLengthDiff=0):
+                                 reformatCorrect=False, allowedLengthDiff=0,
+                                 identityMin=0.6):
     results = reformat_results(results, formatter)
 
     if reformatCorrect: # reformat these data too
@@ -77,10 +79,10 @@ def check_results_relaxed_blastx(results, correct, formatter, delta=0.01,
     results_high = []
     correct_high = []
     for result in results:
-        if result[3] > 0.5:
+        if result[3] > identityMin:
             results_high.append(result)
     for result in correct:
-        if result[3] > 0.5:
+        if result[3] > identityMin:
             correct_high.append(result)
     assert testutil.approximate_cmp(correct_high, results_high, delta) == 0
 
