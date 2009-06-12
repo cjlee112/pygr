@@ -138,6 +138,8 @@ cdef class IntervalDBIterator:
 cdef class IntervalFileDB:
   cdef IntervalDBFile *db
 
+cdef class NLMSASequence
+
 cdef class IntervalFileDBIterator:
   cdef IntervalIterator *it,*it_alloc
   cdef IntervalMap *im_buf
@@ -145,7 +147,7 @@ cdef class IntervalFileDBIterator:
   cdef IntervalFileDB db
   cdef IntervalDB idb
 
-  cdef int restart(self,int start,int end,IntervalFileDB db) except -2
+  cdef int restart(self,int start,int end,IntervalFileDB db,NLMSASequence ns) except -2
   cdef int reset(self) except -2
   cdef int cnext(self,int *pkeep)
   cdef int extend(self,int ikeep)
@@ -157,8 +159,6 @@ cdef class IntervalFileDBIterator:
   cdef int copy(self,IntervalFileDBIterator src)
 
 
-
-cdef class NLMSASequence
 
 cdef class NLMSA:
   cdef readonly object pathstem

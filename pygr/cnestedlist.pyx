@@ -166,22 +166,12 @@ cdef class IntervalFileDBIterator:
               NLMSASequence ns=None,
               int nbuffer=1024,rawIvals=None):
     cdef int i
-    self.it=interval_iterator_alloc()
-    self.it_alloc=self.it
-    self.start=start
-    self.end=end
-    self.db=db
-    if ns is not None:
-      if ns.idb is not None:
-        self.idb=ns.idb
-      elif ns.db is None:
-        ns.forceLoad()
-      self.db=ns.db
+    self.it_alloc=interval_iterator_alloc()
+    self.restart(start, end, db, ns)
     if rawIvals is not None and len(rawIvals)>nbuffer:
       nbuffer=len(rawIvals)
     self.im_buf=interval_map_alloc(nbuffer)
     self.nbuf=nbuffer
-    self.nhit=0
     if rawIvals is not None:
       i=0
       for ival in rawIvals:
@@ -193,12 +183,19 @@ cdef class IntervalFileDBIterator:
         i=i+1
       self.nhit=i # TOTAL NUMBER OF INTERVALS STORED
 
-  cdef int restart(self,int start,int end,IntervalFileDB db) except -2:
+  cdef int restart(self,int start,int end,IntervalFileDB db=None,
+                   NLMSASequence ns=None) except -2:
     'reuse this iterator for another search without reallocing memory'
     self.nhit=0 # FLUSH ANY EXISTING DATA
     self.start=start
     self.end=end
     self.db=db
+    if ns is not None:
+      if ns.idb is not None:
+        self.idb=ns.idb
+      elif ns.db is None:
+        ns.forceLoad()
+      self.db=ns.db
     self.it=self.it_alloc # REUSE OUR CURRENT ITERATOR
     reset_interval_iterator(self.it) # RESET IT FOR REUSE
     return 0
@@ -508,7 +505,7 @@ cdef class NLMSASlice:
                                        it.im_buf[i].target_end,ns=ns_lpo)
           else: # JUST REUSE THIS ITERATOR WITHOUT REALLOCING MEMORY
             it2.restart(it.im_buf[i].target_start,
-                        it.im_buf[i].target_end,ns_lpo.db)
+                        it.im_buf[i].target_end,ns=ns_lpo)
           it2.loadAll() # GET ALL OVERLAPPING INTERVALS
           if it2.nhit<=0: # NO HITS, SO TRY THE NEXT INTERVAL???
             continue
