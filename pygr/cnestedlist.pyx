@@ -183,8 +183,8 @@ cdef class IntervalFileDBIterator:
         i=i+1
       self.nhit=i # TOTAL NUMBER OF INTERVALS STORED
 
-  cdef int restart(self,int start,int end,IntervalFileDB db=None,
-                   NLMSASequence ns=None) except -2:
+  cdef int restart(self,int start,int end,IntervalFileDB db,
+                   NLMSASequence ns) except -2:
     'reuse this iterator for another search without reallocing memory'
     self.nhit=0 # FLUSH ANY EXISTING DATA
     self.start=start
@@ -505,7 +505,7 @@ cdef class NLMSASlice:
                                        it.im_buf[i].target_end,ns=ns_lpo)
           else: # JUST REUSE THIS ITERATOR WITHOUT REALLOCING MEMORY
             it2.restart(it.im_buf[i].target_start,
-                        it.im_buf[i].target_end,ns=ns_lpo)
+                        it.im_buf[i].target_end,None,ns_lpo)
           it2.loadAll() # GET ALL OVERLAPPING INTERVALS
           if it2.nhit<=0: # NO HITS, SO TRY THE NEXT INTERVAL???
             continue
