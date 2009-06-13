@@ -15,7 +15,6 @@ def all_tests():
     patt = re.compile("_test.py$")
     mods = os.listdir(os.path.normpath(os.path.dirname(__file__)))
     mods = filter(patt.search, mods)
-    mods = [ m.rstrip(".py") for m in mods ]
 
     # some predictable order...
     mods.sort() 
