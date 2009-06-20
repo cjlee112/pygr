@@ -11,6 +11,7 @@ from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
 import os
 import platform 
 import UserDict
+import warnings
     
 class TupleDescriptor(object):
     'return tuple entry corresponding to named attribute'
@@ -447,6 +448,9 @@ class SQLTableBase(object, UserDict.DictMixin):
                 cursor = serverInfo.cursor()
             else: # try to read connection info from name or config file
                 name,cursor = getNameCursor(name,**kwargs)
+        else:
+            warnings.warn("""The cursor argument is deprecated.  Use serverInfo instead! """,
+                          DeprecationWarning, stacklevel=2)
         self.cursor = cursor
         if createTable is not None: # RUN COMMAND TO CREATE THIS TABLE
             if dropIfExists: # get rid of any existing table

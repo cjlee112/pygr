@@ -188,7 +188,8 @@ class SQLTableRW_Test(SQLTable_Setup):
         n = len(self.db)
         o = self.db.new(seq_id='freddy', start=3000, stop=4500)
         assert len(self.db) == n + 1
-        t = self.tableClass(self.tableName, self.db.cursor) # requery the db
+        t = self.tableClass(self.tableName,
+                            serverInfo=self.serverInfo) # requery the db
         result = t[o.id]
         assert result.seq_id == 'freddy' and result.start==3000 \
                and result.stop==4500
@@ -198,7 +199,8 @@ class SQLTableRW_Test(SQLTable_Setup):
         o = self.db.new(id=99, seq_id='jeff', start=3000, stop=4500)
         assert len(self.db) == n + 1
         assert o.id == 99
-        t = self.tableClass(self.tableName, self.db.cursor) # requery the db
+        t = self.tableClass(self.tableName, 
+                            serverInfo=self.serverInfo) # requery the db
         result = t[99]
         assert result.seq_id == 'jeff' and result.start==3000 \
                and result.stop==4500
@@ -208,7 +210,8 @@ class SQLTableRW_Test(SQLTable_Setup):
         assert o.seq_id == 'seq2'
         o.seq_id = 'newval' # overwrite this attribute
         assert o.seq_id == 'newval' # check cached value
-        t = self.tableClass(self.tableName, self.db.cursor) # requery the db
+        t = self.tableClass(self.tableName, 
+                            serverInfo=self.serverInfo) # requery the db
         result = t[2]
         assert result.seq_id == 'newval'
     def test_delitem(self):
@@ -231,7 +234,8 @@ class SQLTableRW_Test(SQLTable_Setup):
             raise AssertionError('old ID still exists!')
         except KeyError:
             pass
-        t = self.tableClass(self.tableName, self.db.cursor) # requery the db
+        t = self.tableClass(self.tableName, 
+                            serverInfo=self.serverInfo) # requery the db
         result = t[13]
         assert result.seq_id == 'bob' and result.start==2000 \
                and result.stop==2500
