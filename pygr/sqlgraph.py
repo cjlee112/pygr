@@ -1689,17 +1689,26 @@ class DBServerInfo(object):
         self.kwargs = kwargs # connection arguments
 
     def cursor(self):
-        """returns cursor to this database server"""
+        """returns cursor associated with the DB server info (reused)"""
         try:
             return self._cursor
         except AttributeError:
-            try:
-                moduleName = self.moduleName
-            except AttributeError:
-                moduleName = 'MySQLdb'
-            connect = _DBServerModuleDict[moduleName]
-            self._connection,self._cursor = connect(*self.args, **self.kwargs)
+            self._start_connection()
             return self._cursor
+
+    def new_cursor(self):
+        """returns a NEW cursor; you must close it yourself! """
+        if not hasattr(self, '_connection'):
+            self._start_connection()
+        return self._connection.cursor()
+
+    def _start_connection(self):
+        try:
+            moduleName = self.moduleName
+        except AttributeError:
+            moduleName = 'MySQLdb'
+        connect = _DBServerModuleDict[moduleName]
+        self._connection,self._cursor = connect(*self.args, **self.kwargs)
 
     def close(self):
         """Close file containing this database"""
