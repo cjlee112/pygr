@@ -90,8 +90,9 @@ class SQLTable_Test(SQLTable_Setup):
         iv.sort()
         assert kv == iv
     def test_itervalues_long(self):
+        """test iterator isolation from queries run inside iterator loop """
         sql = 'insert into %s (start) values (1)' % self.tableName
-        for i in range(100000): # insert 100000 rows
+        for i in range(40000): # insert 40000 rows
             self.db.cursor.execute(sql)
         iv = []
         for o in self.db.itervalues():

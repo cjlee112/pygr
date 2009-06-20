@@ -570,11 +570,15 @@ class SQLTableBase(object, UserDict.DictMixin):
             oclass._attrcol = self.data # BIND ATTRIBUTE LIST TO TUPLEO INTERFACE
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
-    def _select(self, whereClause='', params=(), selectCols='t1.*'):
+    def _select(self, whereClause='', params=(), selectCols='t1.*',
+                cursor=None):
         'execute the specified query but do not fetch'
         sql,params = self._format_query('select %s from %s t1 %s'
                             % (selectCols,self.name,whereClause), params)
-        self.cursor.execute(sql, params)
+        if cursor is None:
+            self.cursor.execute(sql, params)
+        else:
+            cursor.execute(sql, params)
     def select(self,whereClause,params=None,oclass=None,selectCols='t1.*'):
         "Generate the list of objects that satisfy the database SELECT"
         if oclass is None:
@@ -633,10 +637,23 @@ class SQLTableBase(object, UserDict.DictMixin):
                 self._weakValueDict.clear()
         except AttributeError:
             pass
-    def generic_iterator(self,fetch_f=None,cache_f=None,map_f=iter):
+
+    def get_new_cursor(self):
+        """Return a new cursor object, or None if not possible """
+        try:
+            new_cursor = self.serverInfo.new_cursor
+        except AttributeError:
+            return None
+        return new_cursor()
+    
+    def generic_iterator(self, cursor=None, fetch_f=None, cache_f=None,
+                         map_f=iter):
         'generic iterator that runs fetch, cache and map functions'
         if fetch_f is None: # JUST USE CURSOR'S PREFERRED CHUNK SIZE
-            fetch_f = self.cursor.fetchmany
+            if cursor is None:
+                fetch_f = self.cursor.fetchmany
+            else:  # isolate this iter from other queries
+                fetch_f = cursor.fetchmany
         if cache_f is None:
             cache_f = self.cache_items
         while True:
@@ -646,6 +663,8 @@ class SQLTableBase(object, UserDict.DictMixin):
                 break
             for v in map_f(cache_f(rows)): # CACHE AND GENERATE RESULTS
                 yield v
+        if cursor is not None: # close iterator now that we're done
+            cursor.close()
     def tuple_from_dict(self, d):
         'transform kwarg dict into tuple for storing in database'
         l = [None]*len(self.description) # DEFAULT COLUMN VALUES ARE NULL
@@ -772,16 +791,18 @@ class SQLTable(SQLTableBase):
         return self._weakValueDict.items()
     def iteritems(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        self._select()
-        return self.generic_iterator(map_f=generate_items)
+        cursor = self.get_new_cursor()
+        self._select(cursor=cursor)
+        return self.generic_iterator(cursor=cursor, map_f=generate_items)
     def values(self):
         'forces load of entire table into memory'
         self.load()
         return self._weakValueDict.values()
     def itervalues(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        self._select()
-        return self.generic_iterator()
+        cursor = self.get_new_cursor()
+        self._select(cursor=cursor)
+        return self.generic_iterator(cursor=cursor)
 
 def getClusterKeys(self,queryOption=''):
     'uses db select; does not force load'
@@ -842,12 +863,15 @@ class SQLTableClustered(SQLTable):
         return result
     def itervalues(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        self._select('order by %s' %self.clusterKey)
-        return self.generic_iterator(self.fetch_cluster)
+        cursor = self.get_new_cursor()
+        self._select('order by %s' %self.clusterKey, cursor=cursor)
+        return self.generic_iterator(cursor, self.fetch_cluster)
     def iteritems(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        self._select('order by %s' %self.clusterKey)
-        return self.generic_iterator(self.fetch_cluster,map_f=generate_items)
+        cursor = self.get_new_cursor()
+        self._select('order by %s' %self.clusterKey, cursor=cursor)
+        return self.generic_iterator(cursor, self.fetch_cluster,
+                                     map_f=generate_items)
         
 class SQLForeignRelation(object):
     'mapping based on matching a foreign key in an SQL table'
