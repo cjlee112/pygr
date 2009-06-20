@@ -1727,11 +1727,13 @@ class SQLiteServerInfo(DBServerInfo):
     """picklable reference to a sqlite database"""
     def __init__(self, database, *args, **kwargs):
         """Takes same arguments as sqlite3.connect()"""
-        if database == ':memory:':
+        DBServerInfo.__init__(self, 'sqlite',
+                              SourceFileName(database), # save abs path!
+                              *args, **kwargs)
+    def __getstate__(self):
+        if self.args[0] == ':memory:':
             raise ValueError('SQLite in-memory database is not picklable!')
-        self.args = (SourceFileName(database),) + args # save abs path!
-        self.kwargs = kwargs
-        self.moduleName = 'sqlite'
+        return DBServerInfo.__getstate__(self)
         
             
 class MapView(object, UserDict.DictMixin):
