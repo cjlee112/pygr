@@ -89,6 +89,17 @@ class SQLTable_Test(SQLTable_Setup):
         iv = list(self.db.itervalues())
         iv.sort()
         assert kv == iv
+    def test_itervalues_long(self):
+        sql = 'insert into %s (start) values (1)' % self.tableName
+        for i in range(100000): # insert 100000 rows
+            self.db.cursor.execute(sql)
+        iv = []
+        for o in self.db.itervalues():
+            status = 99 in self.db # make it do a query inside iterator loop
+            iv.append(o.id)
+        kv = [o.id for o in self.db.values()]
+        assert len(kv) == len(iv)
+        assert kv == iv
     def test_iteritems(self):
         ki = self.db.items()
         ki.sort()
