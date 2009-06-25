@@ -5,4 +5,5 @@
 Pygr Testing
 ============
 
-Testing
+FIXME: add instructions for different modes of running tests along with a detailed description
+of the framework, the way it was for the old one.
