@@ -815,7 +815,7 @@ but not to a text HeaderFile!''' % k)
         return n
     
     def cacheHint(self, ivalDict, owner=None):  # @CTB untested
-        '''save a cache hint dict of {id:(start,stop)}; return ref owner'''
+        '''save a cache hint dict of {id:(start,stop)}'''
         d={}
         # extract separate cache hint dict for each prefix
         for longID,ival in ivalDict.items():
@@ -828,7 +828,7 @@ but not to a text HeaderFile!''' % k)
                 pass
             else:
                 # pass cache hint down to subdictionary
-                return m(seqDict, owner)
+                m(seqDict, owner)
 
     # not clear what this should do for PrefixUnionDict
     copy = setdefault = update = classutil.method_not_implemented
