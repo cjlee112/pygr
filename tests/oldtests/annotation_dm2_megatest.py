@@ -3,6 +3,11 @@ import ConfigParser, sys, os, string
 from pygr.mapping import Collection
 import pygr.Data
 
+try:
+    import hashlib
+except ImportError:
+    import md5 as hashlib
+
 config = ConfigParser.ConfigParser({'testOutputBaseDir' : '.', 'smallSampleKey': ''})
 config.read([ os.path.join(os.path.expanduser('~'), '.pygrrc'), os.path.join(os.path.expanduser('~'), 'pygr.cfg'), '.pygrrc', 'pygr.cfg' ])
 msaDir = config.get('megatests_dm2', 'msaDir')
@@ -242,10 +247,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
                         for saveline in saveList:
                             outfile.write(saveline)
         outfile.close()
-        import md5
-        md5old = md5.new()
+        md5old = hashlib.md5()
         md5old.update(open(tmpexonAnnotFileName, 'r').read())
-        md5new = md5.new()
+        md5new = hashlib.md5()
         md5new.update(open(newexonAnnotFileName, 'r').read())
         assert md5old.digest() == md5new.digest() # MD5 COMPARISON INSTEAD OF COMPARING EACH CONTENTS
 
@@ -296,10 +300,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
                         for saveline in saveList:
                             outfile.write(saveline)
         outfile.close()
-        import md5
-        md5old = md5.new()
+        md5old = hashlib.md5()
         md5old.update(open(tmpintronAnnotFileName, 'r').read())
-        md5new = md5.new()
+        md5new = hashlib.md5()
         md5new.update(open(newintronAnnotFileName, 'r').read())
         assert md5old.digest() == md5new.digest() # MD5 COMPARISON INSTEAD OF COMPARING EACH CONTENTS
 
@@ -438,10 +441,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
                         for saveline in saveList:
                             outfile.write(saveline)
         outfile.close()
-        import md5
-        md5old = md5.new()
+        md5old = hashlib.md5()
         md5old.update(open(tmpexonAnnotFileName, 'r').read())
-        md5new = md5.new()
+        md5new = hashlib.md5()
         md5new.update(open(newexonAnnotFileName, 'r').read())
         assert md5old.digest() == md5new.digest() # MD5 COMPARISON INSTEAD OF COMPARING EACH CONTENTS
 
@@ -492,10 +494,9 @@ class Build_Test(PygrBuildNLMSAMegabase):
                         for saveline in saveList:
                             outfile.write(saveline)
         outfile.close()
-        import md5
-        md5old = md5.new()
+        md5old = hashlib.md5()
         md5old.update(open(tmpintronAnnotFileName, 'r').read())
-        md5new = md5.new()
+        md5new = hashlib.md5()
         md5new.update(open(newintronAnnotFileName, 'r').read())
         assert md5old.digest() == md5new.digest() # MD5 COMPARISON INSTEAD OF COMPARING EACH CONTENTS
 
