@@ -220,7 +220,7 @@ class BlastMapping(object):
             except (IOError,OSError): # BUILD FAILED
                 pass
 
-        raise IOError, "cannot build BLAST database for %s' % (self.filepath,)
+        raise IOError, "cannot build BLAST database for %s" % (self.filepath,)
         # @CTB maybe rename self.filepath to something else?
             
     def raw_fasta_stream(self, ifile=None, idFilter=None):
