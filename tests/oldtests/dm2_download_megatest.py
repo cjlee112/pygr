@@ -3,7 +3,7 @@
 
 from pygr import nlmsa_utils
 import pygr.Data
-import os, time
+import os, tempfile, time
 
 def rm_recursive(top):
     'recursively remove top and everything in it!'
@@ -18,7 +18,7 @@ def rm_recursive(top):
 class NLMSADownload_Test(object):
     '''try to save and build via download catalog auto-constructed from biodb site'''
     def __init__(self,url='http://biodb.bioinformatics.ucla.edu/PYGRDATA/',
-                 testDir = '/tmp'):
+                 testDir = tempfile.gettempdir()):
         self.url = url
         import random
         self.testDir = os.path.join(testDir,'test%d' % random.randint(1,99999))
