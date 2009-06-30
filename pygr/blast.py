@@ -217,12 +217,11 @@ class BlastMapping(object):
             notFirst = True
             try: # BUILD IN TARGET DIRECTORY
                 return self.run_formatdb(filepath)
-            except (IOError,OSError): # BUILD FAILED 
-                classutil.report_exception() # REPORT IT AND CONTINUE
-        # @CTB shouldn't we check to make sure that at least one formatdb
-        # succeeded?  Of course, it may be that we don't need to run
-        # formatdb because the database exists... so, what, just report
-        # the blastall error?
+            except (IOError,OSError): # BUILD FAILED
+                pass
+
+        raise IOError, "cannot build BLAST database for %s' % (self.filepath,)
+        # @CTB maybe rename self.filepath to something else?
             
     def raw_fasta_stream(self, ifile=None, idFilter=None):
         '''Return a stream of fasta-formatted sequences.
