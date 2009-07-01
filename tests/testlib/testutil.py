@@ -2,7 +2,7 @@
 Utility functions for testing
 """
 
-import sys, os, shutil, unittest, random, warnings, threading, time, re, md5, glob
+import sys, os, shutil, unittest, random, warnings, threading, time, re, glob
 import tempfile as tempfile_mod
 import atexit
 
@@ -10,6 +10,11 @@ from unittest_extensions import SkipTest
 
 import pathfix
 from pygr import logger, classutil
+
+try:
+    import hashlib
+except ImportError:
+    import md5 as hashlib
 
 # represents a test data
 class TestData(object):
@@ -342,7 +347,7 @@ def remove_files( path, patterns=[ "*.seqlen" ]):
 def get_file_md5(fpath):
     ifile = file(fpath, 'rb')
     try:
-        h = md5.md5(ifile.read())
+        h = hashlib.md5(ifile.read())
     finally:
         ifile.close()
     return h
