@@ -244,6 +244,15 @@ class Blast_Test(BlastBase):
 
         assert found_once, "should have found this match exactly once!"
 
+    def test_formatdb_fail(self):
+        db = seqdb.SequenceFileDB('data/gapping.fa')
+        try:
+            blastmap = blast.BlastMapping(db, filepath='foobarbaz.fa',
+                                          blastReady=True)
+            assert 0, "should not reach this point"
+        except IOError:                 # should fail with 'cannot build'
+            pass
+
 class Blastx_Test(BlastBase):
     def test_blastx(self):
         "Testing blastx"
