@@ -220,6 +220,15 @@ class BlastMapping(object):
             except (IOError,OSError): # BUILD FAILED
                 pass
 
+        l = self.filepath.split() # check filepath for whitespace
+        if len(l) > 1 or len(l[0]) < len(self.filepath): # contains whitespace
+            raise IOError("""
+The NCBI formatdb program appears to have failed due to the presence of
+whitespace characters in your sequence filepath:
+%s
+The NCBI formatdb (and blastall) programs cannot handle file paths
+containing whitespace! This is a known NCBI formatdb / blastall bug.
+Please use a path containing no whitespace characters!""" % self.filepath)
         raise IOError, "cannot build BLAST database for %s" % (self.filepath,)
         # @CTB maybe rename self.filepath to something else?
             
