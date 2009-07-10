@@ -121,7 +121,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         hg18 = pygr.Data.getResource('TEST.Seq.Genome.hg18')
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS
         exon_slices = Collection(filename = os.path.join(self.path, 'refGene_exonAnnot_hg18.cdb'), \
-            intKeys = True, mode = 'c', writeback = False) # ONLY C
+            intKeys = True, mode = 'cr', writeback = False)
         exon_db = seqdb.AnnotationDB(exon_slices, hg18,
                                sliceAttrDict = dict(id = 0, exon_id = 1, orientation = 2,
                                                   gene_id = 3, start = 4, stop = 5))
@@ -145,7 +145,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         pygr.Data.addSchema('TEST.Annotation.NLMSA.hg18.exons', exon_schema)
         # BUILD ANNOTATION DATABASE FOR REFSEQ SPLICES
         splice_slices = Collection(filename = os.path.join(self.path, 'refGene_spliceAnnot_hg18.cdb'), \
-            intKeys = True, mode = 'c', writeback = False) # ONLY C
+            intKeys = True, mode = 'cr', writeback = False)
         splice_db = seqdb.AnnotationDB(splice_slices, hg18,
                                sliceAttrDict = dict(id = 0, splice_id = 1, orientation = 2,
                                                   gene_id = 3, start = 4, stop = 5))
@@ -169,7 +169,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         pygr.Data.addSchema('TEST.Annotation.NLMSA.hg18.splices', splice_schema)
         # BUILD ANNOTATION DATABASE FOR REFSEQ EXONS
         cds_slices = Collection(filename = os.path.join(self.path, 'refGene_cdsAnnot_hg18.cdb'), \
-            intKeys = True, mode = 'c', writeback = False) # ONLY C
+            intKeys = True, mode = 'cr', writeback = False)
         cds_db = seqdb.AnnotationDB(cds_slices, hg18,
                                sliceAttrDict = dict(id = 0, cds_id = 1, orientation = 2,
                                                   gene_id = 3, start = 4, stop = 5))
@@ -193,7 +193,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         pygr.Data.addSchema('TEST.Annotation.NLMSA.hg18.cdss', cds_schema)
         # BUILD ANNOTATION DATABASE FOR MOST CONSERVED ELEMENTS FROM UCSC
         ucsc_slices = Collection(filename = os.path.join(self.path, 'phastConsElements28way_hg18.cdb'), \
-            intKeys = True, mode = 'c', writeback = False) # ONLY C
+            intKeys = True, mode = 'cr', writeback = False)
         ucsc_db = seqdb.AnnotationDB(ucsc_slices, hg18,
                                sliceAttrDict = dict(id = 0, ucsc_id = 1, orientation = 2,
                                                   gene_id = 3, start = 4, stop = 5))
@@ -217,7 +217,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         pygr.Data.addSchema('TEST.Annotation.UCSC.NLMSA.hg18.mostconserved', ucsc_schema)
         # BUILD ANNOTATION DATABASE FOR SNP126 FROM UCSC
         snp_slices = Collection(filename = os.path.join(self.path, 'snp126_hg18.cdb'), \
-                                          intKeys = True, protocol = 2, mode = 'c', writeback = False) # ONLY C
+                                          intKeys = True, protocol = 2, mode = 'cr', writeback = False)
         snp_db = seqdb.AnnotationDB(snp_slices, hg18,
                                sliceAttrDict = dict(id = 0, snp_id = 1, orientation = 2, gene_id = 3, start = 4,
                                                     stop = 5, score = 6, ref_NCBI = 7, ref_UCSC = 8, observed = 9,
