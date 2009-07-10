@@ -114,6 +114,17 @@ def repeat_mask(seq, progname='RepeatMasker', opts=()):
                 pass
     return seq_masked # ONLY THE REPEATS ARE IN LOWERCASE NOW
 
+def warn_if_whitespace(filepath):
+    l = filepath.split() # check filepath for whitespace
+    if len(l) > 1 or len(l[0]) < len(filepath): # contains whitespace
+        logger.warn("""
+Your sequence filepath contains whitespace characters:
+%s
+The NCBI formatdb (and blastall) programs cannot handle file paths
+containing whitespace! This is a known NCBI formatdb / blastall bug.
+Please use a path containing no whitespace characters!""" % filepath)
+        return True # signal caller that a warning was issued
+            
 
 class BlastMapping(object):
     'Graph interface for mapping a sequence to homologs in a seq db via BLAST'
@@ -175,6 +186,8 @@ class BlastMapping(object):
             cmd += ['-p', 'F'] # special flag required for nucleotide seqs
         logger.info('Building index: ' + ' '.join(cmd))
         if classutil.call_subprocess(cmd): # bad exit code, so command failed
+            warn_if_whitespace(self.filepath) \
+                 or warn_if_whitespace(filepath) # only issue one warning
             raise OSError('command %s failed' % ' '.join(cmd))
         self.blastReady=True
         if filepath!=self.filepath:
@@ -217,13 +230,11 @@ class BlastMapping(object):
             notFirst = True
             try: # BUILD IN TARGET DIRECTORY
                 return self.run_formatdb(filepath)
-            except (IOError,OSError): # BUILD FAILED 
-                classutil.report_exception() # REPORT IT AND CONTINUE
-        # @CTB shouldn't we check to make sure that at least one formatdb
-        # succeeded?  Of course, it may be that we don't need to run
-        # formatdb because the database exists... so, what, just report
-        # the blastall error?
-            
+            except (IOError,OSError): # BUILD FAILED
+                pass
+        raise IOError, "cannot build BLAST database for %s" % (self.filepath,)
+        # @CTB maybe rename self.filepath to something else?
+
     def raw_fasta_stream(self, ifile=None, idFilter=None):
         '''Return a stream of fasta-formatted sequences.
 
@@ -244,7 +255,7 @@ class BlastMapping(object):
             return
         try:
             if seq.db is self.seqDB:
-                logger.warning('''
+                logger.warn('''
 WARNING: your query sequence is part of this database.  Pygr alignments
 normally do not report self-matches, i.e. the alignment of a sequence interval
 to itself, so only homologies to OTHER sequences in the database
@@ -265,7 +276,9 @@ To turn off this message, use the verbose=False option''' % methodname)
         return blastprog
     def blast_command(self, blastpath, blastprog, expmax, maxseq, opts):
         'generate command string for running blast with desired options'
-        cmd = [blastpath, '-d', self.get_blast_index_path(), '-p', blastprog,
+        filepath = self.get_blast_index_path()
+        warn_if_whitespace(filepath)
+        cmd = [blastpath, '-d', filepath, '-p', blastprog,
                 '-e', '%e' % float(expmax)] + list(opts)
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd += ['-b', '%d' % maxseq, '-v', '%d' % maxseq]
@@ -313,8 +326,10 @@ class MegablastMapping(BlastMapping):
 
         # mask repeats to lowercase
         masked_seq = repeat_mask(seq,rmPath,rmOpts)
+        filepath = self.get_blast_index_path()
+        warn_if_whitespace(filepath)
         cmd = [blastpath] + maskOpts \
-              + ['-d', self.get_blast_index_path(),
+              + ['-d', filepath,
                  '-D', '2', '-e', '%e' % float(expmax)] + list(opts)
         if maxseq is not None: # ONLY TAKE TOP maxseq HITS
             cmd += ['-b', '%d' % maxseq, '-v', '%d' % maxseq]

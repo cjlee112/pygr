@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
 import ConfigParser, os, smtplib, time
-from email.mime.text import MIMEText
+try:
+    from email.mime.text import MIMEText
+except ImportError:
+    from email.MIMEText import MIMEText
 
 config = ConfigParser.ConfigParser({'expectedRunningTime' : '-1', 'mailServer' : '', 'runningTimeAllowedDelay' : '0'})
 config.read([ os.path.join(os.path.expanduser('~'), '.pygrrc'), os.path.join(os.path.expanduser('~'), 'pygr.cfg'), '.pygrrc', 'pygr.cfg' ])

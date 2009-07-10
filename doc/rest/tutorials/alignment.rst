@@ -54,13 +54,13 @@ A couple of points deserve comment:
 
 
   
-* The in-memory and on-disk NLMSA alignment storages have exactly the same
+* The in-memory and on-disk :class:`cnestedlist.NLMSA` alignment storages have exactly the same
   interface.  You can work with alignments from small to large to gimungous
   using the same consistent set of tools.  Moreover the performance will be
-  fast across the whole range of scales, because the NLMSA storage and query
+  fast across the whole range of scales, because the :class:`cnestedlist.NLMSA` storage and query
   algorithms scale very well (O(logN)).
   
-* Because of the ``mode='w'`` flag, NLMSA will create a set of alignment
+* Because of the ``mode='w'`` flag, :class:`cnestedlist.NLMSA` will create a set of alignment
   index files called 'all_vs_all'.
   
 * ``bidirectional=False``: whenever you store an alignment relationship
@@ -85,14 +85,14 @@ A couple of points deserve comment:
   mainly makes sense for true multiple sequence alignments (which are guaranteed
   to be symmetric).
   
-* Supplying the :class:`BlastMapping` with an alignment object makes it store
+* Supplying the :class:`blast.BlastMapping` with an alignment object makes it store
   its results into that alignment, rather than creating its own alignment holder
   for us.  In this way we can make it store many different BLAST searches into
   a single alignment database.
 
 * Supplying the ``queryDB`` argument allows you to run multiple queries at
   once; ``queryDB`` is expected to be a dictionary whose values are the 
-  sequence objects you wish to use as queries to the :class:`BlastMapping`.
+  sequence objects you wish to use as queries to the :class:`blast.BlastMapping`.
   
 * To make the NLMSA algorithm scalable, pygr defers construction of the alignment
   indexes until the alignment is complete.  We trigger this by calling its build()
@@ -114,24 +114,24 @@ MAF alignment files and building a disk-based NLMSA alignment database.
 example of building an alignment database from scratch using a
 set of MAF files stored in a directory called ``maf/``::
 
-   import os
+   import glob
    from pygr import cnestedlist,seqdb
 
    genomes = {'hg17':'hg17','mm5':'mm5', 'rn3':'rn3', 'canFam1':'cf1',
               'danRer1':'dr1', 'fr1':'fr1','galGal2':'gg2', 'panTro1':'pt1'}
-   for k,v in genomes.items(): # PREFIX DICTIONARY FOR UNION OF GENOMES
-       genomes[k] = seqdb.SequenceFileDB(v) # USE v AS FILENAME FOR FASTA FILE
-   genomeUnion=seqdb.PrefixUnionDict(genomes) # CREATE UNION OF THESE DBs
-   # CREATE NLMSA DATABASE ucsc8 ON DISK, FROM MAF FILES IN maf/
-   msa = cnestedlist.NLMSA('ucsc8','w',genomeUnion,os.listdir('maf'))
-   msa.build(saveSeqDict=True) # BUILD & SAVE ALIGNMENT + SEQUENCE INDEXES
+   for k,v in genomes.items(): # prefix dictionary for union of genomes
+       genomes[k] = seqdb.SequenceFileDB(v) # use v as filename for fasta file
+   genomeUnion = seqdb.PrefixUnionDict(genomes) # create union of these DBs
+   # create NLMSA database ucsc8 on disk, from MAF files in maf/
+   msa = cnestedlist.NLMSA('ucsc8', 'w', genomeUnion, glob.glob('maf/*.maf'))
+   msa.build(saveSeqDict=True) # build & save alignment + sequence indexes
 
 
 The only real work here is due to the fact that UCSC's MAF files
 use a *prefix.suffix* notation for identifying specific sequences,
 where *prefix* gives the name of the genome, and *suffix*
 gives the identifier of the sequence in that genome database.
-Here we use Pygr's :class:`PrefixUnionDict` class to wrap the
+Here we use Pygr's :class:`seqdb.PrefixUnionDict` class to wrap the
 set of genome databases in a dict-like interface that accepts
 string keys of the form *prefix.suffix* and returns the
 right sequence object from the right genome database.  As an
@@ -142,8 +142,8 @@ correct mapping.  Actually building the NLMSA requires just one
 line, but actually a number of steps are happening behind the
 scenes:
 
-* If you have never opened :class:`SequenceFileDB` objects for these genome
-  databases before, :class:`SequenceFileDB` will initialize each one.  This means
+* If you have never opened :class:`seqdb.SequenceFileDB` objects for these genome
+  databases before, :class:`seqdb.SequenceFileDB` will initialize each one.  This means
   two things.  First, it builds an index of all the sequences and their
   lengths.  This is essential for combining the
   large numbers of sequences in these databases into
@@ -155,16 +155,16 @@ scenes:
   memory requirements and slow speed, so we implemented fast sequence
   indexing.
   
-* :class:`NLMSA` reads each MAF file and divides the interval
+* :class:`cnestedlist.NLMSA` reads each MAF file and divides the interval
   alignment data into one or more coordinate systems created
   on-the-fly (for efficient memory usage, NLMSA uses :class:`int`
   coordinates (32-bit), which has a maximum size of approximately
   2 billion.  This is too small even for a single genome like human;
-  :class:`NLMSA` automatically splits the database into as many
+  :class:`cnestedlist.NLMSA` automatically splits the database into as many
   coordinate systems are needed to represent the alignment.
   Each coordinate system has its own database file on disk.
   
-* After it has finished reading the MAF data, :class:`NLMSA`
+* After it has finished reading the MAF data, :class:`cnestedlist.NLMSA`
   begins to build the database indexes for each coordinate
   system.  Computationally, this operation is equivalent to
   a *sort* (N log N complexity).  Once the indexes are built, the database is

@@ -26,9 +26,6 @@ Recipes
 .. toctree::
     :maxdepth: 3
 
-    contrib/fetch.rst
-    contrib/databrowser.rst
-    recipes/pygrdata_recipes
     recipes/alignment_recipes
 
 Guides
@@ -38,7 +35,6 @@ Guides
     :maxdepth: 3
     
     guides/devguide
-    guides/gitusage
     guides/testing
     guides/libnclist
     manual
