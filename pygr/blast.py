@@ -157,41 +157,41 @@ class BlastMapping(object):
         'return NLMSASlice representing BLAST results'
         al = self.__call__(k) # run BLAST & get NLMSA storing results
         return al[k] # return NLMSASlice representing these results
-    def test_db_location(self, filepath):
+    def test_db_location(self, testpath):
         '''check whether BLAST index files ready for use; return status.'''
-        if not os.access(filepath+'.nsd',os.R_OK) \
-               and not os.access(filepath+'.psd',os.R_OK) \
-               and not os.access(filepath+'.00.nsd',os.R_OK) \
-               and not os.access(filepath+'.00.psd',os.R_OK):
+        if not os.access(testpath+'.nsd',os.R_OK) \
+               and not os.access(testpath+'.psd',os.R_OK) \
+               and not os.access(testpath+'.00.nsd',os.R_OK) \
+               and not os.access(testpath+'.00.psd',os.R_OK):
             return False
         else: # FOUND INDEX FILES IN THIS LOCATION
-            if filepath != self.filepath:
-                self.blastIndexPath = filepath
+            if testpath != self.filepath:
+                self.blastIndexPath = testpath
             return True
     def checkdb(self):
         'look for blast index files in blastIndexPath, standard list of locations'
-        for filepath in self.blast_index_paths():
-            self.blastReady = self.test_db_location(filepath)
+        for testpath in self.blast_index_paths():
+            self.blastReady = self.test_db_location(testpath)
             if self.blastReady:
                 break
         return self.blastReady
-    def run_formatdb(self, filepath):
-        'ATTEMPT TO BUILD BLAST DATABASE INDEXES at filepath'
-        dirname = classutil.file_dirpath(filepath)
+    def run_formatdb(self, testpath):
+        'ATTEMPT TO BUILD BLAST DATABASE INDEXES at testpath'
+        dirname = classutil.file_dirpath(testpath)
         if not os.access(dirname, os.W_OK): # check if directory is writable
             raise IOError('run_formatdb: directory %s is not writable!'
                           % dirname)
-        cmd = ['formatdb', '-i', self.filepath, '-n', filepath, '-o', 'T']
+        cmd = ['formatdb', '-i', self.filepath, '-n', testpath, '-o', 'T']
         if self.seqDB._seqtype != PROTEIN_SEQTYPE:
             cmd += ['-p', 'F'] # special flag required for nucleotide seqs
         logger.info('Building index: ' + ' '.join(cmd))
         if classutil.call_subprocess(cmd): # bad exit code, so command failed
             warn_if_whitespace(self.filepath) \
-                 or warn_if_whitespace(filepath) # only issue one warning
+                 or warn_if_whitespace(testpath) # only issue one warning
             raise OSError('command %s failed' % ' '.join(cmd))
         self.blastReady=True
-        if filepath!=self.filepath:
-            self.blastIndexPath = filepath
+        if testpath!=self.filepath:
+            self.blastIndexPath = testpath
     def get_blast_index_path(self):
         'get path to base name for BLAST index files'
         try:
@@ -224,16 +224,15 @@ class BlastMapping(object):
         if filepath is not None: # JUST USE THE SPECIFIED PATH
             return self.run_formatdb(filepath)
         notFirst = False
-        for filepath in self.blast_index_paths():
+        for testpath in self.blast_index_paths():
             if notFirst:
                 logger.info('Trying next entry in self.blastIndexDirs...')
             notFirst = True
             try: # BUILD IN TARGET DIRECTORY
-                return self.run_formatdb(filepath)
+                return self.run_formatdb(testpath)
             except (IOError,OSError): # BUILD FAILED
                 pass
         raise IOError, "cannot build BLAST database for %s" % (self.filepath,)
-        # @CTB maybe rename self.filepath to something else?
 
     def raw_fasta_stream(self, ifile=None, idFilter=None):
         '''Return a stream of fasta-formatted sequences.
