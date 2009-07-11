@@ -79,6 +79,10 @@ class PygrBuildNLMSAMegabase(unittest.TestCase):
             for filename in files:
                 os.remove(os.path.join(dirpath, filename))
             os.rmdir(dirpath)
+        # Restore original pygr.Data path to remedy lack of isolation
+        # between tests from the same run
+        pygr.Data.update(None)
+
 
 class Build_Test(PygrBuildNLMSAMegabase):
     def test_seqdb(self):

@@ -45,9 +45,12 @@ class NLMSADownload_Test(unittest.TestCase):
         result = msa[chr4[:10000]]
         assert len(result) == 9
     def tearDown(self):
-        'clean up our temporary directory'
+        'clean up our temporary directory, restore pygr.Data path'
         rm_recursive(self.testDir)
-        
+        # Restore original pygr.Data path to remedy lack of isolation
+        # between tests from the same run
+        pygr.Data.update(None)
+
 
 if __name__ == '__main__':
     PygrTestProgram(verbosity=2)

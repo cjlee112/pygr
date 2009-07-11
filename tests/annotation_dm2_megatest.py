@@ -86,13 +86,17 @@ class PygrBuildNLMSAMegabase(unittest.TestCase):
         open(newname, 'w').write(open(filename, 'r').read())
         return newname
     def tearDown(self):
-        'delete the temporary directory and files'
+        'delete the temporary directory and files, restore pygr.Data path'
         for dirpath, subdirs, files in os.walk(self.path, topdown = False): # SHOULD BE DELETED BOTTOM-UP FASHION
             # THIS PART MAY NOT WORK IN NFS MOUNTED DIRECTORY DUE TO .nfsXXXXXXXXX CREATION
             # IN NFS MOUNTED DIRECTORY, IT CANNOT BE DELETED UNTIL CLOSING PYGRDATA
             for filename in files:
                 os.remove(os.path.join(dirpath, filename))
             os.rmdir(dirpath)
+        # Restore original pygr.Data path to remedy lack of isolation
+        # between tests from the same run
+        pygr.Data.update(None)
+
 
 class Build_Test(PygrBuildNLMSAMegabase):
     def test_seqdb(self):
