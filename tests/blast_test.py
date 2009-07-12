@@ -98,9 +98,11 @@ def reformat_results(results, formatter):
 class BlastBase(unittest.TestCase):
     def setUp(self):
         hbb1_mouse = testutil.datafile('hbb1_mouse.fa')
+        hbb1_mouse_rc = testutil.datafile('hbb1_mouse_rc.fa')
         sp_hbb1 = testutil.datafile('sp_hbb1')
 
         self.dna = seqdb.SequenceFileDB(hbb1_mouse)
+        self.dna_rc = seqdb.SequenceFileDB(hbb1_mouse_rc)
         self.prot = seqdb.SequenceFileDB(sp_hbb1)
 
 
@@ -284,6 +286,40 @@ class Blastx_Test(BlastBase):
                    (146, 146, 438, 0.97945205479452058)]
 
         results = blastmap[self.dna['gi|171854975|dbj|AB364477.1|']]
+        check_results_relaxed_blastx(results, correct,
+                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
+                                t[2].pIdentity()), allowedLengthDiff=2)
+
+    def test_blastx_rc(self):
+        "Testing blastx with negative frames"
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+
+        correct = [(143, 143, 429, 0.53146853146853146),
+                   (143, 145, 429, 0.28275862068965518),
+                   (143, 145, 429, 0.28965517241379313),
+                   (143, 145, 429, 0.29655172413793102),
+                   (143, 145, 429, 0.30344827586206896),
+                   (144, 144, 432, 0.4513888888888889),
+                   (144, 144, 432, 0.4513888888888889),
+                   (145, 145, 435, 0.45517241379310347),
+                   (145, 145, 435, 0.51034482758620692),
+                   (146, 142, 438, 0.35616438356164382),
+                   (146, 146, 438, 0.4589041095890411),
+                   (146, 146, 438, 0.46575342465753422),
+                   (146, 146, 438, 0.4726027397260274),
+                   (146, 146, 438, 0.4726027397260274),
+                   (146, 146, 438, 0.4863013698630137),
+                   (146, 146, 438, 0.59589041095890416),
+                   (146, 146, 438, 0.62328767123287676),
+                   (146, 146, 438, 0.66438356164383561),
+                   (146, 146, 438, 0.74657534246575341),
+                   (146, 146, 438, 0.91095890410958902),
+                   (146, 146, 438, 0.97945205479452058)]
+
+        results = blastmap[self.dna_rc['hbb1_mouse_RC']]
         check_results_relaxed_blastx(results, correct,
                       lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
                                 t[2].pIdentity()), allowedLengthDiff=2)
