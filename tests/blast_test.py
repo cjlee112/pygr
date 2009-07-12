@@ -323,6 +323,16 @@ class Blastx_Test(BlastBase):
         check_results_relaxed_blastx(results, correct,
                       lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
                                 t[2].pIdentity()), allowedLengthDiff=2)
+        
+        results = blastmap[self.dna_rc['hbb1_mouse_RC_2']]
+        check_results_relaxed_blastx(results, correct,
+                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
+                                t[2].pIdentity()), allowedLengthDiff=2)
+        
+        results = blastmap[self.dna_rc['hbb1_mouse_RC_3']]
+        check_results_relaxed_blastx(results, correct,
+                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
+                                t[2].pIdentity()), allowedLengthDiff=2)
 
     def test_repr(self):
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
