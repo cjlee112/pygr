@@ -25,7 +25,7 @@ sendStr = 'MEGATEST report, generated ' + timeStr + '\n\n'
 sendStr += 'Test started: ' + open('tmp1_megatest.log', 'r').readlines()[0]
 sendStr += 'PYTHONPATH = ' + open('tmp3_megatest.log', 'r').read() + '\n'
 sendStr += 'Output of standard tests:\n' + ''.join(open('tmp2_megatest.log', 'r').readlines()[-5:]) + '\n\n'
-sendStr += 'Output of megatests:\n' + open('tmp4_megatest.log', 'r').read() + '\n\n'
+sendStr += 'Output of megatests:\n' + ''.join(open('tmp4_megatest.log', 'r').readlines()[-5:]) + '\n\n'
 sendStr += 'Test finished: ' + open('tmp5_megatest.log', 'r').readlines()[0] + '\n'
 
 # Try to determine whether the test has failed or not
