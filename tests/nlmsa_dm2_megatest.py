@@ -161,6 +161,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
 
         # TEXT<->BINARY TEST
         msafilelist = glob.glob(msaname + '*')
+        msa.save_seq_dict()
         cnestedlist.dump_textfile(msaname, os.path.join(self.path, 'dm2_multiz15way.txt'))
         for filename in msafilelist: os.remove(filename)
         runPath = os.path.realpath(os.curdir)
