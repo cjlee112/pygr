@@ -130,7 +130,6 @@ class Build_Test(PygrBuildNLMSAMegabase):
             maflist.sort()
         msaname = os.path.join(self.path, 'hg18_multiz28way')
         msa1 = cnestedlist.NLMSA(msaname, 'w', uniondict, maflist, maxlen = 536870912, maxint = 22369620) # 500MB VERSION
-        msa1.save_seq_dict()
         msa1.__doc__ = 'TEST NLMSA for hg18 multiz28way'
         pygr.Data.addResource('TEST.MSA.UCSC.hg18_multiz28way', msa1)
         pygr.Data.save()

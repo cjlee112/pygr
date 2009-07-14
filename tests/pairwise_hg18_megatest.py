@@ -105,7 +105,6 @@ class Build_Test(PygrBuildNLMSAMegabase):
         msaname = os.path.join(self.path, 'hg18_pairwise5way')
         # 500MB VERSION
         msa1 = cnestedlist.NLMSA(msaname, 'w', uniondict, axtFiles = axtlist, maxlen = 536870912, maxint = 22369620)
-        msa1.save_seq_dict()
         msa1.__doc__ = 'TEST NLMSA for hg18 pairwise5way'
         pygr.Data.addResource('TEST.MSA.UCSC.hg18_pairwise5way', msa1)
         pygr.Data.save()
