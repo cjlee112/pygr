@@ -94,7 +94,7 @@ class DNAAnnotation_Test(TestBase):
                 for annID in annoDB:
                     nlmsa.addAnnotation(annoDB[annID])
 
-                nlmsa.build(verbose=False)
+                nlmsa.build()
                 nlmsa.__doc__ = 'trivial map'
                 pygr.Data.Bio.Test.map = nlmsa
                 pygr.Data.schema.Bio.Test.map = \
@@ -163,7 +163,7 @@ def populate_swissprot():
     nlmsa = cnestedlist.NLMSA(filename, 'w', pairwiseMode=True,
                               bidirectional=False)
     nlmsa.addAnnotation(exon)
-    nlmsa.build(verbose=False)
+    nlmsa.build()
     annoDB.__doc__ = 'a little annotation db'
     nlmsa.__doc__ = 'a little map'
     pygr.Data.Bio.Annotation.annoDB = annoDB
