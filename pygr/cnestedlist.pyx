@@ -1,5 +1,6 @@
 import sequence
 import nlmsa_utils
+import logger
 
 cdef class IntervalDBIterator:
   def __new__(self,int start,int end,IntervalDB db not None):
@@ -1363,7 +1364,7 @@ cdef class NLMSASequence:
     self.db=IntervalFileDB(self.filestem) # NOW OPEN THE IntervalFileDB
     return self.nbuild # return count of intervals
 
-  def buildInMemory(self,verbose=False,**kwargs):
+  def buildInMemory(self, **kwargs):
     try:
       n = len(self.buildList)
     except TypeError:
@@ -1398,8 +1399,8 @@ cdef class NLMSASequence:
       im_tmp.target_id,im_tmp.target_start,im_tmp.target_end=t
       im_tmp.sublist= -1
       i=self.saveInterval(&im_tmp,1,self.is_lpo,self.build_ifile)
-  ##     print 'saveInterval:',self.id,im_tmp.start,im_tmp.end,im_tmp.target_id,\
-  ##           im_tmp.target_start,im_tmp.target_end
+      #logger.debug('saveInterval: %s %s %s  %s %s %s' % (self.id, im_tmp.start, im_tmp.end,
+      #             im_tmp.target_id, im_tmp.target_start, im_tmp.target_end))
       self.nbuild=self.nbuild+i # INCREMENT COUNTER OF INTERVALS SAVED
     elif self.nlmsaLetters.in_memory_mode:
       t=(k.start,k.stop)+t
@@ -1619,7 +1620,8 @@ cdef class NLMSA:
     if is_union: # RECORD THIS AS OUR CURRENT UNION OBJECT
       self.currentUnion=ns
     self.addToSeqlist(ns,seq) # SAVE TO OUR INDEX
-    #print 'Opened build file for ns_id',ns.id,ns.is_union
+    #logger.debug('Opened build file for ns_id %s, is_union %s' % (ns.id,
+    #                                                              ns.is_union))
     return ns
 
   def nextID(self):
@@ -1636,13 +1638,12 @@ cdef class NLMSA:
       ns=self.newSequence() # CREATE AN LPO
       ns.offset=offset # FORCE OUR DESIRED OFFSET... EVEN THOUGH ALL LPOs EMPTY
       offset=offset+self.maxlen
-  def init_pairwise_mode(self,verbose=False):
+  def init_pairwise_mode(self):
     'turn on use of virtual LPO mapping (i.e. no actual LPO is present!)'
     if self.pairwiseMode==0:
       raise ValueError('this alignment is already using an LPO!')
-    elif self.pairwiseMode!=1 and verbose: # NOT ALREADY SET TO PAIRWISE MODE
-      import sys
-      sys.stderr.write('''
+    elif self.pairwiseMode!=1: # NOT ALREADY SET TO PAIRWISE MODE
+      logger.notice('''
 Because you are aligning a pair of sequence intervals,
 the pairwiseMode=True option is automatically being applied.
 To avoid this message in the future, pass the pairwiseMode=True
@@ -1710,7 +1711,7 @@ See the NLMSA documentation for more details.\n''')
     for ns in self.seqlist: # SAVE INTERVAL COUNTS BACK TO EACH SEQUENCE
       if not ns.is_lpo or self.pairwiseMode==1:
         ns.nbuild=nbuild[ns.id]  # SAVE INTERVAL COUNTS BACK TO REGULAR SEQUENCES
-##       print 'nbuild[%d]' % i,ns.nbuild
+        #logger.debug('nbuild[%d] = %s' % (i, ns.nbuild))
   
 
   def readMAFfiles(self,mafFiles,maxint):
@@ -1748,7 +1749,7 @@ Check the input!''' % (pythonStr, seqInfo.length))
     im_tmp.sublist= -1 # DEFAULT
     strcpy(a_header,"a ") # MAKE C STRING 
     for filename in mafFiles:
-      print 'Processing MAF file:',filename
+      logger.info('Processing MAF file: ' + filename)
       ifile=fopen(filename,'r') # text file
       if ifile==NULL:
         self.free_seqidmap(nseq0,seqidmap)
@@ -1814,11 +1815,11 @@ Check the input!''' % (pythonStr, seqInfo.length))
         if not has_continuation:
           p=fgets(tmp,32767,ifile) # TRY TO READ ANOTHER LINE...
       fclose(ifile) # CLOSE THIS MAF FILE
-##     print 'nbuild[0]',ns_lpo.nbuild
+      #logger.debug('nbuild[0] = ' + ns_lpo.nbuild)
     for i from 0 <= i <256: # PRINT WARNINGS ABOUT NON-ALIGNMENT LINES
       if linecode_count[i]>0:
-        print "warning: non-alignment text lines ignored: prefix %s, count %d" \
-              % (chr(i),linecode_count[i])
+        logger.warn("Non-alignment text lines ignored: prefix %s, count %d" %
+                    (chr(i), linecode_count[i]))
     for i from 0 <= i <nseq0: # INDEX SEQUENCES THAT WERE ALIGNED
       if seqidmap[i].nlmsa_id>0: # ALIGNED, SO RECORD IT
         self.seqs.saveSeq(seqidmap[i].id,seqidmap[i].ns_id,seqidmap[i].offset,
@@ -1874,7 +1875,7 @@ Check the input!''' % (pythonStr, seqInfo.length))
     import string
     import os.path
     for filename in axtFiles:
-      print 'Processing axtnet file:',filename
+      logger.info('Processing axtnet file: ' + filename)
       try:
         if filename[-8:] == '.net.axt':
           t = string.split(os.path.basename(filename)[:-8], '.')[-2:]
@@ -1908,8 +1909,16 @@ Check the input!''' % (pythonStr, seqInfo.length))
 
         for i from 0 <= i < n: # SAVE EACH INTERVAL IN SRC -> DEST MAP
           j=im[i].target_id
-          #print 'A',im[i].start,im[i].end,im[i].target_id,im[i].target_start, im[i].target_end, im_tmp.sublist
-          #print 'B',seqidmap[isrc].nlmsa_id,i,j,seqidmap[j].id,seqidmap[j].ns_id,seqidmap[j].offset,seqidmap[j].nlmsa_id
+          #logger.debug('A: %s %s %s %s %s %s' % (im[i].start, im[i].end,
+          #                                       im[i].target_id,
+          #                                       im[i].target_start,
+          #                                       im[i].target_end,
+          #                                       im_tmp.sublist))
+          #logger.debug('B: %s %s %s %s %s %s %s' % (seqidmap[isrc].nlmsa_id, i,
+          #                                          j, seqidmap[j].id,
+          #                                          seqidmap[j].ns_id,
+          #                                          seqidmap[j].offset,
+          #                                          seqidmap[j].nlmsa_id))
           if seqidmap[j].nlmsa_id<=0: # NEW SEQUENCE, NEED TO ADD TO UNION
             ns_src = self.add_seqidmap_to_union(j,seqidmap,ns_src,build_ifile,nbuild)
           im[i].target_id = seqidmap[j].nlmsa_id # USE THE CORRECT ID
@@ -1923,7 +1932,10 @@ Check the input!''' % (pythonStr, seqInfo.length))
             im_tmp.target_id = seqidmap[isrc].nlmsa_id
             im_tmp.target_start = im[i].start
             im_tmp.target_end = im[i].end
-            #print 'C', im_tmp.target_id, im_tmp.target_start, im_tmp.target_end, seqidmap[j].ns_id, j
+            #logger.debug('C: %s %s %s %s %s' % (im_tmp.target_id,
+            #                                    im_tmp.target_start,
+            #                                    im_tmp.target_end,
+            #                                    seqidmap[j].ns_id, j))
             j=seqidmap[j].ns_id-1 # SAVE ALL ALIGNMENTS TO THE VIRTUAL LPO
             ns_src.saveInterval(&im_tmp,1,0,build_ifile[j]) # SAVE DEST -> SRC
             nbuild[j]=nbuild[j]+1
@@ -1933,7 +1945,11 @@ Check the input!''' % (pythonStr, seqInfo.length))
           else: # OFFSET FORWARD ORI
             im[i].start = seqidmap[isrc].offset + im[i].start
             im[i].end = seqidmap[isrc].offset + im[i].end
-          #print 'D', im_tmp.start, im_tmp.end, im_tmp.target_id, im_tmp.target_start, im_tmp.target_end, im_tmp.sublist
+          #logger.debug('D: %s %s %s %s %s %s' % (im_tmp.start, im_tmp.end,
+          #                                       im_tmp.target_id,
+          #                                       im_tmp.target_start,
+          #                                       im_tmp.target_end,
+          #                                       im_tmp.sublist))
 
         # SAVE THE RECORD. read_axtnet FUNCTION READS SRC/DEST AT THE SAME TIME
         j = seqidmap[isrc].ns_id-1 # SAVE ALL ALIGNMENTS TO THE VIRTUAL LPO
@@ -1951,7 +1967,7 @@ Check the input!''' % (pythonStr, seqInfo.length))
     self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
 
     
-  def buildFiles(self,saveSeqDict=False,verbose=True,**kwargs):
+  def buildFiles(self, saveSeqDict=False, **kwargs):
     'build nestedlist databases on-disk, and .seqDict index if desired'
     cdef NLMSASequence ns
     self.seqs.reopenReadOnly() # SAVE INDEXES AND OPEN READ-ONLY
@@ -1977,18 +1993,15 @@ Check the input!''' % (pythonStr, seqInfo.length))
                        pairwiseMode=self.pairwiseMode),ifile)
     finally:
       ifile.close()
-    sys.stderr.write('Index files saved.\n')
+    logger.info('Index files saved.')
     if saveSeqDict:
       self.save_seq_dict()
-    elif verbose:
-      sys.stderr.write('''Note: the NLMSA.seqDict was not saved to a file.
+    else:
+      logger.info('''Note: the NLMSA.seqDict was not saved to a file.
 This is not necessary if you intend to save the NLMSA to worldbase.
 But if you wish to open this NLMSA independently of worldbase,
 you should call NLMSA.save_seq_dict() to save the seqDict info to a file,
-or in the future pass the saveSeqDict=True option to NLMSA.build().
-
-To turn off this message, use the verbose=False option
-''')
+or in the future pass the saveSeqDict=True option to NLMSA.build().''')
 
   def save_seq_dict(self):
     'save seqDict to a worldbase-aware pickle file'
@@ -2027,7 +2040,7 @@ To turn off this message, use the verbose=False option
 
 
 
-def dump_textfile(pathstem,outfilename=None,verbose=True):
+def dump_textfile(pathstem, outfilename=None):
   'dump NLMSA binary files to a text file'
   cdef int n,nlmsaID,nsID,offset,is_bidirectional,pairwiseMode,nprefix
   cdef FILE *outfile
@@ -2050,9 +2063,8 @@ def dump_textfile(pathstem,outfilename=None,verbose=True):
       strcpy(seqDictID,seqDict._persistent_id)
     except AttributeError:
       strcpy(seqDictID,"unknown")
-      if verbose:
-        sys.stderr.write('''Warning: Because your seqDict has no worldbase ID, there is no
-host-independent way to save it to a textfile for transfer
+      logger.notice('''Warning: Because your seqDict has no worldbase ID, there
+is no host-independent way to save it to a textfile for transfer
 to another machine.  Therefore, when loading this textfile
 on the destination machine, you will have to provide the
 seqDict argument to textfile_to_binaries() on the destination machine.''')
@@ -2081,9 +2093,9 @@ seqDict argument to textfile_to_binaries() on the destination machine.''')
         strcpy(seqDictID,d._persistent_id) # try to get worldbase ID
       except AttributeError:
         strcpy(seqDictID,"None")
-        if pleaseWarn and verbose:
+        if pleaseWarn:
           pleaseWarn = False
-          sys.stderr.write('''Warning: Because one or more of the sequence
+          logger.notice('''Warning: Because one or more of the sequence
 databases in the seqDict have no worldbase ID, there is no
 host-independent way to save it to a textfile for transfer
 to another machine.  Therefore, when loading this textfile
@@ -2218,7 +2230,7 @@ dictionary argument: %s''' % missing)
       if not s.startswith('NLMSASequence'):
         raise IOError('bad format in file %s'%filename)
       NLMSAindexText = NLMSAindexText + s[14:] # JUST SAVE THE DATA FIELDS
-      sys.stderr.write('Saving NLMSA binary index: '+s[14:]+'...\n')
+      logger.info('Saving NLMSA binary index: ' + s[14:] + '...')
       if text_file_to_binaries(infile,basestem,err_msg)<0:
         raise IOError(err_msg)
     ifile = file(buildpath1+'.NLMSAindex',"w") # text file
