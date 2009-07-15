@@ -355,10 +355,10 @@ class SeqCacheOwner(object):
 
 def get_interval(seq,start,end,ori):
     "trivial function to get the interval seq[start:end] with requested ori"
-    ival=seq[start:end]
-    if ori== -1:
-        ival= -ival
-    return ival
+    if ori < 0:
+        return seq.absolute_slice(-end, -start)
+    else:
+        return seq.absolute_slice(start, end)
 
 
 _default_ivals_attrs = dict(idDest='id', startDest='start',
