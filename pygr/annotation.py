@@ -115,7 +115,8 @@ class AnnotationDB(object, UserDict.DictMixin):
                  itemClass=AnnotationSeq,
                  itemSliceClass=AnnotationSlice,
                  itemAttrDict=None, # GET RID OF THIS BACKWARDS-COMPATIBILITY KLUGE!!
-                 sliceAttrDict=None,maxCache=None, autoGC=True, **kwargs):
+                 sliceAttrDict=None,maxCache=None, autoGC=True,
+                 checkFirstID=True, **kwargs):
         '''sliceDB must map identifier to a sliceInfo object;
 sliceInfo must have name,start,stop,ori attributes;
 seqDB must map sequence ID to a sliceable sequence object;
@@ -140,15 +141,16 @@ maxCache specfies the maximum number of annotation objects to keep in the cache.
         self.sliceAttrDict=sliceAttrDict # USER-PROVIDED ALIASES
         if maxCache is not None:
             self.maxCache = maxCache
-        try: # don't cache anything now; schema may change itemClass!
-            k = iter(self).next() # get the first ID if any
-            self.get_annot_obj(k, self.sliceDB[k]) # valid annotation object?
-        except KeyError: # a convenient warning to the user...
-            raise KeyError('''\
- cannot create annotation object; sequence database %s may not be correct''' %\
-                           (repr(seqDB),))
-        except StopIteration:
-            pass # dataset is empty so there is nothing we can check...
+        if checkFirstID:
+            try: # don't cache anything now; schema may change itemClass!
+                k = iter(self).next() # get the first ID if any
+                self.get_annot_obj(k, self.sliceDB[k]) # valid annotation?
+            except KeyError: # a convenient warning to the user...
+                raise KeyError('''\
+cannot create annotation object %s; sequence database %s may not be correct'''
+                               % (k, repr(seqDB),))
+            except StopIteration:
+                pass # dataset is empty so there is nothing we can check...
     __getstate__ = classutil.standard_getstate ############### PICKLING METHODS
     __setstate__ = classutil.standard_setstate
     _pickleAttrs = dict(sliceDB=0,seqDB=0,annotationType=0, autoGC=0,
@@ -326,29 +328,6 @@ for you, when the AnnotationDB was deleted.'''
     def popitem(self):
         raise NotImplementedError, "no deletions allowed"
             
-class TranslationInfo(object):
-    def __init__(self, seqDB):
-        self.seqDB = seqDB
-    def __getitem__(self, k):
-        "convert ID of form seqID:frame into slice info tuple"
-        i = k.rfind(':')
-        if i<0:
-            raise KeyError('invalid TranslationInfo key')
-        seqID = k[:i]
-        length = len(self.seqDB[seqID]) # sequence length
-        frame = int(k[i+1:])
-        if k[i+1] == '-': # negative frame -0, -1, or -2
-            return (seqID, -(length - ((length + frame) % 3)), frame)
-        else: # positive frame 0, 1 or 2
-            return (seqID, frame, length - ((length - frame) % 3))
-
-class TranslationDB(AnnotationDB):
-    def __init__(self, seqDB):
-        AnnotationDB.__init__(self, TranslationInfo(seqDB), seqDB,
-                              itemClass=TranslationAnnot,
-                              itemSliceClass=TranslationAnnotSlice,
-                              sliceAttrDict=dict(id=0,start=1,stop=2))
-
 class AnnotationServer(AnnotationDB):
     'XMLRPC-ready server for AnnotationDB'
     xmlrpc_methods={'get_slice_tuple':0,'get_slice_items':0,
