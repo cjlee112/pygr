@@ -204,7 +204,7 @@ class SequenceDB(object, UserDict.DictMixin):
     # define ~ (invert) operator to return a lazily-created _SequenceDBInverse
     __invert__ = classutil.lazy_create_invert(_SequenceDBInverse)
     
-    def __init__(self, autoGC=True, dbname='__generic__', **kwargs):
+    def __init__(self, autoGC=True, dbname=None, **kwargs):
         """Initialize seq db from filepath or ifile."""
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = classutil.RecentValueDictionary(autoGC)

@@ -346,7 +346,10 @@ def get_bound_subclass(obj, classattr='__class__', subname=None, factories=(),
     else: # someone else's shadow class, so shadow its parent
         targetClass = targetClass._shadowParent
     if subname is None: # get a name from worldbase ID
-        subname = obj._persistent_id.split('.')[-1]
+        try:
+            subname = obj._persistent_id.split('.')[-1]
+        except AttributeError:
+            subname = '__generic__'
     class shadowClass(targetClass):
         __reduce__ = shadow_reducer
         _shadowParent = targetClass # NEED TO KNOW ORIGINAL CLASS
