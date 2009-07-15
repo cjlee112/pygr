@@ -285,17 +285,13 @@ class SeqPath(object):
         else: # STORE TOP-LEVEL SEQUENCE PATH...
             self.path = path.path
             self.step = step * path.step
-    def classySlice(self,path,*l,**kwargs):
+    def classySlice(self, path, *l, **kwargs):
         'create a subslice using appropriate class based on container'
-        if path is not None:
-            obj = path
-        else:
-            obj = self
-        try: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
-            klass = obj.pathForward.db.itemSliceClass
+        try: # if db provides a class to use for slices, use it.
+            klass = path.pathForward.db.itemSliceClass
         except AttributeError:
-            klass = SeqPath # DEFAULT: JUST USE GENERIC SLICE CLASS
-        return klass(path,*l,**kwargs) # CONSTRUCT THE SLICE
+            klass = SeqPath # default: just use generic slice class
+        return klass(path, *l, **kwargs) # construct the slice
     def absolute_slice(self, start, stop):
         'get slice of top-level sequence, using absolute coords'
         return self.classySlice(self, start, stop, absoluteCoords=True)
