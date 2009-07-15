@@ -87,8 +87,10 @@ if __name__ == '__main__':
     if options.exclude:
         targets = [ name for name in all_tests() if name not in targets ]
 
-    # disables debug messages at < 2 verbosity
-    if options.verbosity != 2:
+    # disables debug messages at < 2 verbosity, debug+info at < 1
+    if options.verbosity < 1:
+        logger.disable('INFO')  # Should implicity disable DEBUG as well
+    elif options.verbosity < 2:
         logger.disable('DEBUG')
     
     # cleans full entire test directory
