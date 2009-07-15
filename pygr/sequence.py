@@ -234,8 +234,8 @@ class SeqPath(object):
     orientation=SeqOriDescriptor()  # COMPUTE ORIENTATION AUTOMATICALLY
     pathForward=PathForwardDescr()  # GET THE TOP-LEVEL FORWARD SEQUENCE OBJ
     _abs_interval=AbsIntervalDescr()
-    def __init__(self,path,start=0,stop=None,step=None,reversePath=None,
-                 relativeToStart=False,absoluteCoords=False):
+    def __init__(self, path, start=0, stop=None, step=None, reversePath=False,
+                 relativeToStart=False, absoluteCoords=False):
         '''Return slice of path[start:stop:step].
         NB: start>stop means reverse orientation, i.e. (-path)[-stop:-start]
         start/stop are LOCAL coordinates relative to the specified path
@@ -248,8 +248,11 @@ class SeqPath(object):
         absoluteCoords option allows intervals to be created using Pygrs internal
         coordinate convention i.e. -20,-10 --> -(path.pathForward[10:20])
         '''
-        if reversePath is not None:
-            start = -(reversePath.stop)
+        if reversePath: # create top-level negative orientation path
+            start = -(path.stop)
+            stop = 0
+            self._reverse = path
+            path = None # make this a top-level path object
         if absoluteCoords: # THIS OPTION PROVIDES TRANSPARENT WAY TO CREATE
             if start >= 0:   # INTERVALS USING start,stop PAIRS THAT FOLLOW
                 path = path.pathForward # OUR INTERNAL SIGN CONVENTION
@@ -412,8 +415,7 @@ class SeqPath(object):
             try:
                 return self._reverse # USE EXISTING RC OBJECT FOR THIS SEQ
             except AttributeError: #  CREATE ONLY ONE RC FOR THIS SEQUENCE
-                self._reverse=self.classySlice(None,None,stop=0,reversePath=self)
-                self._reverse._reverse=self
+                self._reverse = self.classySlice(self, reversePath=True)
                 return self._reverse
         elif self.orientation>0: # FORWARD ORI: JUST REVERSE INDICES
             return self.classySlice(self.path,self.stop,self.start,
