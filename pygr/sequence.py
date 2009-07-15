@@ -293,6 +293,9 @@ class SeqPath(object):
         except AttributeError:
             klass = SeqPath # DEFAULT: JUST USE GENERIC SLICE CLASS
         return klass(path,*l,**kwargs) # CONSTRUCT THE SLICE
+    def absolute_slice(self, start, stop):
+        'get slice of top-level sequence, using absolute coords'
+        return self.classySlice(self, start, stop, absoluteCoords=True)
     def __getitem__(self,k):
         if isinstance(k,types.IntType):
             if k== -1: # HAVE TO HANDLE THIS CASE SPECIALLY
