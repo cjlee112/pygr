@@ -326,6 +326,28 @@ for you, when the AnnotationDB was deleted.'''
     def popitem(self):
         raise NotImplementedError, "no deletions allowed"
             
+class TranslationInfo(object):
+    def __init__(self, seqDB):
+        self.seqDB = seqDB
+    def __getitem__(self, k):
+        "convert ID of form seqID:frame into slice info tuple"
+        i = k.rfind(':')
+        if i<0:
+            raise KeyError('invalid TranslationInfo key')
+        seqID = k[:i]
+        length = len(self.seqDB[seqID]) # sequence length
+        frame = int(k[i+1:])
+        if k[i+1] == '-': # negative frame -0, -1, or -2
+            return (seqID, -(length - ((length + frame) % 3)), frame)
+        else: # positive frame 0, 1 or 2
+            return (seqID, frame, length - ((length - frame) % 3))
+
+class TranslationDB(AnnotationDB):
+    def __init__(self, seqDB):
+        AnnotationDB.__init__(self, TranslationInfo(seqDB), seqDB,
+                              itemClass=TranslationAnnot,
+                              itemSliceClass=TranslationAnnotSlice,
+                              sliceAttrDict=dict(id=0,start=1,stop=2))
 
 class AnnotationServer(AnnotationDB):
     'XMLRPC-ready server for AnnotationDB'
