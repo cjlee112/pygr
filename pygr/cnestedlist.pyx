@@ -1687,6 +1687,9 @@ See the NLMSA documentation for more details.\n''')
   def __iter__(self):
     raise NotImplementedError, 'you cannot iterate over NLMSAs'
 
+  def edges(self, *args, **kwargs):
+    return nlmsa_utils.generate_nlmsa_edges(self, *args, **kwargs)
+
   def __iadd__(self,seq):
     'add seq to our union'
     self.seqs.saveSeq(seq)

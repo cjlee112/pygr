@@ -46,7 +46,7 @@ class EmptySlice:
     'Empty slice for use by NLMSASlice'
     def __init__(self, seq):
         self.seq = seq
-    def edges(self,**kwargs):
+    def edges(self, *args, **kwargs):
         return []
     def items(self, **kwargs):
         return []
@@ -139,6 +139,11 @@ class NLMSASeqDict(dict):
         if not hasattr(seq,'annotationType'): # don't cache annotations
             dict.__setitem__(self, seq.pathForward, v) # cache this result
         return v
+
+    def __iter__(self):
+        'iterate over sequences in this alignment'
+        for seqID in self.seqIDdict:
+            yield self.nlmsa.seqDict[seqID]
 
     def getSeqID(self, seq):
         'return fully qualified sequence ID for this seq'
@@ -352,6 +357,15 @@ class SeqCacheOwner(object):
     def cache_reference(self, seq):
       'keep a ref to seqs cached on our behalf'
       self.cachedSeqs[seq.id] = seq
+
+
+def generate_nlmsa_edges(self, *args, **kwargs):
+    """iterate over all edges for all sequences in the alignment.
+    Very slow for a big alignment!"""
+    for seq in self.seqs:
+        myslice = self[seq]
+        for results in myslice.edges(*args, **kwargs):
+            yield results
 
 def get_interval(seq,start,end,ori):
     "trivial function to get the interval seq[start:end] with requested ori"
