@@ -496,11 +496,10 @@ class BlastParsers_Test(BlastBase):
         "Testing tblastn parser"
         seq_dict = { 'HBB1_XENLA' : self.prot['HBB1_XENLA'] }
         dna_db = blast.BlastIDIndex(self.dna)
-        trans_db = translationDB.get_translation_db(dna_db)
         tblastn_output = open(testutil.datafile('tblastn_output.txt'), 'r')
         try:
             al = blast.read_blast_alignment(tblastn_output, seq_dict,
-                                            trans_db)
+                                            dna_db, translateDest=True)
             ## pipeline = (blast.TblastnTransform(), blast.save_interval_alignment)
             ## al = blast.read_blast_alignment(tblastn_output, seq_dict, dna_id,
             ##                                 pipeline=pipeline)

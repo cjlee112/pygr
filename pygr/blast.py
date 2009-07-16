@@ -26,7 +26,8 @@ def blast_program(query_type,db_type):
     return progs[query_type][db_type]
 
 
-def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None):
+def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None,
+                         translateDest=False):
     """Apply sequence of transforms to read input from 'ofile'.
     
     BlastHitParser; CoordsToIntervals; save_interval_alignment OR [pipeline]
@@ -38,6 +39,8 @@ def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None):
     d = dict(id='src_id', start='src_start', stop='src_end', ori='src_ori',
              idDest='dest_id', startDest='dest_start',
              stopDest='dest_end', oriDest='dest_ori')
+    if translateDest:
+        destDB = translationDB.get_translation_db(destDB)
     cti = CoordsToIntervals(srcDB, destDB, d)
     alignedIvals = cti(p.parse_file(ofile))
     if pipeline is None:
@@ -303,17 +306,13 @@ To turn off this message, use the verbose=False option''' % methodname)
             self.formatdb()
         blastprog = self.blast_program(seq, blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
-        subjectDB = self.idIndex
+        translateDest = False
         if blastprog=='tblastn': # apply ORF transformation to results
-            #pipeline = (TblastnTransform(), save_interval_alignment)
-            pipeline = None
-            subjectDB = translationDB.get_translation_db(subjectDB)
+            translateDest = True
         elif blastprog=='blastx':
             raise ValueError("Use BlastxMapping for " + blastprog)
-        else:
-            pipeline = None
-        return process_blast(cmd, seq, subjectDB, al, queryDB=queryDB,
-                             pipeline=pipeline)
+        return process_blast(cmd, seq, self.idIndex, al, queryDB=queryDB,
+                             translateDest=translateDest)
 
 class MegablastMapping(BlastMapping):
     def __repr__(self):
