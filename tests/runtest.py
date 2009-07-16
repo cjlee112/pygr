@@ -35,7 +35,9 @@ def run(targets, options):
             runner = PygrTestRunner(verbosity=options.verbosity,
                                     descriptions=0)
             
+            logger.disable(disable_threshold)
             results = runner.run(suite)
+            logger.disable(0)
             
             # count tests and errors
             success += results.testsRun - \
@@ -63,6 +65,9 @@ def run(targets, options):
     return (success, errors, skipped)
 
 if __name__ == '__main__':
+    # Make sure no messages are filtered out at first
+    logger.disable(0)
+
     # gets the prebuild option parser
     parser = testoptions.option_parser()
 
@@ -89,9 +94,11 @@ if __name__ == '__main__':
 
     # disables debug messages at < 2 verbosity, debug+info at < 1
     if options.verbosity < 1:
-        logger.disable('INFO')  # Should implicity disable DEBUG as well
+        disable_threshold = 'INFO' # Should implicity disable DEBUG as well
     elif options.verbosity < 2:
-        logger.disable('DEBUG')
+        disable_threshold = 'DEBUG'
+    else:
+        disable_threshold = 0
     
     # cleans full entire test directory
     if options.clean:
