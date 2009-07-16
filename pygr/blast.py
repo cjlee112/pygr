@@ -27,7 +27,7 @@ def blast_program(query_type,db_type):
 
 
 def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None,
-                         translateDest=False):
+                         translateSrc=False, translateDest=False):
     """Apply sequence of transforms to read input from 'ofile'.
     
     BlastHitParser; CoordsToIntervals; save_interval_alignment OR [pipeline]
@@ -39,6 +39,8 @@ def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None,
     d = dict(id='src_id', start='src_start', stop='src_end', ori='src_ori',
              idDest='dest_id', startDest='dest_start',
              stopDest='dest_end', oriDest='dest_ori')
+    if translateSrc:
+        srcDB = translationDB.get_translation_db(srcDB)
     if translateDest:
         destDB = translationDB.get_translation_db(destDB)
     cti = CoordsToIntervals(srcDB, destDB, d)

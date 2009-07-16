@@ -455,7 +455,6 @@ class BlastParsers_Test(BlastBase):
 
     def test_blastx_parser(self):
         "Testing blastx parser"
-        pipeline = (blast.TblastnTransform(True, False), blast.blastx_results, list)
         blastx_output = open(testutil.datafile('blastx_output.txt'), 'r')
         seq_dict =  { 'gi|171854975|dbj|AB364477.1|' :
                       self.dna['gi|171854975|dbj|AB364477.1|'] }
@@ -463,7 +462,7 @@ class BlastParsers_Test(BlastBase):
             results = blast.read_blast_alignment(blastx_output,
                                                  seq_dict,
                                                  blast.BlastIDIndex(self.prot),
-                                                 pipeline=pipeline)
+                                                 translateSrc=True)
         finally:
             blastx_output.close()
         correct = [(143, 143, 429, 0.53146853146853146),
@@ -488,7 +487,7 @@ class BlastParsers_Test(BlastBase):
                    (146, 146, 438, 0.91095890410958902),
                    (146, 146, 438, 0.97945205479452058)]
 
-        check_results(results, correct,
+        check_results([results], correct,
                       lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
                                 t[2].pIdentity()))
 

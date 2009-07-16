@@ -1,4 +1,4 @@
-from seqdb import SequenceDB
+from seqdb import SequenceDB, BasicSeqInfoDict
 from annotation import AnnotationDB, TranslationAnnot, TranslationAnnotSlice
 import classutil, sequence
 import UserDict
@@ -64,7 +64,10 @@ class TranslationDB(SequenceDB):
 
     def __init__(self, seqDB, **kwargs):
         self.seqDB = seqDB
-        self.seqInfoDict = self.seqDB.seqInfoDict # just inherit from seqdb
+        try:
+            self.seqInfoDict = seqDB.seqInfoDict
+        except AttributeError:
+            self.seqInfoDict = BasicSeqInfoDict(seqDB)
         self.annodb = AnnotationDB(SixFrameInfo(seqDB), seqDB,
                                    itemClass=TranslationAnnot,
                                    itemSliceClass=TranslationAnnotSlice,
@@ -112,5 +115,9 @@ def get_translation_db(seqDB):
     try:
         return seqDB.translationDB
     except AttributeError: # create a new TranslationAnnot DB
-        seqDB.translationDB = TranslationDB(seqDB)
-        return seqDB.translationDB
+        tdb = TranslationDB(seqDB)
+        try:
+            seqDB.translationDB = tdb
+        except AttributeError:
+            pass # won't let us cache? Just hand back the TranslationDB
+        return tdb

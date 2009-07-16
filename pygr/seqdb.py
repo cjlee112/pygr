@@ -463,31 +463,36 @@ class SequenceFileDB(SequenceDB):
 
 # Some support classes for the SeqLenDict mechanism.
 
-class _SeqLenObject(object):
+class BasicSeqInfo(object):
     """Wrapper to provide the correct seqInfoDict-style object information.
 
-    This boils down to providing id, db, length, and offset.
+    This boils down to providing id, db, length, and possibly offset.
     
     """
-    def __init__(self, seqID, seqDB):
+    def __init__(self, seqID, seqDB, length=None):
         self.id = seqID
         self.db = seqDB
-        self.length, self.offset = seqDB.seqLenDict[seqID]
+        if length is None:
+            self.length = len(seqDB[seqID]) # generic but possibly slow
+        else:
+            self.length = length
 
-class _SeqLenDictWrapper(object, UserDict.DictMixin):
+class _SeqLenObject(BasicSeqInfo):
+    """Wrapper for use with a seqLenDict """
+    def __init__(self, seqID, seqDB):
+        length, self.offset = seqDB.seqLenDict[seqID]
+        BasicSeqInfo.__init__(self, seqID, seqDB, length)
+
+class BasicSeqInfoDict(object, UserDict.DictMixin):
     """Wrapper around SequenceDB.seqLenDict to provide seqInfoDict behavior.
-
-    The default storage mechanism for sequences implemented by FileDBSequence
-    and SequenceFileDB puts everything in seqLenDict, a shelve index of
-    lenghts and offsets.  This class wraps that dictionary to provide the
-    interface that SequenceDB expects to see.
-    
+    This basic version just gets the length from the sequence object itself.
     """
+    itemClass = BasicSeqInfo
     def __init__(self, db):
         self.seqDB = db
         
     def __getitem__(self, k):
-        return _SeqLenObject(k, self.seqDB)
+        return self.itemClass(k, self.seqDB)
     
     def __len__(self):
         return len(self.seqDB.seqLenDict)
@@ -497,6 +502,16 @@ class _SeqLenDictWrapper(object, UserDict.DictMixin):
     
     def keys(self):
         return self.seqDB.seqLenDict.keys()
+
+class _SeqLenDictWrapper(BasicSeqInfoDict):
+    """
+    The default storage mechanism for sequences implemented by FileDBSequence
+    and SequenceFileDB puts everything in seqLenDict, a shelve index of
+    lengths and offsets.  This class wraps that dictionary to provide the
+    interface that SequenceDB expects to see.
+    
+ """
+    itemClass = _SeqLenObject
 
 class _SeqLenDictSaver(object):
     """Support for generic reading functions, called by _store_seqlen_dict.
