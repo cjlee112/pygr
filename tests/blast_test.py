@@ -5,6 +5,7 @@ from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import worldbase
 from pygr import sequence, cnestedlist, seqdb, blast, logger, parse_blast
 from pygr.nlmsa_utils import CoordsGroupStart,CoordsGroupEnd
+from pygr import translationDB
 
 def check_results(results, correct, formatter, delta=0.01,
                   reformatCorrect=False):
@@ -323,7 +324,7 @@ class Blastx_Test(BlastBase):
 
 class Tblastn_Test(BlastBase):
     def test_tblastn(self):
-        "Blastn test"
+        "tblastn test"
         if not testutil.blast_enabled():
             raise SkipTest, "no BLAST installed"
         
@@ -494,12 +495,15 @@ class BlastParsers_Test(BlastBase):
     def test_tblastn_parser(self):
         "Testing tblastn parser"
         seq_dict = { 'HBB1_XENLA' : self.prot['HBB1_XENLA'] }
-        dna_id = blast.BlastIDIndex(self.dna)
+        dna_db = blast.BlastIDIndex(self.dna)
+        trans_db = translationDB.get_translation_db(dna_db)
         tblastn_output = open(testutil.datafile('tblastn_output.txt'), 'r')
         try:
-            pipeline = (blast.TblastnTransform(), blast.save_interval_alignment)
-            al = blast.read_blast_alignment(tblastn_output, seq_dict, dna_id,
-                                            pipeline=pipeline)
+            al = blast.read_blast_alignment(tblastn_output, seq_dict,
+                                            trans_db)
+            ## pipeline = (blast.TblastnTransform(), blast.save_interval_alignment)
+            ## al = blast.read_blast_alignment(tblastn_output, seq_dict, dna_id,
+            ##                                 pipeline=pipeline)
             result = al[self.prot['HBB1_XENLA']]
         finally:
             tblastn_output.close()
