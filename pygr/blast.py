@@ -30,8 +30,20 @@ def blast_program(query_type,db_type):
 def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None,
                          translateSrc=False, translateDest=False):
     """Apply sequence of transforms to read input from 'ofile'.
+
+    srcDB: database for finding query sequences from the blast input;
+
+    destDB: database for finding subject sequences from the blast input;
+
+    al, if not None, must be a writeable alignment object in which to
+    store the alignment intervals;
+
+    translateSrc=True forces creation of a TranslationDB representing
+    the possible 6-frames of srcDB (for blastx, tblastx);
+
+    translateDest=True forces creation of a TranslationDB representing
+    the possible 6-frames of destDB (for tblastn, tblastx).
     
-    BlastHitParser; CoordsToIntervals; save_interval_alignment OR [pipeline]
     If pipeline is not None, it must be a list of filter functions each
     taking a single argument and returning an iterator or iterable result
     object.
@@ -280,7 +292,7 @@ To turn off this message, use the verbose=False option''' % methodname)
     _blast_prog_dict = dict(blastx='#BlastxMapping')
 
     def blast_program(self, seq, blastprog=None):
-        'figure out appropriate blast program if needed'
+        'figure out appropriate blast program & remap via _blast_prog_dict'
         if blastprog is None:
             blastprog = blast_program(seq.seqtype(), self.seqDB._seqtype)
         oldprog = blastprog
@@ -306,6 +318,7 @@ To turn off this message, use the verbose=False option''' % methodname)
         return queryDB[seqID]
 
     def translation_kwargs(self, blastprog):
+        'return kwargs for read_blast_alignment() based on blastprog'
         d = dict(tblastn=dict(translateDest=True),
                  blastx=dict(translateSrc=True),
                  tblastx=dict(translateSrc=True, translateDest=True))
@@ -316,7 +329,7 @@ To turn off this message, use the verbose=False option''' % methodname)
     def __call__(self, seq=None, al=None, blastpath='blastall',
                  blastprog=None, expmax=0.001, maxseq=None, verbose=None,
                  opts=(), queryDB=None, **kwargs):
-        "Run blast search for seq in database, return aligned intervals"
+        "Run blast search for seq in database, return alignment object"
         if seq is None and queryDB is None:
             raise ValueError("we need a sequence or db to use as query!")
         if seq and queryDB:
@@ -332,6 +345,11 @@ To turn off this message, use the verbose=False option''' % methodname)
                              ** self.translation_kwargs(blastprog))
 
 class BlastxMapping(BlastMapping):
+    """Because blastx changes the query to multiple sequences
+    (representing its six possible frames), getitem can no longer
+    return a single slice object, but instead an iterator for one
+    or more slice objects representing the frames that had
+    homology hits."""
     def __repr__(self):
         return "<BlastxMapping '%s'>" % (self.filepath)
     _blast_prog_dict = dict(blastn='tblastx', blastp='#BlastMapping',
