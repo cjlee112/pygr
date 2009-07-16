@@ -93,7 +93,7 @@ class DNAAnnotation_Test(TestBase):
                 for annID in annoDB:
                     nlmsa.addAnnotation(annoDB[annID])
 
-                nlmsa.build(verbose=False)
+                nlmsa.build()
                 nlmsa.__doc__ = 'trivial map'
                 worldbase.Bio.Test.map = nlmsa
                 worldbase.schema.Bio.Test.map = metabase.ManyToManyRelation(db,
@@ -162,7 +162,7 @@ def populate_swissprot():
     nlmsa = cnestedlist.NLMSA(filename, 'w', pairwiseMode=True,
                               bidirectional=False)
     nlmsa.addAnnotation(exon)
-    nlmsa.build(verbose=False)
+    nlmsa.build()
     annoDB.__doc__ = 'a little annotation db'
     nlmsa.__doc__ = 'a little map'
     worldbase.Bio.Annotation.annoDB = annoDB

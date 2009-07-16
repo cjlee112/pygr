@@ -1643,7 +1643,7 @@ cdef class NLMSA:
     if self.pairwiseMode==0:
       raise ValueError('this alignment is already using an LPO!')
     elif self.pairwiseMode!=1: # NOT ALREADY SET TO PAIRWISE MODE
-      logger.notice('''
+      logger.info('''
 Because you are aligning a pair of sequence intervals,
 the pairwiseMode=True option is automatically being applied.
 To avoid this message in the future, pass the pairwiseMode=True
@@ -2063,7 +2063,7 @@ def dump_textfile(pathstem, outfilename=None):
       strcpy(seqDictID,seqDict._persistent_id)
     except AttributeError:
       strcpy(seqDictID,"unknown")
-      logger.notice('''Warning: Because your seqDict has no worldbase ID, there
+      logger.info('''Warning: Because your seqDict has no worldbase ID, there
 is no host-independent way to save it to a textfile for transfer
 to another machine.  Therefore, when loading this textfile
 on the destination machine, you will have to provide the
@@ -2095,7 +2095,7 @@ seqDict argument to textfile_to_binaries() on the destination machine.''')
         strcpy(seqDictID,"None")
         if pleaseWarn:
           pleaseWarn = False
-          logger.notice('''Warning: Because one or more of the sequence
+          logger.info('''Warning: Because one or more of the sequence
 databases in the seqDict have no worldbase ID, there is no
 host-independent way to save it to a textfile for transfer
 to another machine.  Therefore, when loading this textfile
