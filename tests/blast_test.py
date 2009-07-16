@@ -297,7 +297,7 @@ class Blastx_Test(BlastBase):
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         try:
-            results = blastmap[self.prot['HBB1_MOUSE']]
+            results = blastmap(self.prot['HBB1_MOUSE'])
             raise AssertionError('failed to trap blastp in BlastxMapping')
         except ValueError:
             pass
@@ -499,9 +499,6 @@ class BlastParsers_Test(BlastBase):
         try:
             al = blast.read_blast_alignment(tblastn_output, seq_dict,
                                             dna_db, translateDest=True)
-            ## pipeline = (blast.TblastnTransform(), blast.save_interval_alignment)
-            ## al = blast.read_blast_alignment(tblastn_output, seq_dict, dna_id,
-            ##                                 pipeline=pipeline)
             result = al[self.prot['HBB1_XENLA']]
         finally:
             tblastn_output.close()

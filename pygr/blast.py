@@ -3,7 +3,8 @@ import classutil, logger
 from sequtil import *
 from parse_blast import BlastHitParser
 from seqdb import write_fasta, read_fasta
-from nlmsa_utils import CoordsGroupStart, CoordsGroupEnd, CoordsToIntervals
+from nlmsa_utils import CoordsGroupStart, CoordsGroupEnd, CoordsToIntervals,\
+     EmptySlice
 from annotation import AnnotationDB, TranslationAnnot, TranslationAnnotSlice
 import cnestedlist
 import translationDB
@@ -275,10 +276,20 @@ results = db.%s(query)
 To turn off this message, use the verbose=False option''' % methodname)
         except AttributeError:
             pass
-    def blast_program(self, seq, blastprog):
+
+    _blast_prog_dict = dict(blastx='#BlastxMapping')
+
+    def blast_program(self, seq, blastprog=None):
         'figure out appropriate blast program if needed'
         if blastprog is None:
-            return blast_program(seq.seqtype(), self.seqDB._seqtype)
+            blastprog = blast_program(seq.seqtype(), self.seqDB._seqtype)
+        oldprog = blastprog
+        try: # apply program transformation if provided
+            blastprog = self._blast_prog_dict[blastprog]
+            if blastprog.startswith('#'): # not permitted by this class!
+                raise ValueError('Use %s for %s' % (blastprog[1:],oldprog))
+        except KeyError:
+            pass # no program transformation to apply, so nothing to do...
         return blastprog
     def blast_command(self, blastpath, blastprog, expmax, maxseq, opts):
         'generate command string for running blast with desired options'
@@ -293,6 +304,15 @@ To turn off this message, use the verbose=False option''' % methodname)
         'get one sequence obj from queryDB'
         seqID = iter(queryDB).next() # get 1st seq ID
         return queryDB[seqID]
+
+    def translation_kwargs(self, blastprog):
+        d = dict(tblastn=dict(translateDest=True),
+                 blastx=dict(translateSrc=True),
+                 tblastx=dict(translateSrc=True, translateDest=True))
+        try:
+            return d[blastprog]
+        except KeyError:
+            return {}
     def __call__(self, seq=None, al=None, blastpath='blastall',
                  blastprog=None, expmax=0.001, maxseq=None, verbose=None,
                  opts=(), queryDB=None, **kwargs):
@@ -308,13 +328,22 @@ To turn off this message, use the verbose=False option''' % methodname)
             self.formatdb()
         blastprog = self.blast_program(seq, blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
-        translateDest = False
-        if blastprog=='tblastn': # apply ORF transformation to results
-            translateDest = True
-        elif blastprog=='blastx':
-            raise ValueError("Use BlastxMapping for " + blastprog)
         return process_blast(cmd, seq, self.idIndex, al, queryDB=queryDB,
-                             translateDest=translateDest)
+                             ** self.translation_kwargs(blastprog))
+
+class BlastxMapping(BlastMapping):
+    def __repr__(self):
+        return "<BlastxMapping '%s'>" % (self.filepath)
+    _blast_prog_dict = dict(blastn='tblastx', blastp='#BlastMapping',
+                            tblastn='#BlastMapping')
+    def __getitem__(self, query):
+        """generate slices for all translations of the query """
+        al = self(query)
+        for seq in al.seqs:
+            myslice = al[seq]
+            if not isinstance(myslice, EmptySlice):
+                yield myslice
+
 
 class MegablastMapping(BlastMapping):
     def __repr__(self):
@@ -537,7 +566,7 @@ def blastx_results(alignedIvals):
     for slice in l:
         yield slice
 
-class BlastxMapping(BlastMapping):
+class BlastxMappingOld(BlastMapping):
     '''use this mapping class for blastx or tblastx queries.
     Note that its interface is a little different than BlastMapping
     in that it returns a list of hits, one for each hit returned by
@@ -546,6 +575,7 @@ class BlastxMapping(BlastMapping):
     BlastxMapping does this because blastx may find multiple ORFs
     in the query sequence; due to this complication it is simplest
     to simply return the hits one at a time exactly as blastx reports them.'''
+    _blast_prog_dict = dict(blastp='#BlastMapping', tblastn='#BlastMapping')
     def __repr__(self):
         return "<BlastxMapping '%s'>" % (self.filepath)
     def __call__(self, seq=None, blastpath='blastall',
