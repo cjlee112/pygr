@@ -6,6 +6,8 @@ from seqdb import write_fasta, read_fasta
 from nlmsa_utils import CoordsGroupStart, CoordsGroupEnd, CoordsToIntervals
 from annotation import AnnotationDB, TranslationAnnot, TranslationAnnotSlice
 import cnestedlist
+import translationDB
+import UserDict
 
 # NCBI HAS THE NASTY HABIT OF TREATING THE IDENTIFIER AS A BLOB INTO
 # WHICH THEY STUFF FIELD AFTER FIELD... E.G. gi|1234567|foobarU|NT_1234567|...
@@ -301,13 +303,16 @@ To turn off this message, use the verbose=False option''' % methodname)
             self.formatdb()
         blastprog = self.blast_program(seq, blastprog)
         cmd = self.blast_command(blastpath, blastprog, expmax, maxseq, opts)
+        subjectDB = self.idIndex
         if blastprog=='tblastn': # apply ORF transformation to results
-            pipeline = (TblastnTransform(), save_interval_alignment)
+            #pipeline = (TblastnTransform(), save_interval_alignment)
+            pipeline = None
+            subjectDB = translationDB.get_translation_db(subjectDB)
         elif blastprog=='blastx':
             raise ValueError("Use BlastxMapping for " + blastprog)
         else:
             pipeline = None
-        return process_blast(cmd, seq, self.idIndex, al, queryDB=queryDB,
+        return process_blast(cmd, seq, subjectDB, al, queryDB=queryDB,
                              pipeline=pipeline)
 
 class MegablastMapping(BlastMapping):
@@ -352,6 +357,7 @@ class BlastIDIndex(object):
     sub-identifiers to the true FASTA ID."""
     def __init__(self, seqDB):
         self.seqDB = seqDB
+        self.seqInfoDict = BlastIDInfoDict(self)
     # FOR UNPACKING NCBI IDENTIFIERS AS WORKAROUND FOR BLAST ID CRAZINESS
     id_delimiter='|'
     def unpack_id(self,id):
@@ -415,6 +421,35 @@ class BlastIDIndex(object):
             return self.seqDB[seqID]
         except KeyError: # translate to the correct ID
             return self.seqDB[self.get_real_id(seqID)]
+
+    def __contains__(self, seqID):
+        try:
+            self.seqInfoDict[seqID]
+            return True
+        except KeyError:
+            return False
+
+class BlastIDInfoDict(object, UserDict.DictMixin):
+    """provide seqInfoDict interface for BlastIDIndex """
+    def __init__(self, db):
+        self.blastDB = db
+        
+    def __getitem__(self, seqID):
+        try:
+            return self.blastDB.seqDB.seqInfoDict[seqID]
+        except KeyError:
+            seqID = self.blastDB.get_real_id(seqID)
+            return self.blastDB.seqDB.seqInfoDict[seqID]
+    
+    def __len__(self):
+        return len(self.blastDB.seqDB.seqInfoDict)
+    
+    def __iter__(self):
+        return iter(self.blastDB.seqDB.seqInfoDict)
+    
+    def keys(self):
+        return self.blastDB.seqDB.seqInfoDict.keys()
+
 
 def get_orf_slices(ivals):
     'create list of TranslationAnnotation slices from union of seq ivals'

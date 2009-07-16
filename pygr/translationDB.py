@@ -17,7 +17,7 @@ class SeqTranslator(sequence.SequenceBase):
             self.start = -len(self)
             self.stop = 0
             self._reverse = reversePath
-        if self.id not in self.db:
+        if self.id not in self.db.seqDB:
             raise KeyError('sequence %s not in db %s' % (self.id, self.db))
 
     def __getitem__(self, k):
@@ -106,3 +106,11 @@ class SixFrameInfo(object, UserDict.DictMixin):
     # these methods should not be implemented for read-only database.
     clear = setdefault = pop = popitem = copy = update = \
             classutil.read_only_error
+
+def get_translation_db(seqDB):
+    """Use cached seqDB.translationDB if already present, or create it """
+    try:
+        return seqDB.translationDB
+    except AttributeError: # create a new TranslationAnnot DB
+        seqDB.translationDB = TranslationDB(seqDB)
+        return seqDB.translationDB
