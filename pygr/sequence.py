@@ -234,8 +234,8 @@ class SeqPath(object):
     orientation=SeqOriDescriptor()  # COMPUTE ORIENTATION AUTOMATICALLY
     pathForward=PathForwardDescr()  # GET THE TOP-LEVEL FORWARD SEQUENCE OBJ
     _abs_interval=AbsIntervalDescr()
-    def __init__(self,path,start=0,stop=None,step=None,reversePath=None,
-                 relativeToStart=False,absoluteCoords=False):
+    def __init__(self, path, start=0, stop=None, step=None, reversePath=False,
+                 relativeToStart=False, absoluteCoords=False):
         '''Return slice of path[start:stop:step].
         NB: start>stop means reverse orientation, i.e. (-path)[-stop:-start]
         start/stop are LOCAL coordinates relative to the specified path
@@ -248,8 +248,11 @@ class SeqPath(object):
         absoluteCoords option allows intervals to be created using Pygrs internal
         coordinate convention i.e. -20,-10 --> -(path.pathForward[10:20])
         '''
-        if reversePath is not None:
-            start = -(reversePath.stop)
+        if reversePath: # create top-level negative orientation path
+            start = -(path.stop)
+            stop = 0
+            self._reverse = path
+            path = None # make this a top-level path object
         if absoluteCoords: # THIS OPTION PROVIDES TRANSPARENT WAY TO CREATE
             if start >= 0:   # INTERVALS USING start,stop PAIRS THAT FOLLOW
                 path = path.pathForward # OUR INTERNAL SIGN CONVENTION
@@ -282,17 +285,16 @@ class SeqPath(object):
         else: # STORE TOP-LEVEL SEQUENCE PATH...
             self.path = path.path
             self.step = step * path.step
-    def classySlice(self,path,*l,**kwargs):
+    def classySlice(self, path, *l, **kwargs):
         'create a subslice using appropriate class based on container'
-        if path is not None:
-            obj = path
-        else:
-            obj = self
-        try: # IF DB PROVIDES A CLASS TO USE FOR SLICES, USE IT.
-            klass = obj.pathForward.db.itemSliceClass
+        try: # if db provides a class to use for slices, use it.
+            klass = path.pathForward.db.itemSliceClass
         except AttributeError:
-            klass = SeqPath # DEFAULT: JUST USE GENERIC SLICE CLASS
-        return klass(path,*l,**kwargs) # CONSTRUCT THE SLICE
+            klass = SeqPath # default: just use generic slice class
+        return klass(path, *l, **kwargs) # construct the slice
+    def absolute_slice(self, start, stop):
+        'get slice of top-level sequence, using absolute coords'
+        return self.classySlice(self, start, stop, absoluteCoords=True)
     def __getitem__(self,k):
         if isinstance(k,types.IntType):
             if k== -1: # HAVE TO HANDLE THIS CASE SPECIALLY
@@ -409,8 +411,7 @@ class SeqPath(object):
             try:
                 return self._reverse # USE EXISTING RC OBJECT FOR THIS SEQ
             except AttributeError: #  CREATE ONLY ONE RC FOR THIS SEQUENCE
-                self._reverse=self.classySlice(None,None,stop=0,reversePath=self)
-                self._reverse._reverse=self
+                self._reverse = self.classySlice(self, reversePath=True)
                 return self._reverse
         elif self.orientation>0: # FORWARD ORI: JUST REVERSE INDICES
             return self.classySlice(self.path,self.stop,self.start,

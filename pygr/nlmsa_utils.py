@@ -266,7 +266,7 @@ class BuildMSASlice(object):
                         ns[target]=(self.id,src.start,src.stop) # save LPO --> SRC
             else: # both src and target are normal seqs.  use_virtual_lpo!!
                 self.ns.nlmsaLetters.__iadd__(targetIval)
-                self.ns.nlmsaLetters.init_pairwise_mode(verbose=True)
+                self.ns.nlmsaLetters.init_pairwise_mode()
                 ns_lpo=self.ns.nlmsaLetters.seqlist[self.ns.id -1] # our virtual LPO
                 ns_lpo[self.offsetSlice(self.seq)]=self.ns.nlmsaLetters.seqs \
                      .getIDcoords(targetIval) # save src --> target
@@ -355,10 +355,10 @@ class SeqCacheOwner(object):
 
 def get_interval(seq,start,end,ori):
     "trivial function to get the interval seq[start:end] with requested ori"
-    ival=seq[start:end]
-    if ori== -1:
-        ival= -ival
-    return ival
+    if ori < 0:
+        return seq.absolute_slice(-end, -start)
+    else:
+        return seq.absolute_slice(start, end)
 
 
 _default_ivals_attrs = dict(idDest='id', startDest='start',
