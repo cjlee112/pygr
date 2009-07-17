@@ -185,7 +185,10 @@ class BlastMapping(object):
         if self.seqDB._seqtype != PROTEIN_SEQTYPE:
             cmd += ['-p', 'F'] # special flag required for nucleotide seqs
         logger.info('Building index: ' + ' '.join(cmd))
-        if classutil.call_subprocess(cmd): # bad exit code, so command failed
+        if classutil.call_subprocess(cmd,
+                                     stdout=classutil.PIPE,
+                                     stderr=classutil.PIPE):
+            # bad exit code, so command failed
             warn_if_whitespace(self.filepath) \
                  or warn_if_whitespace(testpath) # only issue one warning
             raise OSError('command %s failed' % ' '.join(cmd))
