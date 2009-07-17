@@ -15,6 +15,13 @@ class PygrTestResult(unittest._TextTestResult):
     def __init__(self, *args, **kwargs):
         unittest._TextTestResult.__init__(self, *args, **kwargs)
         self.skipped = []
+
+        # by default, support dots at lowest verbosity.
+        verbosity = kwargs.get('verbosity', 0)
+        show_dots = kwargs.get('show_dots', 1)
+        if verbosity == 0 and show_dots:
+            self.dots = 1
+        
         
     def addError(self, test, err):
         exc_type, val, _ = err
