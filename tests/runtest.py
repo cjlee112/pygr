@@ -10,6 +10,8 @@ from testlib import testutil, testoptions
 from testlib.unittest_extensions import PygrTestRunner
 from pygr import logger
 
+disable_threshold = 0                   # global logging override
+
 def all_tests():
     "Returns all file names that end in _test.py"
     patt = re.compile("_test.py$")
@@ -34,10 +36,10 @@ def run(targets, options):
 
             runner = PygrTestRunner(verbosity=options.verbosity,
                                     descriptions=0)
-            
-            logger.disable(disable_threshold)
+
+            logger.disable(disable_threshold)  # set global override
             results = runner.run(suite)
-            logger.disable(0)
+            logger.disable(0)                  # clear global override
             
             # count tests and errors
             success += results.testsRun - \
@@ -97,8 +99,6 @@ if __name__ == '__main__':
         disable_threshold = 'INFO' # Should implicity disable DEBUG as well
     elif options.verbosity < 2:
         disable_threshold = 'DEBUG'
-    else:
-        disable_threshold = 0
     
     # cleans full entire test directory
     if options.clean:
