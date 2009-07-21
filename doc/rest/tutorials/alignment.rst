@@ -266,7 +266,7 @@ You can also search the entire database against itself using the
 alignment in an ``NLMSA``, from which you can retrieve individual
 ``NLMSASlice`` objects by querying by sequence:
 
-   >>> al = blastmap(queryDB=db)   # @CTB change out 'None'
+   >>> al = blastmap(queryDB=db)
    >>> for seq in db.values():
    ...    for (src, dest, edge) in al[seq].edges():
    ...       print repr(src), 'matches', repr(dest)
@@ -381,6 +381,54 @@ dereference the annotation object into its source DNA sequence:
    >>> print "%s\n%s" % (src.sequence[:30], aa)
    ATGGTGCACCTGACTGATGCTGAGAAGGCT
    M  V  H  W  T  Q  E  E  R  D
+
+Storing BLAST alignments on disk
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The BlastMapping classes offer a nice interface, but everything we've
+done above is transient -- what about saving the results of a long BLAST?
+That's simple -- you just have to pass the BlastMapping class an on-disk
+NLMSA.
+
+First, create the mapping.
+
+   >>> db = seqdb.SequenceFileDB('data/gapping.fa')
+   >>> blastmap = blast.BlastMapping(db)
+
+Now, create an on-disk NLMSA.  BLAST alignments are pairwise (they
+only involve two sequences) and they are not bidirectional (x matches
+y does not always mean y matches x):
+
+   >>> store_al = cnestedlist.NLMSA('tempdir/blastn', mode='w', pairwiseMode=True, bidirectional=False)
+
+Pass the NLMSA into the BLAST search, and then build it:
+
+   >>> _ = blastmap(queryDB=db, al=store_al)
+   >>> store_al.build(saveSeqDict=True)
+
+Now, let's pretend we're exiting and restarting Python...
+
+   >>> del store_al
+
+...and re-load the NLMSA from disk:
+
+   >>> loaded_al = cnestedlist.NLMSA('tempdir/blastn')
+
+As before, we have to use the saved seqDict because we're not using
+``worldbase``.  Retrieve the sequence...
+
+   >>> db = loaded_al.seqDict
+   >>> g = db['gapping.gapped']
+
+... and query it for matches, as above:
+
+   >>> edges = loaded_al[g].edges()
+   >>> for (src, dest, edge) in edges:
+   ...   print repr(src), 'matches', repr(dest)
+   gapped[0:40] matches ungapped[0:40]
+   gapped[44:74] matches ungapped[40:70]
+
+And voila, done!
 
 .. for recipes, instead?
 .. Building an Alignment Database from MAF files
