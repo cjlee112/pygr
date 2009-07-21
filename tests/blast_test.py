@@ -367,6 +367,29 @@ class Blastx_Test(BlastBase):
         except ValueError:
             pass
 
+    def test_translation_db_in_results_of_db_search(self):
+        """
+        Test that the NLMSA in a BlastxMapping properly picks up the
+        translationDB from the query sequence dict.
+        """
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+        results = blastmap(queryDB=self.dna)
+
+        tdb = translationDB.get_translation_db(self.dna)
+        assert tdb.annodb in results.seqDict.dicts
+
+    def test_translation_db_in_results_of_seq_search(self):
+        """
+        Test that the NLMSA in a BlastxMapping properly picks up the
+        translationDB from a single input sequence.
+        """
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+
+        query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
+        results = blastmap(seq=query_seq)
+
+        tdb = translationDB.get_translation_db(self.dna)
+        assert tdb.annodb in results.seqDict.dicts
 
 class Tblastn_Test(BlastBase):
     def test_tblastn(self):
