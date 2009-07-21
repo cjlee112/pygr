@@ -367,6 +367,57 @@ class Blastx_Test(BlastBase):
         except ValueError:
             pass
 
+    def test_translation_db_in_results_of_db_search(self):
+        """
+        Test that the NLMSA in a BlastxMapping properly picks up the
+        translationDB from the query sequence dict.
+        """
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+        results = blastmap(queryDB=self.dna)
+
+        tdb = translationDB.get_translation_db(self.dna)
+        assert tdb.annodb in results.seqDict.dicts
+
+    def test_translation_db_in_results_of_seq_search(self):
+        """
+        Test that the NLMSA in a BlastxMapping properly picks up the
+        translationDB from a single input sequence.
+        """
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+
+        query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
+        results = blastmap(seq=query_seq)
+
+        tdb = translationDB.get_translation_db(self.dna)
+        assert tdb.annodb in results.seqDict.dicts
+        
+    def test_translated_seqs_in_results(self):
+        """
+        Only NLMSASlices for the query sequence should show up in
+        BlastxMapping.__getitem__, right?
+        """
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+
+        query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
+        results = blastmap[query_seq]
+
+        tdb = translationDB.get_translation_db(self.dna)
+        annodb = tdb.annodb
+
+        for slice in results:
+            assert slice.seq.id in annodb, '%s not in annodb!' % slice.seq.id
+
+    def test_non_consumable_results(self):
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+
+        query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
+        results = blastmap[query_seq]
+
+        x = list(results)
+        y = list(results)
+
+        assert len(x), x
+        assert x == y, "BlastxMapping.__getitem__ should return list"
 
 class Tblastn_Test(BlastBase):
     def test_tblastn(self):
