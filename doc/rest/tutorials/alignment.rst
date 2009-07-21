@@ -438,3 +438,6 @@ And voila, done!
 .. ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. @CTB figure out sphinx linking stuff to link NLMSA To NLMSA docs, etc.
+.. @CTB section pointing them towards MAF, gene set, etc. recipes?
+.. @CTB link doctests into tests again!
+.. @CTB non-pairwise, etc. (more complicated) NLMSAs?  building NLMSAs?
