@@ -361,12 +361,20 @@ class BlastxMapping(BlastMapping):
                             tblastn='#BlastMapping')
     def __getitem__(self, query):
         """generate slices for all translations of the query """
+        # generate NLMSA for this single sequence
         al = self(query)
-        for seq in al.seqs:
-            myslice = al[seq]
-            if not isinstance(myslice, EmptySlice):
-                yield myslice
+        # get the translation database for the sequence
+        tdb = translationDB.get_translation_db(query.db)
 
+        # run through all of the frames & find alignments.
+        for trans_seq in tdb.annodb:
+            try:
+                slice = al[trans_seq]
+            except KeyError:
+                continue
+            
+            if not isinstance(slice, EmptySlice):
+                yield slice
 
 class MegablastMapping(BlastMapping):
     def __repr__(self):
