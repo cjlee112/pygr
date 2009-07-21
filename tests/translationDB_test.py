@@ -29,3 +29,15 @@ class TranslationDB_Test(unittest.TestCase):
         id = 'gi|171854975|dbj|AB364477.1|'
         tseq = self.tdb[id][:99]
         assert str(tseq)[0:10] == 'MVHLTDAEKA'
+
+    def test_repr_ne(self):
+        """
+        Make sure there's some way to distinguish translated seqs from
+        regular, visually!
+        """
+        id = 'gi|171854975|dbj|AB364477.1|'
+
+        seq = self.dna[id]
+        tseq = self.tdb[id]
+
+        assert repr(seq) != repr(tseq)
