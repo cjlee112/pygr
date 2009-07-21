@@ -416,8 +416,8 @@ class Blastx_Test(BlastBase):
         x = list(results)
         y = list(results)
 
-        assert len(x)
-        assert x == y
+        assert len(x), x
+        assert x == y, "BlastxMapping.__getitem__ should return list"
 
 class Tblastn_Test(BlastBase):
     def test_tblastn(self):

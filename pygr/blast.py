@@ -367,6 +367,7 @@ class BlastxMapping(BlastMapping):
         tdb = translationDB.get_translation_db(query.db)
 
         # run through all of the frames & find alignments.
+        slices = []
         for trans_seq in tdb.annodb.itervalues():
             try:
                 slice = al[trans_seq]
@@ -374,7 +375,9 @@ class BlastxMapping(BlastMapping):
                 continue
 
             if not isinstance(slice, EmptySlice):
-                yield slice
+                slices.append(slice)
+
+        return slices
 
 class MegablastMapping(BlastMapping):
     def __repr__(self):
