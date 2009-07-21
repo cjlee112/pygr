@@ -1,6 +1,8 @@
 from itertools import *
 import re
 import unittest
+import glob
+import os
 from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import worldbase
 from pygr import sequence, cnestedlist, seqdb, blast, logger, parse_blast
@@ -255,6 +257,10 @@ class Blast_Test(BlastBase):
             assert 0, "should not reach this point"
         except IOError:                 # should fail with 'cannot build'
             pass
+
+        remnants = glob.glob('foobarbaz.fa.n??')
+        for filename in remnants:
+            os.unlink(filename)
 
 class Blastx_Test(BlastBase):
     def test_blastx(self):
