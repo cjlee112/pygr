@@ -407,6 +407,18 @@ class Blastx_Test(BlastBase):
         for slice in results:
             assert slice.seq.id in annodb, '%s not in annodb!' % slice.seq.id
 
+    def test_non_consumable_results(self):
+        blastmap = blast.BlastxMapping(self.prot, verbose=False)
+
+        query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
+        results = blastmap[query_seq]
+
+        x = list(results)
+        y = list(results)
+
+        assert len(x)
+        assert x == y
+
 class Tblastn_Test(BlastBase):
     def test_tblastn(self):
         "tblastn test"
