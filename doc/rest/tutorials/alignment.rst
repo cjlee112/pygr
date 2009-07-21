@@ -8,10 +8,11 @@ Pygr multiple alignment objects can be treated as mappings of sequence
 intervals onto sequence intervals.  Here is an example showing basic
 operations for constructing and querying an alignment.
 
-First, create an empty in-memory alignment:
+First, create an empty in-memory alignment.  We'll only be doing
+pairwise alignments, so we will set pairwiseMode=True.
 
    >>> from pygr import cnestedlist
-   >>> simple_al = cnestedlist.NLMSA('hbb', mode='memory')
+   >>> simple_al = cnestedlist.NLMSA('hbb', mode='memory', pairwiseMode=True)
 
 Load some sequences, too:
 
@@ -101,7 +102,7 @@ Here, 'gapped' is a copy of 'ungapped' with 4 extra nucleotides
 
 Now, let's build an alignment containing the two ungapped blocks:
    
-   >>> al = cnestedlist.NLMSA('hbb', mode='memory')
+   >>> al = cnestedlist.NLMSA('hbb', mode='memory', pairwiseMode=True)
    >>> al += gapped
    >>> first_ival = gapped[:40]
    >>> second_ival = gapped[44:]
@@ -158,7 +159,7 @@ rather than 'memory' mode; otherwise the semantics are the same.
 
 Create the NLMSA,
 
-   >>> simple_al = cnestedlist.NLMSA('tempdir/hbb', mode='w')
+   >>> simple_al = cnestedlist.NLMSA('tempdir/hbb', mode='w', pairwiseMode=True)
   
 load the sequences,
 
@@ -381,10 +382,11 @@ dereference the annotation object into its source DNA sequence:
    ATGGTGCACCTGACTGATGCTGAGAAGGCT
    M  V  H  W  T  Q  E  E  R  D
 
-Building an Alignment Database from MAF files
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. for recipes, instead?
+.. Building an Alignment Database from MAF files
+.. ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Example: Mapping an entire gene set onto a new genome version
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. Example: Mapping an entire gene set onto a new genome version
+.. ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. @CTB figure out sphinx linking stuff to link NLMSA To NLMSA docs, etc.
