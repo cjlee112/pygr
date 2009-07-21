@@ -22,10 +22,18 @@ class SeqTranslator(sequence.SequenceBase):
 
     def __getitem__(self, k):
         """get TranslationAnnotSlice for coordinates given by slice k """
-        annoID = self._get_anno_id(k.start)
+        start = k.start                 # deal with [:stop] slices
+        if start is None:
+            start = self.start
+        stop = k.stop                   # deal with [start:] slices
+        if stop is None:
+            stop = self.stop
+            
+        annoID = self._get_anno_id(start)
         a = self.db.annodb[annoID] # get TranslationAnnot object
         s = a.sequence # corresponding nucleotide region
-        return a[(k.start - s.start) / 3: (k.stop - s.start) / 3]
+
+        return a[(start - s.start) / 3: (stop - s.start) / 3]
 
     def absolute_slice(self, start, stop):
         """get protein slice in absolute nucleotide coords;
