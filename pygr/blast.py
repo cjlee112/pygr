@@ -367,12 +367,12 @@ class BlastxMapping(BlastMapping):
         tdb = translationDB.get_translation_db(query.db)
 
         # run through all of the frames & find alignments.
-        for trans_seq in tdb.annodb:
+        for trans_seq in tdb.annodb.itervalues():
             try:
                 slice = al[trans_seq]
             except KeyError:
                 continue
-            
+
             if not isinstance(slice, EmptySlice):
                 yield slice
 
