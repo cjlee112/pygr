@@ -130,7 +130,7 @@ class BlastMapping(object):
     'Graph interface for mapping a sequence to homologs in a seq db via BLAST'
     def __init__(self, seqDB, filepath=None, blastReady=False,
                  blastIndexPath=None, blastIndexDirs=None, verbose=True,
-                 **kwargs):
+                 showFormatdbMessages=True, **kwargs):
         '''seqDB: sequence database object to search for homologs
         filepath: location of FASTA format file for the sequence database
         blastReady: if True, ensure that BLAST index file ready to use
@@ -140,6 +140,7 @@ class BlastMapping(object):
         self.seqDB = seqDB
         self.idIndex = BlastIDIndex(seqDB)
         self.verbose = verbose
+        self.showFormatdbMessages = showFormatdbMessages
         if filepath is not None:
             self.filepath = filepath
         else:
@@ -185,7 +186,12 @@ class BlastMapping(object):
         if self.seqDB._seqtype != PROTEIN_SEQTYPE:
             cmd += ['-p', 'F'] # special flag required for nucleotide seqs
         logger.info('Building index: ' + ' '.join(cmd))
-        if classutil.call_subprocess(cmd): # bad exit code, so command failed
+        if self.showFormatdbMessages:
+            kwargs = {}
+        else: # suppress formatdb messages by redirecting them
+            kwargs = dict(stdout=classutil.PIPE, stderr=classutil.PIPE)
+        if classutil.call_subprocess(cmd, **kwargs):
+            # bad exit code, so command failed
             warn_if_whitespace(self.filepath) \
                  or warn_if_whitespace(testpath) # only issue one warning
             raise OSError('command %s failed' % ' '.join(cmd))
