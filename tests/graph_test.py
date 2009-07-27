@@ -155,6 +155,24 @@ class Graph_Test(Mapping_Test):
     def setUp(self):
         self.datagraph = mapping.Graph()
 
+class Graph_DB_Test(unittest.TestCase):
+    "test mapping.Graph with sourceDB, targetDB but no edgeDB"
+
+    def setUp(self):
+        class Node(object):
+            def __init__(self, id):
+                self.id = id
+        self.nodes = {1:Node(1), 2:Node(2)}
+        self.datagraph = mapping.Graph(sourceDB=self.nodes,
+                                       targetDB=self.nodes)
+    def test_no_edge_db(self):
+        'test behavior with no edgeDB'
+        self.datagraph += self.nodes[1] # add node
+        self.datagraph[self.nodes[1]][self.nodes[2]] = 3 # add edge
+
+        assert self.datagraph[self.nodes[1]][self.nodes[2]] == 3
+        
+
 class GraphShelve_Test(Mapping_Test):
     "Run same tests on mapping.Graph class"
 

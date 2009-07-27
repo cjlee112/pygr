@@ -708,6 +708,8 @@ def save_graph_db_refs(self,sourceDB=None,targetDB=None,edgeDB=None,
         self.targetDB=targetDB
     if edgeDB is not None:
         self.edgeDB=edgeDB
+    else: # just save the edge object as itself (not its ID)
+        self.pack_edge = self.unpack_edge = lambda edge:edge
     if simpleKeys: # SWITCH TO USING TRIVIAL PACKING: OBJECT IS ITS OWN ID
         self.__class__ = self._IDGraphClass
     if unpack_edge is not None:
