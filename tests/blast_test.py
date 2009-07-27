@@ -248,7 +248,8 @@ class Blast_Test(BlastBase):
         db = seqdb.SequenceFileDB('data/gapping.fa')
         try:
             blastmap = blast.BlastMapping(db, filepath='foobarbaz.fa',
-                                          blastReady=True)
+                                          blastReady=True,
+                                          showFormatdbMessages=False)
             assert 0, "should not reach this point"
         except IOError:                 # should fail with 'cannot build'
             pass
