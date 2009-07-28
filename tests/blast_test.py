@@ -251,7 +251,8 @@ class Blast_Test(BlastBase):
         db = seqdb.SequenceFileDB('data/gapping.fa')
         try:
             blastmap = blast.BlastMapping(db, filepath='foobarbaz.fa',
-                                          blastReady=True)
+                                          blastReady=True,
+                                          showFormatdbMessages=False)
             assert 0, "should not reach this point"
         except IOError:                 # should fail with 'cannot build'
             pass
@@ -340,6 +341,9 @@ class Blastx_Test(BlastBase):
         assert '<BlastxMapping' in repr(blastmap)
 
     def test_blastx_no_blastp(self):
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         try:
@@ -434,6 +438,9 @@ class Tblastn_Test(BlastBase):
                                 t[2].pIdentity()))
 
     def test_tblastn_no_blastx(self):
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
+        
         blastmap = blast.BlastMapping(self.prot)
         try:
             results = blastmap[self.dna['gi|171854975|dbj|AB364477.1|']]

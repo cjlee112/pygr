@@ -73,6 +73,11 @@ but without a preceding flag argument.
     def __del__(self):
         self.close()
 
+def call_subprocess(*popenargs, **kwargs):
+    'portable interface to subprocess.call(), even if subprocess not available'
+    p = FilePopen(*popenargs, **kwargs)
+    return p.wait()
+
 try:
     import subprocess
     PIPE = subprocess.PIPE
@@ -101,6 +106,8 @@ except ImportError:
                 CSH_REDIRECT = True
         except KeyError:
             pass
+
+    badExecutableCode = None
             
     class FilePopen(FilePopenBase):
         'this subclass fakes subprocess.Popen.wait() using os.system()'
@@ -121,14 +128,13 @@ except ImportError:
             self._close_file('stdin')
             self._rewind_for_reading(self.stdout)
             self._rewind_for_reading(self.stderr)
+            if badExecutableCode is not None and badExecutableCode == returncode:
+                raise OSError('no such command: %s' % str(self.args[0]))
             return returncode
     PIPE = id(FilePopen) # an arbitrary code for identifying this code
 
-def call_subprocess(*popenargs, **kwargs):
-    'portable interface to subprocess.call(), even if subprocess not available'
-    p = FilePopen(*popenargs, **kwargs)
-    return p.wait()
-
+    # find out exit code for a bad executable name, silently
+    badExecutableCode = call_subprocess(('aZfDqW9',), stdout=PIPE, stderr=PIPE)
 
 def ClassicUnpickler(cls, state):
     'standard python unpickling behavior'

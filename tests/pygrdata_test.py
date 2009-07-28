@@ -1,10 +1,15 @@
 import socket, unittest, os, md5, pickle, datetime
+import warnings
 
 import testlib
 from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import seqdb, cnestedlist, mapping
 from pygr.downloader import SourceURL, GenericBuilder
+
+
+warnings.simplefilter("ignore")
 import pygr.Data
+warnings.simplefilter("default")
 
 try:
     set

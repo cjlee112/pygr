@@ -56,13 +56,11 @@ python setup.py build &> "${logdir}/tmp0_megatest.log"
 cd tests
 python runtest.py -b &> "${logdir}/tmp2_megatest.log"
 echo "$PYTHONPATH" &> "${logdir}/tmp3_megatest.log"
-cd oldtests
-python protest.py *megatest.py &> "${logdir}/tmp4_megatest.log"
+python runtest.py -b *megatest.py &> "${logdir}/tmp4_megatest.log"
 
 # Step 3: send report and clean up
 date &> "${logdir}/tmp5_megatest.log"
 echo END: `date +"%s"` >> "${logdir}/tmp5_megatest.log"
-cd ..
 python tools/send_megatest_email.py
 cd ../..
 rm -rf pygr

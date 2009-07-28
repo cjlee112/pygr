@@ -178,8 +178,8 @@ class TestXMLRPCServer(object):
         self.server_script = path_join(currdir, 'pygrdata_server.py')
     
         # start the thread
-        thread = threading.Thread(target=self.run_server)
-        thread.start()
+        self.thread = threading.Thread(target=self.run_server)
+        self.thread.start()
         
         # wait for it to start
         time.sleep(1)
@@ -222,6 +222,8 @@ class TestXMLRPCServer(object):
         import xmlrpclib
         s = xmlrpclib.ServerProxy('http://localhost:%d' % self.port)
         s.exit_now() # TELL THE SERVER TO EXIT
+
+        self.thread.join()
 
 def make_suite(tests):
     "Makes a test suite from a list of TestCase classes"
