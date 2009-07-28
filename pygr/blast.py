@@ -94,15 +94,20 @@ def start_blast(cmd, seq, seqString=None, seqDict=None, **kwargs):
         raise OSError('command %s failed' % ' '.join(cmd))
     return seqID, p
 
-def process_blast(cmd, seq, seqDB, al=None, seqString=None, queryDB=None,
+def process_blast(cmd, seq, againstDB, al=None, seqString=None, queryDB=None,
                   popenArgs={}, **kwargs):
     """Run blast and return an alignment."""
     seqID,p = start_blast(cmd, seq, seqString, seqDict=queryDB, **popenArgs)
     try:
+        if not queryDB:
+            queryDB = getattr(seq, 'db')
+            if queryDB is None:
+                queryDB = { seqID : seq } # @CTB will mess up translationDB
+            
         if queryDB is not None:
-            al = read_blast_alignment(p.stdout, queryDB, seqDB, al, **kwargs)
+            al = read_blast_alignment(p.stdout, queryDB, againstDB, al, **kwargs)
         else:
-            al = read_blast_alignment(p.stdout, {seqID:seq}, seqDB, al,
+            al = read_blast_alignment(p.stdout, {seqID:seq}, againstDB, al,
                                          **kwargs)
     finally:
         p.close() # close our PIPE files
@@ -356,12 +361,23 @@ class BlastxMapping(BlastMapping):
                             tblastn='#BlastMapping')
     def __getitem__(self, query):
         """generate slices for all translations of the query """
+        # generate NLMSA for this single sequence
         al = self(query)
-        for seq in al.seqs:
-            myslice = al[seq]
-            if not isinstance(myslice, EmptySlice):
-                yield myslice
+        # get the translation database for the sequence
+        tdb = translationDB.get_translation_db(query.db)
 
+        # run through all of the frames & find alignments.
+        slices = []
+        for trans_seq in tdb.annodb.itervalues():
+            try:
+                slice = al[trans_seq]
+            except KeyError:
+                continue
+
+            if not isinstance(slice, EmptySlice):
+                slices.append(slice)
+
+        return slices
 
 class MegablastMapping(BlastMapping):
     def __repr__(self):

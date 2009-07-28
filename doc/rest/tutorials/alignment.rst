@@ -1,237 +1,443 @@
-Storing Alignments
-------------------
+Creating, Querying, and Storing Alignments
+------------------------------------------
 
 Alignment Basics
 ^^^^^^^^^^^^^^^^
 
-Pygr multiple alignment objects can be treated as mappings of sequence 
-intervals onto sequence intervals.  Here is a very simple example, 
-showing basic operations for constructing an alignment::
+Pygr multiple alignment objects can be treated as mappings of sequence
+intervals onto sequence intervals.  Here is an example showing basic
+operations for constructing and querying an alignment.
+
+First, create an empty in-memory alignment.  We'll only be doing
+pairwise alignments, so we will set pairwiseMode=True.
 
    >>> from pygr import cnestedlist
-   >>>
-   >>> # build an empty alignment, in-memory
-   >>> m2 = cnestedlist.NLMSA('myo',mode='memory') 
-   >>>
-   >>> # add sequence s to the alignment
-   >>> m2 += s 
-   >>> ival = s[100:160] # AN INTERVAL OF s
-   >>>
-   >>> # add an edge mapping interval s -> an interval of MYG_CHICK
-   >>> m2[ival] += db['MYG_CHICK'][83:143] 
-   >>> m2[ival] += db['MYG_CANFA'][45:105] 
-   >>>
-   >>> # done constructing the alignment.  Initialize for query.
-   >>> m2.build() 
-   >>>
-   >>> # get aligned seqs for the first 10 letters of ival...
-   >>> for s2 in m2[ival[:10]]: 
-   ...     print repr(s2)
-   ...
-   MYG_CHICK[83:93]
-   MYG_CANFA[45:55]
+   >>> simple_al = cnestedlist.NLMSA('hbb', mode='memory', pairwiseMode=True)
 
-In this case we used in-memory storage of the alignment.
+Load some sequences, too:
 
-Storing an All-vs-All BLAST Alignment
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-However, for really large
-alignments (e.g. an all vs. all BLAST analysis) we may prefer to store the alignment
-on-disk.  In pygr, all we have to do is change the mode flag to 'w' (implying *write*
-a file)::
+   >>> from pygr import seqdb
+   >>> db = seqdb.SequenceFileDB('data/sp_all_hbb')
+   >>> mouse = db['HBB1_MOUSE']
+   >>> rat = db['HBB1_RAT']
+   >>> frog = db['HBB1_XENLA']
 
-   from pygr import cnestedlist, seqdb, blast
-   msa = cnestedlist.NLMSA('all_vs_all', mode='w', bidirectional=False) # on-disk
-   sp = seqdb.SequenceFileDB('sp') # open swissprot database
-   blastmap = blast.BlastMapping(sp) # create blast mapping object
-   blastmap(None, msa, queryDB=sp, expmax=1e-10) # query with each seq in queryDB
-   msa.build(saveSeqDict=True) # build & save alignment indexes
-   # msa ready to query now...
+Now, add the mouse sequence to the alignment:
 
-Again you can see how pygr makes it quite simple to do a large analysis
-and create a powerful resource (an all-vs-all alignment database).
-A couple of points deserve comment:
+   >>> simple_al += mouse
 
+and align several intervals from other sequences to the mouse sequence:
 
+   >>> ival = mouse[40:60]
+   >>> simple_al[ival] += rat[42:62]
+   >>> simple_al[ival] += frog[38:58]
+
+Once we're done adding aligned intervals, build the alignment object
+to prepare it for querying:
+
+   >>> simple_al.build()
+
+Now we can query the alignment with any new interval overlapping the
+mouse interval to which we aligned everything:
+
+   >>> sub_ival = mouse[48:52]
+   >>> for aligned_ival in simple_al[sub_ival]:
+   ...   print repr(aligned_ival)
+   HBB1_RAT[50:54]
+   HBB1_XENLA[46:50]
+
+We can also use any of the other sequences as keys, e.g. the whole
+rat sequence:
+
+   >>> for aligned_ival in simple_al[rat]:
+   ...   print repr(aligned_ival)
+   HBB1_MOUSE[40:60]
+
+When you query 'simple_al' with an interval, it returns an
+``NLMSASlice`` object.  The examples above all use the basic iterator
+interface to ``NLMSASlice``, and it's equivalent to calling ``keys()``
+with no arguments (we'll discuss ``keys()`` in more detail below).
+You can also call ``edges()``, which will return a triple of source
+interval, destination interval, and edge information:
+
+   >>> for src, dest, edge in simple_al[mouse].edges():
+   ...   print repr(src), 'aligns to', repr(dest)
+   ...   print 'Identity across alignment:', edge.pIdentity()
+   ...   print '--'
+   HBB1_MOUSE[40:60] aligns to HBB1_RAT[42:62]
+   Identity across alignment: 0.15
+   --
+   HBB1_MOUSE[40:60] aligns to HBB1_XENLA[38:58]
+   Identity across alignment: 0.05
+   --
+
+You can also retrieve edges directly by querying the ``NLMSASlice`` with
+the aligned sequence, treating it as a mapping:
+
+   >>> edge = simple_al[mouse][rat]
+   >>> print '%.4f' % (edge.pIdentity(),)
+   0.0068
+
+Gaps
+^^^^
+
+The alignments above deal with *ungapped* blocks of sequence similarity.
+How does pygr deal with gapped alignments?
+
+Let's start by loading in some carefully constructed sequences:
+
+   >>> db = seqdb.SequenceFileDB('data/gapping.fa')
+   >>> ungapped = db['ungapped']
+   >>> gapped = db['gapped']
+
+Here, 'gapped' is a copy of 'ungapped' with 4 extra nucleotides
+('atgc') inserted into it at position 40:
+
+   >>> print ungapped
+   ATGGTGCACCTGACTGATGCTGAGAAGGCTGCTGTCTCTGGCCTGTGGGGAAAGGTGAACTCCGATGAAG
+   >>> print gapped
+   ATGGTGCACCTGACTGATGCTGAGAAGGCTGCTGTCTCTGatgcGCCTGTGGGGAAAGGTGAACTCCGATGAAG
+   >>> print ' '*40 + '^^^^'
+                                           ^^^^
+
+Now, let's build an alignment containing the two ungapped blocks:
+   
+   >>> al = cnestedlist.NLMSA('hbb', mode='memory', pairwiseMode=True)
+   >>> al += gapped
+   >>> first_ival = gapped[:40]
+   >>> second_ival = gapped[44:]
+   >>> al[first_ival] += ungapped[:40]
+   >>> al[second_ival] += ungapped[40:]
+   >>> al.build()
+
+As you'd expect, querying 'al' with either 'ungapped' or 'gapped'
+returns two elements with 100% identity: ::
+
+   >>> for (src, dest, edge) in al[gapped].edges():
+   ...   print repr(src), repr(dest), '%.2f' % (edge.pIdentity(),)
+   gapped[0:40] ungapped[0:40] 1.00
+   gapped[44:74] ungapped[40:70] 1.00
+
+   >>> for (src, dest, edge) in al[ungapped].edges():
+   ...   print repr(src), repr(dest), '%.2f' % (edge.pIdentity(),)
+   ungapped[0:40] gapped[0:40] 1.00
+   ungapped[40:70] gapped[44:74] 1.00
+
+Is there a way to combine these into a single interval?  Yes!  This
+is where the extra arguments to the ``keys()``, ``values()``, and ``edges()``
+methods on ``NLMSASlice`` come in handy.
+
+For example, to bridge insertions in the query sequence (or, equivalently,
+deletions in the target sequence), set 'maxgap':
+
+   >>> for (src, dest, edge) in al[gapped].edges(maxgap=4):
+   ...   print repr(src), repr(dest), '%.3f' % (edge.pIdentity(),)
+   gapped[0:74] ungapped[0:70] 0.946
+
+To bridge deletions in the query sequence (insertions in the target
+sequence) use the 'maxinsert' parameter:
+
+   >>> for (src, dest, edge) in al[ungapped].edges(maxinsert=4):
+   ...   print repr(src), repr(dest), '%.3f' % (edge.pIdentity(),)
+   ungapped[0:70] gapped[0:74] 0.946
+
+For both of these queries, you can see that the percent identity is
+properly adjusted to reflect the identity of only 70 of the 74
+nucleotides (70/74 = 94.6%).
+
+There are a number of other ways to control how ``NLMSASlice`` queries
+work, including minimum identity filters, minimum aligned block sizes,
+etc.
+
+Storing alignments on disk
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Creating an NLMSA object can take a long time and a lot of memory;
+what if you want to build it just once, and then query it multiple
+times?  You can do this by creating an NLMSA in 'w' (write) mode,
+rather than 'memory' mode; otherwise the semantics are the same.
+
+Create the NLMSA,
+
+   >>> simple_al = cnestedlist.NLMSA('tempdir/hbb', mode='w', pairwiseMode=True)
   
-* The in-memory and on-disk :class:`cnestedlist.NLMSA` alignment storages have exactly the same
-  interface.  You can work with alignments from small to large to gimungous
-  using the same consistent set of tools.  Moreover the performance will be
-  fast across the whole range of scales, because the :class:`cnestedlist.NLMSA` storage and query
-  algorithms scale very well (O(logN)).
-  
-* Because of the ``mode='w'`` flag, :class:`cnestedlist.NLMSA` will create a set of alignment
-  index files called 'all_vs_all'.
-  
-* ``bidirectional=False``: whenever you store an alignment relationship
-  ``S`` --> ``T``, this can either be *unidirectional* or *bidirectional*.
-  Unidirectional means only the ``S`` to ``T`` mapping is stored; bidirectional means
-  both ``S`` to ``T`` and ``T`` to ``S`` are stored (i.e. you can both query
-  with ``S`` (and get ``T``), and query with ``T`` (and get ``S``).  In general, you want
-  a unidirectional alignment storage when *directionality matters*.  For
-  example, in a BLAST all vs. all search the alignment of ``S`` and ``T`` that you get
-  when you blast ``S`` against the database (finding ``T``, among others) may well be
-  different from the alignment of ``S`` and ``T`` that you get when you blast ``T`` against
-  the database (finding ``S``, among others).  If you stored the all-vs-all alignment
-  using bidirectional storage, querying ``msa`` with ``S`` would get *two* alignments
-  to ``T``: one from the ``S`` to ``T`` BLAST search results, and one from the
-  ``T`` to ``S`` BLAST search results.  This simply reflects the fact that
-  the all vs all BLAST stored two alignments of ``S`` and ``T`` into ``msa``.
-  What this highlights is that BLAST is not a true multiple sequence alignment
-  algorithm (among other things, it is not symmetric: you can get different
-  mappings in one direction vs. the other).
-  
-  In general, bidirectional storage
-  mainly makes sense for true multiple sequence alignments (which are guaranteed
-  to be symmetric).
-  
-* Supplying the :class:`blast.BlastMapping` with an alignment object makes it store
-  its results into that alignment, rather than creating its own alignment holder
-  for us.  In this way we can make it store many different BLAST searches into
-  a single alignment database.
+load the sequences,
 
-* Supplying the ``queryDB`` argument allows you to run multiple queries at
-  once; ``queryDB`` is expected to be a dictionary whose values are the 
-  sequence objects you wish to use as queries to the :class:`blast.BlastMapping`.
-  
-* To make the NLMSA algorithm scalable, pygr defers construction of the alignment
-  indexes until the alignment is complete.  We trigger this by calling its build()
-  method.  At this point we now have an alignment database stored on disk, which
-  we can open at any time later and query with the high-speed nested list algorithm
-  as illustrated in the examples in previous sections.
-  
+   >>> db = seqdb.SequenceFileDB('data/sp_all_hbb')
+   >>> mouse = db['HBB1_MOUSE']
+   >>> rat = db['HBB1_RAT']
+   >>> frog = db['HBB1_XENLA']
 
+add the mouse sequence into the alignment
 
+   >>> simple_al += mouse
 
-Building an Alignment Database from MAF files
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-It may be helpful to see how a large multi-genome alignment database
-is created in Pygr.  It is quite straightforward.
-UCSC has defined a new file format for large multigenome alignment,
-called MAF.  Pygr provides high-performance utilities for reading
-MAF alignment files and building a disk-based NLMSA alignment database.
-(These utilities are written in C for performance).  Here's an
-example of building an alignment database from scratch using a
-set of MAF files stored in a directory called ``maf/``::
+and align several intervals from other sequences to the mouse sequence:
 
-   import glob
-   from pygr import cnestedlist,seqdb
+   >>> ival = mouse[40:60]
+   >>> simple_al[ival] += rat[42:62]
+   >>> simple_al[ival] += frog[38:58]
 
-   genomes = {'hg17':'hg17','mm5':'mm5', 'rn3':'rn3', 'canFam1':'cf1',
-              'danRer1':'dr1', 'fr1':'fr1','galGal2':'gg2', 'panTro1':'pt1'}
-   for k,v in genomes.items(): # prefix dictionary for union of genomes
-       genomes[k] = seqdb.SequenceFileDB(v) # use v as filename for fasta file
-   genomeUnion = seqdb.PrefixUnionDict(genomes) # create union of these DBs
-   # create NLMSA database ucsc8 on disk, from MAF files in maf/
-   msa = cnestedlist.NLMSA('ucsc8', 'w', genomeUnion, glob.glob('maf/*.maf'))
-   msa.build(saveSeqDict=True) # build & save alignment + sequence indexes
+And, finally, build it and then delete the in-memory handle (to emulate
+quitting Python and starting from scratch):
 
+   >>> simple_al.build(saveSeqDict=True)
+   >>> del simple_al
 
-The only real work here is due to the fact that UCSC's MAF files
-use a *prefix.suffix* notation for identifying specific sequences,
-where *prefix* gives the name of the genome, and *suffix*
-gives the identifier of the sequence in that genome database.
-Here we use Pygr's :class:`seqdb.PrefixUnionDict` class to wrap the
-set of genome databases in a dict-like interface that accepts
-string keys of the form *prefix.suffix* and returns the
-right sequence object from the right genome database.  As an
-added twist, the genome names in the MAF files match the
-filenames of the associated genome databases in most cases, but
-not all, so we have to create an initial dictionary giving the
-correct mapping.  Actually building the NLMSA requires just one
-line, but actually a number of steps are happening behind the
-scenes:
+Now, to load this alignment, we need to specify the sequence source or
+sources that we used to build it -- we can do that by using
+``PrefixUnionDict`` to construct a ``seqDict`` and pass it into the NLMSA.
 
-* If you have never opened :class:`seqdb.SequenceFileDB` objects for these genome
-  databases before, :class:`seqdb.SequenceFileDB` will initialize each one.  This means
-  two things.  First, it builds an index of all the sequences and their
-  lengths.  This is essential for combining the
-  large numbers of sequences in these databases into
-  "unified" coordinate systems in the NLMSA (otherwise there would
-  have to be a separate database file for each individual sequence).
-  Second, it saves the sequences to a simple indexed file format that
-  allows Pygr to retrieve individual sequence fragments quickly and
-  efficiently.  We got tired of NCBI ``fastacmd``'s horrible
-  memory requirements and slow speed, so we implemented fast sequence
-  indexing.
-  
-* :class:`cnestedlist.NLMSA` reads each MAF file and divides the interval
-  alignment data into one or more coordinate systems created
-  on-the-fly (for efficient memory usage, NLMSA uses :class:`int`
-  coordinates (32-bit), which has a maximum size of approximately
-  2 billion.  This is too small even for a single genome like human;
-  :class:`cnestedlist.NLMSA` automatically splits the database into as many
-  coordinate systems are needed to represent the alignment.
-  Each coordinate system has its own database file on disk.
-  
-* After it has finished reading the MAF data, :class:`cnestedlist.NLMSA`
-  begins to build the database indexes for each coordinate
-  system.  Computationally, this operation is equivalent to
-  a *sort* (N log N complexity).  Once the indexes are built, the database is
-  ready for use.
+   >>> seqDict = seqdb.PrefixUnionDict({ 'sp_all_hbb': db })
+   >>> loaded_al = cnestedlist.NLMSA('tempdir/hbb', seqDict=seqDict)
+   >>> loaded_al[ival].keys()
+   [HBB1_RAT[42:62], HBB1_XENLA[38:58]]
 
+Here we can use our interval from above because the sequence references
+stored in the NLMSA point to ``db``, the database that our interval came
+from in the first place.
 
-Example: Mapping an entire gene set onto a new genome version
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-To illustrate how Pygr can perform a big task with a little code, here is an example that maps a set of gene sequences onto a new version of the genome, using megablast to do the mapping, and a relational database to store the results.  Moreover, since mapping 80,000 gene clusters takes a fair amount of time, the calculation is parallelized to run over a large number of compute nodes simultaneously::
+You can also load the saved seqDict (see ``simple_al.build``, above, where
+we told pygr to save the sequence dictionary):
 
-   from pygr import worldbase
-   from pygr.apps.leelabdb import * # this accesses our databases
-   from pygr import coordinator     # this provides parallelization support
+   >>> loaded_al = cnestedlist.NLMSA('tempdir/hbb')
 
-   def map_clusters(server,dbname='HUMAN_SPLICE_03',
-                    result_table='GENOME_ALIGNMENT.hg17_cluster_JUN03_all',
-                    rmOpts=",**kwargs):
-       "CLIENT FUNCTION: map clusters one by one"
-       # construct resource for us if needed
-       genome = worldbase.Bio.Seq.Genome.HUMAN.hg17()
-       # load db schema
-       (clusters,exons,splices,genomic_seq,spliceGraph,alt5Graph,alt3Graph,mrna,
-       protein, clusterExons,clusterSplices) = getSpliceGraphFromDB(spliceCalcs[dbname])
-       # now map cluster sequences one by one to our new genome
-       for cluster_id in server:
-           g = genomic_seq[cluster_id] # get the old genomic sequence for this cluster
-           m = genome.megablast(g,maxseq=1,minIdentity=98,rmOpts=rmOpts) # mask, blast, read into m
-           # save alignment m to database table result_table using cursor
-           createTableFromRepr(m.repr_dict(),result_table,clusters.cursor,
-                               {'src_id':'varchar(12)','dest_id':'varchar(12)'})
-           yield cluster_id # we must function as generator to keep error trapping
-   		         # HAPPY
+Now, however, you can't query with our original ival, because we
+loaded a new seqDict into memory. Even though it's pointing at the
+same on-disk file as ``db`` did before, pygr only keeps track of
+sequence-to-database relationships in memory.  So now you have to
+manually retrieve the mouse sequence from the new seqDict in order to
+query the NLMSA:
 
-   def serve_clusters(dbname='HUMAN_SPLICE_03',
-                      source_table='HUMAN_SPLICE_03.genomic_cluster_JUN03',**kwargs):
-       "SERVER FUNCTION: serve up cluster_id one by one to as many clients as you want"
-       cursor = getUserCursor(dbname)
-       t = SQLTable(source_table,cursor)
-       for id in t:
-           yield id # HAND OUT ONE CLUSTER ID TO A CLIENT
+   >>> seqDict = loaded_al.seqDict
+   >>> ival = seqDict['sp_all_hbb.HBB1_MOUSE']
 
-   if __name__=='__main__': # AUTOMATICALLY RUN EITHER THE CLIENT OR SERVER FUNCTION
-       coordinator.start_client_or_server(map_clusters,serve_clusters,[],__file__)
+and voila, now we can query the alignment, etc.
 
+   >>> loaded_al[ival].keys()
+   [HBB1_RAT[42:62], HBB1_XENLA[38:58]]
 
-First, let's just focus on the map_clusters() function, which illustrates how the mapping of each gene is generated and saved.  Let's examine the data piece by piece:
+In practice, if you store your sequence collections in ``worldbase``,
+you don't need to worry about seqDict mechanisms.  However, if you're
+not using ``worldbase`` then you'll need to keep track of your sequence
+dictionaries.
 
-  
-* genome: a BLAST database storing our hg17 genome sequence
-  
-* genomic_seq: another sequence database (which in this case happens to be stored in a relational database), mapping each cluster ID to a piece of the old genomic sequence version containing that specific gene.
-  
-* cluster_id: a cluster ID for us to process.
-  
-* g: the actual sequence object associated with this cluster_id
-  
-* m: the mapping of g onto genome, as generated by megablast after first running RepeatMasker on g, using the RepeatMasker options passed as rmOpts.  Note that only the top hit will be saved (maximum number of hits to save maxseq=1), and only if it has at least 98\% identity.  This alignment is then saved to a relational database table using createTableFromRepr().
-  
+Creating alignments with BLAST
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This code will run in parallel over as many compute nodes as you have free, using Pygr's coordinator module.  The parallelization model for this particular task is simple: a single iterator (server) dispensing task IDs to many clients.
+Let's suppose you have some sequences in a database, and you'd like to use
+BLAST to search that database and load the results into an alignment. Simple!
+First, load in the database and create a ``BlastMapping`` against that
+database:
 
+   >>> from pygr import blast
+   >>> db = seqdb.SequenceFileDB('data/gapping.fa')
+   >>> blastmap = blast.BlastMapping(db)
 
-  
-* server: the serve_clusters() function is trivial: all it does is connect to a specific database table (source_table) and iterate over all its primary keys, yielding them one by one.
-  
-* client: the map_clusters() function expects an iterator as its first argument, which must give it a sequence of task IDs (cluster_id in this script).  This iterator is actually using an XMLRPC request to the server to get the next task ID, but that is done transparently by the coordinator.Processor() class.  The map_clusters() function is modeled as a generator: that is, it first does some initial setup (loading the database schema for example), then it runs its actual task loop, yielding each completed task ID. This enables coordinator.Processor to run map_clusters() within an error-trapping try: except: clause that catches and reports all errors to the central coordinator.Coordinator instance, and also to implement some intelligent error handling policies (like robustly preventing rare individual errors from causing an entire Processor() to crash, but detecting when consistent patterns of errors occur on a particular Processor, and automatically shutting down that Processor.
-  
-* start_client_or_server(): this line automatically starts up the correct function (depending on whether this process is running as client or server).  To make a long story short, all you have to do is run the script once (as a server), and it will automatically start clients for you on free compute nodes (using ssh-agent), with reasonable load-balancing and queuing policies.  For details, see the coordinator module docs.
+Now pull in some sequences (for now, we'll use sequences from the same
+database):
 
+   >>> ungapped = db['ungapped']
+   >>> gapped = db['gapped']
 
+And let's use BLAST to search the database with the sequence!  The first
+approach is to use the ``__getitem__`` interface to ``BlastMapping``:
+
+   >>> slice = blastmap[gapped]
+   >>> edges = slice.edges()
+
+The ``__getitem__`` interface returns an ``NLMSASlice`` containing
+intervals aligned between the source sequence (``gapped``) and
+sequences in the database:
+
+   >>> for (src, dest, edge) in edges:
+   ...   print repr(src), 'matches', repr(dest)
+   gapped[0:40] matches ungapped[0:40]
+   gapped[44:74] matches ungapped[40:70]
+
+Yep, it's that easy!
+
+Note that 'blastmap' will, by default, ignore self-matches:
+there are no 'gapped' to 'gapped' matches above, even though
+'gapped' is present in the database being searched.
+
+You can also search the entire database against itself using the
+``__call__`` interface to ``BlastMapping``; this returns a full
+alignment in an ``NLMSA``, from which you can retrieve individual
+``NLMSASlice`` objects by querying by sequence:
+
+   >>> al = blastmap(queryDB=db)
+   >>> for seq in db.values():
+   ...    for (src, dest, edge) in al[seq].edges():
+   ...       print repr(src), 'matches', repr(dest)
+   gapped[0:40] matches ungapped[0:40]
+   gapped[44:74] matches ungapped[40:70]
+   ungapped[0:40] matches gapped[0:40]
+   ungapped[40:70] matches gapped[44:74]
+
+Using the "translated BLASTs" (blastx and tblastx)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``BlastMapping`` objects can't handle the translated BLASTs because
+they don't return coordinates in the same sequence space as the query
+sequences.  So, we have to use ``BlastxMapping instead``.
+
+For example, suppose you want to search a protein database ('sp_all_hbb')
+
+   >>> dna_db = seqdb.SequenceFileDB('data/hbb1_mouse.fa')
+   >>> dna_seq = dna_db['gi|171854975|dbj|AB364477.1|']
+   >>> prot_db = seqdb.SequenceFileDB('data/sp_all_hbb')
+
+Construct and query the ``BlastxMapping`` object as you would a
+``BlastMapping`` object...
+
+   >>> blastmap = blast.BlastxMapping(prot_db)
+   >>> results = blastmap[dna_seq]
+
+but now the results are one or more NLMSASlice objects containing alignments
+between *translations* of the query sequence and the subject protein
+sequences:
+
+   >>> results = list(results)
+   >>> match = results[0]
+   >>> print match.seq[0:10], 'frame', match.seq.frame
+   MVHLTDAEKA frame 1
+
+and you can iterate over the matches as you normally would: 
+
+   >>> for n, (src, dest, edge) in enumerate(match.edges()):
+   ...    print src[0:10], repr(src)
+   ...    print dest[:10], repr(dest)
+   ...    print '--'
+   ...    if n == 2: break
+   MVHLTDAEKA annotgi|171854975|dbj|AB364477.1|:0[0:52]
+   MVHWTQEERD HBB_MUSGR[0:52]
+   --
+   VHLTDAEKAA annotgi|171854975|dbj|AB364477.1|:0[1:53]
+   VHWTGEEKAL HBB_SQUAC[0:52]
+   --
+   VHLTDAEKAA annotgi|171854975|dbj|AB364477.1|:0[1:53]
+   VSLTDEEKHL HBB2_TORMA[0:52]
+   --
+
+If you use the __call__ interface to retrieve a full NLMSA object
+(rather than the slice(s) associated with a single sequence), you can
+query the NLMSA with translations of the DNA sequences.  You can
+access those via a translation database attached to the query sequence
+database:
+
+   >>> from pygr import translationDB
+   >>> translation_db = translationDB.get_translation_db(dna_db)
+
+To get a translation starting at a particular nucleotide, you can slice
+the sequences returned from the translation_db,
+
+   >>> frame0 = translation_db[dna_seq.id][0:]
+   >>> print str(frame0[:10])
+   MVHLTDAEKA
+
+   >>> frame1 = translation_db[dna_seq.id][1:]
+   >>> print str(frame1[:10])
+   WCT*LMLRRL
+
+   >>> negframe0 = (-translation_db[dna_seq.id])[:0]
+   >>> print str(negframe0[:10])
+   LVVLVSQGSG
+
+or you can request an annotation from the associated annotation db in
+a specific frame by appending a ':' followed by the desired frame to
+the sequence ID:
+
+   >>> frame0 = translation_db.annodb[dna_seq.id + ':0']
+   >>> print str(frame0[:10])
+   MVHLTDAEKA
+   
+   >>> frame1 = translation_db.annodb[dna_seq.id + ':1']
+   >>> print str(frame1[:10])
+   WCT*LMLRRL
+
+   >>> negframe0 = translation_db.annodb[dna_seq.id + ':-0']
+   >>> print str(negframe0[:10])
+   LVVLVSQGSG
+
+These translations can then be used to query the matches from BlastxMapping
+as you would normally do:
+
+   >>> blastmap = blast.BlastxMapping(prot_db)
+   >>> results = blastmap(dna_seq)
+   >>> frame0_results = results[frame0]
+   >>> print frame0_results.keys()[:3]
+   [HBB_MUSGR[0:52], HBB_SQUAC[0:52], HBB2_TORMA[0:52]]
+
+How can we get the original DNA sequence for a match?  Easy --
+dereference the annotation object into its source DNA sequence:
+
+   >>> src, dest, edge = frame0_results.edges()[0]
+
+   >>> print repr(src.sequence), 'aligns to', repr(dest)
+   gi|171854975|dbj|AB364477.1|[0:156] aligns to HBB_MUSGR[0:52]
+
+   >>> aa = '  '.join(str(dest[:10]))
+   >>> print "%s\n%s" % (src.sequence[:30], aa)
+   ATGGTGCACCTGACTGATGCTGAGAAGGCT
+   M  V  H  W  T  Q  E  E  R  D
+
+Storing BLAST alignments on disk
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The BlastMapping classes offer a nice interface, but everything we've
+done above is transient -- what about saving the results of a long BLAST?
+That's simple -- you just have to pass the BlastMapping class an on-disk
+NLMSA.
+
+First, create the mapping.
+
+   >>> db = seqdb.SequenceFileDB('data/gapping.fa')
+   >>> blastmap = blast.BlastMapping(db)
+
+Now, create an on-disk NLMSA.  BLAST alignments are pairwise (they
+only involve two sequences) and they are not bidirectional (x matches
+y does not always mean y matches x):
+
+   >>> store_al = cnestedlist.NLMSA('tempdir/blastn', mode='w', pairwiseMode=True, bidirectional=False)
+
+Pass the NLMSA into the BLAST search, and then build it:
+
+   >>> _ = blastmap(queryDB=db, al=store_al)
+   >>> store_al.build(saveSeqDict=True)
+
+Now, let's pretend we're exiting and restarting Python...
+
+   >>> del store_al
+
+...and re-load the NLMSA from disk:
+
+   >>> loaded_al = cnestedlist.NLMSA('tempdir/blastn')
+
+As before, we have to use the saved seqDict because we're not using
+``worldbase``.  Retrieve the sequence...
+
+   >>> db = loaded_al.seqDict
+   >>> g = db['gapping.gapped']
+
+... and query it for matches, as above:
+
+   >>> edges = loaded_al[g].edges()
+   >>> for (src, dest, edge) in edges:
+   ...   print repr(src), 'matches', repr(dest)
+   gapped[0:40] matches ungapped[0:40]
+   gapped[44:74] matches ungapped[40:70]
+
+And voila, done!
+
+.. for recipes, instead?
+.. Building an Alignment Database from MAF files
+.. ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. Example: Mapping an entire gene set onto a new genome version
+.. ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. @CTB figure out sphinx linking stuff to link NLMSA To NLMSA docs, etc.
+.. @CTB section pointing them towards MAF, gene set, etc. recipes?
+.. @CTB link doctests into tests again!
+.. @CTB non-pairwise, etc. (more complicated) NLMSAs?  building NLMSAs?
