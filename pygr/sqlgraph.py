@@ -250,12 +250,20 @@ def mysql_connect(connect=None, configFile=None, **args):
     if 'user' not in kwargs and configFile is None: #Find where config file is
         osname = platform.system()
         if osname in('Microsoft', 'Windows'): # Machine is a Windows box
-            windir = os.environ.get('WINDIR')
-            sysdrv = os.environ.get('SYSTEMDRIVE')
-            configFile = get_valid_path((windir, 'my.ini'),
-                                        (windir, 'my.cnf'),
-                                        (sysdrv, os.path.sep + 'my.ini'),
-                                        (sysdrv, os.path.sep + 'my.cnf'))
+            paths = []
+            try: # handle case where WINDIR not defined by Windows...
+                windir = os.environ['WINDIR']
+                paths += [(windir, 'my.ini'), (windir, 'my.cnf')]
+            except KeyError:
+                pass
+            try:
+                sysdrv = os.environ['SYSTEMDRIVE']
+                paths += [(sysdrv, os.path.sep + 'my.ini'),
+                          (sysdrv, os.path.sep + 'my.cnf')]
+            except KeyError:
+                pass
+            if len(paths) > 0:
+                configFile = get_valid_path(*paths)
         else: # treat as normal platform with home directories
             configFile = os.path.join(os.path.expanduser('~'), '.my.cnf')
 
