@@ -67,6 +67,9 @@ class SeqTranslator(sequence.SequenceBase):
         for frame in ('0', '1', '2', '-0', '-1', '-2'):
             yield self.db.annodb['%s:%s' % (self.id, frame)]
 
+    def __repr__(self):
+        return 'SeqTranslator(' + sequence.SequenceBase.__repr__(self) + ')'
+
 class TranslationDB(SequenceDB):
     """Provides an automatic translation interface for a nucleotide sequence
     database: slicing of top-level sequence objects will return the
