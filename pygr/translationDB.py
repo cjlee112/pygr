@@ -62,6 +62,11 @@ class SeqTranslator(sequence.SequenceBase):
         else: # negative strand
             return '%s:-%d' % (self.id, (-start) % 3)
 
+    def iter_frames(self):
+        'iterate over the 6 possible frames, yielding TranslationAnnot'
+        for frame in ('0', '1', '2', '-0', '-1', '-2'):
+            yield self.db.annodb['%s:%s' % (self.id, frame)]
+
 class TranslationDB(SequenceDB):
     """Provides an automatic translation interface for a nucleotide sequence
     database: slicing of top-level sequence objects will return the

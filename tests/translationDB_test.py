@@ -41,3 +41,7 @@ class TranslationDB_Test(unittest.TestCase):
         tseq = self.tdb[id]
 
         assert repr(seq) != repr(tseq)
+
+
+if __name__ == '__main__':
+    PygrTestProgram(verbosity=2)

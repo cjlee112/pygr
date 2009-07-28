@@ -368,7 +368,7 @@ class BlastxMapping(BlastMapping):
 
         # run through all of the frames & find alignments.
         slices = []
-        for trans_seq in tdb.annodb.itervalues():
+        for trans_seq in tdb[query.id].iter_frames():
             try:
                 slice = al[trans_seq]
             except KeyError:
