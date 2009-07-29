@@ -181,18 +181,21 @@ class TestXMLRPCServer(object):
         self.thread = threading.Thread(target=self.run_server)
         self.thread.start()
         
-        # wait for it to start
-        time.sleep(1)
-
-        # retrieve port info
-        try:
-            ifile = open(self.port_file)
+        self.port = None
+        for i in range(10): # retry several times in case server starts slowly
+            # wait for it to start
+            time.sleep(1)
+            # retrieve port info from file saved by server
             try:
-                self.port = int(ifile.read())
-            finally:
-                ifile.close() # make sure to close file no matter what
-        except OSError:
-            assert 0, "cannot get port info from server; is server running?"
+                ifile = open(self.port_file)
+                try:
+                    self.port = int(ifile.read())
+                    break # exit the loop
+                finally:
+                    ifile.close() # make sure to close file no matter what
+            except IOError:
+                pass
+        assert self.port, "cannot get port info from server; is server running?"
 
     def run_server(self):
         'this method blocks, so run it in a separate thread'
