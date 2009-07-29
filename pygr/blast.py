@@ -99,11 +99,11 @@ def process_blast(cmd, seq, blastDB, al=None, seqString=None, queryDB=None,
     """Run blast and return an alignment."""
     seqID,p = start_blast(cmd, seq, seqString, seqDict=queryDB, **popenArgs)
     try:
-        if not queryDB:
+        if not queryDB: # need a query db for translation / parsing results
             try:
-                queryDB = seq.db
+                queryDB = seq.db # use this sequence's database
             except AttributeError:
-                queryDB = { seqID : seq }
+                queryDB = { seqID : seq } # construct a trivial "database"
             
         al = read_blast_alignment(p.stdout, queryDB, blastDB, al, **kwargs)
     finally:
