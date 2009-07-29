@@ -94,21 +94,18 @@ def start_blast(cmd, seq, seqString=None, seqDict=None, **kwargs):
         raise OSError('command %s failed' % ' '.join(cmd))
     return seqID, p
 
-def process_blast(cmd, seq, againstDB, al=None, seqString=None, queryDB=None,
+def process_blast(cmd, seq, blastDB, al=None, seqString=None, queryDB=None,
                   popenArgs={}, **kwargs):
     """Run blast and return an alignment."""
     seqID,p = start_blast(cmd, seq, seqString, seqDict=queryDB, **popenArgs)
     try:
         if not queryDB:
-            queryDB = getattr(seq, 'db')
-            if queryDB is None:
-                queryDB = { seqID : seq } # @CTB will mess up translationDB
+            try:
+                queryDB = seq.db
+            except AttributeError:
+                queryDB = { seqID : seq }
             
-        if queryDB is not None:
-            al = read_blast_alignment(p.stdout, queryDB, againstDB, al, **kwargs)
-        else:
-            al = read_blast_alignment(p.stdout, {seqID:seq}, againstDB, al,
-                                         **kwargs)
+        al = read_blast_alignment(p.stdout, queryDB, blastDB, al, **kwargs)
     finally:
         p.close() # close our PIPE files
     return al
