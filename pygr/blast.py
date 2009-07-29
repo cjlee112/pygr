@@ -275,27 +275,6 @@ class BlastMapping(object):
             cmd='fastacmd -D -d "%s"' % self.get_blast_index_path()
             return os.popen(cmd),NCBI_ID_PARSER #BLAST ADDS lcl| TO id
 
-    def warn_about_self_masking(self, seq, verbose, methodname='blast'):
-        if verbose is None:
-            verbose = self.verbose
-        if not verbose: # don't print out annoying warning messages
-            return
-        try:
-            if seq.db is self.seqDB:
-                logger.warn('''
-WARNING: your query sequence is part of this database.  Pygr alignments
-normally do not report self-matches, i.e. the alignment of a sequence interval
-to itself, so only homologies to OTHER sequences in the database
-(or other intervals of the query sequence, if they are homologous) will be
-reported (or an empty query result if no such homologies are found).
-To report ALL homologies, including the self-match, simply create a new
-sequence object and use that as your query, e.g.
-query = sequence.Sequence(str(seq),"myquery")
-results = db.%s(query)
-
-To turn off this message, use the verbose=False option''' % methodname)
-        except AttributeError:
-            pass
 
     _blast_prog_dict = dict(blastx='#BlastxMapping')
 
@@ -344,7 +323,6 @@ To turn off this message, use the verbose=False option''' % methodname)
             raise ValueError("both a sequence AND a db provided for query")
         if queryDB is not None:
             seq = self.get_seq_from_queryDB(queryDB)
-        self.warn_about_self_masking(seq, verbose)
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
         blastprog = self.blast_program(seq, blastprog)
@@ -391,7 +369,6 @@ class MegablastMapping(BlastMapping):
                  rmPath='RepeatMasker', rmOpts=['-xsmall'],
                  verbose=None, opts=(), **kwargs):
         "Run megablast search with optional repeat masking."
-        self.warn_about_self_masking(seq, verbose, 'megablast')
         if not self.blastReady: # HAVE TO BUILD THE formatdb FILES...
             self.formatdb()
 
