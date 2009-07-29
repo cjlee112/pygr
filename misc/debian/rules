@@ -6,8 +6,6 @@
 
 PYVERS=$(shell pyversions -r)
 
-# FIXME: add a separate package for documentation
-
 build: build-stamp
 build-stamp:
 	dh_testdir
@@ -17,6 +15,8 @@ build-stamp:
 		echo "--- Compiling for $$PYTHON"; \
 		$$PYTHON setup.py build; \
 	done
+
+	( cd doc && make )
 
 	touch build-stamp
 
@@ -48,6 +48,7 @@ install-stamp: build
 
 # Build architecture-independent files here.
 binary-indep:
+	dh_installdocs -ppython-pygr-doc doc/html_new/*
 
 # Build architecture-dependent files here.
 binary-arch: install
