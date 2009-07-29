@@ -524,7 +524,8 @@ cdef class NLMSASlice:
             istop=it.im_buf[i].start+end_min-it.im_buf[i].target_start
             start2=im2[j].target_start+start_max-im2[j].start # COORDS IN TARGET
             stop2=im2[j].target_start+end_min-im2[j].start
-            if im2[j].target_id!=id or istart!=start2: # DISCARD SELF-MATCH
+            if im2[j].target_id!=id or istart!=start2 \
+                   or ns.nlmsaLetters.pairwiseMode==1: # DISCARD SELF-MATCH
               it.saveInterval(istart,istop,im2[j].target_id,start2,stop2) # SAVE IT!
             assert ns_lpo.id!=im2[j].target_id
 
