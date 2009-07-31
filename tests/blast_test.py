@@ -103,10 +103,12 @@ class BlastBase(unittest.TestCase):
         hbb1_mouse = testutil.datafile('hbb1_mouse.fa')
         hbb1_mouse_rc = testutil.datafile('hbb1_mouse_rc.fa')
         sp_hbb1 = testutil.datafile('sp_hbb1')
+        gapping = testutil.datafile('gapping.fa')
 
         self.dna = seqdb.SequenceFileDB(hbb1_mouse)
         self.dna_rc = seqdb.SequenceFileDB(hbb1_mouse_rc)
         self.prot = seqdb.SequenceFileDB(sp_hbb1)
+        self.gapping = seqdb.SequenceFileDB(gapping)
 
 
 _multiblast_results = None
@@ -220,7 +222,7 @@ class Blast_Test(BlastBase):
         if not testutil.blast_enabled():
             raise SkipTest, "no BLAST installed"
         
-        db = seqdb.SequenceFileDB('data/gapping.fa')
+        db = self.gapping
         blastmap = blast.BlastMapping(db)
         ungapped = db['ungapped']
         gapped = db['gapped']
@@ -232,7 +234,7 @@ class Blast_Test(BlastBase):
         if not testutil.blast_enabled():
             raise SkipTest, "no BLAST installed"
         
-        db = seqdb.SequenceFileDB('data/gapping.fa')
+        db = self.gapping
         gapped = db['gapped']
         ungapped = db['ungapped']
         
@@ -250,7 +252,7 @@ class Blast_Test(BlastBase):
         assert found_once, "should have found this match exactly once!"
 
     def test_formatdb_fail(self):
-        db = seqdb.SequenceFileDB('data/gapping.fa')
+        db = self.gapping
         try:
             blastmap = blast.BlastMapping(db, filepath='foobarbaz.fa',
                                           blastReady=True,
