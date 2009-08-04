@@ -42,6 +42,15 @@ class TranslationDB_Test(unittest.TestCase):
 
         assert repr(seq) != repr(tseq)
 
+    def test_invalid_annodb_key_str(self):
+        """
+        The invalid key should be mentioned in the KeyError...
+        """
+        try:
+            self.tdb.annodb['fooBar']
+            assert 0, "should not reach this point"
+        except KeyError, e:
+            assert 'fooBar' in str(e)
 
 if __name__ == '__main__':
     PygrTestProgram(verbosity=2)

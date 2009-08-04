@@ -102,7 +102,7 @@ class SixFrameInfo(object, UserDict.DictMixin):
         "convert ID of form seqID:frame into slice info tuple"
         i = k.rfind(':')
         if i<0:
-            raise KeyError('invalid TranslationInfo key')
+            raise KeyError('invalid TranslationInfo key: %s' % (k,))
         seqID = k[:i]
         length = len(self.seqDB[seqID]) # sequence length
         frame = int(k[i+1:])
