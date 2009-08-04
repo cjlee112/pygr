@@ -20,6 +20,7 @@ html/pygr/pygr.html: $(PYGRFILES) perl/distutils.perl
 	$(MKHTML) --dir html/pygr --split 4 pygr/pygr.tex
 
 newdocs:
+	-mkdir -p $(BUILD_DIR)
 	sphinx-build -b html $(DOC_DIR) $(BUILD_DIR)
 
 epydocs:
