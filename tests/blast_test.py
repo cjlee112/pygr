@@ -154,7 +154,7 @@ class Blast_Test(BlastBase):
             pass
 
     def test_both_seq_and_db(self):
-        "Testing blastp"
+        "Testing db arg present"
         blastmap = blast.BlastMapping(self.prot, verbose=False)
         seq = self.prot['HBB1_XENLA']
 
@@ -277,7 +277,7 @@ class Blast_Test(BlastBase):
         for filename in remnants:
             os.unlink(filename)
 
-    def test_both_seq_and_db(self):
+    def test_seq_without_db(self):
         "Check that sequences without associated DBs work as query strings"
         blastmap = blast.BlastMapping(self.prot, verbose=False)
 
