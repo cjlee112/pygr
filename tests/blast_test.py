@@ -10,8 +10,9 @@ from pygr.nlmsa_utils import CoordsGroupStart,CoordsGroupEnd
 from pygr import translationDB
 
 def check_results(results, correct, formatter, delta=0.01,
-                  reformatCorrect=False):
-    results = reformat_results(results, formatter)
+                  reformatCorrect=False, reformatResults=True):
+    if reformatResults:
+        results = reformat_results(results, formatter)
 
     if reformatCorrect: # reformat these data too
         correct = reformat_results(correct, formatter)
@@ -31,8 +32,9 @@ def check_results(results, correct, formatter, delta=0.01,
 
 def check_results_relaxed_blastp(results, correct, formatter, delta=0.01,
                                  reformatCorrect=False, allowedLengthDiff=0,
-                                 identityMin=0.6):
-    results = reformat_results(results, formatter)
+                                 identityMin=0.6, reformatResults=True):
+    if reformatResults:
+        results = reformat_results(results, formatter)
 
     if reformatCorrect: # reformat these data too
         correct = reformat_results(correct, formatter)
@@ -97,6 +99,9 @@ def reformat_results(results, formatter):
     reffed.sort()
     return reffed
 
+def pair_identity_tuple(t):
+    'standard formatter for blast matches'
+    return (t[0].id, t[1].id, t[2].pIdentity())
 
 class BlastBase(unittest.TestCase):
     def setUp(self):
@@ -109,6 +114,13 @@ class BlastBase(unittest.TestCase):
         self.dna_rc = seqdb.SequenceFileDB(hbb1_mouse_rc)
         self.prot = seqdb.SequenceFileDB(sp_hbb1)
         self.gapping = seqdb.SequenceFileDB(gapping)
+
+    def tearDown(self):
+        'do the RIGHT thing... close resources that have been opened!'
+        self.dna.close()
+        self.dna_rc.close()
+        self.prot.close()
+        self.gapping.close()
 
 
 _multiblast_results = None
@@ -156,7 +168,7 @@ class Blast_Test(BlastBase):
         "testing multi sequence blast"
         results = self.get_multiblast_results()
         check_results_relaxed_blastp(results, correct_multiblast_results,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()),
+                                     None, reformatResults=False,
                                      allowedLengthDiff=10)
 
     def get_multiblast_results(self):
@@ -176,7 +188,9 @@ class Blast_Test(BlastBase):
             blastmap(al=al, queryDB=self.prot) # all vs all
 
             al.build() # construct the alignment indexes
-            _multiblast_results = [al[seq] for seq in self.prot.values()]
+            results = [al[seq] for seq in self.prot.values()]
+            _multiblast_results = reformat_results(results,
+                                                   pair_identity_tuple)
             
         return _multiblast_results
 
@@ -197,8 +211,7 @@ class Blast_Test(BlastBase):
         results_multi = self.get_multiblast_results()
         # Strict check must work here even on live BLAST output
         check_results(results, results_multi,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()),
-                      reformatCorrect=True)
+                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
         
     def test_multiblast_long(self):
         "testing multi sequence blast with long db"
