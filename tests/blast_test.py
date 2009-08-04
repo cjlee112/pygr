@@ -138,7 +138,7 @@ class Blast_Test(BlastBase):
         results = blastmap[self.prot['HBB1_XENLA']]
 
         check_results_relaxed_blastp([results], blastp_correct_results,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()),
+                                     pair_identity_tuple,
                                      allowedLengthDiff=2)
 
     def test_repr(self):
@@ -210,8 +210,7 @@ class Blast_Test(BlastBase):
         results = [al[seq] for seq in self.prot.values()]
         results_multi = self.get_multiblast_results()
         # Strict check must work here even on live BLAST output
-        check_results(results, results_multi,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+        check_results(results, results_multi, pair_identity_tuple)
         
     def test_multiblast_long(self):
         "testing multi sequence blast with long db"
@@ -523,8 +522,7 @@ class BlastParsers_Test(BlastBase):
         finally:
             blastp_output.close()
 
-        check_results([results], blastp_correct_results,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+        check_results([results], blastp_correct_results, pair_identity_tuple)
 
     def test_multiblast_parser(self):
         "Testing multiblast parser"
@@ -542,7 +540,7 @@ class BlastParsers_Test(BlastBase):
         results = [al[seq] for seq in self.prot.values()]
 
         check_results(results, correct_multiblast_results,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+                      pair_identity_tuple)
 
     def test_multiblast_parser_long(self):
         "Testing multiblast parser with long input"
@@ -575,8 +573,7 @@ class BlastParsers_Test(BlastBase):
                 correct.append((t[0], t[1], float(t[2])))
         finally:
             correctfile.close()
-        check_results(results, correct,
-                      lambda t:(t[0].id, t[1].id, t[2].pIdentity()))
+        check_results(results, correct, pair_identity_tuple)
 
     def test_blastx_parser(self):
         "Testing blastx parser"
