@@ -263,6 +263,15 @@ class Blast_Test(BlastBase):
         for filename in remnants:
             os.unlink(filename)
 
+    def test_both_seq_and_db(self):
+        "Check that sequences without associated DBs work as query strings"
+        blastmap = blast.BlastMapping(self.prot, verbose=False)
+
+        seq = self.prot['HBB1_XENLA']
+        seq_no_db = sequence.Sequence(str(seq), 'HBB1_XENLA_no_db')
+        slice = blastmap(seq=seq_no_db)[seq_no_db]
+        assert len(slice)
+
 class Blastx_Test(BlastBase):
     def test_blastx(self):
         "Testing blastx"
