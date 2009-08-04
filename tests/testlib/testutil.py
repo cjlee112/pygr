@@ -181,7 +181,7 @@ class TestXMLRPCServer(object):
         self.thread = threading.Thread(target=self.run_server)
         self.thread.start()
         
-        self.port = None
+        port = None
         for i in range(10): # retry several times in case server starts slowly
             # wait for it to start
             time.sleep(1)
@@ -189,22 +189,24 @@ class TestXMLRPCServer(object):
             try:
                 ifile = open(self.port_file)
                 try:
-                    self.port = int(ifile.read())
+                    port = int(ifile.read())
                     break # exit the loop
                 finally:
                     ifile.close() # make sure to close file no matter what
             except IOError:
                 pass
-        assert self.port, "cannot get port info from server; is server running?"
+        assert port, "cannot get port info from server; is server running?"
+        self.port = port # use the port returned by the server
 
     def run_server(self):
         'this method blocks, so run it in a separate thread'
         cmdArgs = (sys.executable, self.server_script) + tuple(sys.argv) \
-                  + ('--port=' + str(self.port),
-                     '--port-file=' + self.port_file,
+                  + ('--port-file=' + self.port_file,
                      '--pygrdatapath=' + self.pygrDataPath,
                      '--downloadDB=' + self.downloadDB,
                      '--resources=' + ':'.join(self.pygrDataNames))
+        if self.port: # only add port argument if set
+            cmdArgs += ('--port=' + str(self.port),)
         p = classutil.FilePopen(cmdArgs, stdout=classutil.PIPE,
                                 stderr=classutil.PIPE)
         try:
