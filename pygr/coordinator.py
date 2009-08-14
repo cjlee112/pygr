@@ -926,26 +926,27 @@ class Coordinator(object):
         sys.exit()
         
 
+try:
+    class ResourceFile(file):
+        """wrapper around some locking behavior, to ensure only one copy operation
+        performed for a given resource on a given host.
+        Otherwise, it's just a regular file object."""
+        def __init__(self,resource,rule,mode,processor):
+            "resource is name of the resource; rule is (localFile,cpCommand)"
+            self.resource=resource
+            self.processor=processor
+            localFile,cpCommand=rule
+            if not os.access(localFile,os.R_OK):
+                cmd=cpCommand % localFile
+                print 'copying data:',cmd
+                os.system(cmd)
+            file.__init__(self,localFile,mode) # NOW INITIALIZE AS A REAL FILE OBJECT
 
-class ResourceFile(file):
-    """wrapper around some locking behavior, to ensure only one copy operation
-    performed for a given resource on a given host.
-    Otherwise, it's just a regular file object."""
-    def __init__(self,resource,rule,mode,processor):
-        "resource is name of the resource; rule is (localFile,cpCommand)"
-        self.resource=resource
-        self.processor=processor
-        localFile,cpCommand=rule
-        if not os.access(localFile,os.R_OK):
-            cmd=cpCommand % localFile
-            print 'copying data:',cmd
-            os.system(cmd)
-        file.__init__(self,localFile,mode) # NOW INITIALIZE AS A REAL FILE OBJECT
-
-    def close(self):
-        self.processor.release_rule(self.resource) # RELEASE THE LOCK WE PLACED ON THIS RULE
-        file.close(self)
-
+        def close(self):
+            self.processor.release_rule(self.resource) # RELEASE THE LOCK WE PLACED ON THIS RULE
+            file.close(self)
+except TypeError:
+    pass
 
 
 
