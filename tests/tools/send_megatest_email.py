@@ -54,13 +54,8 @@ if expectedRunningTime >= 0.:
         abnormalStop -= 1
 
 for lines in sendStr.splitlines():
-    # Standard-test output
     if lines[:4] == 'INFO' and 'passed' in lines and 'failed' in lines and 'skipped' in lines:
         nError += int(lines[18:].split(',')[1].strip().split(' ')[0])
-        abnormalStop += 1
-    # Megatest output
-    if lines[:6] == 'FINAL:':
-        nError += int(lines[7:30].split(' ')[0])
         abnormalStop += 1
 
 if nError == 0 and abnormalStop == 3:
