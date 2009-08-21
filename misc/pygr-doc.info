@@ -6,7 +6,7 @@ Revision: 1
 Description: Pygr documentation
 License: BSD
 Maintainer: Christopher Lee <leec@chem.ucla.edu>
-Depends: sphinx-py%type_pkg[python]
+BuildDepends: sphinx-py%type_pkg[python]
 Source: http://pygr.googlecode.com/files/pygr-%v.tar.gz
 Source-MD5: 66c52f52834d4b02ff0d02b63b4ac09f
 CompileScript: <<
