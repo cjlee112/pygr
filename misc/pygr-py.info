@@ -16,7 +16,7 @@ CompileScript: <<
 InstallScript: <<
  %p/bin/python%type_raw[python] setup.py install --root %d
 <<
-DocFiles: README.txt
+DocFiles: README.txt LICENSE.txt
 Description: A Python graph-database toolkit oriented primarily on bioinformatics.
 DescDetail: <<
  Pygr is an open source software project used to develop graph database
