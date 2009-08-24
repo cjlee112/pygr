@@ -6,6 +6,21 @@ try:
 except ImportError:
     from email.MIMEText import MIMEText
 
+
+def extract_errors(text):
+    errors = [ ]
+    start_line = -1
+    for idx, line in enumerate(text):
+        if line[:6] == 'ERROR:':
+            start_line = idx - 1
+        elif line == '\n' and start_line >= 0:
+            for i in range(start_line, idx + 1):
+                errors.append(text[i])
+            start_line = -1
+
+    return errors
+
+
 config = ConfigParser.ConfigParser({'expectedRunningTime' : '-1', 'mailServer' : '', 'runningTimeAllowedDelay' : '0'})
 config.read([ os.path.join(os.path.expanduser('~'), '.pygrrc'), os.path.join(os.path.expanduser('~'), 'pygr.cfg'), '.pygrrc', 'pygr.cfg' ])
 expectedRunningTime = config.get('megatests', 'expectedRunningTime')
@@ -57,6 +72,11 @@ for lines in sendStr.splitlines():
     if lines[:4] == 'INFO' and 'passed' in lines and 'failed' in lines and 'skipped' in lines:
         nError += int(lines[18:].split(',')[1].strip().split(' ')[0])
         abnormalStop += 1
+
+if nError > 0:
+    sendStr += '\nThe following errors have been detected:\n'
+    sendStr += ''.join(extract_errors(open('tmp2_megatest.log', 'r').readlines()))
+    sendStr += ''.join(extract_errors(open('tmp4_megatest.log', 'r').readlines()))
 
 if nError == 0 and abnormalStop == 3:
     maillist = maillist_pass
