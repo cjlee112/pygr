@@ -1,0 +1,85 @@
+TBLASTN 2.2.20 [Feb-08-2009]
+
+
+Reference: Altschul, Stephen F., Thomas L. Madden, Alejandro A. Schaffer, 
+Jinghui Zhang, Zheng Zhang, Webb Miller, and David J. Lipman (1997), 
+"Gapped BLAST and PSI-BLAST: a new generation of protein database search
+programs",  Nucleic Acids Res. 25:3389-3402.
+
+Reference for compositional score matrix adjustment: Altschul, Stephen F., 
+John C. Wootton, E. Michael Gertz, Richa Agarwala, Aleksandr Morgulis,
+Alejandro A. Schaffer, and Yi-Kuo Yu (2005) "Protein database searches
+using compositionally adjusted substitution matrices", FEBS J. 272:5101-5109.
+
+Query= HBB1_XENLA
+         (145 letters)
+
+Database: data/hbb1_mouse.fa 
+           1 sequences; 444 total letters
+
+Searching..................................................done
+
+
+
+                                                                 Score    E
+Sequences producing significant alignments:                      (bits) Value
+
+dbj|AB364477.1| Mus musculus HBB1 mRNA for hemoglobin beta chain...   145   3e-40
+
+>dbj|AB364477.1| Mus musculus HBB1 mRNA for hemoglobin beta chain subunit, complete
+           cds
+          Length = 444
+
+ Score =  145 bits (366), Expect = 3e-40,   Method: Compositional matrix adjust.
+ Identities = 65/144 (45%), Positives = 93/144 (64%)
+ Frame = +1
+
+Query: 2   LTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAA 61
+           LT  ++  ++  WGK+ +  +G EALGRLL  YPWTQRYF SFG+L+SA A+  N  V A
+Sbjct: 10  LTDAEKAAVSGLWGKVNSDEVGGEALGRLLVVYPWTQRYFDSFGDLSSASAIMGNAKVKA 189
+
+Query: 62  HGEKVVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEY 121
+           HG+KV+T+  E + H+D +KG +A LS+ H + LHVDP NF+  G  + I L  H  +++
+Sbjct: 190 HGKKVITAFNEGLNHLDSLKGTFASLSELHCDKLHVDPENFRLLGNMIVIVLGHHLGKDF 369
+
+Query: 122 TPELHAAYEHLFDAIADALGKGYH 145
+           TP   AA++ +   +A AL   YH
+Sbjct: 370 TPAAQAAFQKVMAGVATALAHKYH 441
+
+
+  Database: data/hbb1_mouse.fa
+    Posted date:  Mar 4, 2009 12:10 PM
+  Number of letters in database: 444
+  Number of sequences in database:  1
+  
+Lambda     K      H
+   0.321    0.135    0.427 
+
+Gapped
+Lambda     K      H
+   0.267   0.0410    0.140 
+
+
+Matrix: BLOSUM62
+Gap Penalties: Existence: 11, Extension: 1
+Number of Sequences: 1
+Number of Hits to DB: 148
+Number of extensions: 3
+Number of successful extensions: 1
+Number of sequences better than 1.0e-03: 1
+Number of HSP's gapped: 1
+Number of HSP's successfully gapped: 1
+Length of query: 145
+Length of database: 148
+Length adjustment: 16
+Effective length of query: 129
+Effective length of database: 132
+Effective search space:    17028
+Effective search space used:    17028
+Neighboring words threshold: 13
+Window for multiple hits: 40
+X1: 16 ( 7.4 bits)
+X2: 38 (14.6 bits)
+X3: 64 (24.7 bits)
+S1: 41 (21.9 bits)
+S2: 30 (16.2 bits)

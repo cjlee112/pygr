@@ -1,0 +1,69 @@
+#!/bin/sh
+
+# User-configurable bits. FIXME: read these from the Pygr config file!
+megatestdir='/result/pygr_megatest'
+mycnfpath="${megatestdir}"
+logdir="${megatestdir}"
+#
+
+
+# It's easier to edit PATH than to change explicit paths all over the script...
+PATH='/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/root/bin'
+
+# $HOME must be set in order for MySQL code to be able to find per-user option
+# file (i.e. ~/.my.cnf). This is necessary in two cases:
+#  - if you actually want to use that file;
+#  - if you build Pygr against certain (older?) versions of the MySQL client,
+#      which segfault on startup if $HOME is unset or empty
+# $HOME is also used to locate the Pygr configuration file - while such a file
+# will also be read from the current directory (and in fact override data
+# from the $HOME-based one), this is not particularly useful when the current
+# directory in question comes straight from Git.
+if [ -z "$HOME" ]; then
+	HOME="${mycnfpath}"
+	export HOME
+fi
+
+# Megatests do not run without a config file
+if [ ! -f "$HOME/.pygrrc" ] && [ ! -f "$HOME/pygr.cfg" ]; then
+	echo "Error: Pygr configuration file not found in $HOME, cannot proceed"
+	exit 1
+fi
+
+# Tell Python where Pygr will live.
+arch=`uname -m`
+pver=`python -V 2>&1 | cut -f2 -d' ' | cut -f1-2 -d'.'`	# FIXME: must be a cleaner way of doing this... awk?
+PYTHONPATH="${megatestdir}/src_save/pygr/build/lib.linux-${arch}-${pver}"
+export PYTHONPATH
+unset arch pver
+
+[ -d "${megatestdir}/src_save" ] || mkdir -p "${megatestdir}/src_save"
+cd "${megatestdir}/src_save"
+if [ $? -ne 0 ]; then
+	echo "Error: Couldn't cd to ${megatestdir}/src_save, aborting"
+	exit 1
+fi
+
+# Step 1: download and build Pygr
+date &> "${logdir}/tmp1_megatest.log"
+echo START: `date +"%s"` >> "${logdir}/tmp1_megatest.log"
+rm -rf pygr
+git clone -q 'git://repo.or.cz/pygr.git' &> /dev/null
+cd pygr
+python setup.py build &> "${logdir}/tmp0_megatest.log"
+
+# Step 2: run tests
+cd tests
+python runtest.py -b &> "${logdir}/tmp2_megatest.log"
+echo "$PYTHONPATH" &> "${logdir}/tmp3_megatest.log"
+python runtest.py -b *megatest.py &> "${logdir}/tmp4_megatest.log"
+
+# Step 3: send report and clean up
+date &> "${logdir}/tmp5_megatest.log"
+echo END: `date +"%s"` >> "${logdir}/tmp5_megatest.log"
+python tools/send_megatest_email.py
+cd ../..
+rm -rf pygr
+rm -f "${logdir}/tmp*megatest.log"
+
+exit 0

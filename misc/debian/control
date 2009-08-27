@@ -1,0 +1,28 @@
+Source: python-pygr
+Section: python
+Priority: optional
+Maintainer: Debian Python Modules Team <python-modules-team@lists.alioth.debian.org>
+Build-Depends: debhelper (>= 5.0.37.2)
+Build-Depends-Indep: python-all-dev, python-central (>= 0.5), python-sphinx
+XS-Python-Version: all
+Standards-Version: 3.7.2
+
+Package: python-pygr
+Architecture: any
+Depends: ${python:Depends}, ${shlibs:Depends}
+Suggests: python-mysqldb, python (>= 2.5.0) | python-pysqlite2, blast2
+Provides: ${python:Provides}
+XB-Python-Version: ${python:Versions}
+Description: A Python graph-database toolkit oriented primarily on bioinformatics.
+ Pygr is an open source software project used to develop graph database
+ interfaces for the popular Python language, with a strong emphasis
+ on bioinformatics applications ranging from genome-wide analysis of
+ alternative splicing patterns, to comparative genomics queries of
+ multi-genome alignment data.
+
+Package: python-pygr-doc
+Section: doc
+Priority: optional
+Architecture: all
+Description: Pygr documentation
+

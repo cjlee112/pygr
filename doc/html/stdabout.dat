@@ -1,0 +1,52 @@
+<p> This document was based on the template of the Python 
+    documentation, and generated using the <a
+    href="http://saftsack.fs.uni-bayreuth.de/;SPMtilde;latex2ht/">
+    <strong>LaTeX</strong>2<tt>HTML</tt></a> translator.
+</p>
+
+<p> <a
+    href="http://saftsack.fs.uni-bayreuth.de/;SPMtilde;latex2ht/">
+    <strong>LaTeX</strong>2<tt>HTML</tt></a> is Copyright &copy;
+  1993, 1994, 1995, 1996, 1997, <a
+    href="http://cbl.leeds.ac.uk/nikos/personal.html">Nikos
+    Drakos</a>, Computer Based Learning Unit, University of
+  Leeds, and Copyright &copy; 1997, 1998, <a
+    href="http://www.maths.mq.edu.au/;SPMtilde;ross/">Ross
+    Moore</a>, Mathematics Department, Macquarie University,
+  Sydney.
+</p>
+
+<p> The application of <a
+    href="http://saftsack.fs.uni-bayreuth.de/;SPMtilde;latex2ht/">
+    <strong>LaTeX</strong>2<tt>HTML</tt></a> to the Python
+  documentation has been heavily tailored by Fred L. Drake,
+  Jr.  Original navigation icons were contributed by Christopher
+  Petrilli.
+</p>
+
+<hr>
+
+<h2>Comments and Questions</h2>
+
+<p> General comments and questions regarding this document should
+  be sent by email to <a href="mailto:leec@chem.ucla.edu"
+    >leec@chem.ucla.edu</a>.  If you find specific errors in
+  this document, either in the content or the presentation, please
+  report the bug at the <a
+    href="http://code.google.com/p/pygr/issues/list">Pygr Bug
+    Tracker</a> at <a href="http://code.google.com/">Google Code</a>.
+  If you are able to provide suggested text, either to replace
+  existing incorrect or unclear material, or additional text to
+  supplement what's already available, we'd appreciate the
+  contribution.  There's no need to worry about text markup; our
+  documentation team will gladly take care of that.
+</p>
+
+<p> Questions regarding how to use the information in this
+  document should be sent to the Pygr Discussion group, <a
+    href="http://groups.google.com/group/pygr-dev">Pygr-dev</a>.
+</p>
+
+<p> For any of these channels, please be sure not to send HTML email.
+  Thanks.
+</p>

@@ -1,0 +1,40 @@
++++ TEXINPUTS=/usr/local/src/Python-0.1/Doc/pygr:/usr/local/src/Python-0.1/Doc/paper-letter:/usr/local/src/Python-0.1/Doc/texinputs:
++++ latex pygr
+This is TeX, Version 3.14159 (Web2C 7.4.5)
+(/usr/local/src/Python-0.1/Doc/pygr/pygr.tex
+LaTeX2e <2001/06/01>
+Babel <v3.7h> and hyphenation patterns for american, french, german, ngerman, n
+ohyphenation, loaded.
+(/usr/local/src/Python-0.1/Doc/texinputs/howto.cls
+Document Class: howto 1998/02/25 Document class (Python HOWTO)
+(/usr/local/src/Python-0.1/Doc/texinputs/pypaper.sty
+(/usr/share/texmf/tex/latex/psnfss/times.sty)
+Using Times instead of Computer Modern.
+) (/usr/share/texmf/tex/latex/misc/fancybox.sty
+Style option: `fancybox' v1.3 <2000/09/19> (tvz)
+) (/usr/share/texmf/tex/latex/base/article.cls
+Document Class: article 2001/04/21 v1.4e Standard LaTeX document class
+(/usr/share/texmf/tex/latex/base/size10.clo))
+(/usr/local/src/Python-0.1/Doc/texinputs/fancyhdr.sty)
+Using fancier footers than usual.
+(/usr/local/src/Python-0.1/Doc/texinputs/python.sty
+(/usr/share/texmf/tex/latex/tools/longtable.sty)
+(/usr/share/texmf/tex/latex/tools/verbatim.sty)
+(/usr/share/texmf/tex/latex/base/alltt.sty)))
+(/usr/local/src/Python-0.1/Doc/texinputs/distutils.sty)
+
+! LaTeX Error: File `boilerplate.tex' not found.
+
+Type X to quit or <RETURN> to proceed,
+or enter new name. (Default extension: tex)
+
+Enter file name: 
+! Emergency stop.
+<read *> 
+         
+l.19 \input{boilerplate}
+                        ^^M
+No pages of output.
+Transcript written on pygr.log.
+*** Session transcript and error messages are in /usr/local/src/Python-0.1/Doc/pygr/pygr.how.
+*** Exited with status 1.

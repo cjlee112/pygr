@@ -1,0 +1,37 @@
+PEP 8 -- line lengths
+         testutil.TempDir( 'blast-test' ) <-- spacing inside parens?
+
+imports within functions (blast_test)
+
+==================
+
+can all tests be combined into a single test suite?
+  maybe you don't want this so that tests can be skipped or whatever
+  what's the return code if a test fails?
+
+==================
+
+is code coverage better or worse?
+ - no substantial difference; see 
+     http://lyorn.idyll.org/~t/transfer/coverage/ for new
+     http://lyorn.idyll.org/~t/transfer/coverage2/ for old
+
+==================
+
+---
+INFO runtest.run: running tests for module doctests_test
+DEBUG downloader.uncompress_file: unzipping /home/u/t/dev/pygr-psu/tests/temp/pygrdata/chromFa.zip...
+Archive:  /home/u/t/dev/pygr-psu/tests/temp/pygrdata/chromFa.zip
+replace chr1.fa? [y]es, [n]o, [A]ll, [N]one, [r]ename: y
+---
+
+should the temp directory be axed each run??
+
+===================
+
+would be nice to have the test utilities separated from the test files.
+maybe tests/testlib/, tests/something
+
+===================
+
+do the tests work with nose?

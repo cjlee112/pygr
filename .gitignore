@@ -1,0 +1,7 @@
+*.pyc
+*~
+.pygr_data
+build
+dist
+pygr.egg-info
+.DS_Store

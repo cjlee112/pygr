@@ -1,0 +1,17 @@
+{% extends "!layout.html" %}
+
+{% block rootrellink %}
+        <li><a href="{{ pathto('index') }}">Pygr home</a> |&nbsp;</li>
+        <li><a href="{{ pathto('contents') }}">Table of contents</a> &raquo;</li>
+{% endblock %}
+
+{% block relbar1 %}
+<div style="background-color: white; text-align: left; padding: 10px 10px 10px 10px">
+<img src="{{ pathto("_static/pygr-logo.gif", 1) }}" alt="Pygr logo" />
+</div>
+{{ super() }}
+{% endblock %}
+
+{# put the sidebar before the body #}
+{% block sidebar1 %}{{ sidebar() }}{% endblock %}
+{% block sidebar2 %}{% endblock %}

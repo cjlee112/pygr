@@ -1,0 +1,69 @@
+#!/usr/bin/make -f
+#-*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+PYVERS=$(shell pyversions -r)
+
+build: build-stamp
+build-stamp:
+	dh_testdir
+	
+	set -e; \
+	for PYTHON in $(PYVERS); do \
+		echo "--- Compiling for $$PYTHON"; \
+		$$PYTHON setup.py build; \
+	done
+
+	( cd doc && make )
+
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	@echo "--- Cleaning"
+	rm -f build-stamp install-stamp
+	rm -rf build
+	find . -name "*.py[co]" -exec rm -f {} \;
+	dh_clean
+
+install: install-stamp
+install-stamp: build
+	dh_testdir
+	dh_testroot
+
+	set -e; \
+	for PYTHON in $(PYVERS); do \
+		echo "--- Installing for $$PYTHON"; \
+		$$PYTHON setup.py install --root `pwd`/debian/python-pygr; \
+	done
+	
+	@echo "  -- Cleaning build from *.py[co] files"
+	-find debian -name '*.py[co]' | xargs -n 50 rm -f
+	
+	touch install-stamp
+
+
+# Build architecture-independent files here.
+binary-indep:
+	dh_installdocs -ppython-pygr-doc doc/html_new/*
+
+# Build architecture-dependent files here.
+binary-arch: install
+	dh_installdocs -A README.txt
+#	dh_installchangelogs ChangeLog
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_pycentral
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+	
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary 

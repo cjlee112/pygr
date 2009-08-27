@@ -1,0 +1,17 @@
+
+# THIS MAKEFILE EXISTS ONLY TO BUILD THE PURE C LIBRARY VERSION OF intervaldb.c
+# i.e. NO PYTHON EXTENSION MODULE FUNCTIONALITY!
+
+LIBOBJECTS= \
+	intervaldb.o
+
+TARGETS=libnclist.a
+CFLAGS=-DBUILD_C_LIBRARY
+
+libnclist.a: $(LIBOBJECTS)
+	rm -f $@
+	$(AR) -r $@ $(LIBOBJECTS)
+	ranlib $@
+
+clean:
+	rm -f $(LIBOBJECTS) $(TARGETS)
