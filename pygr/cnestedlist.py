@@ -835,7 +835,6 @@ class NLMSA(object):
 
   def close(self):
     'close our shelve index files'
-    cdef NLMSASequence ns
     for ns in self.seqlist: # tell each seq to close its index files
       ns.close()
     self.seqs.close()

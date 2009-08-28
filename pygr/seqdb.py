@@ -151,7 +151,10 @@ import classutil
 from annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
      AnnotationServer, AnnotationClient
 import logger
-import seqfmt
+try:
+    import seqfmt
+except ImportError:
+    pass
 
 from dbfile import NoSuchFileError
 
