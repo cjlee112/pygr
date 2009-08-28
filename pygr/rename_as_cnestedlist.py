@@ -1,6 +1,6 @@
-#from lpo import POMSANodeRef
 import sequence
 import nlmsa_utils
+import logger
 
 class IntervalMap(object): # <CJL
   def __init__(self,ival,im=None):
@@ -97,10 +97,10 @@ class NLMSASlice(object):
     if seq is None: # GET FROM NLMSASequence
       seq=ns.seq
     self.nlmsaSequence=ns # SAVE BASIC INFO
+    self.nlmsa = ns.nlmsaLetters
     self.start=start
     self.stop=stop
     self.offset=offset # ALWAYS STORE offset IN POSITIVE ORIENTATION
-    self.deallocID= -1
     self.seq=seq
     # USE PYTHON METHOD TO DO QUERY
     id,ivals=ns.nlmsaLetters.doSlice(seq) # doSlice() RETURNS RAW INTERVALS
@@ -133,8 +133,6 @@ class NLMSASlice(object):
     except AttributeError:
       cacheMax=0 # TURN OFF CACHING
     if cacheMax>0: # CONSTRUCT & SAVE DICT OF CACHE HINTS: COVERING INTERVALS
-      from seqdb import cacheProxyDict
-      self.deallocID,cacheProxy=cacheProxyDict()
       cacheDict={}
       try: # ADD A CACHE HINT FOR QUERY SEQ IVAL
         seqID=ns.nlmsaLetters.seqs.getSeqID(seq) # GET FULL-LENGTH ID
@@ -144,17 +142,28 @@ class NLMSASlice(object):
       for i in range(self.nseqBounds): # ONLY SAVE NON-LPO SEQUENCES
         if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].target_id):
           cacheDict[ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
-      saveCache(cacheProxy,cacheDict) # SAVE COVERING IVALS AS CACHE HINT
+      if cacheDict:
+        self.weakestLink = nlmsa_utils.SeqCacheOwner()
+        saveCache(cacheDict, self.weakestLink) # SAVE COVERING IVALS AS CACHE HINT
 
-  def __del__(self):
-    if self.deallocID>=0: # REMOVE OUR ENTRY FROM CACHE...
-      from seqdb import cacheProxyDict
-      try: # WORKAROUND weakref - PYREX PROBLEMS...
-        del cacheProxyDict[self.deallocID]
-      except KeyError:
-        pass
+  def __hash__(self):
+    return id(self)
 
+  def __repr__(self):
+    return "<NLMSASlice object at 0x%x (seq=%s)>" % (id(self), self.seq.id,)
 
+  def get_seq_interval(self, nl, targetID, start, stop):
+    'get seq interval and ensure cache owner keeps it in the cache'
+    if start<stop:
+      ival = nl.seqInterval(targetID, start, stop)
+    else:  # GET THE SEQUENCE OBJECT
+      ival = nl.seqlist.getSeq(targetID)
+    try: # tell owner to keep it in the cache
+      self.weakestLink.cache_reference(ival.pathForward)
+    except AttributeError:
+      pass
+    return ival
+  
   ########################################### ITERATOR METHODS
   def edges(self,mergeAll=False,**kwargs):
     'get list of tuples (srcIval,destIval,edge) aligned in this slice'
@@ -239,9 +248,9 @@ alignment intervals to an NLMSA after calling its build() method.''')
     i=self.findSeqBounds(id,seq.orientation) # FIND THIS id,ORIENTATION
     if i<0: # NOT FOUND!
       raise KeyError('seq not aligned in this interval')
-    return nl.seqInterval(self.seqBounds[i].target_id,
-                          self.seqBounds[i].target_start,
-                          self.seqBounds[i].target_end)
+    return self.get_seq_interval(nl, self.seqBounds[i].target_id,
+                                 self.seqBounds[i].target_start,
+                                 self.seqBounds[i].target_end)
 
   def generateSeqEnds(self):
     'get list of tuples (ival1,ival2,edge)'
@@ -252,9 +261,9 @@ alignment intervals to an NLMSA after calling its build() method.''')
         continue  # DON'T RETURN EDGES TO LPO
       #ival1=sequence.absoluteSlice(self.seq,self.seqBounds[i].start,
       #                             self.seqBounds[i].end)
-      ival2=nl.seqInterval(self.seqBounds[i].target_id,
-                           self.seqBounds[i].target_start,
-                           self.seqBounds[i].target_end)
+      ival2 = self.get_seq_interval(nl, self.seqBounds[i].target_id,
+                                    self.seqBounds[i].target_start,
+                                    self.seqBounds[i].target_end)
       #l.append((ival1,ival2,sequence.Seq2SeqEdge(self,ival2,ival1)))
       edge = self[ival2] # LET edge FIGURE OUT sourcePath FOR US
       l.append((edge.sourcePath,ival2,edge))
@@ -318,9 +327,10 @@ alignment intervals to an NLMSA after calling its build() method.''')
           start = maskStart
         if end>maskEnd:# CLIP END TO MASKED REGION
           targetEnd = targetEnd+maskEnd-end
-          end = MaskEnd
+          end = maskEnd
       elif filterSeqs is not None: # CLIP TARGET SEQ INTERVAL
-        target=nl.seqInterval(self.im[i].target_id,targetStart,targetEnd)
+        target = self.get_seq_interval(nl, self.im[i].target_id,
+                                       targetStart, targetEnd)
         try:
           target=filterSeqs[target] # PERFORM CLIPPING
         except KeyError: # NO OVERLAP IN filterSeqs, SO SKIP
@@ -414,7 +424,7 @@ alignment intervals to an NLMSA after calling its build() method.''')
     nl=self.nlmsaSequence.nlmsaLetters # GET TOPLEVEL LETTERS OBJECT
     pIdentityMin0=pIdentityMin
     for targetID,l in seqIntervals.items(): # MERGE INTERVALS FOR EACH SEQ
-      seq=nl.seqlist.getSeq(targetID) # GET THE SEQUENCE OBJECT
+      seq = self.get_seq_interval(nl, targetID, 0, 0) # GET THE SEQUENCE OBJECT
       if pIdentityMin0 is not None and not isinstance(pIdentityMin0,types.FloatType):
         try:
           pIdentityMin=pIdentityMin0[seq] # LOOK UP DESIRED IDENTITY FOR THIS SEQ
@@ -472,7 +482,7 @@ alignment intervals to an NLMSA after calling its build() method.''')
       for seq in seqs: # CONSTRUCT INTERVAL BOUNDS LIST
         if isinstance(seq,int): # seqIntervals USES INT INDEX VALUES
           id=seq # SAVE THE ID
-          seq=nl.seqlist.getSeq(id) # GET THE SEQUENCE OBJECT
+          seq = self.get_seq_interval(nl, id, 0, 0) # GET THE SEQUENCE OBJECT
         else: # EXPECT USER TO SUPPLY ACTUAL SEQUENCE OBJECTS
           id=nl.seqs.getID(seq)
           seq=seq.pathForward # ENSURE WE HAVE TOP-LEVEL SEQ OBJECT
@@ -655,7 +665,7 @@ class NLMSASequence(object):
       self.idb=IntervalDB()
     elif mode=='w': # WRITE .build FILE
       filename=filestem+'.build'
-      self.build_ifile=fopen(filename,'w')
+      self.build_ifile=fopen(filename,'wb') # binary file
       if self.build_ifile==NULL:
         errmsg='unable to open in write mode: '+filename
         raise IOError(errmsg)
@@ -692,11 +702,17 @@ class NLMSASequence(object):
     import os
     os.remove(filename) # REMOVE OUR .build FILE, NO LONGER NEEDED
     self.db=IntervalFileDB(self.filestem) # NOW OPEN THE IntervalFileDB
+    return self.nbuild # return count of intervals
 
-  def buildInMemory(self,verbose=False,**kwargs):
-    if self.buildList is not None:
+  def buildInMemory(self, **kwargs):
+    try:
+      n = len(self.buildList)
+    except TypeError:
+      return 0
+    else:
       self.idb.save_tuples(self.buildList,**kwargs)
-    self.buildList=None
+      self.buildList = None
+      return n
 
   def __getitem__(self,k):
     try:
@@ -743,11 +759,13 @@ class NLMSA(object):
                maxOpenFiles=1024,maxlen=None,nPad=1000000,maxint=41666666,
                trypath=None,bidirectional=True,pairwiseMode= -1,
                bidirectionalRule=nlmsa_utils.prune_self_mappings,
-               use_virtual_lpo=None,maxLPOcoord=None,**kwargs):
+               use_virtual_lpo=None,maxLPOcoord=None,
+               inverseDB=None, alignedIvals=None,**kwargs):
     self.lpoList=[] # EMPTY LIST OF LPO
     self.seqs=nlmsa_utils.NLMSASeqDict(self,pathstem,mode,**kwargs)
     self.seqlist=self.seqs.seqlist
     self.pathstem=pathstem
+    self.inverseDB = inverseDB
     if maxlen is None:
       import sys
       maxlen=sys.maxint-65536 # C_int_max MAXIMUM VALUE REPRESENTABLE BY int
@@ -797,6 +815,9 @@ class NLMSA(object):
           self.seqDict=seqdb.SeqPrefixUnionDict(addAll=True)
         self.initLPO() # CREATE AS MANY LPOs AS WE NEED
         self.newSequence(is_union=1) # SO HE NEEDS AN INITIAL UNION
+      if alignedIvals is not None:
+        self.add_aligned_intervals(alignedIvals)
+        self.build()
     elif mode=='memory': # CONSTRUCT IN-MEMORY
       if self.seqDict is None:
         import seqdb
@@ -806,8 +827,18 @@ class NLMSA(object):
       self.initLPO() # CREATE AS MANY LPOs AS WE NEED
       self.newSequence(is_union=1) # CREATE INITIAL UNION
       self.lpo_id=0
+      if alignedIvals is not None:
+        self.add_aligned_intervals(alignedIvals)
+        self.build()
     elif mode!='xmlrpc':
       raise ValueError('unknown mode %s' % mode)
+
+  def close(self):
+    'close our shelve index files'
+    cdef NLMSASequence ns
+    for ns in self.seqlist: # tell each seq to close its index files
+      ns.close()
+    self.seqs.close()
 
   def __reduce__(self): ############################# SUPPORT FOR PICKLING
     import seqdb
@@ -815,16 +846,17 @@ class NLMSA(object):
   def __getstate__(self):
     if self.in_memory_mode:
       raise ValueError("can't pickle NLMSA.in_memory_mode")
-    return dict(pathstem=self.pathstem,seqDict=self.seqDict)
+    return dict(pathstem=self.pathstem,seqDict=self.seqDict,
+                inverseDB=self.inverseDB)
   def __setstate__(self,state):
     self.__init__(**state) #JUST PASS KWARGS TO CONSTRUCTOR
 
   def read_indexes(self,seqDict):
     'open all nestedlist indexes in this LPO database for immediate use'
     try:
-      ifile=file(self.pathstem+'.NLMSAindex')
+      ifile=file(self.pathstem+'.NLMSAindex', 'rU') # text file
     except IOError:
-      ifile=file(self.pathstem+'NLMSAindex') # FOR BACKWARDS COMPATIBILITY
+      ifile=file(self.pathstem+'NLMSAindex', 'rU') # FOR BACKWARDS COMPATIBILITY
     try:
       for line in ifile:
         id,name,is_union,length=line.strip().split('\t')
@@ -851,7 +883,7 @@ class NLMSA(object):
     'read pickled attribute dictionary from file and apply to self'
     import pickle
     try:
-      ifile = file(self.pathstem+'.attrDict')
+      ifile = file(self.pathstem+'.attrDict', 'rb') # pickle is binary file!
     except IOError: # BACKWARDS COMPATIBILITY: OLD NLMSA HAS NOT ATTRDICT
       return
     try:
@@ -885,7 +917,8 @@ class NLMSA(object):
     if is_union: # RECORD THIS AS OUR CURRENT UNION OBJECT
       self.currentUnion=ns
     self.addToSeqlist(ns,seq) # SAVE TO OUR INDEX
-    #print 'Opened build file for ns_id',ns.id,ns.is_union
+    #logger.debug('Opened build file for ns_id %s, is_union %s' % (ns.id,
+    #                                                              ns.is_union))
     return ns
 
   def nextID(self):
@@ -901,13 +934,12 @@ class NLMSA(object):
       ns=self.newSequence() # CREATE AN LPO
       ns.offset=offset # FORCE OUR DESIRED OFFSET... EVEN THOUGH ALL LPOs EMPTY
       offset=offset+self.maxlen
-  def init_pairwise_mode(self,verbose=False):
+  def init_pairwise_mode(self):
     'turn on use of virtual LPO mapping (i.e. no actual LPO is present!)'
     if self.pairwiseMode==0:
       raise ValueError('this alignment is already using an LPO!')
-    elif self.pairwiseMode!=1 and verbose: # NOT ALREADY SET TO PAIRWISE MODE
-      import sys
-      sys.stderr.write('''
+    elif self.pairwiseMode!=1: # NOT ALREADY SET TO PAIRWISE MODE
+      logger.info('''
 Because you are aligning a pair of sequence intervals,
 the pairwiseMode=True option is automatically being applied.
 To avoid this message in the future, pass the pairwiseMode=True
@@ -948,6 +980,12 @@ See the NLMSA documentation for more details.\n''')
       for ns,myslice in l: # ONLY RETURN ONE SLICE OBJECT
           return NLMSASlice(ns,myslice.start,myslice.stop)
 
+  def __iter__(self):
+    raise NotImplementedError, 'you cannot iterate over NLMSAs'
+
+  def edges(self, *args, **kwargs):
+    return nlmsa_utils.generate_nlmsa_edges(self, *args, **kwargs)
+
   def __iadd__(self,seq):
     'add seq to our union'
     self.seqs.saveSeq(seq)
@@ -958,10 +996,22 @@ See the NLMSA documentation for more details.\n''')
     self.__iadd__(ival) # ADD SEQ AS A NODE IN OUR ALIGNMENT
     self[ival].__iadd__(a) # ADD ALIGNMENT BETWEEN ival AND ANNOTATION
 
+  def add_aligned_intervals(self, alignedIvals):
+    'add alignedIvals to this alignment'
+    nlmsa_utils.add_aligned_intervals(self, alignedIvals)
+
   def seqInterval(self, iseq, istart, istop):
     'get specified interval in the target sequence'
     seq=self.seqlist.getSeq(iseq) # JUST THE SEQ OBJECT
     return sequence.relativeSlice(seq,istart,istop)
+
+  def __invert__(self):
+    if self.inverseDB is not None: # use the specified inverseDB
+      return self.inverseDB
+    elif self.is_bidirectional: # provides mapping both directions
+      return self
+    else:
+      raise ValueError('this mapping is not invertible')
 
 
 
