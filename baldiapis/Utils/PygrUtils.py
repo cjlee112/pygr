@@ -54,9 +54,18 @@ class AnnotationDBMapping(object):
                         persistent storage pathstems.
             forwardAttr - label of attribute to bind to sourceDB
             reverseAttr - label of attribute to bind to targetDB for reverse mapping to sourceDB
+            inverseAttr - if not None, annotDB2 attribute that gives
+                          ID of the annotDB2 item that maps to it.
+
+            reverseAttr and inverseAttr both None: only the forward
+            mapping is stored and bound (as forwardAttr).
+
+            reverseAttr not None, inverseAttr None: the reverse mapping
+            will be stored separately, and also bound (as reverseAttr).
+
+            reverseAttr and inverseAttr both not None: the reverse mapping
+            will be obtained using inverseAttr, and bound (as reverseAttr).
         """
-        if inverseAttr and reverseAttr:
-            raise(Exception("Construction Error: Cannot use inverseAttr option with reverseAttr."))
         
         #Mapping objects
         self.Mf = mapping.Mapping(sourceDB=annotDB1,
@@ -69,7 +78,7 @@ class AnnotationDBMapping(object):
                             verbose=verbose)
 
         self.Mr = None
-        if reverseAttr != None:
+        if reverseAttr and inverseAttr is None: # must save reverse mapping
             self.Mr = mapping.Mapping(sourceDB=annotDB2,
                             targetDB=annotDB1,
                             filename=filename+"_reverse",
@@ -140,7 +149,10 @@ class AnnotationDBMapping(object):
         worldbase.add_resource(self.resourceString+"_forward", self.Mf)
         
         # FOR forward MAPPING
-        forward_bindAttrs = (self.forwardAttr, self.inverseAttr) # self.inverseAttr is either None or set to an appropriate inverse attribute
+        if self.Mr: # here only bind forward; reverse will be bound later
+            forward_bindAttrs = (self.forwardAttr, None)
+        else: # bind bi-directionally if possible
+            forward_bindAttrs = (self.forwardAttr, self.reverseAttr)
         relationF = metabase.OneToManyRelation(self.Mf.sourceDB, self.Mf.targetDB, bindAttrs=forward_bindAttrs)
         relationF.__doc__ = "Mapping schema (forward) between annotations %s and %s" % (self.Mf.sourceDB._persistent_id,
                                                                                 self.Mf.targetDB._persistent_id) 
