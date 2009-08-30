@@ -419,6 +419,12 @@ class SQLFormatDict(object):
 def get_table_schema(self, analyzeSchema=True):
     'run the right schema function based on type of db server connection'
     try:
+        schema_func = self.serverInfo.get_table_schema
+    except AttributeError:
+        pass
+    else: # default: use serverInfo.get_table_schema()
+        return schema_func(self, analyzeSchema)
+    try: # forced to guess server type from cursor object...
         modname = self.cursor.__class__.__module__
     except AttributeError:
         raise ValueError('no cursor object or module information!')
@@ -451,6 +457,7 @@ class SQLTableBase(object, UserDict.DictMixin):
         self.autoGC = autoGC
         self.orderBy = orderBy
         self.writeable = writeable
+        self.serverInfo = serverInfo
         if cursor is None:
             if serverInfo is not None: # get cursor from serverInfo
                 cursor = serverInfo.cursor()
@@ -493,8 +500,6 @@ class SQLTableBase(object, UserDict.DictMixin):
             self.data.update(attrAlias)
         if clusterKey is not None:
             self.clusterKey=clusterKey
-        if serverInfo is not None:
-            self.serverInfo = serverInfo
 
     def __hash__(self):
         return id(self)
@@ -1770,6 +1775,8 @@ class SQLiteServerInfo(DBServerInfo):
         if self.args[0] == ':memory:':
             raise ValueError('SQLite in-memory database is not picklable!')
         return DBServerInfo.__getstate__(self)
+    def get_table_schema(self, db, analyzeSchema):
+        return sqlite_table_schema(db, analyzeSchema)
         
             
 class MapView(object, UserDict.DictMixin):
