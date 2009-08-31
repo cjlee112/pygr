@@ -10,8 +10,7 @@ BuildDepends: sphinx-py%type_pkg[python]
 Source: http://pygr.googlecode.com/files/pygr-%v.tar.gz
 Source-MD5: 66c52f52834d4b02ff0d02b63b4ac09f
 CompileScript: <<
- cd doc
- make
+ ( cd doc && make )
 <<
 InstallScript: <<
  mkdir -p %i/share/doc/pygr/html
