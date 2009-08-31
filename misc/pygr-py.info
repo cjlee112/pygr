@@ -7,7 +7,7 @@ Distribution: (%type_pkg[python] = 23) 10.3, (%type_pkg[python] = 23) 10.4
 Maintainer: Christopher Lee <leec@chem.ucla.edu>
 Type: python (2.3 2.4 2.5 2.6)
 Depends: python%type_pkg[python] | python%type_pkg[python]-nox
-Suggests: mysql-python-py%type_pkg[python], (%type_pkg[python] >= 25) python%type_pkg[python] | pysqlite2-py%type_pkg[python], ncbitools
+Suggests: mysql-python-py%type_pkg[python], (%type_pkg[python] << 25) pysqlite2-py%type_pkg[python], ncbitools
 Source: http://pygr.googlecode.com/files/pygr-%v.tar.gz
 Source-MD5: 66c52f52834d4b02ff0d02b63b4ac09f
 CompileScript: <<
