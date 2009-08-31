@@ -14,7 +14,7 @@ CompileScript: <<
  %p/bin/python%type_raw[python] setup.py build
 <<
 InstallScript: <<
- %p/bin/python%type_raw[python] setup.py install --root %d
+ %p/bin/python%type_raw[python] setup.py install -O1 --root %d
 <<
 DocFiles: README.txt LICENSE.txt
 Description: A Python graph-database toolkit oriented primarily on bioinformatics.
