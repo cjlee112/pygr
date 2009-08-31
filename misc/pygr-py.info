@@ -1,7 +1,7 @@
 Info2: <<
 
 Package: pygr-py%type_pkg[python]
-Version: 0.8.0.beta2
+Version: 0.8.0.beta1
 Revision: 1
 Distribution: (%type_pkg[python] = 23) 10.3, (%type_pkg[python] = 23) 10.4
 Maintainer: Christopher Lee <leec@chem.ucla.edu>
