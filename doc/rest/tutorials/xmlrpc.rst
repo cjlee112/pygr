@@ -6,7 +6,7 @@
    contain the root `toctree` directive.
 
 
-Welcome to Pygr XMLRPC Tutorial's documentation!
+Welcome to the Pygr XMLRPC Tutorial
 ================================================
 
 Contents:
@@ -16,6 +16,11 @@ Contents:
 
 Introduction
 ------------
+
+The purpose of this tutorial is to familiarise the user with Pygr's resource-sharing service, commonly referred to - after the name of the protocol used by the service - as XMLRPC. You will learn how to establish a Pygr XMLRPC server and populate it with different types of data it can serve, as well as how to take advantage of such servers and their resources in your client code.
+
+Overview
+--------
 
 Often times, the size of the :func:`seqdb.SequenceFileDB` and :func:`cnestedlist.NLMSA` is too big to have in your servers. For example, we need about 400GB if we want to keep hg18 referenced MAF multiz44way alignments. In this case, pygr offers a very efficient way of sharing resources over XMLRPC without losing any significant loss of performance.
 Other than giving a direct access via XMLRPC, pygr XMLRPC can be a resource distribution system. One can access the pygrdownloadable resources via XMLRPC and download all regarding resources just by one python line. This tutorial will give a glimpse of all XMLRPC features.
