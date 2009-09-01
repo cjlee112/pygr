@@ -20,6 +20,7 @@ Tutorials
     tutorials/annotation
     tutorials/graphquery
     tutorials/annotating-yeast
+    tutorials/xmlrpc
 
 Recipes
 -------
