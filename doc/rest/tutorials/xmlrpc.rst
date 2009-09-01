@@ -22,14 +22,14 @@ The purpose of this tutorial is to familiarise the user with Pygr's resource-sha
 Overview
 --------
 
-Often times, the size of the :func:`seqdb.SequenceFileDB` and :func:`cnestedlist.NLMSA` is too big to have in your servers. For example, we need about 400GB if we want to keep hg18 referenced MAF multiz44way alignments. In this case, pygr offers a very efficient way of sharing resources over XMLRPC without losing any significant loss of performance.
+Often times, the size of the :class:`seqdb.SequenceFileDB` and :class:`cnestedlist.NLMSA` is too big to have in your servers. For example, we need about 400GB if we want to keep hg18 referenced MAF multiz44way alignments. In this case, pygr offers a very efficient way of sharing resources over XMLRPC without losing any significant loss of performance.
 Other than giving a direct access via XMLRPC, pygr XMLRPC can be a resource distribution system. One can access the pygrdownloadable resources via XMLRPC and download all regarding resources just by one python line. This tutorial will give a glimpse of all XMLRPC features.
 
-Let's assume user has pygr resource repository and registered a bunch of :func:`seqdb.SequenceFileDB` and :func:`cnestedlist.NLMSA`.
+Let's assume user has pygr resource repository and registered a bunch of :class:`seqdb.SequenceFileDB` and :class:`cnestedlist.NLMSA`.
 
 There are two paths used in this tutorial, :data:`/my/resource/path` as :data:`WORLDBASEPATH` for writing all XMLRPC resources and :data:`/my/downloadable/path` for saving downloadable resources. Downloadable resources should be written in other path because unpickling (by accessing resources via XMLRPC) will initiate instant downloading of resources.
 
-Sharing :func:`seqdb.SequenceFileDB` & :func:`cnestedlist.NLMSA` via XMLRPC
+Sharing :class:`seqdb.SequenceFileDB` & :class:`cnestedlist.NLMSA` via XMLRPC
 ---------------------------------------------------------------------------
 
 Assume that you have your :data:`Bio` resources in :data:`/my/resource/path`. You can open your :data:`metabase` first and then open all the resources. By :data:`withIndex=True` option, pygr will collect all open resources and start your XMLRPC server. You need to choose log file name (:data:`biodb2_5000` in following example) and port number (:data:`5000` default). :data:`server.serve_forever()` will start your XMLRPC server::
@@ -50,7 +50,7 @@ Assume that you have your :data:`Bio` resources in :data:`/my/resource/path`. Yo
     # start a XMLRPC server, running as a daemon, non-interactive Python process
     server.serve_forever()
 
-:func:`annotation.AnnotationDB` can be served via XMLRPC, but not for downloadable resource because it is hardly bound to :func:`Collection`, :func:`SQLTable` or :func:`SQLTableClustered`.
+:class:`annotation.AnnotationDB` can be served via XMLRPC, but not for downloadable resource because it is hardly bound to :class:`Collection`, :class:`SQLTable` or :class:`SQLTableClustered`.
 
 Above example demonstrates standalone Pygr XMLRPC server, but you can interact with XMLRPC without running as a daemon::
 
@@ -59,7 +59,7 @@ Above example demonstrates standalone Pygr XMLRPC server, but you can interact w
 By default, :data:`demonize=True`. If :data:`demonize=False`, note that XMLRPC server will stop working if you exit from interactive python prompt. You can have more information in `XMLRPC Resource Server <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/metabase.html#xmlrpc-resource-server>`_.
 
 
-Downloading :func:`seqdb.SequenceFileDB` & :func:`cnestedlist.NLMSA` via XMLRPC
+Downloading :class:`seqdb.SequenceFileDB` & :class:`cnestedlist.NLMSA` via XMLRPC
 -------------------------------------------------------------------------------
 
 First thing is to get a list of resource URLs (FTP or HTTP). For example you can download :data:`bosTau4` genome via FTP, `ftp://hgdownload.cse.ucsc.edu/goldenPath/bosTau4/bigZips/bosTau4.fa.gz <ftp://hgdownload.cse.ucsc.edu/goldenPath/bosTau4/bigZips/bosTau4.fa.gz>`_. We provide with more than three hundreds pre-calculated NLMSA text filess for most of the pairwise and multigenome alignments available in `UCSC genome browser <http://genome.ucsc.edu>`_, `http://biodb.bioinformatics.ucla.edu/PYGRDATA <http://biodb.bioinformatics.ucla.edu/PYGRDATA>`_. Of course, you can make your NLMSA and share on the web for your downloadable resources. Let's pick one of them, :data:`bosTau4_multiz4way`, in `http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz <http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz>`_.
@@ -96,7 +96,7 @@ There are two very important things. First, your resource ID (:data:`Bio.Seq.Gen
     mdb.commit()
 
 
-For downloadable NLMSA, you have to use :func:`NLMSABuilder` instead of :func:`GenericBuilder`::
+For downloadable NLMSA, you have to use :class:`NLMSABuilder` instead of :class:`GenericBuilder`::
 
     from pygr import seqdb, metabase
     from pygr.downloader import SourceURL
@@ -128,7 +128,7 @@ Note that :data:`__doc__` attribute is mandatory for all resources to be added t
 Starting XMLRPC Server
 ----------------------
 
-If you have downloadable resources in your XMLRPC server, you need to add :func:`downloadDB`. Pygr will register automatically all the downloadable resources::
+If you have downloadable resources in your XMLRPC server, you need to add *downloadDB*. Pygr will register automatically all the downloadable resources::
 
     server = metabase.ResourceServer(mdb, 'biodb2_5000', withIndex=True, \
         port=5000, host='biodb2.bioinformatics.ucla.edu', \
@@ -141,7 +141,7 @@ Note that you have to point out ``.pygr_data`` in :data:`/my/downloadable/path`
 How to use
 ----------
 
-By default, pygr will open :data:`WORLDBASEPATH` as ``.,http://biodb2.bioinformatics.ucla.edu:5000``. In order to save your pygr objects including downloadable resources, you have to have at least one `writable` directory in :data:`WORLDBASEPATH`. If you have more than one writable location in your :data:`WORLDBASEPATH`, it will search all the locations before dumping downloadable resources, and then generate :func:`seqdb.SequenceFileDB` and :func:`cnestedlist.NLMSA`. And, the resources will be written in your ``first`` writable location.
+By default, pygr will open :data:`WORLDBASEPATH` as ``.,http://biodb2.bioinformatics.ucla.edu:5000``. In order to save your pygr objects including downloadable resources, you have to have at least one `writable` directory in :data:`WORLDBASEPATH`. If you have more than one writable location in your :data:`WORLDBASEPATH`, it will search all the locations before dumping downloadable resources, and then generate :class:`seqdb.SequenceFileDB` and :class:`cnestedlist.NLMSA`. And, the resources will be written in your ``first`` writable location.
 
 There are over three hundreds XMLRPC resources (genomes, pairwise and multigenome alignments) available at :data:`http://biodb2.bioinformatics.ucla.edu:5000`. See following example::
 
