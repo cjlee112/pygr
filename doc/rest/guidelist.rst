@@ -15,6 +15,7 @@ Tutorials
 
     tutorials/sequence
     tutorials/alignment
+    tutorials/db
     tutorials/worldbase
     tutorials/annotation
     tutorials/graphquery
