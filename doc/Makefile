@@ -25,6 +25,7 @@ newdocs:
 
 epydocs:
 	rm -rf $(EPYDOC_DIR)
+	-mkdir -p $(EPYDOC_DIR)
 	epydoc --docformat restructuredtext ../pygr -o $(EPYDOC_DIR)
 
 clean:	
