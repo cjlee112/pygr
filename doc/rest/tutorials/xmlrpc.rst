@@ -30,7 +30,7 @@ Let's assume user has pygr resource repository and registered a bunch of :class:
 There are two paths used in this tutorial, :data:`/my/resource/path` as :data:`WORLDBASEPATH` for writing all XMLRPC resources and :data:`/my/downloadable/path` for saving downloadable resources. Downloadable resources should be written in other path because unpickling (by accessing resources via XMLRPC) will initiate instant downloading of resources.
 
 Sharing :class:`seqdb.SequenceFileDB` & :class:`cnestedlist.NLMSA` via XMLRPC
----------------------------------------------------------------------------
+-----------------------------------------------------------------------------
 
 Assume that you have your :data:`Bio` resources in :data:`/my/resource/path`. You can open your :data:`metabase` first and then open all the resources. By :data:`withIndex=True` option, pygr will collect all open resources and start your XMLRPC server. You need to choose log file name (:data:`biodb2_5000` in following example) and port number (:data:`5000` default). :data:`server.serve_forever()` will start your XMLRPC server::
 
@@ -60,7 +60,7 @@ By default, :data:`demonize=True`. If :data:`demonize=False`, note that XMLRPC s
 
 
 Downloading :class:`seqdb.SequenceFileDB` & :class:`cnestedlist.NLMSA` via XMLRPC
--------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 First thing is to get a list of resource URLs (FTP or HTTP). For example you can download :data:`bosTau4` genome via FTP, `ftp://hgdownload.cse.ucsc.edu/goldenPath/bosTau4/bigZips/bosTau4.fa.gz <ftp://hgdownload.cse.ucsc.edu/goldenPath/bosTau4/bigZips/bosTau4.fa.gz>`_. We provide with more than three hundreds pre-calculated NLMSA text filess for most of the pairwise and multigenome alignments available in `UCSC genome browser <http://genome.ucsc.edu>`_, `http://biodb.bioinformatics.ucla.edu/PYGRDATA <http://biodb.bioinformatics.ucla.edu/PYGRDATA>`_. Of course, you can make your NLMSA and share on the web for your downloadable resources. Let's pick one of them, :data:`bosTau4_multiz4way`, in `http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz <http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz>`_.
 
