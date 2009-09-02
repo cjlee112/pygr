@@ -10,7 +10,7 @@ Purpose
 This tutorial will teach you how to work with sequence data in Pygr,
 using different classes that either store the data in memory, on
 disk, or accessed from a remote XMLRPC or SQL server.  No previous
-knowledge of Pygr required.
+knowledge of Pygr is required.
 
 Pygr Sequence Objects
 ^^^^^^^^^^^^^^^^^^^^^
@@ -209,6 +209,13 @@ In this case the reverse mapping is pretty trivial -- it returns the
 same value as ``t.id``.  But later we will see cases where reverse mappings
 are extremely useful.
 
+When you're done using a :class:`seqdb.SequenceFileDB`, 
+you should ``close()`` it, just like any other open file resource::
+
+   >>> sp.close()
+
+Closing every file when you are done with it is a good practice,
+because some operating systems can behave very strangely if you don't...
 
 Working with Sequences from Worldbase
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -303,7 +310,7 @@ section:
   want them anymore.  (for details see :class:`seqdb.SequenceDB`).
 
 Accessing a Sequence Database over SQL
---------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Let's say you wanted to access the transcript sequences from UCSC's
 "known genes" annotation, from UCSC's MySQL server.  Pygr provides
@@ -318,6 +325,11 @@ standard sequence types that work over SQL.  That is, they
 * by default, they assume that two standard column names will be present
   in the database table: ``seq``, containing the actual sequence string;
   ``length``, containing the sequence length as an integer.
+
+* :mod:`sqlgraph` defines three sequence classes: ``DNASQLSequence``,
+  ``RNASQLSequence``, and ``ProteinSQLSequence``.  The only difference
+  between them is their ``_seqtype`` attribute, which informs Pygr what
+  kind of sequences it contains.
 
 In the case of the UCSC ``knownGenesMrna`` table, it does in fact 
 store the sequence as its ``seq`` column, but it lacks a ``length``
@@ -382,6 +394,14 @@ of them, let's just start playing with one sequence, in the usual ways::
 
 As you can see, we can use these sequence objects exactly the same way
 we used any other Pygr sequence objects.
+
+Once again, it's a good idea to ``close()`` any open resource
+when you're done with it.  In this case, you should close the 
+:class:`sqlgraph.DBServerInfo` object when you are done using its
+database connection::
+
+   >>> serverInfo.close()
+
 
 Comparative Genomics Query of Multigenome Alignments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
