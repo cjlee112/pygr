@@ -127,28 +127,38 @@ info::
             else:
                setattr(self, attr, val)
 
-   class GFF3File(object):
-      def __init__(self, filename, genome):
-         d = {}
-         self.filename = filename
-         self.genome = genome
-         ifile = file(filename)
-         for line in ifile: # parse all the GFF3 lines
-            if line.startswith('#'): # ignore this line
-               continue
-            row = GFF3Row(line)
-            try:
-               d.setdefault(row.type, {})[row.ID] = row
-            except AttributeError:
-               pass
-         ifile.close()
-         for atype,sliceDB in d.items(): # create annotation DBs
-            adb = annotation.AnnotationDB(sliceDB, genome)
-            setattr(self, atype, adb)
-
 
 The key fields this must provide to be used as slice info
 are id, start, stop, and orientation.
+
+
+Next, let's write a reader that will read all the annotations in 
+a GFF3 file::
+
+   def read_gff3(filename, genome):
+      d = {} # for different types of sliceDBs
+      ifile = file(filename)
+      for line in ifile: # parse all the GFF3 lines
+         if line.startswith('#'): # ignore this line
+            continue
+         row = GFF3Row(line)
+         try:
+            d.setdefault(row.type, {})[row.ID] = row
+         except AttributeError:
+            pass # no type or ID so ignore...
+      ifile.close()
+      annotations = {}
+      for atype,sliceDB in d.items(): # create annotation DBs
+         adb = annotation.AnnotationDB(sliceDB, genome)
+         annotations[atype] = adb
+      return annotations
+
+Now we can read a file and turn it into annotation databases as easily
+as::
+
+   annots = read_gff3('eden.gff3', genome)
+   print 'annotation types:', len(annots)
+   print 'mRNAs:', len(annots['mRNA'])
 
 TO DO
 -----
