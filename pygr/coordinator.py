@@ -284,9 +284,13 @@ class XMLRPCServerBase(object):
         except (KeyError,AttributeError):
             return '' # RETURN FAILURE CODE
         return m(*args) # RUN THE OBJECT METHOD
-    def serve_forever(self, demonize = True):
+    def serve_forever(self, demonize=None, daemonize=False, detach=False):
         'launch the XMLRPC service.  Never exits if demonize == True.'
-        if demonize == True:
+        if demonize is not None:
+            logging.warning("demonize is a deprecated argument to serve_forever; use 'daemonize' instead!")
+            daemonize = demonize
+
+        if daemonize:
             print "Running as a daemon"
             detach_as_demon_process(self)
             serve_forever(self)
