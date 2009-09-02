@@ -253,13 +253,10 @@ sequences in the database:
    >>> for (src, dest, edge) in edges:
    ...   print repr(src), 'matches', repr(dest)
    gapped[0:40] matches ungapped[0:40]
+   gapped[0:74] matches gapped[0:74]
    gapped[44:74] matches ungapped[40:70]
 
 Yep, it's that easy!
-
-Note that 'blastmap' will, by default, ignore self-matches:
-there are no 'gapped' to 'gapped' matches above, even though
-'gapped' is present in the database being searched.
 
 You can also search the entire database against itself using the
 ``__call__`` interface to ``BlastMapping``; this returns a full
@@ -271,9 +268,11 @@ alignment in an ``NLMSA``, from which you can retrieve individual
    ...    for (src, dest, edge) in al[seq].edges():
    ...       print repr(src), 'matches', repr(dest)
    gapped[0:40] matches ungapped[0:40]
+   gapped[0:74] matches gapped[0:74]
    gapped[44:74] matches ungapped[40:70]
    ungapped[0:40] matches gapped[0:40]
    ungapped[40:70] matches gapped[44:74]
+   ungapped[0:70] matches ungapped[0:70]
 
 Using the "translated BLASTs" (blastx and tblastx)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -426,6 +425,7 @@ As before, we have to use the saved seqDict because we're not using
    >>> for (src, dest, edge) in edges:
    ...   print repr(src), 'matches', repr(dest)
    gapped[0:40] matches ungapped[0:40]
+   gapped[0:74] matches gapped[0:74]
    gapped[44:74] matches ungapped[40:70]
 
 And voila, done!
@@ -441,3 +441,4 @@ And voila, done!
 .. @CTB section pointing them towards MAF, gene set, etc. recipes?
 .. @CTB link doctests into tests again!
 .. @CTB non-pairwise, etc. (more complicated) NLMSAs?  building NLMSAs?
+   @CTB talk about building NLMSAs with complicated data sets
