@@ -69,7 +69,7 @@ The download mode of Pygr XMLRPC works by publishing appropriately-crafted links
 
 In the examples below we shall show how to publish both sequence (the aforementioned :data:`bosTau4` genome) and alignment (:data:`bosTau4_multiz4way`, from `http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz <http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz>`_) data. Note that in order to make NLMSA available for downloading one needs to convert binary objects used by Pygr into text files using the function by :func:`cnestedlist.dump_textfile`; it is also recommended compress the resulting text file using e.g. :data:`gzip`. Having downloaded the text file Pygr will automatically convert it to the binary format. More information on the subject of NLMSA format conversion can be found in the NLMSA reference guide: `dump_textfile, textfile_to_binaries (FIXME: ReST link!) <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/cnestedlist.html#dump-textfile-textfile-to-binaries>`_.
 
-There are two very important things to keep in mind while preparing downloadable resources. To begin with, respective resource IDs (:data:`Bio.Seq.Genome.COW.bosTau4` and :data:`Bio.MSA.UCSC.bosTau4_multiz4way` in this example) of your downloadable resources should be exactly the same as of their shared counterparts. Secondly, a separate, dedicated resource repository should be prepared for downloadable resources (in this example it is in :data:`/my/downlodable/path`).
+There are two very important things to keep in mind while preparing downloadable resources. To begin with, respective resource IDs (:data:`Bio.Seq.Genome.COW.bosTau4` and :data:`Bio.MSA.UCSC.bosTau4_multiz4way` in this example) of your downloadable resources should be exactly the same as of their shared counterparts. Secondly, a separate, dedicated resource repository should be prepared for downloadable resources (in this example it is in :data:`/my/downloadable/path`).
 
 The following bit of code populates the metabase with a downloadable sequence-data resource::
 
@@ -168,8 +168,10 @@ If you want to `download` :data:`bosTau4` genome and :data:`bosTau4_multiz4way` 
     bosTau4_multiz4way = mdb('Bio.MSA.UCSC.bosTau4_multiz4way', downlad=True)
 
 By default all files are downloaded to your current working directory, it is also where binary NLMSA files are built. Should you want to store any of these elsewhere you can use two environment variables: 
+
 * ``WORLDBASEDOWNLOAD`` to point at the destination for downloading;
 * ``WORLDBASEBUILDDIR`` for where binary NLMSA will be saved.
+
 Check `downloader - Remote data retrieval (FIXME: ReST link!) <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/downloader.html>`_ for more details.
 
 
