@@ -294,7 +294,9 @@ class XMLRPCServerBase(object):
             print "Running as a daemon"
             detach_as_demon_process(self)
             serve_forever(self)
-        else:
+        elif not daemonize and not detach:
+            serve_forever(self)
+        else: # daemonize and detach
             print "Running in the background of active session"
             # Check if we're running interactively, as otherwise the server will
             # die right after starting. Two checks are needed for this: one for
