@@ -34,7 +34,15 @@ try: # detect whether bsddb module available and working...
     except AttributeError:
         raise ImportError
 except ImportError:
-    bsddb = None
+    try:    # maybe the external bsddb3 will work instead...
+        import bsddb3
+        try:
+            bsddb3.db
+        except AttributeError:
+            raise ImportError
+        bsddb = bsddb3
+    except ImportError: # ...nope
+        bsddb = None
 
 def open_bsddb(filename, flag='r', useHash=False, mode=0666):
     """open bsddb index instead of hash by default.
