@@ -22,17 +22,20 @@ The purpose of this tutorial is to familiarise the user with Pygr's resource-sha
 Overview
 --------
 
-Often times, the size of the :class:`seqdb.SequenceFileDB` and :class:`cnestedlist.NLMSA` is too big to have in your servers. For example, we need about 400GB if we want to keep hg18 referenced MAF multiz44way alignments. In this case, pygr offers a very efficient way of sharing resources over XMLRPC without losing any significant loss of performance.
-Other than giving a direct access via XMLRPC, pygr XMLRPC can be a resource distribution system. One can access the pygrdownloadable resources via XMLRPC and download all regarding resources just by one python line. This tutorial will give a glimpse of all XMLRPC features.
+Oftentimes it is not practical for one to keep all one's data on the workstation. One reason for avoiding this could be potentially large total size of pickled :class:`seqdb.SequenceFileDB` and :class:`cnestedlist.NLMSA` objects (for example, about 400 GB of drive space is needed to store hg18 referenced MAF multiz44way alignments); another could be trying to maintain central storage of data rather than than keeping separate copies on multiple machines. Whatever the reason may be, Pygr offers an elegant and efficient alternative: resources can be shared over the network with no significant loss of performance, using XMLRPC.
+Moreover, in addition to providing remote access to data Pygr XMLRPC servers can also be used as a resource-distribution system. In this mode, one can access downloadable resources and fetch them to the local system with a single line of Python code.
 
-Let's assume user has pygr resource repository and registered a bunch of :class:`seqdb.SequenceFileDB` and :class:`cnestedlist.NLMSA`.
+At present, Pygr XMLRPC offers full support for providing its sequence (e.g. :class:`seqdb.SequenceFileDB`) and alignment (:class:`cnestedlist.NLMSA`) objects. Annotation (:class:`annotation.AnnotationDB`) objects can also be shared, they cannot however be made available for downloading due to the way they are hard-wired to internal classes such as :class:`Collection`, :class:`SQLTable` or :class:`SQLTableClustered` (FIXME: do we need to go into such detail?).
 
-There are two paths used in this tutorial, :data:`/my/resource/path` as :data:`WORLDBASEPATH` for writing all XMLRPC resources and :data:`/my/downloadable/path` for saving downloadable resources. Downloadable resources should be written in other path because unpickling (by accessing resources via XMLRPC) will initiate instant downloading of resources.
+Last but not least, Pygr XMLRPC servers offer their resources in *read-only* mode. Support for write mode is planned in a future release of Pygr.
 
-Sharing :class:`seqdb.SequenceFileDB` & :class:`cnestedlist.NLMSA` via XMLRPC
+This tutorial will give you a glimpse of all the features offers by the Pygr XMLRPC service, along with providing working examples.
+
+
+Sharing Resources via XMLRPC
 -----------------------------------------------------------------------------
 
-Assume that you have your :data:`Bio` resources in :data:`/my/resource/path`. You can open your :data:`metabase` first and then open all the resources. By :data:`withIndex=True` option, pygr will collect all open resources and start your XMLRPC server. You need to choose log file name (:data:`biodb2_5000` in following example) and port number (:data:`5000` default). :data:`server.serve_forever()` will start your XMLRPC server::
+Let us assume the user has already created a bunch of :class:`seqdb.SequenceFileDB` and/or :class:`cnestedlist.NLMSA` objects and committed them to a local metabase (FIXME: link?), located in :data:`/my/resource/path` and added to :data:`WORLDBASEPATH`; for the sake of simplicity let us also assume the names of all the resources we will want to share begin with :data:`Bio`. The recommended (as well as the easiest) way of publishing such resources via XMLRPC is to open the relevant metabase, load all the relevant resources into memory, then start the resource server with the :data:`withIndex=True` option. A few other options must be passed to the server's constructor: the base of the log file name (:data:`biodb2_5000` in following example, resulting in a file named :data:`biodb2_5000.log`) and the TCP port number (:data:`port=5000`, the default, here) for it to listen on. The :data:`host` keyword is optional but useful on multi-homed machines. Finally, executing :meth:`server.serve_forever()` will start your XMLRPC server::
 
     from pygr import metabase
 
@@ -43,30 +46,32 @@ Assume that you have your :data:`Bio` resources in :data:`/my/resource/path`. Yo
     for ix in mdb.dir('Bio'): mdb(ix)
 
     # create a XMLRPC server.
-    # metabase path for this server is http://biodb2.bioinformatics.ucla.edu:5000
+    # metabase path for this server is http://biodb2.bioinformatics.ucla.edu:5000/
     # log file 'biodb2_5000.log' will be created in current directory
     server = metabase.ResourceServer(mdb, 'biodb2_5000', withIndex=True, port=5000, \
         host='biodb2.bioinformatics.ucla.edu')
     # start a XMLRPC server, running as a daemon, non-interactive Python process
     server.serve_forever()
 
-:class:`annotation.AnnotationDB` can be served via XMLRPC, but not for downloadable resource because it is hardly bound to :class:`Collection`, :class:`SQLTable` or :class:`SQLTableClustered`.
-
-Above example demonstrates standalone Pygr XMLRPC server, but you can interact with XMLRPC without running as a daemon::
+The example above launches an XMLRPC server as a daemon: it detaches itself from the Python interpreter shortly after start-up and will continue running after that interpreter has been terminated. Should you for some reason prefer to interact with a running server, you can launch it in the foreground::
 
     server.serve_forever(demonize=False)
 
-By default, :data:`demonize=True`. If :data:`demonize=False`, note that XMLRPC server will stop working if you exit from interactive python prompt. You can have more information in `XMLRPC Resource Server <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/metabase.html#xmlrpc-resource-server>`_.
+Of course running in this mode means the server will die with the Python interpreter that's spawned it (in particular, if you launched it from a non-interactive Python session it will terminate *right after start-up*). To keep it running long-term, use an external terminal manager such as :data:`screen`.
+
+You can have more information in `XMLRPC Resource Server (FIXME: ReST link!) <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/metabase.html#xmlrpc-resource-server>`_.
 
 
-Downloading :class:`seqdb.SequenceFileDB` & :class:`cnestedlist.NLMSA` via XMLRPC
----------------------------------------------------------------------------------
+Publishing :class:`seqdb.SequenceFileDB` & :class:`cnestedlist.NLMSA` Data for Downloading
+------------------------------------------------------------------------------------------
 
-First thing is to get a list of resource URLs (FTP or HTTP). For example you can download :data:`bosTau4` genome via FTP, `ftp://hgdownload.cse.ucsc.edu/goldenPath/bosTau4/bigZips/bosTau4.fa.gz <ftp://hgdownload.cse.ucsc.edu/goldenPath/bosTau4/bigZips/bosTau4.fa.gz>`_. We provide with more than three hundreds pre-calculated NLMSA text filess for most of the pairwise and multigenome alignments available in `UCSC genome browser <http://genome.ucsc.edu>`_, `http://biodb.bioinformatics.ucla.edu/PYGRDATA <http://biodb.bioinformatics.ucla.edu/PYGRDATA>`_. Of course, you can make your NLMSA and share on the web for your downloadable resources. Let's pick one of them, :data:`bosTau4_multiz4way`, in `http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz <http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz>`_.
+The download mode of Pygr XMLRPC works by publishing appropriately-crafted links to resources downladable using FTP or HTTP. The first thing you will need here will therefore be, of course, a list of FTP or HTP links to the relevant data files: for example, the :data:`bosTau4` genome can be downloaded via FTP `from UCSC <ftp://hgdownload.cse.ucsc.edu/goldenPath/bosTau4/bigZips/bosTau4.fa.gz>`_. The Pygr team provides more than three hundred pre-calculated NLMSA text files for most of the pairwise and multigenome alignments available from the `UCSC genome browser <http://genome.ucsc.edu>`_ on a dedicated server: `http://biodb.bioinformatics.ucla.edu/PYGRDATA <http://biodb.bioinformatics.ucla.edu/PYGRDATA>`_; that said, one can of course publish one's own sequence and/or alignment resources as necessary.
 
-If you want to create your own downloadable NLMSA, you have to convert NLMSA into text files by :func:`cnestedlist.dump_textfile` function, and then compress by :data:`gzip`. You can have more information on NLMSA binary <-> text conversion here, `dump_textfile, textfile_to_binaries <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/cnestedlist.html#dump-textfile-textfile-to-binaries>`_.
+In the examples below we shall show how to publish both sequence (the aforementioned :data:`bosTau4` genome) and alignment (:data:`bosTau4_multiz4way`, from `http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz <http://biodb.bioinformatics.ucla.edu/PYGRDATA/canFam2_multiz4way.txt.gz>`_) data. Note that in order to make NLMSA available for downloading one needs to convert binary objects used by Pygr into text files using the function by :func:`cnestedlist.dump_textfile`; it is also recommended compress the resulting text file using e.g. :data:`gzip`. Having downloaded the text file Pygr will automatically convert it to the binary format. More information on the subject of NLMSA format conversion can be found in the NLMSA reference guide: `dump_textfile, textfile_to_binaries (FIXME: ReST link!) <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/cnestedlist.html#dump-textfile-textfile-to-binaries>`_.
 
-There are two very important things. First, your resource ID (:data:`Bio.Seq.Genome.COW.bosTau4` in this example) should be same as your downloadable resources. Second, you have to prepare another resource repository for downloadable resources. In this example, :data:`/my/downlodable/path`::
+There are two very important things to keep in mind while preparing downloadable resources. To begin with, respective resource IDs (:data:`Bio.Seq.Genome.COW.bosTau4` and :data:`Bio.MSA.UCSC.bosTau4_multiz4way` in this example) of your downloadable resources should be exactly the same as of their shared counterparts. Secondly, a separate, dedicated resource repository should be prepared for downloadable resources (in this example it is in :data:`/my/downlodable/path`).
+
+The following bit of code populates the metabase with a downloadable sequence-data resource::
 
     from pygr import seqdb, metabase
     from pygr.downloader import SourceURL, GenericBuilder
@@ -124,26 +129,22 @@ For downloadable NLMSA, you have to use :class:`NLMSABuilder` instead of :class:
 
 Note that :data:`__doc__` attribute is mandatory for all resources to be added to :data:`metabase/worldbase`.
 
-
-Starting XMLRPC Server
-----------------------
-
-If you have downloadable resources in your XMLRPC server, you need to add *downloadDB*. Pygr will register automatically all the downloadable resources::
+Once the metabase in question has been populated with downloadable resources, the resource server's constructor should be instructed of its location with the *downloadDB* keyword. Pygr will then automatically register all the available resources::
 
     server = metabase.ResourceServer(mdb, 'biodb2_5000', withIndex=True, \
         port=5000, host='biodb2.bioinformatics.ucla.edu', \
         downloadDB='/my/downloadable/path/.pygr_data')
     server.serve_forever()
 
-Note that you have to point out ``.pygr_data`` in :data:`/my/downloadable/path`
+Note that you have to specifically point out ``.pygr_data`` in :data:`/my/downloadable/path`
 
 
-How to use
+Client Use
 ----------
 
-By default, pygr will open :data:`WORLDBASEPATH` as ``.,http://biodb2.bioinformatics.ucla.edu:5000``. In order to save your pygr objects including downloadable resources, you have to have at least one `writable` directory in :data:`WORLDBASEPATH`. If you have more than one writable location in your :data:`WORLDBASEPATH`, it will search all the locations before dumping downloadable resources, and then generate :class:`seqdb.SequenceFileDB` and :class:`cnestedlist.NLMSA`. And, the resources will be written in your ``first`` writable location.
+By default, Pygr will open :data:`WORLDBASEPATH` as ``.,http://biodb2.bioinformatics.ucla.edu:5000/`` (biodb2 is a public XMLRPC server operated by the Pygr team, containing over three hundred genome as well as pairwise and multigenome alignment resources). In order to save your pygr objects including downloadable resources, you have to have at least one `writable` directory in :data:`WORLDBASEPATH`. If more than writable location is present :data:`WORLDBASEPATH` the first one listed will be used for registering obtained data. Moreover, Pygr will search all the locations before dumping downloadable resources, and then generate :class:`seqdb.SequenceFileDB` and :class:`cnestedlist.NLMSA` (FIXME: what does this mean?)
 
-There are over three hundreds XMLRPC resources (genomes, pairwise and multigenome alignments) available at :data:`http://biodb2.bioinformatics.ucla.edu:5000`. See following example::
+The following commands can be used to list all available via XMLRPC::
 
     import os
     # WORLDBASEPATH: '.,http://biodb2.bioinformatics.ucla.edu:5000'
@@ -156,7 +157,6 @@ There are over three hundreds XMLRPC resources (genomes, pairwise and multigenom
     print mdb.dir() # Print all XMLRPC resources
     print mdb.dir(download=True) # Print all downloadable resources
 
-
 If you want to `use` :data:`bosTau4` genome and :data:`bosTau4_multiz4way` NLMSA::
 
     bosTau4 = mdb('Bio.Seq.Genome.COW.bosTau4')
@@ -167,10 +167,10 @@ If you want to `download` :data:`bosTau4` genome and :data:`bosTau4_multiz4way` 
     bosTau4 = mdb('Bio.Seq.Genome.COW.bosTau4', download=True)
     bosTau4_multiz4way = mdb('Bio.MSA.UCSC.bosTau4_multiz4way', downlad=True)
 
-It will download :data:`bosTau4` and :data:`bosTau4_multiz4way` in your ``.`` directory.
-
-If you want to save or build the downloadable resources to another directory, you have to set two environmental variables, ``WORLDBASEDOWNLOAD`` for downloading directory and ``WORLDBASEBUILDDIR`` for NLMSA building. Check `downloader - Remote data retrieval <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/downloader.html>`_ for more details.
-
+By default all files are downloaded to your current working directory, it is also where binary NLMSA files are built. Should you want to store any of these elsewhere you can use two environment variables: 
+* ``WORLDBASEDOWNLOAD`` to point at the destination for downloading;
+* ``WORLDBASEBUILDDIR`` for where binary NLMSA will be saved.
+Check `downloader - Remote data retrieval (FIXME: ReST link!) <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/downloader.html>`_ for more details.
 
 
 Examples
