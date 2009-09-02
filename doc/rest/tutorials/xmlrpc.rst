@@ -89,7 +89,7 @@ There are two very important things. First, your resource ID (:data:`Bio.Seq.Gen
     # .fasta for SourceURL
     src.__doc__ = 'bosTau4 FASTA File'
     mdb.add_resource('Bio.Seq.Genome.COW.' + genoname + '.fasta', src)
-    rsrc = GenericBuilder('BlastDB', src)
+    rsrc = GenericBuilder('SequenceFileDB', src)
     # downloadable resource should have same resource ID as XMLRPC resource
     rsrc.__doc__ = 'bosTau4 downloadable genome'
     mdb.add_resource('Bio.Seq.Genome.COW.' + genoname, rsrc)
