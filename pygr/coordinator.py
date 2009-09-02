@@ -246,10 +246,8 @@ class XMLRPCServerBase(object):
     xmlrpc_methods={'methodCall':0,'objectList':0,'objectInfo':0}
     max_tb=10
     _dispatch=safe_dispatch # RESTRICT XMLRPC TO JUST THE METHODS LISTED ABOVE
-    def __init__(self, name, host=None, port=5000, logRequests=False,
+    def __init__(self, name, host='', port=5000, logRequests=False,
                  server=None):
-        if host is None: # GET FULLY QUALIFIED HOSTNAME SO OTHERS CAN CONTACT US
-            host=get_hostname()
         self.host=host
         self.name=name
         if server is not None:
