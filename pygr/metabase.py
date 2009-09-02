@@ -1101,7 +1101,7 @@ docs in the Python Library Reference).'''
 class ResourceServer(XMLRPCServerBase):
     'serves resources that can be transmitted on XMLRPC'
     def __init__(self, mdb, name, serverClasses=None, clientHost=None,
-                 withIndex=False, excludeClasses=None, downloadDB=None,
+                 withIndex=True, excludeClasses=None, downloadDB=None,
                  resourceDict=None, **kwargs):
         'construct server for the designated classes'
         XMLRPCServerBase.__init__(self, name, **kwargs)
