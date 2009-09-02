@@ -402,4 +402,75 @@ database connection::
 
    >>> serverInfo.close()
 
+Plugging in Your Own Sequence Parser
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+What if you want to open a sequence database stored in a non-FASTA
+format?  This is very simple in Pygr.  All you have to do is pass a
+``reader()`` function to :class:`seqdb.SequenceFileDB`, and it will
+use your reader instead of its own FASTA parser.
+
+* Your ``reader()``
+  must act like a Python generator function (i.e. it can be used as
+  an iterator), yielding one object per sequence in the file.
+
+* each object should have three attributes: ``id``, giving the 
+  sequence's ID; ``length``, giving the sequence's length, and
+  ``sequence``, giving the actual string sequence.
+
+* the first time you open the :class:`seqdb.SequenceFileDB`, it
+  will use your ``reader()`` to build an on-disk index of all
+  the sequences, reading the sequences one at a time to do so.
+
+* once this is complete, it will be used exactly the same as a
+  FASTA-based :class:`seqdb.SequenceFileDB`.  That is, the
+  sequences will *not* be kept in memory, but accessed from the
+  on-disk index, using its fast ``fseek()`` method.
+
+* once the index files have been created, you can later open the
+  sequence database without even passing a ``reader()`` method.
+  The ``reader()`` method is only needed for the initial indexing
+  operation.
+
+Let's try this out with a simple CSV based ``reader()``.  First,
+let's write our parsing function, which must take two arguments:
+``ifile``, a file object to read the data from; ``filename``, the
+path to the file, in case that is helpful (for example, the function
+might use its file suffix to guess the file's format).  Here is 
+a simple example::
+
+   import csv
+   def read_csv(ifile, filename):
+      'assume 1st col is id, 2nd is sequence'
+      class seqholder(object):
+         def __init__(self, id, sequence):
+            (self.id, self.sequence, self.length) = (id, sequence, 
+                                                     len(sequence))
+      for row in csv.reader(ifile):
+         yield seqholder(row[0],row[1])
+         
+Now all we have to do is pass this reader function to create a new
+:class:`seqdb.SequenceFileDB`::
+
+   >>> myseqs = seqdb.SequenceFileDB('someseqs.csv', reader=read_csv)
+   DEBUG seqdb._create_seqLenDict: Building sequence length index...
+
+This message signals that it created our sequence index files.
+Now we can use the sequence database in all the usual ways::
+
+   >>> len(myseqs)
+   2
+   >>> myseqs.keys()
+   ['bar', 'foo']
+   >>> foo = myseqs['foo']
+   >>> len(foo)
+   17
+   >>> print foo
+   attgtatacgtgcgtag
+
+Finally, let's close our database::
+
+   >>> myseqs.close()
+
+
 
