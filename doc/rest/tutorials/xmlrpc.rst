@@ -68,11 +68,13 @@ easiest) way of publishing such resources via XMLRPC is to open the
 relevant metabase, load all the relevant resources into memory, then
 start the resource server with the :data:`withIndex=True` option. A
 few other options must be passed to the server's constructor: the base
-of the log file name (:data:`biodb2_5000` in following example,
-resulting in a file named :data:`biodb2_5000.log`) and the TCP port
-number (:data:`port=5000`, the default, here) for it to serve on. The
-:data:`host` keyword is optional but useful on machines with multiple
-network interfaces. Finally, executing :meth:`server.serve_forever()`
+of the log file name (:data:`worldbase-server` in following example,
+resulting in a file named :data:`worldbase-server.log`) and the TCP port
+number (the default port is :data:`port=5000`) for it to serve on. The
+:data:`host` keyword is optional; the server defaults to serving on
+the public server name, and you can use :data:`host=''` to serve on
+all network interfaces including :data:`localhost`.
+Finally, executing :meth:`server.serve_forever()`
 will start your XMLRPC server::
 
     from pygr import metabase
@@ -84,10 +86,8 @@ will start your XMLRPC server::
     for ix in mdb.dir('Bio'): mdb(ix)
 
     # create a XMLRPC server.
-    # metabase path for this server is http://biodb2.bioinformatics.ucla.edu:5000/
-    # log file 'biodb2_5000.log' will be created in current directory
-    server = metabase.ResourceServer(mdb, 'biodb2_5000', withIndex=True, port=5000, \
-        host='biodb2.bioinformatics.ucla.edu')
+    # metabase path for this server is http://localhost:5000/
+    server = metabase.ResourceServer(mdb, 'worldbase-server.log', withIndex=True, host='')
     # start a XMLRPC server, running as a daemon, non-interactive Python process
     server.serve_forever()
 
@@ -160,18 +160,9 @@ sequence-data resource::
     mdb = metabase.MetabaseList('/my/downloadable/path')
     newurl = 'ftp://hgdownload.cse.ucsc.edu/goldenPath/bosTau4/bigZips/bosTau4.fa.gz'
     filename = os.path.basename(newurl)
-    if '.tar.gz' in filename: mytype = '.tar.gz'
-    elif '.gz' in filename: mytype = '.gz'
-    elif '.tgz' in filename: mytype = '.tar.gz'
-    elif '.zip' in filename: mytype = '.zip'
-    else:
-        continue
-    genoname = filename.replace(mytype, '') # bosTau4
+    filename = filename[-3:]	# remove '.gz'
 
-    if mytype != '.gz': # pass singleFile=True option for .gz file (not .tar.gz)
-        src = SourceURL(newurl, filename=genoname + mytype, singleFile=True)
-    else:
-        src = SourceURL(newurl, filename=genoname + mytype)
+    src = SourceURL(newurl, filename=genoname + mytype, singleFile=True)
     # .fasta for SourceURL
     src.__doc__ = 'bosTau4 FASTA File'
     mdb.add_resource('Bio.Seq.Genome.COW.' + genoname + '.fasta', src)
