@@ -19,62 +19,64 @@ Python already provides a "sequence protocol" that is familiar to all
 Python programmers as lists, tuples, etc.  
 So, naturally, Pygr follows this design pattern for
 representing biological sequences.
-This python interpreter session illustrates some simple features::
+
+Let's create a sequence object in memory::
 
    >>> from pygr.sequence import *
    >>> s = Sequence('attatatgccactat','bobo') #create a sequence named bobo
    >>> s # interpreter will print repr(s)
    bobo[0:15]
+
+Slices of a sequence object (e.g. ``s[1:10]`` or ``s[-8:]``) 
+are themselves sequence-like objects.  All of the operations 
+that you can do to a :class:`sequence.Sequence` object, you
+can also do to a sequence slice object, e.g. slicing, negation etc.::
+
    >>> t = s[-8:] #python slice gives last 8 nt of s
    >>> t # interpreter will print repr(t)
    bobo[7:15]
+
+Of course, Pygr stores the actual string data only once, in
+your original :class:`sequence.Sequence` object.  If you make
+slices of the original sequence object, they simply *refer*
+to the original data, rather than copying it. In other words,
+these objects are a *representation* of the sequence data
+rather than themselves *storing* the data.  This is a general
+principle in Pygr: Pygr objects are a system of *representation*,
+decoupled from fixed assumptions about *storage*.  That is a crucial
+requirement for scalability, which makes it as easy in Pygr to work
+with the entire human genome as with a 15 nt sequence.
+
+The string value of a sequence object (e.g. ``str(s)``) is just 
+the sequence itself (as a string)::
+
    >>> str(t) #returns the sequence interval as a string
    'gccactat'
    >>> len(t) # get sequence length
    8
+
+Like a regular Python slice object, Pygr sequence slice objects have
+``start``, ``stop`` atttributes.  Like Python slice coordinates,
+they are zero-based, i.e. ``[0:10]`` means the first ten letters
+of a sequence.  (for more details, see :attr:`sequence.start` and
+:attr:`sequence.stop`)::
+
    >>> print t.start, t.stop, t.orientation
    7 15 1
+
+Because nucleotide sequences
+can be double-stranded, sequence objects also provide an
+:attr:`sequence.orientation` attribute, which will be either 1 (referring
+to the same orientation as the original sequence object)
+or -1 (the reverse complement of the original sequence object).
+  
+Where appropriate, Pygr uses Python's math operators for
+standard operations on sequences.  For example, Pygr uses negation
+to obtain the "reverse strand" for a given sequence slice::
+
    >>> rc = -s #get the reverse complement
    >>> str(rc[:5]) #its first five letters
    'atagt'
-
-
-A few points:
-
-* The string value of a sequence object (e.g. ``str(s)``) is just 
-  the sequence itself (as a string).
-
-* Slices of a sequence object (e.g. ``s[1:10]`` or ``s[-8:]``) 
-  are themselves sequence-like objects.  All of the operations 
-  that you can do to a :class:`sequence.Sequence` object, you
-  can also do to a sequence slice object, e.g. slicing, negation etc.
-
-* Of course, Pygr stores the actual string data only once, in
-  your original :class:`sequence.Sequence` object.  If you make
-  slices of the original sequence object, they simply *refer*
-  to the original data, rather than copying it. In other words,
-  these objects are a *representation* of the sequence data
-  rather than themselves *storing* the data.  This is a general
-  principle in Pygr: Pygr objects are a system of *representation*,
-  decoupled from fixed assumptions about *storage*.  That is a crucial
-  requirement for scalability, which makes it as easy in Pygr to work
-  with the entire human genome as with a 15 nt sequence.
-
-* Like a regular Python slice object, Pygr sequence slice objects have
-  ``start``, ``stop`` atttributes.  Like Python slice coordinates,
-  they are zero-based, i.e. ``[0:10]`` means the first ten letters
-  of a sequence.  (for more details, see :attr:`sequence.start` and
-  :attr:`sequence.stop`).
-
-* Because nucleotide sequences
-  can be double-stranded, sequence objects also provide an
-  :attr:`sequence.orientation` attribute, which will be either 1 (referring
-  to the same orientation as the original sequence object)
-  or -1 (the reverse complement of the original sequence object).
-  
-* Where appropriate, Pygr uses Python's math operators for
-  standard operations on sequences.  For example, Pygr uses negation
-  to obtain the "reverse strand" for a given sequence slice.
 
 Relations between sequences
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -89,33 +91,36 @@ with other sequence slices?  Pygr makes this easy::
    False
    >>> s.path is s
    True
+
+The :attr:`sequence.path` attribute always gives the "whole
+sequence" object that your slice is part of.
+
+You can compare sequence slices to test their relative
+positions, or whether one contains the other::
+
    >>> t in s
    True
    >>> s[:3] < t
    True
    >>> s[3:5] + t # get enclosing interval 
    bobo[3:15]
+
+Note that :attr:`sequence.path`
+is always on the same strand as your slice, so if your slice
+is negative orientation, so is its ``path``::
+
    >>> u = -t
    >>> u
    -bobo[7:15]
    >>> u.path
    -bobo[0:15]
+
+If you want to get the original sequence (i.e. both whole
+and in its original (positive) orientation), use the
+:attr:`sequence.pathForward` attribute::
+
    >>> u.pathForward
    bobo[0:15]
-
-* the :attr:`sequence.path` attribute always gives the "whole
-  sequence" object that your slice is part of.
-
-* Note that this 
-  is always on the same strand as your slice, so if your slice
-  is negative orientation, so is its ``path``.
-
-* If you want to get the original sequence (i.e. both whole
-  and in its original (positive) orientation), use the
-  :attr:`sequence.pathForward` attribute.
-
-* you can compare sequence slices to test their relative
-  positions, or whether one contains the other.
 
 
 Comparative Genomics Query of Multigenome Alignments
