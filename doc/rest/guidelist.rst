@@ -15,6 +15,7 @@ Tutorials
 
     tutorials/sequence
     tutorials/alignment
+    tutorials/gene
     tutorials/db
     tutorials/worldbase
     tutorials/annotation
