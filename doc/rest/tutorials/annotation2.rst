@@ -40,7 +40,6 @@ required by a default Pygr :class:`annotation.AnnotationDB` database::
 
   >>> dna_db = seqdb.SequenceFileDB('../tests/data/hbb1_mouse.fa')
   >>> seq_id = 'gi|171854975|dbj|AB364477.1|'
-  >>> seq = dna_db[seq_id]
 
 Constructing an annotation database using regular Python objects
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -57,21 +56,32 @@ method::
   >>> annot1 = annodb.new_annotation('A', slice1)
   >>> annot2 = annodb.new_annotation('B', slice2)
 
+An annotation object or slice is associated with the corresponding
+sequence interval of the sequence to which it is bound.  To obtain that
+sequence interval, simply request the annotation's :attr:`sequence`
+attribute.  Use this if you want to get its sequence string via ``str``,
+for example::
+
   >>> for k in annodb:
   ...     print repr(annodb[k]), repr(annodb[k].sequence)
   annotA[0:50] gi|171854975|dbj|AB364477.1|[0:50]
   annotB[0:100] -gi|171854975|dbj|AB364477.1|[300:400]
 
-An annotation object or slice is associated with the corresponding
-sequence interval of the sequence to which it is bound.  To obtain that
-sequence interval, simply request the annotation's :attr:`sequence`
-attribute.  Use this if you want to get its sequence string via ``str``,
-for example.
+As a general, an object from a Pygr database have
+two attributes that identify it as belonging to its database:
+``id`` gives its unique identifier (primary key) in that database,
+and ``db`` points to the annotation database object itself::
+
+  >>> a = annodb['A']
+  >>> a.id
+  'A'
+  >>> a.db is annodb
+  True
 
 While an annotation behaves like a sequence in most respects,
 usually it will *not* provide a string value::
 
-  >>> str(annodb['A'])
+  >>> str(a)
    Traceback (most recent call last):
      File "<stdin>", line 1, in <module>
      File "/Users/leec/projects/pygr/pygr/sequence.py", line 483, in __str__
@@ -87,6 +97,11 @@ nucleotide sequence interval.
   
 Modifying annotationType
 ^^^^^^^^^^^^^^^^^^^^^^^^
+
+An annotation object or slice always has an
+:attr:`annotation.AnnotationDB.annotationType` 
+attribute giving a string identifier for
+its annotation type.  You can set this by passing an argument::
 
   >>> annodb = annotation.AnnotationDB({}, dna_db, annotationType='foo:')
 
