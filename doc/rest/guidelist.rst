@@ -14,9 +14,9 @@ Tutorials
     :maxdepth: 3
 
     tutorials/sequence
+    tutorials/db_basic
     tutorials/alignment
     tutorials/gene
-    tutorials/db_basic
     tutorials/worldbase
     tutorials/annotation
     tutorials/graphquery
