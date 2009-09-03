@@ -255,7 +255,7 @@ a different server info class::
 
 Note that passing the ``createTable`` argument makes it run this
 SQL statement first, to create our table for us.  Note also that whereas
-:meth:`sqlgraph.SQLTable` is read-only by default, setting the 
+:class:`sqlgraph.SQLTable` is read-only by default, setting the 
 ``writeable=True`` argument enables its data writing methods.
 
 Now we can add new rows to the database using its 
