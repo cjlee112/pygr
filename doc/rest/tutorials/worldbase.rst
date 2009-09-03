@@ -104,6 +104,81 @@ We can also use this to do regular expression searches::
    >>> worldbase.dir('hg[0-9]+', matchType='r')
    ['Bio.MSA.UCSC.hg17ToHg18', 'Bio.MSA.UCSC.hg17_multiz17way', 'Bio.MSA.UCSC.hg18ToHg17', 'Bio.MSA.UCSC.hg18_multiz17way', 'Bio.MSA.UCSC.hg18_multiz28way', 'Bio.MSA.UCSC.hg18_multiz44way', 'Bio.MSA.UCSC.hg18_pairwiseAnoCar1', 'Bio.MSA.UCSC.hg18_pairwiseBosTau2', 'Bio.MSA.UCSC.hg18_pairwiseBosTau3', 'Bio.MSA.UCSC.hg18_pairwiseBosTau4', 'Bio.MSA.UCSC.hg18_pairwiseBraFlo1', 'Bio.MSA.UCSC.hg18_pairwiseCalJac1', 'Bio.MSA.UCSC.hg18_pairwiseCanFam2', 'Bio.MSA.UCSC.hg18_pairwiseCavPor3', 'Bio.MSA.UCSC.hg18_pairwiseDanRer3', 'Bio.MSA.UCSC.hg18_pairwiseDanRer4', 'Bio.MSA.UCSC.hg18_pairwiseDanRer5', 'Bio.MSA.UCSC.hg18_pairwiseEquCab1', 'Bio.MSA.UCSC.hg18_pairwiseFelCat3', 'Bio.MSA.UCSC.hg18_pairwiseFr1', 'Bio.MSA.UCSC.hg18_pairwiseFr2', 'Bio.MSA.UCSC.hg18_pairwiseGalGal2', 'Bio.MSA.UCSC.hg18_pairwiseGalGal3', 'Bio.MSA.UCSC.hg18_pairwiseGasAcu1', 'Bio.MSA.UCSC.hg18_pairwiseMm7', 'Bio.MSA.UCSC.hg18_pairwiseMm8', 'Bio.MSA.UCSC.hg18_pairwiseMm9', 'Bio.MSA.UCSC.hg18_pairwiseMonDom4', 'Bio.MSA.UCSC.hg18_pairwiseOrnAna1', 'Bio.MSA.UCSC.hg18_pairwiseOryCun1', 'Bio.MSA.UCSC.hg18_pairwiseOryLat1', 'Bio.MSA.UCSC.hg18_pairwiseOryLat2', 'Bio.MSA.UCSC.hg18_pairwisePanTro1', 'Bio.MSA.UCSC.hg18_pairwisePanTro2', 'Bio.MSA.UCSC.hg18_pairwisePetMar1', 'Bio.MSA.UCSC.hg18_pairwisePonAbe2', 'Bio.MSA.UCSC.hg18_pairwiseRheMac2', 'Bio.MSA.UCSC.hg18_pairwiseRn4', 'Bio.MSA.UCSC.hg18_pairwiseSelf', 'Bio.MSA.UCSC.hg18_pairwiseSorAra1', 'Bio.MSA.UCSC.hg18_pairwiseStrPur2', 'Bio.MSA.UCSC.hg18_pairwiseTaeGut1', 'Bio.MSA.UCSC.hg18_pairwiseTetNig1', 'Bio.MSA.UCSC.hg18_pairwiseXenTro1', 'Bio.MSA.UCSC.hg18_pairwiseXenTro2', 'Bio.MSA.UCSC.hg19_pairwiseCalJac1', 'Bio.MSA.UCSC.hg19_pairwiseGorGor1', 'Bio.MSA.UCSC.hg19_pairwiseMicMur1', 'Bio.MSA.UCSC.hg19_pairwiseOtoGar1', 'Bio.MSA.UCSC.hg19_pairwisePanTro2', 'Bio.MSA.UCSC.hg19_pairwisePonAbe2', 'Bio.MSA.UCSC.hg19_pairwiseRheMac2', 'Bio.MSA.UCSC.hg19_pairwiseTarSyr1', 'Bio.Seq.Genome.HUMAN.hg17', 'Bio.Seq.Genome.HUMAN.hg18', 'Bio.Seq.Genome.HUMAN.hg19']
 
+Resource Dependencies
+^^^^^^^^^^^^^^^^^^^^^
+
+What if the dataset you want to use in turn depends on many other 
+datasets?  For example, let's get a multigenome alignment that
+maps the human genome to many other genomes::
+
+   >>> worldbase.dir('hg[0-9]+_multi', matchType='r')
+   ['Bio.MSA.UCSC.hg17_multiz17way', 'Bio.MSA.UCSC.hg18_multiz17way', 'Bio.MSA.UCSC.hg18_multiz28way', 'Bio.MSA.UCSC.hg18_multiz44way']
+
+Let's get the big alignment of 44 vertebrate genomes::
+
+   >>> msa = worldbase.Bio.MSA.UCSC.hg18_multiz44way()
+
+Not surprisingly, being able to use this dataset depends on also having
+the 44 different genome sequence datasets.  A Pygr multiple sequence
+alignment object generally stores a dictionary of its sequences as its
+``seqDict`` attribute.  Knowing that this dictionary must be a composite
+of 44 different genomes, each with a separate prefix in the UCSC alignment,
+we can take a peek inside::
+
+   >>> msa.seqDict.prefixDict.keys()
+   ['petMar1', 'mm9', 'gorGor1', 'cavPor3', 'eriEur1', 'pteVam1', 'panTro2', 'anoCar1', 'micMur1', 'galGal3', 'proCap1', 'ponAbe2', 'loxAfr2', 'rn4', 'oryLat2', 'vicPac1', 'danRer5', 'canFam2', 'dipOrd1', 'echTel1', 'sorAra1', 'tetNig1', 'equCab2', 'bosTau4', 'ochPri2', 'myoLuc1', 'oryCun1', 'rheMac2', 'turTru1', 'xenTro2', 'speTri1', 'otoGar1', 'dasNov2', 'choHof1', 'taeGut1', 'calJac1', 'tarSyr1', 'ornAna1', 'tupBel1', 'fr2', 'gasAcu1', 'hg18', 'felCat3', 'monDom4']
+
+Yup, there are 44 genomes in there.  We could grab one by its prefix::
+
+   >>> turTru1 = msa.seqDict.prefixDict['turTru1']
+   >>> len(turTru1)
+   116467
+
+Or we could just access individual sequences using UCSC's prefix notation::
+
+   >>> chr1 = msa.seqDict['mm9.chr1']
+   >>> len(chr1)
+   197195432
+   >>> len(chr1.db)
+   35
+
+(Notice that first-draft genomes tend to have huge numbers of contigs,
+whereas genomes that have been through many drafts have far fewer).
+Let's query the alignment with a piece of mouse chromosome 1::
+
+   >>> ival = chr1[9098000:9099000]
+
+Let's get a mapping that for any sequence will give us its ID
+prefixed with the genome name (in the usual UCSC style)::
+
+   >>> idDict = ~(msa.seqDict)
+
+Finally, the actual query, printed in a trivial format::
+
+   >>> for src,dest,e in msa[ival].edges():
+   ...    print src, repr(src), '\n', dest, idDict[dest], '\n'
+   ...
+   CTAAACTA chr1[9098273:9098281] 
+   CTGAAATT dasNov2.scaffold_203475 
+   
+   TCGGAGCTAAACTA chr1[9098267:9098281] 
+   AGGAAGCTATTCCT calJac1.Contig7152 
+   
+   TCGGAGCTAAACTA chr1[9098267:9098281] 
+   AGTCAACTAATCTT canFam2.chr29 
+   
+   TCGGAGCTAAACTA chr1[9098267:9098281] 
+   AGGAGGCTATTCTT otoGar1.scaffold_81178.1-424864 
+   
+   TCGGAGCTAAACTA chr1[9098267:9098281] 
+   AAATGGCTATTCGT pteVam1.scaffold_7567 
+   (more results truncated)
+
+Hopefully at this point you're convinced that we've got access to 
+all of the data from the 44 genomes.  This is a general principle 
+in :mod:`worldbase`: asking for one dataset automatically brings along
+other data that it requires.  You don't have to do anything special
+to make this happen; it just works.
 
 
 One challenge in bioinformatics is the complexity of managing many diverse
