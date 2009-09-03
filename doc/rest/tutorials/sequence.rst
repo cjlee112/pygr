@@ -472,5 +472,59 @@ Finally, let's close our database::
 
    >>> myseqs.close()
 
+Combining Sequence Databases Using PrefixUnionDict
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+What if you wanted to make a "super-database" of sequences, by combining
+several different sequence databases?  For example, the UCSC
+multigenome alignments do exactly that, because each alignment must
+refer to sequences from several different genome databases.
+UCSC adopted the convention of pre-pending a prefix for each
+genome, e.g. "hg17", separated by a dot from the sequence ID within
+that genome, e.g. "hg17.chr1".  
+
+Pygr provides a simple way of combining multiple sequence databases,
+called :class:`seqdb.PrefixUnionDict`.
+
+Let's get a couple more sequence databases from worldbase, then
+combine them::
+
+   >>> mm8 = worldbase.Bio.Seq.Genome.MOUSE.mm8()
+   >>> rn4 = worldbase.Bio.Seq.Genome.RAT.rn4()
+   >>> pud = seqdb.PrefixUnionDict(dict(hg17=hg17,mm8=mm8,rn4=rn4))
+
+We have to initialize the :class:`seqdb.PrefixUnionDict` with a dictionary
+of the prefix:sequence_db pairs we want it to combine.  Now we can use
+it as a sequence database that seems to contain all the sequences
+within any of its member databases::
+
+   >>> len(pud)
+   125
+   >>> len(hg17) + len(rn4) + len(mm8)
+   125
+   >>> pud.keys()
+   ['rn4.chr6_random', 'rn4.chr19_random', 'rn4.chr8_random', 'rn4.chrX', 'rn4.chr13', 'rn4.chr12', 'rn4.chr11', 'rn4.chr15_random', 'rn4.chr17', 'rn4.chr16', 'rn4.chr15', 'rn4.chr14', 'rn4.chr19', 'rn4.chr18', 'rn4.chrM', 'rn4.chr1_random', 'rn4.chr13_random', 'rn4.chr3_random', 'rn4.chr9_random', 'rn4.chr14_random', 'rn4.chr10', 'rn4.chrUn_random', 'rn4.chr4_random', 'rn4.chr18_random', 'rn4.chr2_random', 'rn4.chr20_random', 'rn4.chr20', 'rn4.chr10_random', 'rn4.chr11_random', 'rn4.chr7', 'rn4.chr6', 'rn4.chr5', 'rn4.chr4', 'rn4.chr3', 'rn4.chr2', 'rn4.chr1', 'rn4.chr7_random', 'rn4.chrX_random', 'rn4.chr9', 'rn4.chr8', 'rn4.chr16_random', 'rn4.chr5_random', 'rn4.chr17_random', 'rn4.chrUn', 'rn4.chr12_random', 'mm8.chrY_random', 'mm8.chr8_random', 'mm8.chrY', 'mm8.chrX', 'mm8.chr13', 'mm8.chr12', 'mm8.chr11', 'mm8.chr10', 'mm8.chr17', 'mm8.chr16', 'mm8.chr15', 'mm8.chr14', 'mm8.chr5_random', 'mm8.chr19', 'mm8.chr18', 'mm8.chrM', 'mm8.chr1_random', 'mm8.chr13_random', 'mm8.chr9_random', 'mm8.chrUn_random', 'mm8.chr10_random', 'mm8.chr7', 'mm8.chr6', 'mm8.chr5', 'mm8.chr4', 'mm8.chr3', 'mm8.chr2', 'mm8.chr1', 'mm8.chr7_random', 'mm8.chrX_random', 'mm8.chr9', 'mm8.chr8', 'mm8.chr15_random', 'mm8.chr17_random', 'hg17.chr6_random', 'hg17.chr19_random', 'hg17.chr8_random', 'hg17.chrY', 'hg17.chrX', 'hg17.chr13', 'hg17.chr12', 'hg17.chr11', 'hg17.chr15_random', 'hg17.chr17', 'hg17.chr16', 'hg17.chr15', 'hg17.chr14', 'hg17.chr19', 'hg17.chr18', 'hg17.chrM', 'hg17.chr1_random', 'hg17.chr13_random', 'hg17.chr3_random', 'hg17.chr6_hla_hap2', 'hg17.chr9_random', 'hg17.chr22_random', 'hg17.chr10', 'hg17.chr4_random', 'hg17.chr18_random', 'hg17.chr2_random', 'hg17.chr22', 'hg17.chr20', 'hg17.chr21', 'hg17.chr10_random', 'hg17.chr6_hla_hap1', 'hg17.chr7', 'hg17.chr6', 'hg17.chr5', 'hg17.chr4', 'hg17.chr3', 'hg17.chr2', 'hg17.chr1', 'hg17.chr7_random', 'hg17.chrX_random', 'hg17.chr9', 'hg17.chr8', 'hg17.chr16_random', 'hg17.chr5_random', 'hg17.chr17_random', 'hg17.chr12_random']
+
+As with any Pygr database, we can ask for its reverse mapping.  Since
+the database maps a sequence ID to a sequence object, the reverse
+mapping takes a sequence object and returns its ID.  But note that
+:class:`seqdb.PrefixUnionDict` returns the correct ID for looking
+up that sequence object in the prefix union, which in this case
+is *not* the same as the sequence object's ``id`` attribute::
+
+   >>> idDict = ~pud
+   >>> idDict[chr1]
+   'hg17.chr1'
+   >>> chr1.id
+   'chr1'
+   >>> mouse_chr5 = pud['mm8.chr5']
+   >>> idDict[mouse_chr5]
+   'mm8.chr5'
+
+:class:`seqdb.PrefixUnionDict` is commonly used by :class:`cnestedlist.NLMSA`
+multiple genome alignments to access many genome databases as a single
+database.  This simply follows UCSC's practice of indexing their
+multigenome alignments using this "prefix.ID" notation.
+
 
 
