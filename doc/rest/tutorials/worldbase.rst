@@ -346,6 +346,32 @@ specify where you want downloaded data to be saved:
   constructed, when large downloaded datasets are initialized.  Currently,
   this is used by :class:`cnestedlist.NLMSA`.
 
+A Warning about Security
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Worldbase uses Python's standard mechanism for saving and retrieving
+data, called **pickling**.  Strictly speaking,
+Python pickling is not secure.  In particular, you should not unpickle
+data provided by someone else unless you trust the data not to contain
+attempted security exploits.  Because Python unpickling has access to ``import``,
+it theoretically has the potential to access system calls 
+and possibly execute malicious code on your
+computer.  Python has made efforts to plug known security holes
+in the unpickling process; for example, unpickling will refuse to
+call any function that has not been specifically marked as 
+safe for unpickling (i.e. that it has no potential for executing
+commands supplied by the pickle data).
+But it should not be considered secure.
+
+Future versions of Pygr will build in a foundation of digital
+signatures and networks-of-trust (based on GPG) so that for every pickle
+it is possible to verify who produced it and that no changes have
+been introduced since they signed it.
+
+For the moment we advise that you not point your ``WORLDBASEPATH``
+at sources that you do not have a good reason to trust.
+
+
 Older material still to be revised
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
