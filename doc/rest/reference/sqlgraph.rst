@@ -28,10 +28,14 @@ This class assumes that the database table has a primary key,
 which is used as the key value for the dictionary.  For tables
 with no primary key see other variants below.
 
-.. class:: SQLTable(name, cursor=None, itemClass=None, attrAlias=None, clusterKey=None,maxCache=None, arraysize=1024)
+.. class:: SQLTable(name, cursor=None, itemClass=None, attrAlias=None, clusterKey=None,createTable=None,graph=None,maxCache=None, arraysize=1024, itemSliceClass=None, dropIfExists=False,serverInfo=None, autoGC=True, orderBy=None,writeable=False)
 
-   Open a connection to the existing SQL table specified by *name*.
-   You can supply a Python DB API *cursor* providing a connection
+   Open a connection to an SQL table specified by *name*.
+
+   You should provide a *serverInfo* argument that provides a connection
+   to the server.  See :class:`sqlgraph.DBServerInfo` for details.
+
+   DEPRECATED: You can supply a Python DB API *cursor* providing a connection
    to the database server.  If *cursor* is None, it will attempt
    to connect to a MySQL server using authentication information either
    from your the *name* string (treated as a whitespace separated
@@ -42,7 +46,14 @@ with no primary key see other variants below.
 
    *itemClass* indicates
    the class that should be used for constructing item objects (representing
-   individual rows in the database).
+   individual rows in the database). *itemSliceClass* indicates the class
+   used for instantiation slices of items (if appropriate).
+
+   *createTable* if not None, must be an SQL statement for creating
+   the desired table structure.
+
+   *dropIfExists* if True, forces it to delete any existing table 
+   of the same name prior to creating a new table.
 
    *attrAlias*, if provided, must be a dictionary whose keys are
    attribute names that should be bound to items from your database,
@@ -55,6 +66,13 @@ with no primary key see other variants below.
    This caching hint is only used by the :class:`Clustered` SQLTable variants
    described in detail below.
 
+   *autoGC* if True, makes it use a :class:`classutil.RecentValueDictionary`
+   to implement a weakref-based cache, in which items are automatically
+   flushed from the cache when no longer referenced by the user.
+
+   *orderBy* if not None, must be an SQL ORDER BY clause to be used
+   for determining the iteration order of keys from the database.
+
    *maxCache*, if not None, specifies the maximum number of database
    objects to keep in the cache.  For large databases, this is an important
    parameter for ensuring that :class:`SQLTable` will not consume too much
@@ -65,6 +83,10 @@ with no primary key see other variants below.
    database server in each cursor.fetchmany() operation.  This can be important
    for speeding up data transfer from the database server.
 
+.. method:: SQLTable.new(**columnSettings)
+
+   creates a new row in the database, using the keyword arguments as column
+   name-value pairs to save to that row.  Returns the new row object.
 
 
 This class and its variants follow a simple rule for controlling
@@ -78,10 +100,11 @@ This allows you to keep tight control over the total memory usage of :class:`SQL
 when iterating over all the items in a very large database, and also to ensure
 efficient data transfer using the Python DB API 2.0 :meth:`fetchmany()` method.
 
-.. method:: iteritems()
+
+.. method:: SQLTable.iteritems()
 
 
-.. method:: itervalues()
+.. method:: SQLTable.itervalues()
 
 
 
@@ -93,12 +116,12 @@ These methods ensure very efficient data transfer from the database server
 (using the :meth:`fetchall()` method), but can consume large amounts of
 memory limited only by the size of your database!
 
-.. method:: items()
+.. method:: SQLTable.items()
 
    return a list of all (id,obj) pairs representing all data in the table,
    after first loading the entire table into memory.
 
-.. method:: values()
+.. method:: SQLTable.values()
 
    return a list of all obj representing each row in the table,
    after first loading the entire table into memory.
@@ -109,7 +132,7 @@ Finally, if you iterate over IDs using :meth:`__iter__()` or :meth:`keys()`
 each object will be fetched individually when you try to access it
 (e.g. ``obj=mytable[id]``).
 
-.. method:: __iter__()
+.. method:: SQLTable.__iter__()
 
    Iterate over all IDs (primary key values) in the table,
    without loading the entire table into memory.
@@ -118,7 +141,7 @@ each object will be fetched individually when you try to access it
 Accessing individual objects by *id* also obeys the *maxCache*
 caching limits:
 
-.. method:: __getitem__(id)
+.. method:: SQLTable.__getitem__(id)
 
    get the object whose primary key is *id*, and cache it in
    our local dictionary (so that subsequent requests will return the
@@ -128,7 +151,7 @@ caching limits:
 
 You can also force loading of the entire database directly:
 
-.. method:: load(oclass=None)
+.. method:: SQLTable.load(oclass=None)
 
    Load all data from the table, using *oclass* as the row object
    class if specified (otherwise use the oclass for this table).
@@ -136,7 +159,7 @@ You can also force loading of the entire database directly:
    in the Python dictionary of this class.
 
 
-.. method:: objclass(itemClass)
+.. method:: SQLTable.objclass(itemClass)
 
    Specify a object class to use for creating new "row" objects.
    *itemClass* must accept a single argument, a tuple object representing
@@ -147,7 +170,7 @@ You can also force loading of the entire database directly:
    to the tuple values representing the row.
 
 
-.. method:: select(whereClause,params=None,oclass=None,selectCols='t1.*')
+.. method:: SQLTable.select(whereClause,params=None,oclass=None,selectCols='t1.*')
 
    Generate the list of objects that satisfy the *whereClause*
    via a SQL SELECT query.  This function is a generator, so you
@@ -157,7 +180,7 @@ You can also force loading of the entire database directly:
    columns should actually be retrieved.
 
 
-.. method:: _attrSQL(attr)
+.. method:: SQLTable._attrSQL(attr)
 
    Get a string expression for accessing attribute *attr* in SQL.
    This might either simply be an alias to the corresponding column

@@ -259,7 +259,7 @@ SQL statement first, to create our table for us.  Note also that whereas
 ``writeable=True`` argument enables its data writing methods.
 
 Now we can add new rows to the database using its 
-:meth:`sqlgraph.SQLTableBase.new()` method, which accepts a dictionary
+:meth:`sqlgraph.SQLTable.new()` method, which accepts a dictionary
 of column names to store::
 
    >>> txInfo.new(k=0,seq_id='gi|171854975|dbj|AB364477.1|',start=0,stop=50,orientation=1)
