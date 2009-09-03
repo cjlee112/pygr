@@ -1,5 +1,40 @@
-# 1.
 
+=============================================
+Accessing, Building, and Querying Annotations
+=============================================
+
+Purpose
+^^^^^^^
+
+This tutorial teaches you the finer points of constructing
+annotation databases, mapping them onto associated sequence
+databases, and saving them in :mod:`worldbase`.  You should 
+understand Pygr sequences (see :doc:`sequence`).  While not
+required, you may find it helpful to view the :doc:`db_basic`
+tutorial, to get comfortable with Pygr's different database types.
+
+Pygr Sequence Annotations
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+*Annotation* -- information bound to specific intervals of a genome
+or sequence -- is an essential concept in bioinformatics.  We would like to
+be able to store and query annotations naturally as part of working with
+sequence datasets of any size, from single sequences to multigenome
+alignments.  Pygr makes this fairly easy.
+
+An annotation is an interval (i.e. it has length, and can be sliced,
+or negated to get the opposite strand) that has bound attributes giving
+biological information about the annotation.  It acts like a little coordinate
+system, i.e. ``annotation[0]`` is the first position in the annotation;
+``annotation[-10:]`` is the last ten positions of the annotation etc.
+Any subslice of the annotation gives its coordinates and orientation
+relative to the original annotation.  
+
+Let's set up a basic example, by  opening a sequence database to
+annotate, and a ``MySliceInfo`` class that will store the basic
+coordinate attributes (``id``, ``start``, ``stop``, ``orientation``
+required by a default Pygr :class:`annotation.AnnotationDB` database::
+ 
   >>> from slice_pickle_obj import MySliceInfo, MyFunkySliceInfo
   >>> from pygr import seqdb, annotation, worldbase
 
@@ -9,6 +44,10 @@
 
 Constructing an annotation database using regular Python objects
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To start simple, let's just save a couple annotation intervals
+to our database using its :meth:`annotation.AnnotationDB.new_annotation()`
+method::
 
   >>> annodb = annotation.AnnotationDB({}, dna_db)
 
@@ -22,6 +61,29 @@ Constructing an annotation database using regular Python objects
   ...     print repr(annodb[k]), repr(annodb[k].sequence)
   annotA[0:50] gi|171854975|dbj|AB364477.1|[0:50]
   annotB[0:100] -gi|171854975|dbj|AB364477.1|[300:400]
+
+An annotation object or slice is associated with the corresponding
+sequence interval of the sequence to which it is bound.  To obtain that
+sequence interval, simply request the annotation's :attr:`sequence`
+attribute.  Use this if you want to get its sequence string via ``str``,
+for example.
+
+While an annotation behaves like a sequence in most respects,
+usually it will *not* provide a string value::
+
+  >>> str(annodb['A'])
+   Traceback (most recent call last):
+     File "<stdin>", line 1, in <module>
+     File "/Users/leec/projects/pygr/pygr/sequence.py", line 483, in __str__
+       return self.path.strslice(self.start,self.stop)
+     File "/Users/leec/projects/pygr/pygr/annotation.py", line 61, in strslice
+       Use its sequence attribute to get a sequence object representing this interval.''')
+   ValueError: this is an annotation, and you cannot get a sequence string from it.
+   Use its sequence attribute to get a sequence object representing this interval.
+
+One exception to this rule: :class:`annotation.TranslationAnnot`
+annotations, which represent the protein translation of an underlying
+nucleotide sequence interval.  
   
 Modifying annotationType
 ^^^^^^^^^^^^^^^^^^^^^^^^

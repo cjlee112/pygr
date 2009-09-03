@@ -16,9 +16,9 @@ Tutorials
     tutorials/sequence
     tutorials/db_basic
     tutorials/alignment
+    tutorials/annotation2
     tutorials/gene
     tutorials/worldbase
-    tutorials/annotation
     tutorials/graphquery
     tutorials/annotating-yeast
     tutorials/xmlrpc
