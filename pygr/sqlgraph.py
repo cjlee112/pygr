@@ -496,6 +496,9 @@ class SQLTableBase(object, UserDict.DictMixin):
         if serverInfo is not None:
             self.serverInfo = serverInfo
 
+    def __len__(self):
+        self._select(selectCols='count(*)')
+        return self.cursor.fetchone()[0]
     def __hash__(self):
         return id(self)
     _pickleAttrs = dict(name=0, clusterKey=0, maxCache=0, arraysize=0,
