@@ -1,5 +1,14 @@
+==========================================
 Creating, Querying, and Storing Alignments
-------------------------------------------
+==========================================
+
+Purpose
+^^^^^^^
+
+This tutorial teaches you how build, query, access and store
+sequence alignments in Pygr, in-memory, on-disk and over networks.
+You should already understand Pygr sequences (see :doc:`sequence`).
+
 
 Alignment Basics
 ^^^^^^^^^^^^^^^^
