@@ -181,6 +181,120 @@ other data that it requires.  You don't have to do anything special
 to make this happen; it just works.
 
 
+Downloading datasets locally using download=True
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+What if you want to make :mod:`worldbase` download the data locally,
+so that you could perform heavy-duty analysis on them?  The examples
+above all accessed the data via a client-server (XMLRPC) connection,
+without downloading all the data to our computer.  But if you want
+the data downloaded to your computer, all you have to do is add
+the flag ``download=True``.  First, let's see if the yeast genome
+is available for download::
+
+   >>> worldbase.dir('YEAST', matchType='r', download=True)
+   ['Bio.Seq.Genome.YEAST.sacCer1', 'Bio.Seq.Genome.YEAST.sacCer1.fasta', '__doc__.Bio.Seq.Genome.YEAST.sacCer1', '__doc__.Bio.Seq.Genome.YEAST.sacCer1.fasta']
+
+The first entry is the one we want -- it represents an interface to
+the genome.  It will both invoke downloading of the .fasta file
+(the next item in the list), and then install it as a Pygr
+:class:`seqdb.SequenceFileDB`.  Let's get it::
+
+   >>> yeast = worldbase.Bio.Seq.Genome.YEAST.sacCer1(download=True)
+   INFO downloader.download_unpickler: Beginning download of http://biodb.bioinformatics.ucla.edu/GENOMES/sacCer1/chromFa.zip to /Users/leec/projects/pygr/tests/sacCer1.zip...
+   INFO downloader.download_monitor: downloaded 385024 bytes (10.2%)...
+   INFO downloader.download_monitor: downloaded 770048 bytes (20.3%)...
+   INFO downloader.download_monitor: downloaded 1155072 bytes (30.5%)...
+   INFO downloader.download_monitor: downloaded 1540096 bytes (40.7%)...
+   INFO downloader.download_monitor: downloaded 1925120 bytes (50.9%)...
+   INFO downloader.download_monitor: downloaded 2310144 bytes (61.0%)...
+   INFO downloader.download_monitor: downloaded 2695168 bytes (71.2%)...
+   INFO downloader.download_monitor: downloaded 3080192 bytes (81.4%)...
+   INFO downloader.download_monitor: downloaded 3465216 bytes (91.6%)...
+   INFO downloader.download_unpickler: Download done.
+   INFO downloader.uncompress_file: unzipping /Users/leec/projects/pygr/tests/sacCer1.zip...
+   DEBUG seqdb._create_seqLenDict: Building sequence length index...
+
+We can start using it right away::
+   >>> len(yeast)
+   17
+   >>> yeast.keys()
+   ['chr1', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chrM']
+   >>> len(yeast['chr1'])
+   230208
+
+What just happened?
+
+* :mod:`worldbase` unpickled the ``Bio.Seq.Genome.YEAST.sacCer1``
+  :class:`seqdb.SequenceFileDB` object,
+  which in turn requested the ``Bio.Seq.Genome.YEAST.sacCer1.fasta``
+  text file (again with ``download=True``).
+
+* the compressed file was downloaded and unzipped.
+
+* the :class:`seqdb.SequenceFileDB` object initialized itself,
+  building its indexes on disk.
+
+* :mod:`worldbase` then saved this local resource to your local
+  worldbase index (on disk), so that when you request this resource
+  in the future, it will simply use the local resource instead
+  of either accessing it over a network (the slow client-server model)
+  or downloading it over again.
+
+Let's test that claim.  First, we clear all records from our Python interpreter's
+worldbase cache.  That will force any new requests to loaded from
+scratch (as if we had started a new Python interpreter session).
+Then we can request the yeast genome over again and see what happens::
+
+   >>> worldbase.clear_cache()
+   >>> yeast = worldbase.Bio.Seq.Genome.YEAST.sacCer1(download=True)
+   >>> len(yeast)
+   17
+
+Notice that we got the yeast genome instantly, without any downloading.
+``download=True`` mode first checks for the resource in your local
+worldbase indexes.  If you already have the resource as a local resource
+(on your disk), it just uses that, instead of downloading it again.
+
+Let's check that our database is truly a local storage, and not an
+XMLRPC client::
+
+   >>> repr(yeast)
+   "<BlastDB '/Users/leec/projects/pygr/tests/sacCer1'>"
+
+Yup.  ``BlastDB`` is an older Pygr variant of :class:`seqdb.SequenceFileDB`,
+for working with data on disk.  So now when you request this resource 
+from worldbase, it will connect you to your local copy stored on disk!
+
+Older material still to be revised
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:mod:`worldbase` provides powerful automation for allowing you to have
+both the convenience of obtaining resources automatically from
+remote servers, but also the performance of local resources
+stored on your computer(s).  If you specify the optional
+*download=True* argument, worldbase will try to find a
+server that will allow download of the entire dataset, and
+will then download and initialize the resource for you --
+completely automatically::
+
+   nlmsa = worldbase.Bio.MSA.UCSC.dm2_multiz9way(download=True)
+
+The location in which downloads and constructed index files
+will be stored is controlled by environment variables
+PYGRDATADOWNLOAD and PYGRDATABUILDDIR.  If these variables are
+not set, data files are simply stored in current directory.
+
+If the resource you requested with ``download=True`` has resource
+dependencies, they will also be downloaded and built automatically,
+if you do not already have a local copy of a given resource.  In general,
+if you place your local metabases before remote resource
+servers in your WORLDBASEPATH, ``download=True`` will always default to
+any local resource that you already have, rather than downloading
+a new copy of it.
+
+
+
 One challenge in bioinformatics is the complexity of managing many diverse
 data resources.  For example, running a large job on a heterogeneous cluster
 of computers is complicated by the fact that individual computers often can't
@@ -260,32 +374,6 @@ with comparative genomics data, but clearly is not efficient for analysis
 of large amounts of data, which must be transmitted to you by the server
 via XMLRPC, since potentially many users must share the access to the
 biodb2.bioinformatics.ucla.edu server.
-
-download=True Mode
-^^^^^^^^^^^^^^^^^^
-:mod:`worldbase` provides powerful automation for allowing you to have
-both the convenience of obtaining resources automatically from
-remote servers, but also the performance of local resources
-stored on your computer(s).  If you specify the optional
-*download=True* argument, worldbase will try to find a
-server that will allow download of the entire dataset, and
-will then download and initialize the resource for you --
-completely automatically::
-
-   nlmsa = worldbase.Bio.MSA.UCSC.dm2_multiz9way(download=True)
-
-The location in which downloads and constructed index files
-will be stored is controlled by environment variables
-PYGRDATADOWNLOAD and PYGRDATABUILDDIR.  If these variables are
-not set, data files are simply stored in current directory.
-
-If the resource you requested with ``download=True`` has resource
-dependencies, they will also be downloaded and built automatically,
-if you do not already have a local copy of a given resource.  In general,
-if you place your local metabases before remote resource
-servers in your WORLDBASEPATH, ``download=True`` will always default to
-any local resource that you already have, rather than downloading
-a new copy of it.
 
 Understanding worldbase
 ^^^^^^^^^^^^^^^^^^^^^^^
