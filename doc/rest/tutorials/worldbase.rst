@@ -47,8 +47,8 @@ print a sequence interval of interest, etc.::
   (in the usual Python way).
 
 * Of course, this is a *virtual* namespace -- you don't actually have
-  all the world's datasets sitting in a file called ``worldbase.py``
-  on your computer!  :mod:`worldbase` connects to a wide variety of 
+  all the world's datasets sitting on your computer in a file called 
+  ``worldbase.py``!  :mod:`worldbase` connects to a wide variety of 
   data sources (some of which may be on your computer, and some which
   may be on the Internet) to find out the set of available resources,
   and then serves them to you.
@@ -68,6 +68,43 @@ print a sequence interval of interest, etc.::
   Note that we did not even have to know what code is required to
   work with that data, let alone explicitly import those modules.
   :mod:`worldbase` takes care of that for you.
+
+Searching Worldbase
+^^^^^^^^^^^^^^^^^^^
+
+Python 2.6 introduced a method for customizing the results of the
+built-in ``dir()`` function.  Try this out in Python 2.6::
+
+   >>> from pygr import worldbase
+   >>> dir(worldbase)
+   ['0root', 'Bio', 'Test', '__doc__']
+   >>> dir(worldbase.Bio)
+   ['MSA', 'Seq']
+   >>> dir(worldbase.Bio.Seq)
+   ['Genome']
+   >>> dir(worldbase.Bio.Seq.Genome)
+   ['ANOCA', 'ANOGA', 'APIME', 'BOVIN', 'BRAFL', 'CAEBR', 'CAEEL', 'CAEJA', 'CAEPB', 'CAERE', 'CALJA', 'CANFA', 'CAVPO', 'CHICK', 'CHOHO', 'CIOIN', 'DANRE', 'DASNO', 'DIPOR', 'DROAN', 'DROER', 'DROGR', 'DROME', 'DROMO', 'DROPE', 'DROPS', 'DROSE', 'DROSI', 'DROVI', 'DROWI', 'DROYA', 'ECHTE', 'ERIEU', 'FELCA', 'FUGRU', 'GASAC', 'GORGO', 'HORSE', 'HUMAN', 'LAMPA', 'LOXAF', 'MACMU', 'MICMU', 'MONDO', 'MOUSE', 'MYOLU', 'OCHPR', 'ORNAN', 'ORYLA', 'OTOGA', 'PANTR', 'PETMA', 'PONAB', 'PONPA', 'PRIPA', 'PROCA', 'PTEVA', 'RABIT', 'RAT', 'SORAR', 'SPETR', 'STRPU', 'TAEGU', 'TARSY', 'TETNG', 'TRICA', 'TUPGB', 'TURTR', 'XENTR', 'YEAST']
+   >>> dir(worldbase.Bio.Seq.Genome.MOUSE)
+   ['mm5', 'mm6', 'mm7', 'mm8', 'mm9']
+
+If we want to get more details, :func:`worldbase.dir()` lets us request
+a dictionary of info for each result::
+
+   >>> worldbase.dir('Bio.Seq.Genome.MOUSE', asDict=True)
+   {'Bio.Seq.Genome.MOUSE.mm9': {'pickle_size': 186, 'creation_time': <DateTime '20090903T13:07:57' at 7b30f8>, 'user': 'deepreds', '__doc__': 'Mouse Genome (July 2007)'}, 'Bio.Seq.Genome.MOUSE.mm8': {'pickle_size': 186, 'creation_time': <DateTime '20090903T13:07:57' at 7b30d0>, 'user': 'deepreds', '__doc__': 'Mouse Genome (March 2006)'}, 'Bio.Seq.Genome.MOUSE.mm5': {'pickle_size': 186, 'creation_time': <DateTime '20090903T13:07:57' at 7b3120>, 'user': 'deepreds', '__doc__': 'Mouse Genome (May 2004)'}, 'Bio.Seq.Genome.MOUSE.mm7': {'pickle_size': 186, 'creation_time': <DateTime '20090903T13:07:57' at 7b3198>, 'user': 'deepreds', '__doc__': 'Mouse Genome (August 2005)'}, 'Bio.Seq.Genome.MOUSE.mm6': {'pickle_size': 186, 'creation_time': <DateTime '20090903T13:07:57' at 7b3210>, 'user': 'deepreds', '__doc__': 'Mouse Genome (March 2005)'}}
+
+We can also use this to do regular expression searches::
+
+   >>> worldbase.dir('MOUSE', matchType='r')
+   ['Bio.Seq.Genome.MOUSE.mm5', 'Bio.Seq.Genome.MOUSE.mm6', 'Bio.Seq.Genome.MOUSE.mm7', 'Bio.Seq.Genome.MOUSE.mm8', 'Bio.Seq.Genome.MOUSE.mm9']
+   >>> worldbase.dir('Gor', matchType='r')
+   ['Bio.MSA.UCSC.hg19_pairwiseGorGor1', 'Bio.Seq.Genome.GORGO.gorGor1']
+   >>> worldbase.dir('[Rr][Aa][Tt]', matchType='r')
+   ['Bio.Seq.Genome.RAT.rn3', 'Bio.Seq.Genome.RAT.rn4']
+   >>> worldbase.dir('hg[0-9]+', matchType='r')
+   ['Bio.MSA.UCSC.hg17ToHg18', 'Bio.MSA.UCSC.hg17_multiz17way', 'Bio.MSA.UCSC.hg18ToHg17', 'Bio.MSA.UCSC.hg18_multiz17way', 'Bio.MSA.UCSC.hg18_multiz28way', 'Bio.MSA.UCSC.hg18_multiz44way', 'Bio.MSA.UCSC.hg18_pairwiseAnoCar1', 'Bio.MSA.UCSC.hg18_pairwiseBosTau2', 'Bio.MSA.UCSC.hg18_pairwiseBosTau3', 'Bio.MSA.UCSC.hg18_pairwiseBosTau4', 'Bio.MSA.UCSC.hg18_pairwiseBraFlo1', 'Bio.MSA.UCSC.hg18_pairwiseCalJac1', 'Bio.MSA.UCSC.hg18_pairwiseCanFam2', 'Bio.MSA.UCSC.hg18_pairwiseCavPor3', 'Bio.MSA.UCSC.hg18_pairwiseDanRer3', 'Bio.MSA.UCSC.hg18_pairwiseDanRer4', 'Bio.MSA.UCSC.hg18_pairwiseDanRer5', 'Bio.MSA.UCSC.hg18_pairwiseEquCab1', 'Bio.MSA.UCSC.hg18_pairwiseFelCat3', 'Bio.MSA.UCSC.hg18_pairwiseFr1', 'Bio.MSA.UCSC.hg18_pairwiseFr2', 'Bio.MSA.UCSC.hg18_pairwiseGalGal2', 'Bio.MSA.UCSC.hg18_pairwiseGalGal3', 'Bio.MSA.UCSC.hg18_pairwiseGasAcu1', 'Bio.MSA.UCSC.hg18_pairwiseMm7', 'Bio.MSA.UCSC.hg18_pairwiseMm8', 'Bio.MSA.UCSC.hg18_pairwiseMm9', 'Bio.MSA.UCSC.hg18_pairwiseMonDom4', 'Bio.MSA.UCSC.hg18_pairwiseOrnAna1', 'Bio.MSA.UCSC.hg18_pairwiseOryCun1', 'Bio.MSA.UCSC.hg18_pairwiseOryLat1', 'Bio.MSA.UCSC.hg18_pairwiseOryLat2', 'Bio.MSA.UCSC.hg18_pairwisePanTro1', 'Bio.MSA.UCSC.hg18_pairwisePanTro2', 'Bio.MSA.UCSC.hg18_pairwisePetMar1', 'Bio.MSA.UCSC.hg18_pairwisePonAbe2', 'Bio.MSA.UCSC.hg18_pairwiseRheMac2', 'Bio.MSA.UCSC.hg18_pairwiseRn4', 'Bio.MSA.UCSC.hg18_pairwiseSelf', 'Bio.MSA.UCSC.hg18_pairwiseSorAra1', 'Bio.MSA.UCSC.hg18_pairwiseStrPur2', 'Bio.MSA.UCSC.hg18_pairwiseTaeGut1', 'Bio.MSA.UCSC.hg18_pairwiseTetNig1', 'Bio.MSA.UCSC.hg18_pairwiseXenTro1', 'Bio.MSA.UCSC.hg18_pairwiseXenTro2', 'Bio.MSA.UCSC.hg19_pairwiseCalJac1', 'Bio.MSA.UCSC.hg19_pairwiseGorGor1', 'Bio.MSA.UCSC.hg19_pairwiseMicMur1', 'Bio.MSA.UCSC.hg19_pairwiseOtoGar1', 'Bio.MSA.UCSC.hg19_pairwisePanTro2', 'Bio.MSA.UCSC.hg19_pairwisePonAbe2', 'Bio.MSA.UCSC.hg19_pairwiseRheMac2', 'Bio.MSA.UCSC.hg19_pairwiseTarSyr1', 'Bio.Seq.Genome.HUMAN.hg17', 'Bio.Seq.Genome.HUMAN.hg18', 'Bio.Seq.Genome.HUMAN.hg19']
+
+
 
 One challenge in bioinformatics is the complexity of managing many diverse
 data resources.  For example, running a large job on a heterogeneous cluster
