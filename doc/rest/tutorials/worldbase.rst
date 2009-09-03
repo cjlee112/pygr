@@ -225,10 +225,23 @@ We can start using it right away::
 
 What just happened?
 
+* :mod:`worldbase` first checked your local resource lists to see
+  if this resource was available locally.  Failing that, it obtained
+  the resource from the remote server, which basically tells it
+  how to download the data.
+
 * :mod:`worldbase` unpickled the ``Bio.Seq.Genome.YEAST.sacCer1``
   :class:`seqdb.SequenceFileDB` object,
   which in turn requested the ``Bio.Seq.Genome.YEAST.sacCer1.fasta``
   text file (again with ``download=True``).
+
+* this is a general principle.  If you request a resource with
+  ``download=True``, and it in turn depends on other resources,
+  they will also be requested with ``download=True``.  I.e. 
+  they will each either be obtained locally, or downloaded
+  automatically.  So if you requested the 44 genome alignment
+  dataset, this could result in up to 45 downloads (the alignment
+  itself plus the 44 genome sequence datasets).
 
 * the compressed file was downloaded and unzipped.
 
@@ -263,8 +276,75 @@ XMLRPC client::
    "<BlastDB '/Users/leec/projects/pygr/tests/sacCer1'>"
 
 Yup.  ``BlastDB`` is an older Pygr variant of :class:`seqdb.SequenceFileDB`,
-for working with data on disk.  So now when you request this resource 
+for working with data on disk.  
+
+So now when you request this resource 
 from worldbase, it will connect you to your local copy stored on disk!
+
+
+Controlling Where Worldbase Searches and Saves Data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In the last section, you may have wondered what we meant by 
+"your local worldbase indexes".  After all, you didn't do anything
+to tell worldbase where you store data.  :mod:`worldbase` checks the
+environment variable ``WORLDBASEPATH`` for a list of locations
+to search; but if it's not set, worldbase defaults to the following
+path::
+
+   ~,.,http://biodb2.bioinformatics.ucla.edu:5000
+
+which specifies three locations to be searched (in order)
+
+* your home directory;
+
+* your current directory;
+
+* the UCLA public XMLRPC server.
+
+In each location, worldbase looks for a "metabase", which is a 
+*metadata database* storing information about datasets that it knows
+how to access.  This is an important point: worldbase is *not* intended
+to be a database in which you actually store data.  Instead it is only
+intended to store *metadata* about data that is stored elsewhere
+(in disk files; in SQL databases; in network servers, etc.).
+Broadly speaking these metadata for each resource include
+
+* what kind of data it is;
+
+* how to access it;
+
+* its relations with other data (schema and dependencies).
+
+You can set your WORLDBASEPATH in your shell environment,
+or you can tell worldbase directly what path you want it to use,
+by calling its :meth:`worldbase.update()` method.  For example,
+to restrict it to searching the metabase in your current directory::
+
+   >>> worldbase.update('.')
+
+Now if we ask for a resource that is not in that metabase, we'll
+get an error::
+
+   >>> msa = worldbase.Bio.MSA.UCSC.hg18_multiz44way()
+   Traceback (most recent call last):  
+     File "<stdin>", line 1, in <module>  
+     File "/Users/leec/projects/pygr/pygr/metabase.py", line 1201, in __call__
+       return self._mdb(self._path, *args, **kwargs)
+     File "/Users/leec/projects/pygr/pygr/metabase.py", line 647, in __call__
+       for objdata,docstr in self.find_resource(resID, download):
+     File "/Users/leec/projects/pygr/pygr/metabase.py", line 877, in find_resource
+       raise WorldbaseNotFoundError('unable to find %s in WORLDBASEPATH' % resID)
+   pygr.metabase.WorldbaseNotFoundError: 'unable to find Bio.MSA.UCSC.hg18_multiz44way in WORLDBASEPATH'
+
+``download=True`` uses two additional environment variables that
+specify where you want downloaded data to be saved:
+
+* ``WORLDBASEDOWNLOAD``: the directory that files will be download into;
+
+* ``WORLDBASEBUILDDIR``: that directory in which index files will be
+  constructed, when large downloaded datasets are initialized.  Currently,
+  this is used by :class:`cnestedlist.NLMSA`.
 
 Older material still to be revised
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
