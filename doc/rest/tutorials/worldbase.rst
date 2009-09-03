@@ -1,8 +1,74 @@
-Simplifying the Challenges of Working with Complex Datasets
------------------------------------------------------------
+
+==========================================
+Accessing Complex Datasets Using Worldbase
+==========================================
+
+Purpose
+^^^^^^^
+
+This tutorial teaches you how to access complex datasets
+like whole genomes and multigenome alignments, either from local
+files or Internet servers, using :mod:`worldbase`.  
+No previous knowledge of Pygr is required, although the end products of
+some of the examples (accessing sequences or alignments) may be 
+easier to understand if you're familiar with Pygr sequences and
+alignments (see :doc:`sequence`; :doc:`alignment`).
+
 
 worldbase: a Namespace for Transparently Importing Data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Say you want to work with human genome draft 18.  Start Python and
+type the following::
+
+   >>> from pygr import worldbase
+   >>> hg18 = worldbase.Bio.Seq.Genome.HUMAN.hg18()
+
+That's it: you now have the human genome dataset, and can start working.
+Let's see how many contigs it contains, pull out one chromosome,
+print a sequence interval of interest, etc.::
+
+   >>> len(hg18)
+   49
+   >>> chr1 = hg18['chr1']
+   >>> len(chr1)
+   247249719
+   >>> ival = chr1[20000000:20000500]
+   >>> print ival
+   cctcggcctcccaaagtgctgggattacaggcgtgagccaccgcgcagccccaactagactttaaaagccctggaggtgggcgggtttaggctgccttgctctccgctgtgtgcccagccccagggactgtgcctagcacttgcaggtgctcaaaagaagcacttaatgaatggatctctttcccctagcaaccctgtgaaatttcatcacacccactctgaaggagaggaaaccgaggctcaggtccagacaatgcagaagccacagagctaatgagtgccagagctagggcatgaatcatcgtggcctcagaagctgttgcccttaCTCCCAGTGAAGACAATCTAGGGTTATGGGAGGAAAAGGTACCGACGGGGGTCAGAGACCAGCATCCCAGCTCAGAGCCTGGGACTCACGCACCTGTGAAATGTTCCTTCCTTCATCTGCTCATCTCCCCACTGGCCAATCAGGACCAAGAAGGGCAGCTCtacccacccat
+
+:mod:`worldbase` establishes a one-step model for accessing data:
+*ask for it by name*:
+
+* :mod:`worldbase` is an importable namespace for all the world's
+  scientific datasets.  You simply *import* the namespace (in the usual
+  Python way), and
+  ask it to *construct* an instance of the dataset that you want
+  (in the usual Python way).
+
+* Of course, this is a *virtual* namespace -- you don't actually have
+  all the world's datasets sitting in a file called ``worldbase.py``
+  on your computer!  :mod:`worldbase` connects to a wide variety of 
+  data sources (some of which may be on your computer, and some which
+  may be on the Internet) to find out the set of available resources,
+  and then serves them to you.
+
+* :mod:`worldbase` takes advantage of Pygr's scalable design.
+  Pygr is first and foremost a *a system of representation* not tied to
+  any fixed assumptions about storage (i.e. ``chr1`` represents human
+  chromosome 1, but does not necessarily mean that the human chromosome
+  1 sequence (245 Mb) was loaded into a Python object).
+  Thus it can work very naturally with huge datasets, even over
+  a network connection where the actual data is stored on a remote
+  server.  In this case, :mod:`worldbase` is accessing hg18 from 
+  UCLA's data server, which is included by default in :mod:`worldbase`
+  searches (of course, you can change that).
+
+* To get a dataset, all you need to know is its *name* in :mod:`worldbase`.
+  Note that we did not even have to know what code is required to
+  work with that data, let alone explicitly import those modules.
+  :mod:`worldbase` takes care of that for you.
+
 One challenge in bioinformatics is the complexity of managing many diverse
 data resources.  For example, running a large job on a heterogeneous cluster
 of computers is complicated by the fact that individual computers often can't
