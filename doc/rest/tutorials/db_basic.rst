@@ -238,3 +238,67 @@ Let's get the human genome database, and create our annotation database::
 Victory!  We are able to serve up gene annotations over the whole
 genome on our local machine, simply by plugging in to UCSC's database server!
 
+
+Saving Data to a SQL Database
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Naturally, you want to be able to save your own data to a SQL
+database.  For some variety, let's create an sqlite database
+using our same Pygr methods.  The only change is that we use
+a different server info class::
+
+   >>> liteserver = sqlgraph.SQLiteServerInfo('slicedb.sqlite')
+   >>> txInfo = sqlgraph.SQLTable('annotations', serverInfo=liteserver,
+   ...                            writeable=True, 
+   ...                            createTable='CREATE TABLE annotations (k INTEGER PRIMARY KEY, seq_id TEXT, start INT, stop INT, orientation INT);')
+   ...
+
+Note that passing the ``createTable`` argument makes it run this
+SQL statement first, to create our table for us.  Note also that whereas
+:meth:`sqlgraph.SQLTable` is read-only by default, setting the 
+``writeable=True`` argument enables its data writing methods.
+
+Now we can add new rows to the database using its 
+:meth:`sqlgraph.SQLTableBase.new()` method, which accepts a dictionary
+of column names to store::
+
+   >>> txInfo.new(k=0,seq_id='gi|171854975|dbj|AB364477.1|',start=0,stop=50,orientation=1)
+   <pygr.classutil.TupleORW_annotations object at 0x17bcdb0>
+   >>> txInfo.new(k=1,seq_id='gi|171854975|dbj|AB364477.1|',start=300,stop=400,orientation= -1)
+   <pygr.classutil.TupleORW_annotations object at 0x17d7370>
+
+Now we can check the data in our table::
+
+   >>> len(txInfo)
+   2
+   >>> txInfo.keys()
+   [0, 1]
+
+OK, let's go ahead and create an annotation database using this
+sqlite database as its slice database back-end::
+
+   >>> annodb = annotation.AnnotationDB(txInfo, dna_db, 
+   ...                                  sliceAttrDict=dict(id='seq_id'))
+   ...
+   >>> len(annodb)
+   2
+
+Looks good.  We can play with the annotations in the usual ways::
+
+   >>> a = annodb[0]
+   >>> len(a)
+   50
+   >>> a.sequence
+   gi|171854975|dbj|AB364477.1|[0:50]
+   >>> a = annodb[1]
+   >>> a.sequence
+   -gi|171854975|dbj|AB364477.1|[300:400]
+
+When we're done with our database, we should of course close
+the server connection, forcing it to close any open files and
+write all the data to disk::
+
+   >>> liteserver.close()
+
+
+
