@@ -1,7 +1,183 @@
 
-=========================
-Using Databases with Pygr
-=========================
+
+=================================
+Workings with Mappings and Graphs
+=================================
+
+Purpose
+^^^^^^^
+
+This tutorial teaches you how to create and query 
+mappings stored in memory, on disk, and in SQL databases.
+This includes not only traditional Python mappings, in which
+each value maps to a unique value, and many-to-many mappings,
+which we will refer to as *graphs*.  You should first understand
+how Pygr works with databases (see :doc:`db_basic`).
+
+The Standard Mapping: dict
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Every Python programmer knows how to use a Python mapping -- it's
+just ``dict``.  For example, given a database of UCSC "known genes"
+and a database of RefSeq mRNAs, we can use ``dict`` to store a mapping
+from RefSeq to UCSC genes::
+
+   >>> from pygr import sqlgraph
+   >>> serverInfo = sqlgraph.DBServerInfo(host='genome-mysql.cse.ucsc.edu',
+   ...                                    user='genome')
+   >>> genes = sqlgraph.SQLTable('hg18.knownGene', serverInfo=serverInfo)
+   >>> refseq = sqlgraph.SQLTable('hg18.refLink', serverInfo=serverInfo)
+
+Let's get 5 refseq entries and 5 genes, and map them to each other::
+
+   >>> refseq_it = iter(refseq)
+   >>> genes_it = iter(genes)
+   >>> list1 = [refseq_it.next() for i in range(5)]
+   >>> list2 = [genes_it.next() for i in range(5)]
+   >>> m = {}
+   >>> for i in range(5):
+   ...    m[list1[i]] = list2[i]
+
+Now we can query with refseq objects and find the corresponding gene::
+
+   >>> m[list1[2]]
+
+This is nice, but it has several important limitations:
+
+* the mapping is stored in memory.  Big mappings will take up lots of memory,
+  and if they get too big, we wont't be able to create the mapping at all.
+  This is a serious problem for bioinformatics datasets, which are often
+  huge.
+
+* To improve scalability, we'd like to be able to save this mapping to
+  a disk file.  But this requires using a more sophisticated approach --
+  this will only give us a real benefit if the data are stored using
+  an on-disk index structure so that we can quickly look up individual
+  records without having to load a sizable fraction of the data into
+  memory.  Python doesn't provide a complete solution for this;
+  its solution (``shelve``) requires that the key be a string,
+  whereas the value is allowed to be any picklable Python object.
+
+* Persistence: one of the real benefits of storing the mapping
+  on disk would be that we could build the mapping just once,
+  and then reuse it in any subsequent Python process.  However,
+  that requires being able to automatically "recreate" the 
+  Python objects that we mapped to the file, in a later Python process.
+  This is referred to as the "persistence" problem.
+  Commonly, objects from a large, complex database are not
+  "picklable" (Python's standard method for persistence).
+
+Storing Mappings on Disk Using Indexed Files
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+So we need a slightly more sophisticated approach.  The standard
+solution in the database world is to store not the complete
+objects, but simply their unique IDs, to save the mapping.
+Pygr provides a standard class to do this for you:
+:class:`mapping.Mapping`.  Let's apply it to our refseq - genes
+mapping::
+
+   >>> from pygr import mapping
+   >>> m = mapping.Mapping(refseq, genes, filename='mymap.shelve', mode='c')
+
+This tells :class:`mapping.Mapping` that we are mapping objects
+from the database ``refseq`` to objects from the database ``genes``,
+and to create a new file to store the mapping.
+
+Now we simply use the mapping exactly as before::
+
+   >>> for i in range(5):
+   ...    m[list1[i]] = list2[i]
+
+Always close the mapping when you are done; this closes its
+open file descriptor and ensures that all data has been completely
+written to disk::
+
+   >>> m.close()
+
+Now we can test whether this mapping is really persistent, by
+re-opening it from the disk file (this time without the create flag)::
+
+   >>> m = mapping.Mapping(refseq, genes, filename='mymap.shelve')
+   >>> m[list1[2]]
+
+Great!  Storing the mapping on disk has several benefits:
+
+* since the data are accessed via on-disk indexes, without loading
+  the dataset into memory, we can work with huge datasets without
+  using up much memory.
+
+* because these files are indexed, performance should still be reasonably
+  scalable, ideally *O(log(N))* time for looking up one entry, in a 
+  database of size *N*.
+
+Saving Mappings in Worldbase
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you use Pygr, whenever someone says "persistence" you should think
+:mod:`worldbase` -- it makes access to persistent data as easy as
+just "saying the name" of the dataset you want (see :doc:`worldbase`
+for more details).  So let's try adding our mapping to worldbase.
+First let's save our ``genes`` and ``refseq`` datasets::
+
+   >>> from pygr import worldbase
+   >>> serverInfo.__doc__ = 'MySQL server with UCSC genome annotations'
+   >>> worldbase.Bio.MSA.UCSC.genome_mysql = serverInfo
+   >>> genes.__doc__ = 'UCSC hg18.knownGene database'
+   >>> worldbase.Test.Annotation.UCSC.hg18.knownGene = genes
+   >>> refseq.__doc__ = 'UCSC hg18.refseqLink database'
+   >>> worldbase.Test.Annotation.UCSC.hg18.refseqLink = refseq
+
+Now our mapping::
+
+   >>> m.__doc__ = 'refseq to knownGene mapping'
+   >>> worldbase.Test.Annotation.UCSC.hg18.refseqToKG = m
+
+Now let's tell worldbase that this is a one-to-one mapping::
+
+   >>> from pygr import metabase
+   >>> worldbase.schema.Test.Annotation.UCSC.hg18.refseqToKG = \
+   ...   metabase.OneToOneMapping(refseq, genes, bindAttrs=('gene', 'refseq'))
+
+This tells worldbase that ``Test.Annotation.UCSC.hg18.refseqToKG``
+is a one-to-one mapping from ``Test.Annotation.UCSC.hg18.refseqLink``
+to ``Test.Annotation.UCSC.hg18.knownGene``.  It furthermore instructs
+worldbase to automatically bind this mapping to ``refseq`` objects
+as an attribute called ``gene`` and to ``genes`` objects as the
+``refseq`` attribute.
+
+Finally, let's commit all our data::
+
+   >>> worldbase.commit()
+
+Let's see if all this worked.  First, let's clear the worldbase cache,
+which is equivalent to closing Python and starting a new Python
+interpreter::
+
+   >>> worldbase.clear_cache()
+
+This allows us to test whether this worked, without having to quit and
+restart.  Let's just request our ``refseq`` dataset, grab an
+object from it, and try getting its mapping to our genes::
+
+   >>> refseq = worldbase.Test.Annotation.UCSC.hg18.refseqLink()
+   >>> r = refseq['NM_003710']
+   >>> r.gene, r.gene.id
+
+Wow!  Look how much easier it is to use the mapping via our bound
+``gene`` attribute -- we didn't even have to tell worldbase to
+load the ``Test.Annotation.UCSC.hg18.refseqToKG`` mapping or
+the ``Test.Annotation.UCSC.hg18.knownGene`` gene database.
+Just because we requested this bound attribute, worldbase 
+automatically loaded both of the needed resources for us.
+That's the idea of worldbase: to work with data, all you should
+need to know is the *name* of what you want.  In this case,
+all we needed to know was the name of the ``gene`` attribute
+that serves as a proxy for obtaining this mapping.
+
+
+Types of Databases and Mappings
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. csv-table:: Pygr Database categories
    :header: "Data Type", "ID:data dictionary", "1:1 mapping", "many:many mapping"
