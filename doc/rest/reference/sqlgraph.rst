@@ -246,6 +246,32 @@ an iterator for one or more row object.  You must set a
 column to use as the key for searching the database;
 this defaults to "id".
 
+MapView
+-------
+
+Provides a one-to-one mapping based on any SQL query that you provide.
+
+.. class:: MapView(sourceDB, targetDB, viewSQL, cursor=None, serverInfo=None, inverseSQL=None)
+
+   *sourceDB* must be the database whose objects will be used as keys
+   to this mapping.
+
+   *targetDB* must be the database whose objects will be targets of this
+   mapping.
+
+   *viewSQL* must be an SQL query string with a single replacement
+   field (%s), into which the key ID will be inserted prior to 
+   executing the query on the SQL server.  It must return a single
+   ID of the target database object to which the key maps.
+
+   *inverseSQL* if not None, must be an SQL query string for
+   performing the inverse mapping.  It should follow the same basic
+   format as *viewSQL*, with a single replacement
+   field (%s), into which the key ID will be inserted prior to 
+   executing the query on the SQL server.  It must return a single
+   ID of the source database object to which the key maps.
+
+
 SQLGraph
 --------
 Provides a graph interface to data stored in a table
