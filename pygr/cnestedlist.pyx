@@ -1543,8 +1543,8 @@ cdef class NLMSA:
     self.seqs.close()
 
   def __reduce__(self): ############################# SUPPORT FOR PICKLING
-    import seqdb
-    return (seqdb.ClassicUnpickler, (self.__class__,self.__getstate__()))
+    import classutil
+    return (classutil.ClassicUnpickler, (self.__class__,self.__getstate__()))
   def __getstate__(self):
     if self.in_memory_mode:
       raise ValueError("can't pickle NLMSA.in_memory_mode")
