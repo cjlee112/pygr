@@ -75,6 +75,32 @@ This example illustrates some key points about :mod:`worldbase`:
   (:class:`seqdb.SequenceFileDB`), or even to import
   the necessary modules for constructing it.  
 
+* You should think of :mod:`worldbase` not as a conventional *database*
+  (a container for storing a large set of a specific kind of data)
+  but rather as a *metadata database*, i.e. a container for storing
+  *metadata* describing various datasets (which are typically stored in
+  other databases).  By "metadata" we mean information about the *content*
+  of a particular dataset (this is what allows :mod:`worldbase` to reload it
+  automatically for the user, without the user having to know what classes
+  to import or how to construct the object correctly), and about its
+  *relations* with other datasets (dependencies, cross-references; for 
+  details, see the section on ``worldbase.schema`` below).
+
+* Throughout, we will use the term "metabase" to refer to this concept of
+  a "metadata database".
+  Whereas a *database* actually stores an entire dataset, a *metabase*
+  merely stores a small amount of metadata pointing to that database
+  and describing its relations with other datasets.
+
+* :mod:`worldbase` is designed to work with any back-end database that stores
+  **actual data**.  Typical Pygr back-end databases
+  for storing data include MySQL, sqlite, Python shelve (using
+  :class:`mapping.Collection`), on-disk indexes
+  (e.g. for alignments, :class:`cnestedlist.NLMSA`; for sequences,
+  :class:`seqdb.SequenceFileDB`), etc., but you can use anything you want --
+  you just need to make the database object picklable (using standard
+  Python methods).
+
 Saving a Dataset with Dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -203,6 +229,106 @@ This example assumes that
   schema information, worldbase will construct this attribute automatically,
   and will automatically load the resources ``splicegraph`` and ``splices``
   if the user tries to actually use the ``next`` attribute.
+
+Saving SQL Server Information to Worldbase
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For datasets whose back-end storage is in a SQL server, you need
+to supply a mechanism for connecting automatically to that server,
+so worldbase can re-establish the database
+connection when the object is unpickled.  
+For example, say we wanted to save the UCSC ``knownGeneMrna`` 
+interface that we created in :doc:`sequence`.
+We created these objects in two separate steps: first the
+server information; second the mRNA table::
+
+   >>> serverInfo = sqlgraph.DBServerInfo(host='genome-mysql.cse.ucsc.edu',
+   ...                                    user='genome')
+   >>> mrna = sqlgraph.SQLTable('hg18.knownGeneMrna', serverInfo=serverInfo, 
+   ...                          itemClass=UCSCmRNA,
+   ...                          itemSliceClass=seqdb.SeqDBSlice)
+
+Now we can save both of these to worldbase::
+
+   >>> serverInfo.__doc__ = 'MySQL server with UCSC genome annotations'
+   >>> worldbase.Bio.MSA.UCSC.genome_mysql = serverInfo
+   >>> mrna.__doc__ = 'hg18.knownGeneMrna sequence database'
+   >>> worldbase.Bio.MSA.UCSC.hg18.knownGeneMrna = mrna
+   >>> worldbase.commit()
+   
+Note that even if we hadn't explicitly saved ``serverInfo`` to worldbase,
+it still would have been saved in the second step (as a dependency of ``mrna``).
+Retrieving ``Bio.MSA.UCSC.hg18.knownGeneMrna`` would still have worked,
+because it would have stored the ``serverInfo`` as part of its dependencies.
+In that case, the ``serverInfo`` just wouldn't have been assigned a worldbase ID.
+
+
+So why is it valuable to assign ``serverInfo`` a worldbase ID?
+Assigning it a standard ID creates a layer of dereference between
+resources that depend on that ID, and the actual server.  For example,
+UCSC provides all of its mysql data for download, so a lab could set up
+its own MySQL server containing the same data.  In their local worldbase,
+they could save a pointer to their local MySQL server as
+``Bio.MSA.UCSC.genome_mysql``, and all worldbase resources that
+depend on ``Bio.MSA.UCSC.genome_mysql`` would automatically use their
+local server instead of UCSC's.  Furthermore, they could create new resources
+that use their local server, and save them to worldbase, yet
+those resources would still work for other people who don't have
+their own local server -- in their case ``Bio.MSA.UCSC.genome_mysql``
+would point back to the standard UCSC MySQL server.
+
+:class:`sqlgraph.DBServerInfo` provides other advantages:
+
+* it will automatically try to obtain authentication information from
+  your ~/.my.cnf config file.
+
+
+Saving Data to a Specific Location
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:mod:`worldbase` is a collection of one or more metabases representing
+different zones of access -- typically one metabase belonging to
+the user, representing his/her personal data; another metabase
+in a system-wide location, representing data stored on this system
+and available to all its users; and a remote metabase representing resources
+available from the Internet.
+
+Ordinarily, :mod:`worldbase` saves data to the *first writable metabase*
+in your ``WORLDBASEPATH``.  What if you want to specify explicitly
+where to save your data?  To do this, you can open an interface to a
+single metabase directly::
+
+   >>> from pygr import metabase
+   >>> mdb = metabase.Metabase('.')
+
+This opens the metabase in your current directory.  Now we can write
+to it either using its ``Data`` attribute (which provides a 
+worldbase-like interface), or directly use its 
+:meth:`metabase.Metabase.add_resource()` method::
+
+   >>> mdb.Data.Bio.MSA.UCSC.hg18.knownGeneMrna = mrna
+
+or::
+
+   >>> mdb.add_resource('Bio.MSA.UCSC.hg18.knownGeneMrna', mrna)
+
+and finally commit in the usual way::
+
+   >>> mdb.commit()
+
+Where Can You Store Metabases?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Pygr currently support three types of :class:`metabase.Metabase`:
+
+* a Python shelve file stored on-disk: :class:`metabase.ShelveMetabase`
+
+* a MySQL database table: :class:`metabase.MySQLMetabase`: this is used
+  for any metabase path that begins with "mysql:".
+
+* an XMLRPC server: :class:`metabase.MetabaseServer`: this is used
+  for any metabase path that begins with "http:".
+
 
 Pickling: The Fine Print
 ^^^^^^^^^^^^^^^^^^^^^^^^
