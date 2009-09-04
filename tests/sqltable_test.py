@@ -141,6 +141,29 @@ class SQLTable_Test(SQLTable_Setup):
             raise AssertionError('failed to trap non-unique mapping')
         except KeyError:
             pass
+    def test_mapview_inverse(self):
+        'test inverse MapView of SQL join'
+        m = MapView(self.sourceDB, self.targetDB,"""\
+        SELECT t2.third_id FROM %s t1, %s t2
+           WHERE t1.my_id=%%s and t1.other_id=t2.other_id
+        """ % (self.joinTable1,self.joinTable2), serverInfo=self.serverInfo,
+                    inverseSQL="""\
+        SELECT t1.my_id FROM %s t1, %s t2
+           WHERE t2.third_id=%%s and t1.other_id=t2.other_id
+        """ % (self.joinTable1,self.joinTable2))
+        assert m[self.sourceDB[2]] == self.targetDB[7]
+        assert m[self.sourceDB[3]] == self.targetDB[99]
+        assert self.sourceDB[2] in m
+        r = ~m # get the inverse
+        assert self.sourceDB[2] == r[self.targetDB[7]]
+        assert self.sourceDB[3] == r[self.targetDB[99]]
+        assert self.targetDB[7] in r
+        
+        try:
+            d = m[self.sourceDB[4]]
+            raise AssertionError('failed to trap non-unique mapping')
+        except KeyError:
+            pass
     def test_graphview(self):
         'test GraphView of SQL join'
         m = GraphView(self.sourceDB, self.targetDB,"""\
