@@ -9,12 +9,18 @@ try:
 except ImportError:
     import md5 as hashlib
 
-config = ConfigParser.ConfigParser({'testOutputBaseDir' : '.', 'smallSampleKey': ''})
+config = ConfigParser.ConfigParser({'testOutputBaseDir' : '.', 'smallSampleKey_nlmsa': ''})
 config.read([ os.path.join(os.path.expanduser('~'), '.pygrrc'), os.path.join(os.path.expanduser('~'), 'pygr.cfg'), '.pygrrc', 'pygr.cfg' ])
 mafDir = config.get('megatests_dm2', 'mafDir')
 seqDir = config.get('megatests_dm2', 'seqDir')
+smallSampleKey = config.get('megatests_dm2', 'smallSampleKey_nlmsa')
 testInputDir = config.get('megatests', 'testInputDir')
 testOutputBaseDir = config.get('megatests', 'testOutputBaseDir')
+
+if smallSampleKey:
+    smallSamplePostfix = '_' + smallSampleKey
+else:
+    smallSamplePostfix = ''
 
 ## mafDir CONTAINS FOLLOWING DM2 MULTIZ15WAY MAF ALIGNMENTS
 ## seqDir CONTAINS FOLLOWING 15 GENOME ASSEMBLIES AND THEIR SEQDB FILES
@@ -102,17 +108,19 @@ class Build_Test(PygrBuildNLMSAMegabase):
         for orgstr in msaSpeciesList:
             genomedict[orgstr] = pygr.Data.getResource('TEST.Seq.Genome.' + orgstr)
         uniondict = seqdb.PrefixUnionDict(genomedict)
-        import glob
-        maflist = glob.glob(os.path.join(mafDir, 'chr4h.maf')) # CHR4H TESTING
-        maflist.sort()
+        if smallSampleKey:
+            maflist = ( os.path.join(mafDir, smallSampleKey + '.maf'), )
+        else:
+            maflist = glob.glob(os.path.join(mafDir, '*.maf'))
+            maflist.sort()
         msaname = os.path.join(self.path, 'dm2_multiz15way')
         msa1 = cnestedlist.NLMSA(msaname, 'w', uniondict, maflist, maxlen = 536870912, maxint = 22369620) # 500MB VERSION
         msa1.__doc__ = 'TEST NLMSA for dm2 multiz15way'
         pygr.Data.addResource('TEST.MSA.UCSC.dm2_multiz15way', msa1)
         pygr.Data.save()
         msa = pygr.Data.getResource('TEST.MSA.UCSC.dm2_multiz15way')
-        outfileName = os.path.join(testInputDir, 'splicesite_dm2_chr4h.txt') # CHR4H TESTING
-        outputName = os.path.join(testInputDir, 'splicesite_dm2_chr4h_multiz15way.txt') # CHR4H TESTING
+        outfileName = os.path.join(testInputDir, 'splicesite_dm2%s.txt' % smallSamplePostfix)
+        outputName = os.path.join(testInputDir, 'splicesite_dm2%s_multiz15way.txt' % smallSamplePostfix)
         newOutputName = os.path.join(self.path, 'splicesite_new1.txt')
         tmpInputName = self.copyFile(outfileName)
         tmpOutputName = self.copyFile(outputName)
