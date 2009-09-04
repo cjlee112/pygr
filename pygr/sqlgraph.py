@@ -1836,7 +1836,8 @@ class MapView(object, UserDict.DictMixin):
                 raise ValueError('this MapView has no inverseSQL!')
             self._inverse = MapView(self.targetDB, self.sourceDB,
                                     self.inverseSQL, self.cursor,
-                                    serverInfo=self.serverInfo)
+                                    serverInfo=self.serverInfo,
+                                    inverseSQL=self.viewSQL)
             self._inverse._inverse = self
             return self._inverse
 
