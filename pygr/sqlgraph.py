@@ -1778,10 +1778,11 @@ class SQLiteServerInfo(DBServerInfo):
 class MapView(object, UserDict.DictMixin):
     'general purpose 1:1 mapping defined by any SQL query'
     def __init__(self, sourceDB, targetDB, viewSQL, cursor=None,
-                 serverInfo=None, **kwargs):
+                 serverInfo=None, inverseSQL=None, **kwargs):
         self.sourceDB = sourceDB
         self.targetDB = targetDB
         self.viewSQL = viewSQL
+        self.inverseSQL = inverseSQL
         if cursor is None:
             if serverInfo is not None: # get cursor from serverInfo
                 cursor = serverInfo.cursor()
@@ -1807,7 +1808,8 @@ class MapView(object, UserDict.DictMixin):
             raise KeyError('%s not found in MapView, or not unique'
                            % str(k))
         return self.targetDB[t[0][0]] # get the corresponding object
-    _pickleAttrs = dict(sourceDB=0, targetDB=0, viewSQL=0, serverInfo=0)
+    _pickleAttrs = dict(sourceDB=0, targetDB=0, viewSQL=0, serverInfo=0,
+                        inverseSQL=0)
     __getstate__ = standard_getstate
     __setstate__ = standard_setstate
     __setitem__ = __delitem__ = clear = pop = popitem = update = \
@@ -1826,6 +1828,17 @@ class MapView(object, UserDict.DictMixin):
     def iteritems(self):
         for k in self:
             yield k,self[k]
+    def __invert__(self):
+        try:
+            return self._inverse
+        except AttributeError:
+            if self.inverseSQL is None:
+                raise ValueError('this MapView has no inverseSQL!')
+            self._inverse = MapView(self.targetDB, self.sourceDB,
+                                    self.inverseSQL, self.cursor,
+                                    serverInfo=self.serverInfo)
+            self._inverse._inverse = self
+            return self._inverse
 
 class GraphViewEdgeDict(UserDict.DictMixin):
     'edge dictionary for GraphView: just pre-loaded on init'
