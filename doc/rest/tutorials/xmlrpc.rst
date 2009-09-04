@@ -6,16 +6,17 @@
    contain the root `toctree` directive.
 
 
-Welcome to the Pygr XMLRPC Tutorial
-================================================
+===================================================
+Making Data Available via XMLRPC or for Downloading
+===================================================
 
 Contents:
 
 .. toctree::
    :maxdepth: 2
 
-Introduction
-------------
+Purpose
+-------
 
 The purpose of this tutorial is to familiarize the user with Pygr's
 resource-sharing service, commonly referred to as XMLRPC, after the
