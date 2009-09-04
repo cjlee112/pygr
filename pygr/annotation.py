@@ -118,7 +118,7 @@ class AnnotationDB(object, UserDict.DictMixin):
                  sliceAttrDict=None,maxCache=None, autoGC=True,
                  checkFirstID=True, **kwargs):
         '''sliceDB must map identifier to a sliceInfo object;
-sliceInfo must have name,start,stop,ori attributes;
+sliceInfo must have attributes: id, start, stop, orientation;
 seqDB must map sequence ID to a sliceable sequence object;
 sliceAttrDict gives optional dict of item attributes that
 should be mapped to sliceDB item attributes.
