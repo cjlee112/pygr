@@ -377,15 +377,3 @@ been introduced since they signed it.
 For the moment we advise that you not point your ``WORLDBASEPATH``
 at sources that you do not have a good reason to trust.
 
-
-One challenge in bioinformatics is the complexity of managing many diverse
-data resources.  For example, running a large job on a heterogeneous cluster
-of computers is complicated by the fact that individual computers often can't
-access a given data resource in the same way (i.e. the file path may be different),
-and some machines may not have direct access at all to certain resources.
-
-Pygr provides a systematic solution to this problem: creating a consistent
-namespace for data.  A given resource is given a unique name that then becomes
-its universal handle for accessing it, no matter where you are (just as Python's
-``import`` command provides a consistent name for accessing a given code
-resource, regardless of where you are).  

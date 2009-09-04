@@ -3,6 +3,13 @@
 Constructing Gene Databases
 ===========================
 
+Purpose
+-------
+
+This tutorial shows you how to build a splice graph representing
+a gene's exons and splicing structure,
+using simple interval information or a GFF3 formatted file.
+You should be familiar with Pygr annotations (see :doc:`annotation2`).
 
 
 Building a Simple Gene & Exon Database
