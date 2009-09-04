@@ -17,11 +17,12 @@ Tutorials
     tutorials/db_basic
     tutorials/alignment
     tutorials/annotation2
-    tutorials/gene
     tutorials/worldbase
+    tutorials/worldbase2
+    tutorials/xmlrpc
+    tutorials/gene
     tutorials/graphquery
     tutorials/annotating-yeast
-    tutorials/xmlrpc
 
 Recipes
 -------
