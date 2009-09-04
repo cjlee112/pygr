@@ -188,11 +188,18 @@ a Pygr mapping using any SQL query that our back-end database
 server can execute::
 
    >>> kgXref = sqlgraph.MapView(refseq, genes,
-   ...             'select kgID from hg18.kgXref where refseq=%s')
+   ...             'select kgID from hg18.kgXref where refseq=%s',
+   ...             inverseSQL='select refseq from hg18.kgXref where kgID=%s')
 
 This tells ``MapView`` that it can provide a 1:1 mapping from
-``refseq`` to ``genes`` using ths supplied SQL query.  The
-query works in a very simple way, whenever we perform an
+``refseq`` to ``genes`` using ths supplied SQL query.  Note that 
+``MapView`` can automatically get the necessary ``serverInfo``
+from the source database you supplied as the first argument.
+Note that we also supplied an SQL statement for performing the
+inverse mapping, so that the ``MapView`` can automatically provide
+the inverse mapping as well.
+
+The ``MapView`` query works in a very simple way, whenever we perform an
 actual mapping operation::
 
    >>> g = kgXref[r]
@@ -209,7 +216,23 @@ actual mapping operation::
   which returns the final result: our desired gene object. 
 
 Of course, our :class:`sqlgraph.MapView` can be saved to 
-:mod:`worldbase` just like we saved the :class:`mapping.Mapping`.
+:mod:`worldbase` just like we saved the :class:`mapping.Mapping`::
+
+   >>> kgXref.__doc__ = 'refseq to knownGene mapping'
+   >>> worldbase.Test.Annotation.UCSC.hg18.refseqToKG = kgXref
+   >>> worldbase.schema.Test.Annotation.UCSC.hg18.refseqToKG = \
+   ...   metabase.OneToOneMapping(refseq, genes, bindAttrs=('gene', 'refseq'))
+   ...
+   >>> worldbase.commit()
+
+Now, if we wanted we could use the inverse mapping directly from
+the ``refseq`` attribute that we bound to gene objects::
+
+   >>> worldbase.clear_cache()
+   >>> genes = worldbase.Test.Annotation.UCSC.hg18.knownGene()
+   >>> g = genes['SOME ID']
+   >>> g.refseq, g.refseq.id
+   
 
 Types of Databases and Mappings
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
