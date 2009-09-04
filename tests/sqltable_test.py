@@ -1,4 +1,4 @@
-import os, unittest
+import os, random, string, unittest
 from testlib import testutil, PygrTestProgram, SkipTest
 from pygr.sqlgraph import SQLTable, SQLTableNoCache,\
      MapView, GraphView, DBServerInfo, import_sqlite
@@ -49,10 +49,23 @@ class SQLTable_Setup(unittest.TestCase):
         """ % tuple(([tableName]*2) + ([joinTable1]*3) + ([joinTable2]*4))
         for line in sql.strip().splitlines(): # insert our test data
             self.db.cursor.execute(line.strip())
+
+        # Another table, for the "ORDER BY" test
+        self.orderTable = tableName + '_orderBy'
+        self.db.cursor.execute("""\
+        CREATE TABLE %s (id INTEGER PRIMARY KEY, number INTEGER, letter VARCHAR(1))
+        """ % self.orderTable)
+        for row in range(0, 10):
+            self.db.cursor.execute('INSERT INTO %s VALUES (%d, %d, \'%s\')' %
+                                   (self.orderTable, row, random.randint(0, 99), 
+                                    string.lowercase[random.randint(0,
+                                                                    len(string.lowercase)
+                                                                    - 1)]))
     def tearDown(self):
         self.db.cursor.execute('drop table if exists %s' % self.tableName)
         self.db.cursor.execute('drop table if exists %s' % self.joinTable1)
         self.db.cursor.execute('drop table if exists %s' % self.joinTable2)
+        self.db.cursor.execute('drop table if exists %s' % self.orderTable)
         self.serverInfo.close()
 
 class SQLTable_Test(SQLTable_Setup):
@@ -157,7 +170,25 @@ class SQLiteBase(testutil.SQLite_Mixin):
         self.load_data('sqltable_test', writeable=self.writeable)
 
 class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
-    pass
+    def test_orderby(self):
+        'test orderBy in SQLTable'
+
+        byNumber = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
+                                   orderBy='number')
+        bv = [ ]
+        for val in byNumber.values():
+            bv.append(val.number)
+        sortedBV = bv[:]
+        sortedBV.sort()
+        assert sortedBV == bv
+
+        byLetter = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
+                                   orderBy='letter')
+        bl = [ ]
+        for val in byLetter.values():
+            bl.append(val.letter)
+        sortedBL = bl[:]
+        assert sortedBL == bl
 
 ## class SQLitePickle_Test(SQLiteTable_Test):
 ##     def setUp(self):
