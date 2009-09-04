@@ -61,6 +61,8 @@ class SQLTable_Test(SQLTable_Setup):
         k = self.db.keys()
         k.sort()
         assert k == [1, 2]
+    def test_len(self):
+        assert len(self.db) == len(self.db.keys())
     def test_contains(self):
         assert 1 in self.db
         assert 2 in self.db
