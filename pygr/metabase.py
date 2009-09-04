@@ -1,7 +1,6 @@
 
 import os, pickle, sys, re, datetime, UserDict
 from StringIO import StringIO
-import shelve
 from mapping import Collection,Mapping,Graph
 from classutil import standard_invert,get_bound_subclass,SourceFileName
 from coordinator import XMLRPCServerBase
