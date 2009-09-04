@@ -175,6 +175,41 @@ need to know is the *name* of what you want.  In this case,
 all we needed to know was the name of the ``gene`` attribute
 that serves as a proxy for obtaining this mapping.
 
+Accessing Mappings from SQL Databases
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Often the mapping that you want is stored in an SQL database.
+Pygr provides a way to use such a mapping directly:
+:class:`sqlgraph.MapView`.  Let's apply that to our refseq
+- UCSC known genes mapping.  UCSC provides a table that gives
+a mapping between known gene IDs and refseq IDs; it's called
+``kgXref``.  :class:`sqlgraph.MapView` enables us to create
+a Pygr mapping using any SQL query that our back-end database
+server can execute::
+
+   >>> kgXref = sqlgraph.MapView(refseq, genes,
+   ...             'select kgID from hg18.kgXref where refseq=%s')
+
+This tells ``MapView`` that it can provide a 1:1 mapping from
+``refseq`` to ``genes`` using ths supplied SQL query.  The
+query works in a very simple way, whenever we perform an
+actual mapping operation::
+
+   >>> g = kgXref[r]
+
+* given a key object ``r`` (which must be from the ``refseq`` database)
+  ``MapView`` first extracts the ID from that object.
+
+* it then formats the query, substituting in the ID in place of the
+  ``%s``
+
+* it runs the query, receiving back an ID for a known gene.
+
+* it then uses that ID as a key to the ``genes`` database,
+  which returns the final result: our desired gene object. 
+
+Of course, our :class:`sqlgraph.MapView` can be saved to 
+:mod:`worldbase` just like we saved the :class:`mapping.Mapping`.
 
 Types of Databases and Mappings
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
