@@ -1,17 +1,16 @@
 
 
-=================================
-Workings with Mappings and Graphs
-=================================
+=====================
+Working with Mappings
+=====================
 
 Purpose
 ^^^^^^^
 
 This tutorial teaches you how to create and query 
 mappings stored in memory, on disk, and in SQL databases.
-This includes not only traditional Python mappings, in which
-each value maps to a unique value, and many-to-many mappings,
-which we will refer to as *graphs*.  You should first understand
+This focuses on traditional Python mappings, in which
+each value maps to a unique value.  You should first understand
 how Pygr works with databases (see :doc:`db_basic`).
 
 The Standard Mapping: dict
@@ -233,6 +232,38 @@ the ``refseq`` attribute that we bound to gene objects::
    >>> g = genes['SOME ID']
    >>> g.refseq, g.refseq.id
    
+Storing Mappings in an SQL Database
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Because :class:`sqlgraph.MapView` allows you to use arbitrary SQL
+expressions to generate the mapping, there is no guaranteed way for
+it to be able to save mapping data to your schema.  Instead, simply
+use :class:`sqlgraph.SQLTable` to create an SQL table and save
+mapping information to it.  Let's go through a simple example
+of storing our mapping in an sqlite table.  First let's create the table::
+
+   >>> liteserver = sqlgraph.SQLiteServerInfo('mapping.sqlite')
+   >>> m = sqlgraph.SQLTable('refseq_knowngene', serverInfo=liteserver,
+   ...                       writeable=True, 
+   ...                       createTable='CREATE TABLE refseq_knowngene (refseq_id VARCHAR(40) PRIMARY KEY, kg_id VARCHAR(40) NOT NULL, INDEX(kg_id));')
+   ...
+
+Now all we have to do is save the ID pairs to the table, using its
+:meth:`sqlgraph.SQLTable.new()` method::
+
+   >>> for i in range(5):
+   ...    m.new(refseq_id=list1[i].id, kg_id=list2[i].id)
+
+When we're done saving our data, all we have to do is create a
+:class:`sqlgraph.MapView` object to access the table::
+
+   >>> m = sqlgraph.MapView(refseq, genes,
+   ...             'select kg_id from refseq_knowngene where refseq_id=%s',
+   ...             inverseSQL='select refseq_id from refseq_knowngene where kg_id=%s')
+   ...
+   >>> m[list1[1]]
+
+
 
 Types of Databases and Mappings
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
