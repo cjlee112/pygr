@@ -20,6 +20,7 @@ Tutorials
     tutorials/worldbase
     tutorials/worldbase2
     tutorials/xmlrpc
+    tutorials/db
     tutorials/gene
     tutorials/graphquery
     tutorials/annotating-yeast
