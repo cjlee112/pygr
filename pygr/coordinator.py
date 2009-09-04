@@ -246,10 +246,8 @@ class XMLRPCServerBase(object):
     xmlrpc_methods={'methodCall':0,'objectList':0,'objectInfo':0}
     max_tb=10
     _dispatch=safe_dispatch # RESTRICT XMLRPC TO JUST THE METHODS LISTED ABOVE
-    def __init__(self, name, host=None, port=5000, logRequests=False,
+    def __init__(self, name, host='', port=5000, logRequests=False,
                  server=None):
-        if host is None: # GET FULLY QUALIFIED HOSTNAME SO OTHERS CAN CONTACT US
-            host=get_hostname()
         self.host=host
         self.name=name
         if server is not None:
@@ -286,13 +284,19 @@ class XMLRPCServerBase(object):
         except (KeyError,AttributeError):
             return '' # RETURN FAILURE CODE
         return m(*args) # RUN THE OBJECT METHOD
-    def serve_forever(self, demonize = True):
+    def serve_forever(self, demonize=None, daemonize=False, detach=False):
         'launch the XMLRPC service.  Never exits if demonize == True.'
-        if demonize == True:
+        if demonize is not None:
+            logging.warning("demonize is a deprecated argument to serve_forever; use 'daemonize' instead!")
+            daemonize = demonize
+
+        if daemonize:
             print "Running as a daemon"
             detach_as_demon_process(self)
             serve_forever(self)
-        else:
+        elif not daemonize and not detach:
+            serve_forever(self)
+        else: # daemonize and detach
             print "Running in the background of active session"
             # Check if we're running interactively, as otherwise the server will
             # die right after starting. Two checks are needed for this: one for
