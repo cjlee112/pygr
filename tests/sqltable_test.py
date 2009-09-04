@@ -141,6 +141,11 @@ class SQLTable_Test(SQLTable_Setup):
             raise AssertionError('failed to trap non-unique mapping')
         except KeyError:
             pass
+        try:
+            r = ~m
+            raise AssertionError('failed to trap non-invertible mapping')
+        except ValueError:
+            pass
     def test_mapview_inverse(self):
         'test inverse MapView of SQL join'
         m = MapView(self.sourceDB, self.targetDB,"""\
