@@ -494,7 +494,9 @@ cdef class NLMSASlice:
                                      +start-it.im_buf[i].start
             it.im_buf[i].start=start
 
-      if not ns.is_lpo: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
+      if ns.is_lpo: # TARGET INTERVALS MUST BE LPO, MUST MAP TO REAL SEQUENCES
+        it2=IntervalFileDBIterator(start,stop) # HOLDER FOR SUBSEQUENT MERGE
+      else:
         ns_lpo=ns.nlmsaLetters.seqlist[ns.nlmsaLetters.lpo_id] # DEFAULT LPO
         for i from 0 <= i < n:
           if it.im_buf[i].target_id != ns_lpo.id: # SWITCHING TO A DIFFERENT LPO?
@@ -555,11 +557,12 @@ cdef class NLMSASlice:
       cacheMax=0 # TURN OFF CACHING
     if cacheMax>0: # CONSTRUCT & SAVE DICT OF CACHE HINTS: COVERING INTERVALS
       cacheDict={}
-      try: # ADD A CACHE HINT FOR QUERY SEQ IVAL
-        seqID=ns.nlmsaLetters.seqs.getSeqID(seq) # GET FULL-LENGTH ID
-        cacheDict[seqID]=(self.start,self.stop)
-      except KeyError:
-        pass
+      if seq is not None:
+        try: # ADD A CACHE HINT FOR QUERY SEQ IVAL
+          seqID=ns.nlmsaLetters.seqs.getSeqID(seq) # GET FULL-LENGTH ID
+          cacheDict[seqID]=(self.start,self.stop)
+        except KeyError:
+          pass
       for i from 0 <= i < self.nseqBounds: # ONLY SAVE NON-LPO SEQUENCES
         if not ns.nlmsaLetters.seqlist.is_lpo(self.seqBounds[i].target_id):
           cacheDict[ns.nlmsaLetters.seqlist.getSeqID(self.seqBounds[i].target_id)]=(self.seqBounds[i].target_start,self.seqBounds[i].target_end)
