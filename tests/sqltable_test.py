@@ -192,6 +192,16 @@ class SQLTable_Test(SQLTable_Setup):
         assert self.targetDB[6] in d and self.targetDB[8] in d
         assert self.sourceDB[2] in m
 
+        self.sourceDB.cursor.execute("INSERT INTO %s VALUES (5,'seq78')"
+                                     % self.sourceDB.name)
+        assert len(self.sourceDB) == 4
+        assert len(m) == 3
+        l = m.keys()
+        l.sort()
+        correct = [self.sourceDB[2],self.sourceDB[3],self.sourceDB[4]]
+        correct.sort()
+        assert l == correct
+
     def test_graphview_inverse(self):
         'test inverse GraphView of SQL join'
         m = GraphView(self.sourceDB, self.targetDB,"""\
