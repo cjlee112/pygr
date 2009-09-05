@@ -1849,20 +1849,16 @@ class MapView(object, UserDict.DictMixin):
     __setstate__ = standard_setstate
     __setitem__ = __delitem__ = clear = pop = popitem = update = \
                   setdefault = read_only_error
-    def __len__(self):
-        return len(self.sourceDB)
     def __iter__(self):
-        return self.sourceDB.itervalues()
+        'only yield sourceDB items that are actually in this mapping!'
+        for k in self.sourceDB.itervalues():
+            try:
+                self[k]
+                yield k
+            except KeyError:
+                pass
     def keys(self):
-        return self.sourceDB.values()
-    def __contains__(self, k):
-        try:
-            return k.db==self.sourceDB
-        except AttributeError:
-            return False
-    def iteritems(self):
-        for k in self:
-            yield k,self[k]
+        return [k for k in self] # don't use list(self); causes infinite loop!
     def __invert__(self):
         try:
             return self._inverse

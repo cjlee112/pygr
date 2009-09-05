@@ -148,6 +148,15 @@ class SQLTable_Test(SQLTable_Setup):
             raise AssertionError('failed to trap non-invertible mapping')
         except ValueError:
             pass
+        self.sourceDB.cursor.execute("INSERT INTO %s VALUES (5,'seq78')"
+                                     % self.sourceDB.name)
+        assert len(self.sourceDB) == 4
+        assert len(m) == 2
+        l = m.keys()
+        l.sort()
+        correct = [self.sourceDB[2],self.sourceDB[3]]
+        correct.sort()
+        assert l == correct
     def test_mapview_inverse(self):
         'test inverse MapView of SQL join'
         m = MapView(self.sourceDB, self.targetDB,"""\
