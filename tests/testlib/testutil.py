@@ -248,7 +248,7 @@ def mysql_enabled():
         return False
     try:
         from pygr import sqlgraph
-        tempcurs = sqlgraph.getNameCursor()[1]
+        tempcurs = sqlgraph.get_name_cursor()[1]
         # disable some MySQL specific spurious warnings, current scope only
         warnings.simplefilter("ignore") 
         tempcurs.execute('create database if not exists test')
