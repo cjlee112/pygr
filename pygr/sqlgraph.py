@@ -753,7 +753,14 @@ class SQLTable(SQLTableBase):
     "Provide on-the-fly access to rows in the database, caching the results in dict"
     itemClass = TupleO # our default itemClass; constructor can override
     keys=getKeys
-    def __iter__(self): return iter(self.keys())
+    def __iter__(self):
+        cursor = self.get_new_cursor()
+        if cursor: # got our own cursor, guaranteeing query isolation
+            self._select(cursor=cursor, selectCols=self.primary_key)
+            return self.generic_iterator(cursor=cursor,
+                                         cache_f=lambda x:[t[0] for t in x])
+        else: # must pre-fetch all keys to ensure query isolation
+            return iter(self.keys())
     def load(self,oclass=None):
         "Load all data from the table"
         try: # IF ALREADY LOADED, NO NEED TO DO ANYTHING
