@@ -7,11 +7,12 @@ import types
 from classutil import methodFactory,standard_getstate,\
      override_rich_cmp,generate_items,get_bound_subclass,standard_setstate,\
      get_valid_path,standard_invert,RecentValueDictionary,read_only_error,\
-     SourceFileName
+     SourceFileName, split_kwargs
 import os
 import platform 
 import UserDict
 import warnings
+import logger
     
 class TupleDescriptor(object):
     'return tuple entry corresponding to named attribute'
@@ -1153,28 +1154,41 @@ def getColumnTypes(createTable,attrAlias={},defaultColumnType='int',
             attrName = attrAlias[attr+'_id']
         except KeyError:
             attrName = attr+'_id'
-        try:
+        try: # SEE IF USER SPECIFIED A DESIRED TYPE
+            l.append((attrName,createTable[attr+'_id']))
+            continue
+        except (KeyError,TypeError):
+            pass
+        try: # get type info from primary key for that database
             db = kwargs[attr+'DB']
             if db is None:
                 raise KeyError # FORCE IT TO USE DEFAULT TYPE
         except KeyError:
-            try: # SEE IF USER SPECIFIED A DESIRED TYPE
-                l.append((attrName,createTable[attr+'_id']))
-            except (KeyError,TypeError): # OTHERWISE USE THE DEFAULT
-                l.append((attrName,defaultColumnType))
+            pass
         else: # INFER THE COLUMN TYPE FROM THE ASSOCIATED DATABASE KEYS...
             it = iter(db)
             try: # GET ONE IDENTIFIER FROM THE DATABASE
                 k = it.next()
             except StopIteration: # TABLE IS EMPTY, SO READ SQL TYPE FROM db OBJECT
-                l.append((attrName,db.columnType[db.primary_key]))
+                try:
+                    l.append((attrName,db.columnType[db.primary_key]))
+                    continue
+                except AttributeError:
+                    pass
             else: # GET THE TYPE FROM THIS IDENTIFIER
                 if isinstance(k,int) or isinstance(k,long):
                     l.append((attrName,'int'))
+                    continue
                 elif isinstance(k,str):
                     l.append((attrName,'varchar(32)'))
+                    continue
                 else:
                     raise ValueError('SQLGraph node / edge must be int or str!')
+        l.append((attrName,defaultColumnType))
+        logger.warn('no type info found for %s, so using default: %s'
+                    % (attrName, defaultColumnType))
+
+
     return l
 
 
@@ -1192,15 +1206,19 @@ class SQLGraph(SQLTableMultiNoCache):
     _pickleAttrs.update(dict(sourceDB=0,targetDB=0,edgeDB=0,allowMissingNodes=0))
     _edgeClass = SQLEdgeDict
     def __init__(self,name,*l,**kwargs):
+        graphArgs,tableArgs = split_kwargs(kwargs,
+                    ('attrAlias','defaultColumnType','columnAttrs',
+                     'sourceDB','targetDB','edgeDB','simpleKeys','unpack_edge',
+                     'edgeDictClass','graph'))
         if 'createTable' in kwargs: # CREATE A SCHEMA FOR THIS TABLE
             c = getColumnTypes(**kwargs)
-            kwargs['createTable'] = \
+            tableArgs['createTable'] = \
               'create table %s (%s %s not null,%s %s,%s %s,unique(%s,%s))' \
               % (name,c[0][0],c[0][1],c[1][0],c[1][1],c[2][0],c[2][1],c[0][0],c[1][0])
         try:
             self.allowMissingNodes = kwargs['allowMissingNodes']
         except KeyError: pass
-        SQLTableMultiNoCache.__init__(self,name,*l,**kwargs)
+        SQLTableMultiNoCache.__init__(self,name,*l,**tableArgs)
         self.sourceSQL = self._attrSQL('source_id')
         self.targetSQL = self._attrSQL('target_id')
         try:
@@ -1251,14 +1269,18 @@ class SQLGraph(SQLTableMultiNoCache):
                                    **graph_db_inverse_refs(self))
             self._inverse._inverse=self
             return self._inverse
-    def iteritems(self,myslice=slice(0,2)):
-        for k in self:
-            result=(self.pack_source(k),self._edgeClass(k,self))
-            yield result[myslice]
-    def keys(self): return [k for k in self]
-    def itervalues(self): return self.iteritems(1)
-    def values(self): return [k for k in self.iteritems(1)]
-    def items(self): return [k for k in self.iteritems()]
+    def __iter__(self):
+        for k in SQLTableMultiNoCache.__iter__(self):
+            yield self.unpack_source(k)
+    def iteritems(self):
+        for k in SQLTableMultiNoCache.__iter__(self):
+            yield (self.unpack_source(k), self._edgeClass(k, self))
+    def itervalues(self):
+        for k in SQLTableMultiNoCache.__iter__(self):
+            yield self._edgeClass(k, self)
+    def keys(self): return list(self)
+    def values(self): return list(self.itervalues())
+    def items(self): return list(self.iteritems())
     edges=SQLGraphEdgeDescriptor()
     update = update_graph
     def __len__(self):
