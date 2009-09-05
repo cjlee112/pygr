@@ -231,7 +231,7 @@ def list_to_dict(names, values):
     return d
 
 
-def getNameCursor(name=None, connect=None, configFile=None, **kwargs):
+def get_name_cursor(name=None, **kwargs):
     '''get table name and cursor by parsing name or using configFile.
     If neither provided, will try to get via your MySQL config file.
     If connect is None, will use MySQLdb.connect()'''
@@ -240,9 +240,10 @@ def getNameCursor(name=None, connect=None, configFile=None, **kwargs):
         if len(argList)>1:
             name = argList[0] # USE 1ST ARG AS TABLE NAME
             argnames = ('host','user','passwd') # READ ARGS IN THIS ORDER
-            kwargs = list_to_dict(argnames, argList[1:])
-    conn,cursor = mysql_connect(connect, configFile, **kwargs)
-    return name,cursor
+            kwargs = kwargs.copy() # a copy we can overwrite
+            kwargs.update(list_to_dict(argnames, argList[1:]))
+    serverInfo = DBServerInfo(**kwargs)
+    return name,serverInfo.cursor(),serverInfo
 
 def mysql_connect(connect=None, configFile=None, **args):
     """return connection and cursor objects, using .my.cnf if necessary"""
@@ -455,7 +456,7 @@ class SQLTableBase(object, UserDict.DictMixin):
             if serverInfo is not None: # get cursor from serverInfo
                 cursor = serverInfo.cursor()
             else: # try to read connection info from name or config file
-                name,cursor = getNameCursor(name,**kwargs)
+                name,cursor,serverInfo = get_name_cursor(name,**kwargs)
         else:
             warnings.warn("""The cursor argument is deprecated.  Use serverInfo instead! """,
                           DeprecationWarning, stacklevel=2)

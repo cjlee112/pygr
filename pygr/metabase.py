@@ -319,8 +319,8 @@ where DBNAME is the name of your database, TABLENAME is the name of the
 table you want to create, and LAYERNAME is the layer name you want to assign it'''
     _pygr_data_version=(0,1,0)
     def __init__(self, tablename, mdb, createLayer=None, newZone=None, **kwargs):
-        from sqlgraph import getNameCursor,SQLGraph
-        self.tablename,self.cursor=getNameCursor(tablename)
+        from sqlgraph import get_name_cursor,SQLGraph
+        self.tablename,self.cursor,self.serverInfo = get_name_cursor(tablename)
         self.mdb = mdb
         self.writeable = True
         self.rootNames={}
