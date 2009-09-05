@@ -739,28 +739,33 @@ class SQLTableBase(object, UserDict.DictMixin):
         except KeyError:
             pass
 
-def getKeys(self,queryOption=''):
+def getKeys(self,queryOption='', selectCols=None):
     'uses db select; does not force load'
+    if selectCols is None:
+        selectCols=self.primary_key
     if queryOption=='' and self.orderBy is not None:
         queryOption = self.orderBy # apply default ordering
     self.cursor.execute('select %s from %s %s' 
-                        %(self.primary_key,self.name,queryOption))
+                        %(selectCols,self.name,queryOption))
     return [t[0] for t in self.cursor.fetchall()] # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
 
-
+def iter_keys(self, selectCols=None):
+    'guarantee correct iteration insulated from other queries'
+    if selectCols is None:
+        selectCols=self.primary_key
+    cursor = self.get_new_cursor()
+    if cursor: # got our own cursor, guaranteeing query isolation
+        self._select(cursor=cursor, selectCols=selectCols)
+        return self.generic_iterator(cursor=cursor,
+                                     cache_f=lambda x:[t[0] for t in x])
+    else: # must pre-fetch all keys to ensure query isolation
+        return iter(self.keys())
 
 class SQLTable(SQLTableBase):
     "Provide on-the-fly access to rows in the database, caching the results in dict"
     itemClass = TupleO # our default itemClass; constructor can override
     keys=getKeys
-    def __iter__(self):
-        cursor = self.get_new_cursor()
-        if cursor: # got our own cursor, guaranteeing query isolation
-            self._select(cursor=cursor, selectCols=self.primary_key)
-            return self.generic_iterator(cursor=cursor,
-                                         cache_f=lambda x:[t[0] for t in x])
-        else: # must pre-fetch all keys to ensure query isolation
-            return iter(self.keys())
+    __iter__ = iter_keys
     def load(self,oclass=None):
         "Load all data from the table"
         try: # IF ALREADY LOADED, NO NEED TO DO ANYTHING
@@ -916,7 +921,7 @@ class SQLTableNoCache(SQLTableBase):
     Row data are not stored locally, but always accessed by querying the db'''
     itemClass=SQLRow # DEFAULT OBJECT CLASS FOR ROWS...
     keys=getKeys
-    def __iter__(self): return iter(self.keys())
+    __iter__ = iter_keys
     def getID(self,t): return t[0] # GET ID FROM TUPLE
     def select(self,whereClause,params):
         return SQLTableBase.select(self,whereClause,params,self.oclass,
@@ -962,12 +967,11 @@ class SQLTableMultiNoCache(SQLTableBase):
     "Trivial on-the-fly access for table with key that returns multiple rows"
     itemClass = TupleO # default itemClass; constructor can override
     _distinct_key='id' # DEFAULT COLUMN TO USE AS KEY
+    def keys(self):
+        return getKeys(self, selectCols='distinct(%s)'
+                       % self._attrSQL(self._distinct_key))
     def __iter__(self):
-        self.cursor.execute('select distinct(%s) from %s'
-                            %(self._attrSQL(self._distinct_key),self.name))
-        l=self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
-        for row in l:
-            yield row[0]
+        return iter_keys(self, 'distinct(%s)' % self._attrSQL(self._distinct_key))
     def __getitem__(self,id):
         sql,params = self._format_query('select * from %s where %s=%%s'
                            %(self.name,self._attrSQL(self._distinct_key)),(id,))
