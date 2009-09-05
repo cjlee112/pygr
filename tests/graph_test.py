@@ -10,15 +10,17 @@ from pygr import mapping, graphquery, sqlgraph
 class Query_Test(unittest.TestCase):
     "Pygr Query tests"
 
-    def dqcmp(self, datagraph, querygraph, result):
+    def update_graph(self, datagraph):
         try:
             g = self.datagraph
         except AttributeError:
-            pass
+            return datagraph
         else:
             g.update(datagraph)
-            datagraph = g
-            
+            return g
+        
+    def dqcmp(self, datagraph, querygraph, result):
+        datagraph = self.update_graph(datagraph)
         l = [ d.copy() for d in graphquery.GraphQuery(datagraph, querygraph) ]
         assert len(l) == len(result), 'length mismatch'
         l.sort()
@@ -38,7 +40,17 @@ class Query_Test(unittest.TestCase):
                   {0: 0, 1: 2, 2: 1, 3: 3, 4: 4},
                   {0: 0, 1: 2, 2: 1, 3: 3, 4: 5}]
         
-        self.dqcmp(datagraph, querygraph, result) 
+        self.dqcmp(datagraph, querygraph, result)
+
+    def test_iter(self):
+        'test basic iteration'
+        g = {0: {1: None, 2: None, 3: None},
+             1: {2: None}, 3: {4: None, 5: None},
+             4: {6: None}, 5: {6: None}, 2: {}, 6: {}}
+        datagraph = self.update_graph(g)
+        l = list(iter(datagraph))
+        l.sort()
+        assert l == [0,1,2,3,4,5,6]
     
     def test_cyclicquery(self): 
         "Cyclic QG against cyclic DG @CTB comment?"
