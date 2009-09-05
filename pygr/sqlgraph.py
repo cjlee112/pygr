@@ -1880,6 +1880,8 @@ class GraphViewEdgeDict(UserDict.DictMixin):
         sql,params = self.g._format_query(self.g.viewSQL, (k.id,))
         self.g.cursor.execute(sql, params) # run the query
         l = self.g.cursor.fetchall() # get results
+        if len(l) <= 0:
+            raise KeyError('key %s not in GraphView' % k.id)
         self.targets = [t[0] for t in l] # preserve order of the results
         d = {} # also keep targetID:edgeID mapping
         if self.g.edgeDB is not None: # save with edge info
