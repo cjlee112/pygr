@@ -1278,7 +1278,8 @@ class SQLGraph(SQLTableMultiNoCache):
     def itervalues(self):
         for k in SQLTableMultiNoCache.__iter__(self):
             yield self._edgeClass(k, self)
-    def keys(self): return list(self)
+    def keys(self):
+        return [self.unpack_source(k) for k in SQLTableMultiNoCache.keys(self)]
     def values(self): return list(self.itervalues())
     def items(self): return list(self.iteritems())
     edges=SQLGraphEdgeDescriptor()
