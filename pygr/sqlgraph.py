@@ -1865,10 +1865,10 @@ class MapView(object, UserDict.DictMixin):
         except AttributeError:
             if self.inverseSQL is None:
                 raise ValueError('this MapView has no inverseSQL!')
-            self._inverse = MapView(self.targetDB, self.sourceDB,
-                                    self.inverseSQL, self.cursor,
-                                    serverInfo=self.serverInfo,
-                                    inverseSQL=self.viewSQL)
+            self._inverse = self.__class__(self.targetDB, self.sourceDB,
+                                           self.inverseSQL, self.cursor,
+                                           serverInfo=self.serverInfo,
+                                           inverseSQL=self.viewSQL)
             self._inverse._inverse = self
             return self._inverse
 
