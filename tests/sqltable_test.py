@@ -167,14 +167,15 @@ class SQLTable_Test(SQLTable_Setup):
         SELECT t1.my_id FROM %s t1, %s t2
            WHERE t2.third_id=%%s and t1.other_id=t2.other_id
         """ % (self.joinTable1,self.joinTable2))
-        assert m[self.sourceDB[2]] == self.targetDB[7]
-        assert m[self.sourceDB[3]] == self.targetDB[99]
-        assert self.sourceDB[2] in m
         r = ~m # get the inverse
         assert self.sourceDB[2] == r[self.targetDB[7]]
         assert self.sourceDB[3] == r[self.targetDB[99]]
         assert self.targetDB[7] in r
-        
+
+        m = ~r # get the inverse of the inverse!
+        assert m[self.sourceDB[2]] == self.targetDB[7]
+        assert m[self.sourceDB[3]] == self.targetDB[99]
+        assert self.sourceDB[2] in m
         try:
             d = m[self.sourceDB[4]]
             raise AssertionError('failed to trap non-unique mapping')
@@ -186,6 +187,30 @@ class SQLTable_Test(SQLTable_Setup):
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
         """ % (self.joinTable1,self.joinTable2), serverInfo=self.serverInfo)
+        d = m[self.sourceDB[4]]
+        assert len(d) == 2
+        assert self.targetDB[6] in d and self.targetDB[8] in d
+        assert self.sourceDB[2] in m
+
+    def test_graphview_inverse(self):
+        'test inverse GraphView of SQL join'
+        m = GraphView(self.sourceDB, self.targetDB,"""\
+        SELECT t2.third_id FROM %s t1, %s t2
+           WHERE t1.my_id=%%s and t1.other_id=t2.other_id
+        """ % (self.joinTable1,self.joinTable2), serverInfo=self.serverInfo,
+                    inverseSQL="""\
+        SELECT t1.my_id FROM %s t1, %s t2
+           WHERE t2.third_id=%%s and t1.other_id=t2.other_id
+        """ % (self.joinTable1,self.joinTable2))
+        r = ~m # get the inverse
+        assert self.sourceDB[2] in r[self.targetDB[7]]
+        assert self.sourceDB[3] in r[self.targetDB[99]]
+        assert self.targetDB[7] in r
+        d = r[self.targetDB[6]]
+        assert len(d) == 1
+        assert self.sourceDB[4] in d
+
+        m = ~r # get inverse of the inverse!
         d = m[self.sourceDB[4]]
         assert len(d) == 2
         assert self.targetDB[6] in d and self.targetDB[8] in d
