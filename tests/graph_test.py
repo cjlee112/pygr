@@ -7,8 +7,60 @@ import os, unittest
 from testlib import testutil, PygrTestProgram, SkipTest
 from pygr import mapping, graphquery, sqlgraph
 
+class Node(object):
+    def __init__(self, id):
+        self.id = id
+
+
 class Query_Test(unittest.TestCase):
     "Pygr Query tests"
+
+    def get_node(self, k):
+        try:
+            db = self.nodeDB
+        except AttributeError:
+            return k
+        else:
+            try:
+                return db[k]
+            except KeyError:
+                db[k] = Node(k)
+                return db[k]
+    def node_graph(self, g):
+        try:
+            db = self.nodeDB
+        except AttributeError:
+            return g
+        out = {}
+        for k,e in g.items():
+            k = self.get_node(k)
+            d = out.setdefault(k, {})
+            for dest,edge in e.items():
+                d[self.get_node(dest)] = edge
+        return out
+
+    def node_list(self, l):
+        try:
+            db = self.nodeDB
+        except AttributeError:
+            return l
+        out = []
+        for k in l:
+            out.append(self.get_node(k))
+        return out
+
+    def node_result(self, r):
+        try:
+            db = self.nodeDB
+        except AttributeError:
+            return r
+        l = []
+        for d in r:
+            d2 = {}
+            for k,v in d.items():
+                d2[k] = self.get_node(v)
+            l.append(d2)
+        return l
 
     def update_graph(self, datagraph):
         try:
@@ -20,10 +72,11 @@ class Query_Test(unittest.TestCase):
             return g
         
     def dqcmp(self, datagraph, querygraph, result):
-        datagraph = self.update_graph(datagraph)
+        datagraph = self.update_graph(self.node_graph(datagraph))
         l = [ d.copy() for d in graphquery.GraphQuery(datagraph, querygraph) ]
         assert len(l) == len(result), 'length mismatch'
         l.sort()
+        result = self.node_result(result)
         result.sort()
         for i in range(len(l)):
             assert l[i] == result[i], 'incorrect result'
@@ -47,10 +100,12 @@ class Query_Test(unittest.TestCase):
         g = {0: {1: None, 2: None, 3: None},
              1: {2: None}, 3: {4: None, 5: None},
              4: {6: None}, 5: {6: None}, 2: {}, 6: {}}
-        datagraph = self.update_graph(g)
+        datagraph = self.update_graph(self.node_graph(g))
         l = list(iter(datagraph))
         l.sort()
-        assert l == [0,1,2,3,4,5,6]
+        result = self.node_list([0,1,2,3,4,5,6])
+        result.sort()
+        assert l == result
     
     def test_cyclicquery(self): 
         "Cyclic QG against cyclic DG @CTB comment?"
@@ -82,7 +137,7 @@ class Query_Test(unittest.TestCase):
         "Test a filter against a query"
         datagraph = {0: {1: None, 2: None, 3: None}, 1: {2: None, 3: None},
                      3: {4: None}}
-        querygraph = {0:{1:{'filter':lambda toNode,**kw:toNode == 3}},1:{}}
+        querygraph = {0:{1:{'filter':lambda toNode,**kw:toNode == self.get_node(3)}},1:{}}
         result = [{0: 0, 1: 3},{0: 1, 1: 3}]
         self.dqcmp(datagraph,querygraph,result)
 
@@ -105,30 +160,32 @@ class Mapping_Test(Query_Test):
     def test_graphdict(self):
         "Graph dictionary"
         datagraph = self.datagraph
-        datagraph += 1 
-        datagraph[1] += 2
+        datagraph += self.get_node(1) 
+        datagraph[self.get_node(1)] += self.get_node(2)
         results = {1: {2: None}, 2: {}}
+        results = self.node_graph(results)
         assert datagraph == results, 'incorrect result'
     
     def test_nodedel(self): 
         "Node deletion"
         datagraph = self.datagraph
-        datagraph += 1
-        datagraph += 2 
-        datagraph[2] += 3
-        datagraph -= 1
+        datagraph += self.get_node(1)
+        datagraph += self.get_node(2) 
+        datagraph[self.get_node(2)] += self.get_node(3)
+        datagraph -= self.get_node(1)
         results = {2: {3: None}, 3: {}}
+        results = self.node_graph(results)
         assert datagraph == results, 'incorrect result'
     
     def test_delraise(self):
         "Delete raise"
         datagraph = self.datagraph
-        datagraph += 1
-        datagraph += 2
-        datagraph[2] += 3
+        datagraph += self.get_node(1)
+        datagraph += self.get_node(2)
+        datagraph[self.get_node(2)] += self.get_node(3)
         try:
             for i in range(0,2):
-                datagraph -= 3
+                datagraph -= self.get_node(3)
             raise ValueError('failed to catch bad node deletion attempt')
         except KeyError:
             pass # THIS IS THE CORRECT RESULT
@@ -136,9 +193,9 @@ class Mapping_Test(Query_Test):
     def test_setitemraise(self):
         "Setitemraise"
         datagraph = self.datagraph
-        datagraph += 1
+        datagraph += self.get_node(1)
         try:
-            datagraph[1] = 2
+            datagraph[self.get_node(1)] = self.get_node(2)
             raise KeyError('failed to catch bad setitem attempt')
         except ValueError:
             pass # THIS IS THE CORRECT RESULT
@@ -147,7 +204,11 @@ class Mapping_Test(Query_Test):
         "Graphedges"
         datagraph = self.datagraph
         graphvals = {1:{2:None},2:{3:None,4:None},5:{2:None},3:{},4:{}}
-        edge_list = [[1, 2,None], [2, 3,None], [2, 4,None], [5, 2,None]]
+        graphvals = self.node_graph(graphvals)
+        edge_list = [[self.get_node(1), self.get_node(2),None],
+                     [self.get_node(2), self.get_node(3),None],
+                     [self.get_node(2), self.get_node(4),None],
+                     [self.get_node(5), self.get_node(2),None]]
         for i in graphvals:
             datagraph += i
             for n in graphvals[i].keys():
@@ -167,22 +228,19 @@ class Graph_Test(Mapping_Test):
     def setUp(self):
         self.datagraph = mapping.Graph()
 
-class Graph_DB_Test(unittest.TestCase):
+class Graph_DB_Test(Mapping_Test):
     "test mapping.Graph with sourceDB, targetDB but no edgeDB"
 
     def setUp(self):
-        class Node(object):
-            def __init__(self, id):
-                self.id = id
-        self.nodes = {1:Node(1), 2:Node(2)}
-        self.datagraph = mapping.Graph(sourceDB=self.nodes,
-                                       targetDB=self.nodes)
+        self.nodeDB = {1:Node(1), 2:Node(2)}
+        self.datagraph = mapping.Graph(sourceDB=self.nodeDB,
+                                       targetDB=self.nodeDB)
     def test_no_edge_db(self):
         'test behavior with no edgeDB'
-        self.datagraph += self.nodes[1] # add node
-        self.datagraph[self.nodes[1]][self.nodes[2]] = 3 # add edge
+        self.datagraph += self.nodeDB[1] # add node
+        self.datagraph[self.nodeDB[1]][self.nodeDB[2]] = 3 # add edge
 
-        assert self.datagraph[self.nodes[1]][self.nodes[2]] == 3
+        assert self.datagraph[self.nodeDB[1]][self.nodeDB[2]] == 3
         
 
 class GraphShelve_Test(Mapping_Test):
@@ -193,6 +251,21 @@ class GraphShelve_Test(Mapping_Test):
         tmp = testutil.TempDir('graphshelve-test')
         filename = tmp.subfile() # needs a random name each time
         self.datagraph = mapping.Graph(filename=filename, intKeys=True)
+        
+    def tearDown(self):
+        self.datagraph.close()
+
+ 
+class GraphShelve_DB_Test(Mapping_Test):
+    "Run same tests on mapping.Graph class"
+
+    def setUp(self):
+        self.nodeDB = {}        
+        tmp = testutil.TempDir('graphshelve-test')
+        filename = tmp.subfile() # needs a random name each time
+        self.datagraph = mapping.Graph(sourceDB=self.nodeDB,
+                                       targetDB=self.nodeDB,
+                                       filename=filename, intKeys=True)
         
     def tearDown(self):
         self.datagraph.close()
@@ -213,6 +286,24 @@ class SQLGraph_Test(Mapping_Test):
     def tearDown(self):
         self.datagraph.cursor.execute('drop table if exists %s' % self.dbname)
 
+class SQLGraph_DB_Test(Mapping_Test):
+    "Runs the same tests on mapping.SQLGraph class"
+    dbname = 'test.dumbo_foo_test'
+
+    def setUp(self):
+        if not testutil.mysql_enabled():
+            raise SkipTest, "no MySQL"
+    
+        self.nodeDB = {}        
+        createOpts = dict(source_id='int', target_id='int', edge_id='int')
+        self.datagraph = sqlgraph.SQLGraph(self.dbname, dropIfExists=True,
+                                           createTable=createOpts,
+                                           sourceDB=self.nodeDB,
+                                           targetDB=self.nodeDB)
+    
+    def tearDown(self):
+        self.datagraph.cursor.execute('drop table if exists %s' % self.dbname)
+
 class SQLiteGraph_Test(testutil.SQLite_Mixin, Mapping_Test):
     'run same tests on mapping.SQLGraph class using sqlite'
     def sqlite_load(self):
@@ -221,6 +312,18 @@ class SQLiteGraph_Test(testutil.SQLite_Mixin, Mapping_Test):
                                            serverInfo=self.serverInfo,
                                            dropIfExists=True,
                                            createTable=createOpts)
+
+class SQLiteGraph_DB_Test(testutil.SQLite_Mixin, Mapping_Test):
+    'run same tests on mapping.SQLGraph class using sqlite'
+    def sqlite_load(self):
+        self.nodeDB = {}        
+        createOpts = dict(source_id='int', target_id='int', edge_id='int')
+        self.datagraph = sqlgraph.SQLGraph('testgraph',
+                                           serverInfo=self.serverInfo,
+                                           dropIfExists=True,
+                                           createTable=createOpts,
+                                           sourceDB=self.nodeDB,
+                                           targetDB=self.nodeDB)
 
 # test currently unused, requires access to leelab data
 ## from pygr import worldbase
