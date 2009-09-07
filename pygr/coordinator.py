@@ -153,28 +153,21 @@ class FileDict(dict):
             self[key]=objclass(val) # APPLY THE DESIRED TYPE CONVERSION
         f.close()
 
-def try_fork():
-    "standard UNIX technique c/o Jurgen Hermann's Python Cookbook recipe"
-    try:
-        pid=os.fork()
-        if pid>0: # MAKE PARENT EXIT SILENTLY
-            sys.exit(0)
-    except OSError,e:
-        print >>sys.stderr, "fork failed: %d (%s)" %(e.errno,e.strerror)
-        sys.exit(1)
-
 def detach_as_demon_process(self):
     "standard UNIX technique c/o Jurgen Hermann's Python Cookbook recipe"
     # CREATE AN APPROPRIATE ERRORLOG FILEPATH
     if not hasattr(self,'errlog') or self.errlog is False:
         self.errlog = os.path.join(os.getcwd(), self.name + '.log')
-    try_fork() # DISCONNECT FROM PARENT PROCESS
-    #os.chdir("/")
+    pid = os.fork()
+    if pid:
+        return pid
+    
     os.setsid() # CREATE A NEW SESSION WITH NO CONTROLLING TERMINAL
     os.umask(0) # IS THIS ABSOLUTELY NECESSARY?
-    try_fork() # DISCONNECT FROM PARENT PROCESS
+    
     sys.stdout=file(self.errlog,'a') # DEMONIZE BY REDIRECTING ALL OUTPUT TO LOG
     sys.stderr=sys.stdout
+    return 0
 
 def serve_forever(self):
     'start the service -- this will run forever'
@@ -284,30 +277,23 @@ class XMLRPCServerBase(object):
         except (KeyError,AttributeError):
             return '' # RETURN FAILURE CODE
         return m(*args) # RUN THE OBJECT METHOD
-    def serve_forever(self, demonize=None, daemonize=False, detach=False):
-        'launch the XMLRPC service.  Never exits if demonize == True.'
+    def serve_forever(self, demonize=None, daemonize=False):
+        'launch the XMLRPC service.  Never exits if daemonize == True.'
         if demonize is not None:
             logging.warning("demonize is a deprecated argument to serve_forever; use 'daemonize' instead!")
             daemonize = demonize
 
+        print 'Serving on interface "%s", port %d' % (self.host, self.port,)
+
         if daemonize:
-            print "Running as a daemon"
-            detach_as_demon_process(self)
-            serve_forever(self)
-        elif not daemonize and not detach:
-            serve_forever(self)
-        else: # daemonize and detach
-            print "Running in the background of active session"
-            # Check if we're running interactively, as otherwise the server will
-            # die right after starting. Two checks are needed for this: one for
-            # a truly interactive session and one for the interpreter having
-            # been run with the -i flag (makes the session interactive AFTER the
-            # script has been executed). Unfortunately, the latter only works
-            # with Python 2.6 and up.
-            if not hasattr(sys, 'ps1'):
-                if sys.version_info < (2, 6) or not sys.flags.interactive:
-                    print "Warning: Running non-interactively without daemonising means the server will die right after starting. This is probably not what you want."
-            thread.start_new_thread(serve_forever, (self, ))
+            print "detaching to run as a daemon."
+            pid = detach_as_demon_process(self)
+            if pid:
+                print 'PID', pid
+                sys.exit(0)
+                
+        serve_forever(self)
+        
     def register(self,url=None,name='index',server=None):
         'register our server with the designated index server'
         data=self.registrationData # RAISE ERROR IF NO DATA TO REGISTER...
