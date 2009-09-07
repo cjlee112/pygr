@@ -278,7 +278,7 @@ class XMLRPCServerBase(object):
             return '' # RETURN FAILURE CODE
         return m(*args) # RUN THE OBJECT METHOD
     def serve_forever(self, demonize=None, daemonize=False):
-        'launch the XMLRPC service.  Never exits if daemonize == True.'
+        'launch the XMLRPC service.  if daemonize=True, detach & exit.'
         if demonize is not None:
             logging.warning("demonize is a deprecated argument to serve_forever; use 'daemonize' instead!")
             daemonize = demonize
