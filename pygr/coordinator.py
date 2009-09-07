@@ -293,6 +293,9 @@ class XMLRPCServerBase(object):
                 sys.exit(0)
                 
         serve_forever(self)
+
+    def serve_in_thread(self):
+        thread.start_new_thread(serve_forever, (self,))
         
     def register(self,url=None,name='index',server=None):
         'register our server with the designated index server'
