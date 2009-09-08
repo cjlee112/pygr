@@ -246,7 +246,7 @@ def get_name_cursor(name=None, **kwargs):
     serverInfo = DBServerInfo(**kwargs)
     return name,serverInfo.cursor(),serverInfo
 
-def mysql_connect(connect=None, configFile=None, **args):
+def mysql_connect(connect=None, configFile=None, useStreaming=False, **args):
     """return connection and cursor objects, using .my.cnf if necessary"""
     kwargs = args.copy() # a copy we can modify
     if 'user' not in kwargs and configFile is None: #Find where config file is
@@ -280,6 +280,12 @@ def mysql_connect(connect=None, configFile=None, **args):
         import MySQLdb
         connect = MySQLdb.connect
         kwargs['compress'] = True
+    if useStreaming:  # use server side cursors for scalable result sets
+        try:
+            from MySQLdb import cursors
+            kwargs['cursorclass'] = cursors.SSCursor
+        except (ImportError, AttributeError):
+            pass
     conn = connect(**kwargs)
     cursor = conn.cursor()
     return conn,cursor
