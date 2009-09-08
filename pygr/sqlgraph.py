@@ -661,7 +661,7 @@ class SQLTableBase(object, UserDict.DictMixin):
             new_cursor = self.serverInfo.new_cursor
         except AttributeError:
             return None
-        return new_cursor()
+        return new_cursor(self.arraysize)
     
     def generic_iterator(self, cursor=None, fetch_f=None, cache_f=None,
                          map_f=iter):
@@ -1770,11 +1770,14 @@ class DBServerInfo(object):
             self._start_connection()
             return self._cursor
 
-    def new_cursor(self):
+    def new_cursor(self, arraysize=None):
         """returns a NEW cursor; you must close it yourself! """
         if not hasattr(self, '_connection'):
             self._start_connection()
-        return self._connection.cursor()
+        cursor = self._connection.cursor()
+        if arraysize is not None:
+            cursor.arraysize = arraysize
+        return cursor
 
     def _start_connection(self):
         try:
