@@ -1754,14 +1754,12 @@ def sqlite_connect(*args, **kwargs):
     cursor = connection.cursor()
     return connection, cursor
 
-# list of database connection functions DBServerInfo knows how to use
-_DBServerModuleDict = dict(MySQLdb=mysql_connect, sqlite=sqlite_connect)
-
-
 class DBServerInfo(object):
     'picklable reference to a database server'
     def __init__(self, moduleName='MySQLdb', *args, **kwargs):
-        if moduleName not in _DBServerModuleDict:
+        try:
+            self.__class__ = _DBServerModuleDict[moduleName]
+        except KeyError:
             raise ValueError('Module name not found in _DBServerModuleDict: '\
                              + moduleName)
         self.moduleName = moduleName
@@ -1785,14 +1783,6 @@ class DBServerInfo(object):
             cursor.arraysize = arraysize
         return cursor
 
-    def _start_connection(self):
-        try:
-            moduleName = self.moduleName
-        except AttributeError:
-            moduleName = 'MySQLdb'
-        connect = _DBServerModuleDict[moduleName]
-        self._connection,self._cursor = connect(*self.args, **self.kwargs)
-
     def close(self):
         """Close file containing this database"""
         self._cursor.close()
@@ -1806,6 +1796,30 @@ class DBServerInfo(object):
                     moduleName=self.moduleName)
 
 
+class MySQLServerInfo(DBServerInfo):
+    'customized for MySQLdb SSCursor support via new_cursor()'
+    def _start_connection(self):
+        self._connection,self._cursor = mysql_connect(*self.args, **self.kwargs)
+    def new_cursor(self, arraysize=None):
+        'provide streaming cursor support'
+        try:
+            conn = self._conn_sscursor
+        except AttributeError:
+            self._conn_sscursor,cursor = mysql_connect(useStreaming=True,
+                                                       *self.args, **self.kwargs)
+        else:
+            cursor = self._conn_sscursor.cursor()
+        if arraysize is not None:
+            cursor.arraysize = arraysize
+        return cursor
+    def close(self):
+        DBServerInfo.close(self)
+        try:
+            self._conn_sscursor.close()
+            del self._conn_sscursor
+        except AttributeError:
+            pass
+
 class SQLiteServerInfo(DBServerInfo):
     """picklable reference to a sqlite database"""
     def __init__(self, database, *args, **kwargs):
@@ -1813,11 +1827,16 @@ class SQLiteServerInfo(DBServerInfo):
         DBServerInfo.__init__(self, 'sqlite',
                               SourceFileName(database), # save abs path!
                               *args, **kwargs)
+    def _start_connection(self):
+        self._connection,self._cursor = sqlite_connect(*self.args, **self.kwargs)
     def __getstate__(self):
         if self.args[0] == ':memory:':
             raise ValueError('SQLite in-memory database is not picklable!')
         return DBServerInfo.__getstate__(self)
         
+# list of DBServerInfo subclasses for different modules
+_DBServerModuleDict = dict(MySQLdb=MySQLServerInfo, sqlite=SQLiteServerInfo)
+
             
 class MapView(object, UserDict.DictMixin):
     'general purpose 1:1 mapping defined by any SQL query'
