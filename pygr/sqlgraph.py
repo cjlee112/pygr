@@ -830,21 +830,18 @@ class SQLTable(SQLTableBase):
     def items(self):
         'forces load of entire table into memory'
         self.load()
-        return self._weakValueDict.items()
+        return [(k,self[k]) for k in self] # apply orderBy rules...
     def iteritems(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        cursor = self.get_new_cursor()
-        self._select(cursor=cursor)
-        return self.generic_iterator(cursor=cursor, map_f=generate_items)
+        return iter_keys(self, selectCols='*', cache_f=None,
+                         map_f=generate_items, get_f=self.items)
     def values(self):
         'forces load of entire table into memory'
         self.load()
-        return self._weakValueDict.values()
+        return [self[k] for k in self] # apply orderBy rules...
     def itervalues(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        cursor = self.get_new_cursor()
-        self._select(cursor=cursor)
-        return self.generic_iterator(cursor=cursor)
+        return iter_keys(self, selectCols='*', cache_f=None, get_f=self.values)
 
 def getClusterKeys(self,queryOption=''):
     'uses db select; does not force load'
