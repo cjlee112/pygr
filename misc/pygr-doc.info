@@ -1,0 +1,27 @@
+Info2: <<
+
+Package: pygr-doc
+Version: 0.8.0.beta1
+Revision: 1
+Description: Pygr documentation
+License: BSD
+Maintainer: Christopher Lee <leec@chem.ucla.edu>
+BuildDepends: sphinx-py23 | sphinx-py24 | sphinx-py25 | sphinx-py26
+Source: http://pygr.googlecode.com/files/pygr-%v.tar.gz
+Source-MD5: 66c52f52834d4b02ff0d02b63b4ac09f
+CompileScript: <<
+ ( cd doc && make )
+<<
+InstallScript: <<
+ mkdir -p %i/share/doc/pygr/html
+ cp -rf doc/html_new/* %i/share/doc/pygr/html
+<<
+DescDetail: <<
+ This package provides HTML documentation for Pygr
+<<
+DescUsage: <<
+ The documentation is installed in %p/share/doc/pygr/html. Point your web
+ browser to index.html is this directory.
+<<
+
+<<

@@ -4,14 +4,15 @@ from __future__ import generators
 from mapping import *
 from sequence import SequenceBase, DNA_SEQTYPE, RNA_SEQTYPE, PROTEIN_SEQTYPE
 import types
-from classutil import ClassicUnpickler,methodFactory,standard_getstate,\
+from classutil import methodFactory,standard_getstate,\
      override_rich_cmp,generate_items,get_bound_subclass,standard_setstate,\
      get_valid_path,standard_invert,RecentValueDictionary,read_only_error,\
-     SourceFileName
+     SourceFileName, split_kwargs
 import os
 import platform 
 import UserDict
 import warnings
+import logger
     
 class TupleDescriptor(object):
     'return tuple entry corresponding to named attribute'
@@ -231,7 +232,7 @@ def list_to_dict(names, values):
     return d
 
 
-def getNameCursor(name=None, connect=None, configFile=None, **kwargs):
+def get_name_cursor(name=None, **kwargs):
     '''get table name and cursor by parsing name or using configFile.
     If neither provided, will try to get via your MySQL config file.
     If connect is None, will use MySQLdb.connect()'''
@@ -240,9 +241,10 @@ def getNameCursor(name=None, connect=None, configFile=None, **kwargs):
         if len(argList)>1:
             name = argList[0] # USE 1ST ARG AS TABLE NAME
             argnames = ('host','user','passwd') # READ ARGS IN THIS ORDER
-            kwargs = list_to_dict(argnames, argList[1:])
-    conn,cursor = mysql_connect(connect, configFile, **kwargs)
-    return name,cursor
+            kwargs = kwargs.copy() # a copy we can overwrite
+            kwargs.update(list_to_dict(argnames, argList[1:]))
+    serverInfo = DBServerInfo(**kwargs)
+    return name,serverInfo.cursor(),serverInfo
 
 def mysql_connect(connect=None, configFile=None, **args):
     """return connection and cursor objects, using .my.cnf if necessary"""
@@ -455,7 +457,7 @@ class SQLTableBase(object, UserDict.DictMixin):
             if serverInfo is not None: # get cursor from serverInfo
                 cursor = serverInfo.cursor()
             else: # try to read connection info from name or config file
-                name,cursor = getNameCursor(name,**kwargs)
+                name,cursor,serverInfo = get_name_cursor(name,**kwargs)
         else:
             warnings.warn("""The cursor argument is deprecated.  Use serverInfo instead! """,
                           DeprecationWarning, stacklevel=2)
@@ -496,6 +498,9 @@ class SQLTableBase(object, UserDict.DictMixin):
         if serverInfo is not None:
             self.serverInfo = serverInfo
 
+    def __len__(self):
+        self._select(selectCols='count(*)')
+        return self.cursor.fetchone()[0]
     def __hash__(self):
         return id(self)
     _pickleAttrs = dict(name=0, clusterKey=0, maxCache=0, arraysize=0,
@@ -656,7 +661,7 @@ class SQLTableBase(object, UserDict.DictMixin):
             new_cursor = self.serverInfo.new_cursor
         except AttributeError:
             return None
-        return new_cursor()
+        return new_cursor(self.arraysize)
     
     def generic_iterator(self, cursor=None, fetch_f=None, cache_f=None,
                          map_f=iter):
@@ -736,21 +741,33 @@ class SQLTableBase(object, UserDict.DictMixin):
         except KeyError:
             pass
 
-def getKeys(self,queryOption=''):
+def getKeys(self,queryOption='', selectCols=None):
     'uses db select; does not force load'
+    if selectCols is None:
+        selectCols=self.primary_key
     if queryOption=='' and self.orderBy is not None:
         queryOption = self.orderBy # apply default ordering
     self.cursor.execute('select %s from %s %s' 
-                        %(self.primary_key,self.name,queryOption))
+                        %(selectCols,self.name,queryOption))
     return [t[0] for t in self.cursor.fetchall()] # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
 
-
+def iter_keys(self, selectCols=None):
+    'guarantee correct iteration insulated from other queries'
+    if selectCols is None:
+        selectCols=self.primary_key
+    cursor = self.get_new_cursor()
+    if cursor: # got our own cursor, guaranteeing query isolation
+        self._select(cursor=cursor, selectCols=selectCols)
+        return self.generic_iterator(cursor=cursor,
+                                     cache_f=lambda x:[t[0] for t in x])
+    else: # must pre-fetch all keys to ensure query isolation
+        return iter(self.keys())
 
 class SQLTable(SQLTableBase):
     "Provide on-the-fly access to rows in the database, caching the results in dict"
     itemClass = TupleO # our default itemClass; constructor can override
     keys=getKeys
-    def __iter__(self): return iter(self.keys())
+    __iter__ = iter_keys
     def load(self,oclass=None):
         "Load all data from the table"
         try: # IF ALREADY LOADED, NO NEED TO DO ANYTHING
@@ -906,7 +923,7 @@ class SQLTableNoCache(SQLTableBase):
     Row data are not stored locally, but always accessed by querying the db'''
     itemClass=SQLRow # DEFAULT OBJECT CLASS FOR ROWS...
     keys=getKeys
-    def __iter__(self): return iter(self.keys())
+    __iter__ = iter_keys
     def getID(self,t): return t[0] # GET ID FROM TUPLE
     def select(self,whereClause,params):
         return SQLTableBase.select(self,whereClause,params,self.oclass,
@@ -952,12 +969,11 @@ class SQLTableMultiNoCache(SQLTableBase):
     "Trivial on-the-fly access for table with key that returns multiple rows"
     itemClass = TupleO # default itemClass; constructor can override
     _distinct_key='id' # DEFAULT COLUMN TO USE AS KEY
+    def keys(self):
+        return getKeys(self, selectCols='distinct(%s)'
+                       % self._attrSQL(self._distinct_key))
     def __iter__(self):
-        self.cursor.execute('select distinct(%s) from %s'
-                            %(self._attrSQL(self._distinct_key),self.name))
-        l=self.cursor.fetchall() # PREFETCH ALL ROWS, SINCE CURSOR MAY BE REUSED
-        for row in l:
-            yield row[0]
+        return iter_keys(self, 'distinct(%s)' % self._attrSQL(self._distinct_key))
     def __getitem__(self,id):
         sql,params = self._format_query('select * from %s where %s=%%s'
                            %(self.name,self._attrSQL(self._distinct_key)),(id,))
@@ -1138,28 +1154,41 @@ def getColumnTypes(createTable,attrAlias={},defaultColumnType='int',
             attrName = attrAlias[attr+'_id']
         except KeyError:
             attrName = attr+'_id'
-        try:
+        try: # SEE IF USER SPECIFIED A DESIRED TYPE
+            l.append((attrName,createTable[attr+'_id']))
+            continue
+        except (KeyError,TypeError):
+            pass
+        try: # get type info from primary key for that database
             db = kwargs[attr+'DB']
             if db is None:
                 raise KeyError # FORCE IT TO USE DEFAULT TYPE
         except KeyError:
-            try: # SEE IF USER SPECIFIED A DESIRED TYPE
-                l.append((attrName,createTable[attr+'_id']))
-            except (KeyError,TypeError): # OTHERWISE USE THE DEFAULT
-                l.append((attrName,defaultColumnType))
+            pass
         else: # INFER THE COLUMN TYPE FROM THE ASSOCIATED DATABASE KEYS...
             it = iter(db)
             try: # GET ONE IDENTIFIER FROM THE DATABASE
                 k = it.next()
             except StopIteration: # TABLE IS EMPTY, SO READ SQL TYPE FROM db OBJECT
-                l.append((attrName,db.columnType[db.primary_key]))
+                try:
+                    l.append((attrName,db.columnType[db.primary_key]))
+                    continue
+                except AttributeError:
+                    pass
             else: # GET THE TYPE FROM THIS IDENTIFIER
                 if isinstance(k,int) or isinstance(k,long):
                     l.append((attrName,'int'))
+                    continue
                 elif isinstance(k,str):
                     l.append((attrName,'varchar(32)'))
+                    continue
                 else:
                     raise ValueError('SQLGraph node / edge must be int or str!')
+        l.append((attrName,defaultColumnType))
+        logger.warn('no type info found for %s, so using default: %s'
+                    % (attrName, defaultColumnType))
+
+
     return l
 
 
@@ -1177,15 +1206,19 @@ class SQLGraph(SQLTableMultiNoCache):
     _pickleAttrs.update(dict(sourceDB=0,targetDB=0,edgeDB=0,allowMissingNodes=0))
     _edgeClass = SQLEdgeDict
     def __init__(self,name,*l,**kwargs):
+        graphArgs,tableArgs = split_kwargs(kwargs,
+                    ('attrAlias','defaultColumnType','columnAttrs',
+                     'sourceDB','targetDB','edgeDB','simpleKeys','unpack_edge',
+                     'edgeDictClass','graph'))
         if 'createTable' in kwargs: # CREATE A SCHEMA FOR THIS TABLE
             c = getColumnTypes(**kwargs)
-            kwargs['createTable'] = \
+            tableArgs['createTable'] = \
               'create table %s (%s %s not null,%s %s,%s %s,unique(%s,%s))' \
               % (name,c[0][0],c[0][1],c[1][0],c[1][1],c[2][0],c[2][1],c[0][0],c[1][0])
         try:
             self.allowMissingNodes = kwargs['allowMissingNodes']
         except KeyError: pass
-        SQLTableMultiNoCache.__init__(self,name,*l,**kwargs)
+        SQLTableMultiNoCache.__init__(self,name,*l,**tableArgs)
         self.sourceSQL = self._attrSQL('source_id')
         self.targetSQL = self._attrSQL('target_id')
         try:
@@ -1236,14 +1269,19 @@ class SQLGraph(SQLTableMultiNoCache):
                                    **graph_db_inverse_refs(self))
             self._inverse._inverse=self
             return self._inverse
-    def iteritems(self,myslice=slice(0,2)):
-        for k in self:
-            result=(self.pack_source(k),self._edgeClass(k,self))
-            yield result[myslice]
-    def keys(self): return [k for k in self]
-    def itervalues(self): return self.iteritems(1)
-    def values(self): return [k for k in self.iteritems(1)]
-    def items(self): return [k for k in self.iteritems()]
+    def __iter__(self):
+        for k in SQLTableMultiNoCache.__iter__(self):
+            yield self.unpack_source(k)
+    def iteritems(self):
+        for k in SQLTableMultiNoCache.__iter__(self):
+            yield (self.unpack_source(k), self._edgeClass(k, self))
+    def itervalues(self):
+        for k in SQLTableMultiNoCache.__iter__(self):
+            yield self._edgeClass(k, self)
+    def keys(self):
+        return [self.unpack_source(k) for k in SQLTableMultiNoCache.keys(self)]
+    def values(self): return list(self.itervalues())
+    def items(self): return list(self.iteritems())
     edges=SQLGraphEdgeDescriptor()
     update = update_graph
     def __len__(self):
@@ -1732,11 +1770,14 @@ class DBServerInfo(object):
             self._start_connection()
             return self._cursor
 
-    def new_cursor(self):
+    def new_cursor(self, arraysize=None):
         """returns a NEW cursor; you must close it yourself! """
         if not hasattr(self, '_connection'):
             self._start_connection()
-        return self._connection.cursor()
+        cursor = self._connection.cursor()
+        if arraysize is not None:
+            cursor.arraysize = arraysize
+        return cursor
 
     def _start_connection(self):
         try:
@@ -1775,10 +1816,11 @@ class SQLiteServerInfo(DBServerInfo):
 class MapView(object, UserDict.DictMixin):
     'general purpose 1:1 mapping defined by any SQL query'
     def __init__(self, sourceDB, targetDB, viewSQL, cursor=None,
-                 serverInfo=None, **kwargs):
+                 serverInfo=None, inverseSQL=None, **kwargs):
         self.sourceDB = sourceDB
         self.targetDB = targetDB
         self.viewSQL = viewSQL
+        self.inverseSQL = inverseSQL
         if cursor is None:
             if serverInfo is not None: # get cursor from serverInfo
                 cursor = serverInfo.cursor()
@@ -1804,25 +1846,34 @@ class MapView(object, UserDict.DictMixin):
             raise KeyError('%s not found in MapView, or not unique'
                            % str(k))
         return self.targetDB[t[0][0]] # get the corresponding object
-    _pickleAttrs = dict(sourceDB=0, targetDB=0, viewSQL=0, serverInfo=0)
+    _pickleAttrs = dict(sourceDB=0, targetDB=0, viewSQL=0, serverInfo=0,
+                        inverseSQL=0)
     __getstate__ = standard_getstate
     __setstate__ = standard_setstate
     __setitem__ = __delitem__ = clear = pop = popitem = update = \
                   setdefault = read_only_error
-    def __len__(self):
-        return len(self.sourceDB)
     def __iter__(self):
-        return self.sourceDB.itervalues()
+        'only yield sourceDB items that are actually in this mapping!'
+        for k in self.sourceDB.itervalues():
+            try:
+                self[k]
+                yield k
+            except KeyError:
+                pass
     def keys(self):
-        return self.sourceDB.values()
-    def __contains__(self, k):
+        return [k for k in self] # don't use list(self); causes infinite loop!
+    def __invert__(self):
         try:
-            return k.db==self.sourceDB
+            return self._inverse
         except AttributeError:
-            return False
-    def iteritems(self):
-        for k in self:
-            yield k,self[k]
+            if self.inverseSQL is None:
+                raise ValueError('this MapView has no inverseSQL!')
+            self._inverse = self.__class__(self.targetDB, self.sourceDB,
+                                           self.inverseSQL, self.cursor,
+                                           serverInfo=self.serverInfo,
+                                           inverseSQL=self.viewSQL)
+            self._inverse._inverse = self
+            return self._inverse
 
 class GraphViewEdgeDict(UserDict.DictMixin):
     'edge dictionary for GraphView: just pre-loaded on init'
@@ -1832,6 +1883,8 @@ class GraphViewEdgeDict(UserDict.DictMixin):
         sql,params = self.g._format_query(self.g.viewSQL, (k.id,))
         self.g.cursor.execute(sql, params) # run the query
         l = self.g.cursor.fetchall() # get results
+        if len(l) <= 0:
+            raise KeyError('key %s not in GraphView' % k.id)
         self.targets = [t[0] for t in l] # preserve order of the results
         d = {} # also keep targetID:edgeID mapping
         if self.g.edgeDB is not None: # save with edge info

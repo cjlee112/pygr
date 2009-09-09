@@ -74,6 +74,8 @@ class SQLTable_Test(SQLTable_Setup):
         k = self.db.keys()
         k.sort()
         assert k == [1, 2]
+    def test_len(self):
+        assert len(self.db) == len(self.db.keys())
     def test_contains(self):
         assert 1 in self.db
         assert 2 in self.db
@@ -154,12 +156,84 @@ class SQLTable_Test(SQLTable_Setup):
             raise AssertionError('failed to trap non-unique mapping')
         except KeyError:
             pass
+        try:
+            r = ~m
+            raise AssertionError('failed to trap non-invertible mapping')
+        except ValueError:
+            pass
+        self.sourceDB.cursor.execute("INSERT INTO %s VALUES (5,'seq78')"
+                                     % self.sourceDB.name)
+        assert len(self.sourceDB) == 4
+        assert len(m) == 2
+        l = m.keys()
+        l.sort()
+        correct = [self.sourceDB[2],self.sourceDB[3]]
+        correct.sort()
+        assert l == correct
+    def test_mapview_inverse(self):
+        'test inverse MapView of SQL join'
+        m = MapView(self.sourceDB, self.targetDB,"""\
+        SELECT t2.third_id FROM %s t1, %s t2
+           WHERE t1.my_id=%%s and t1.other_id=t2.other_id
+        """ % (self.joinTable1,self.joinTable2), serverInfo=self.serverInfo,
+                    inverseSQL="""\
+        SELECT t1.my_id FROM %s t1, %s t2
+           WHERE t2.third_id=%%s and t1.other_id=t2.other_id
+        """ % (self.joinTable1,self.joinTable2))
+        r = ~m # get the inverse
+        assert self.sourceDB[2] == r[self.targetDB[7]]
+        assert self.sourceDB[3] == r[self.targetDB[99]]
+        assert self.targetDB[7] in r
+
+        m = ~r # get the inverse of the inverse!
+        assert m[self.sourceDB[2]] == self.targetDB[7]
+        assert m[self.sourceDB[3]] == self.targetDB[99]
+        assert self.sourceDB[2] in m
+        try:
+            d = m[self.sourceDB[4]]
+            raise AssertionError('failed to trap non-unique mapping')
+        except KeyError:
+            pass
     def test_graphview(self):
         'test GraphView of SQL join'
         m = GraphView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
         """ % (self.joinTable1,self.joinTable2), serverInfo=self.serverInfo)
+        d = m[self.sourceDB[4]]
+        assert len(d) == 2
+        assert self.targetDB[6] in d and self.targetDB[8] in d
+        assert self.sourceDB[2] in m
+
+        self.sourceDB.cursor.execute("INSERT INTO %s VALUES (5,'seq78')"
+                                     % self.sourceDB.name)
+        assert len(self.sourceDB) == 4
+        assert len(m) == 3
+        l = m.keys()
+        l.sort()
+        correct = [self.sourceDB[2],self.sourceDB[3],self.sourceDB[4]]
+        correct.sort()
+        assert l == correct
+
+    def test_graphview_inverse(self):
+        'test inverse GraphView of SQL join'
+        m = GraphView(self.sourceDB, self.targetDB,"""\
+        SELECT t2.third_id FROM %s t1, %s t2
+           WHERE t1.my_id=%%s and t1.other_id=t2.other_id
+        """ % (self.joinTable1,self.joinTable2), serverInfo=self.serverInfo,
+                    inverseSQL="""\
+        SELECT t1.my_id FROM %s t1, %s t2
+           WHERE t2.third_id=%%s and t1.other_id=t2.other_id
+        """ % (self.joinTable1,self.joinTable2))
+        r = ~m # get the inverse
+        assert self.sourceDB[2] in r[self.targetDB[7]]
+        assert self.sourceDB[3] in r[self.targetDB[99]]
+        assert self.targetDB[7] in r
+        d = r[self.targetDB[6]]
+        assert len(d) == 1
+        assert self.sourceDB[4] in d
+
+        m = ~r # get inverse of the inverse!
         d = m[self.sourceDB[4]]
         assert len(d) == 2
         assert self.targetDB[6] in d and self.targetDB[8] in d

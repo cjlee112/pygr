@@ -68,6 +68,21 @@ class NLMSA_SimpleTests(unittest.TestCase):
                                 bidirectional=False)
         # @CTB should there be something else here?  What is this testing?
 
+    def test_lpo_query(self):
+        s1=sequence.Sequence('aaaa','s1')
+        s2=sequence.Sequence('bbbb','s2')
+        msa = cnestedlist.NLMSA(mode='memory')
+        msa[0:4]+=s1
+        msa[0:4]+=s2
+        msa.build()
+        msaSlice = msa[0:4]
+        assert len(msaSlice) == 2
+        l = [t[0:2] for t in msaSlice.edges()]
+        l.sort()
+        correct = [(slice(0,4),s1),(slice(0,4),s2)]
+        correct.sort()
+        assert l == correct
+
 class NLMSA_Test(unittest.TestCase):
     def setUp(self):
         s = sequence.Sequence('ATGGACAGAGATGACAGATGAC', 'a')

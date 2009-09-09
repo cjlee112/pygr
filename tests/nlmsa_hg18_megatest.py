@@ -123,7 +123,7 @@ class Build_Test(PygrBuildNLMSAMegabase):
         for orgstr in msaSpeciesList:
             genomedict[orgstr] = pygr.Data.getResource('TEST.Seq.Genome.' + orgstr)
         uniondict = seqdb.PrefixUnionDict(genomedict)
-	if smallSampleKey:
+        if smallSampleKey:
             maflist = ( os.path.join(mafDir, smallSampleKey + '.maf'), )
         else:
             maflist = glob.glob(os.path.join(mafDir, '*.maf'))

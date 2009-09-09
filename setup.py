@@ -10,8 +10,8 @@ alternative splicing patterns, to comparative genomics queries of
 multi-genome alignment data.
 """
 
-import os, sys, stat
-from shutil import copyfile
+import os, sys
+
 try:
     from setuptools import setup, Extension
 except ImportError:

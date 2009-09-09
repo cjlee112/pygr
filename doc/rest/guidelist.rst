@@ -14,9 +14,14 @@ Tutorials
     :maxdepth: 3
 
     tutorials/sequence
+    tutorials/db_basic
     tutorials/alignment
+    tutorials/annotation2
     tutorials/worldbase
-    tutorials/annotation
+    tutorials/worldbase2
+    tutorials/xmlrpc
+    tutorials/db
+    tutorials/gene
     tutorials/graphquery
     tutorials/annotating-yeast
 

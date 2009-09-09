@@ -1,7 +1,6 @@
 
 import os, pickle, sys, re, datetime, UserDict
 from StringIO import StringIO
-import shelve
 from mapping import Collection,Mapping,Graph
 from classutil import standard_invert,get_bound_subclass,SourceFileName
 from coordinator import XMLRPCServerBase
@@ -320,8 +319,8 @@ where DBNAME is the name of your database, TABLENAME is the name of the
 table you want to create, and LAYERNAME is the layer name you want to assign it'''
     _pygr_data_version=(0,1,0)
     def __init__(self, tablename, mdb, createLayer=None, newZone=None, **kwargs):
-        from sqlgraph import getNameCursor,SQLGraph
-        self.tablename,self.cursor=getNameCursor(tablename)
+        from sqlgraph import get_name_cursor,SQLGraph
+        self.tablename,self.cursor,self.serverInfo = get_name_cursor(tablename)
         self.mdb = mdb
         self.writeable = True
         self.rootNames={}
@@ -1101,7 +1100,7 @@ docs in the Python Library Reference).'''
 class ResourceServer(XMLRPCServerBase):
     'serves resources that can be transmitted on XMLRPC'
     def __init__(self, mdb, name, serverClasses=None, clientHost=None,
-                 withIndex=False, excludeClasses=None, downloadDB=None,
+                 withIndex=True, excludeClasses=None, downloadDB=None,
                  resourceDict=None, **kwargs):
         'construct server for the designated classes'
         XMLRPCServerBase.__init__(self, name, **kwargs)

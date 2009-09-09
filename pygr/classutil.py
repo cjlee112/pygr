@@ -584,3 +584,19 @@ def kwargs_filter(kwargs, allowed):
             pass
     return d
 
+def split_kwargs(kwargs, *targets):
+    '''split kwargs into n+1 dicts for n targets; each target must
+    be a list of arguments for that target'''
+    kwargs = kwargs.copy()
+    out = []
+    for args in targets:
+        d = {}
+        for arg in args:
+            try:
+                d[arg] = kwargs[arg]
+                del kwargs[arg]
+            except KeyError:
+                pass
+        out.append(d)
+    out.append(kwargs)
+    return out

@@ -172,10 +172,14 @@ def absoluteSlice(seq,start,stop):
     '''get slice of top-level sequence object, in absolute coordinates.
     This method calls getitem on the top-level sequence object
     i.e. seq.pathForward'''
-    if start<0: # REVERSE ORIENTATION
-        return -(seq.pathForward[-stop:-start])
-    else: # FORWARD ORIENTATION
-        return seq.pathForward[start:stop]
+    try:
+        if start<0: # REVERSE ORIENTATION
+            return -(seq.pathForward[-stop:-start])
+        else: # FORWARD ORIENTATION
+            return seq.pathForward[start:stop]
+    except AttributeError:
+        if seq is None:
+            return slice(start, stop)
 
 def relativeSlice(seq,start,stop):
     '''get slice of this sequence object, in relative coordinates.
