@@ -509,6 +509,12 @@ class SQLTableBase(object, UserDict.DictMixin):
         return self.cursor.fetchone()[0]
     def __hash__(self):
         return id(self)
+    def __cmp__(self, other):
+        'only match self and no other!'
+        if self is other:
+            return 0
+        else:
+            return cmp(id(self), id(other))
     _pickleAttrs = dict(name=0, clusterKey=0, maxCache=0, arraysize=0,
                         attrAlias=0, serverInfo=0, autoGC=0, orderBy=0,
                         writeable=0)
@@ -821,7 +827,7 @@ class SQLTable(SQLTableBase):
         if not self.writeable:
             raise ValueError('this database is read only!')
         try:
-            if v.db != self:
+            if v.db is not self:
                 raise AttributeError
         except AttributeError:
             raise ValueError('object not bound to itemClass for this db!')
@@ -1926,7 +1932,7 @@ class MapView(object, UserDict.DictMixin):
     _schemaModuleDict = _schemaModuleDict # default module list
     get_sql_format = get_table_schema
     def __getitem__(self, k):
-        if not hasattr(k,'db') or k.db != self.sourceDB:
+        if not hasattr(k,'db') or k.db is not self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this map!')
         sql,params = self._format_query(self.viewSQL, (k.id,))
         self.cursor.execute(sql, params) # formatted for this db interface
@@ -2000,7 +2006,7 @@ class GraphViewEdgeDict(UserDict.DictMixin):
     def __getitem__(self, o, exitIfFound=False):
         'for the specified target object, return its associated edge object'
         try:
-            if o.db != self.g.targetDB:
+            if o.db is not self.g.targetDB:
                 raise KeyError('key is not part of targetDB!')
             edgeID = self.targetDict[o.id]
         except AttributeError:
