@@ -692,7 +692,6 @@ class SQLTableBase(object, UserDict.DictMixin):
         while True:
             self.limit_cache()
             rows = fetch_f() # FETCH THE NEXT SET OF ROWS
-            print 'fetch_f rows:', len(rows)
             if len(rows)==0: # NO MORE DATA SO ALL DONE
                 break
             for v in map_f(cache_f(rows)): # CACHE AND GENERATE RESULTS
@@ -1821,6 +1820,7 @@ class DBServerInfo(object):
 
 class MySQLServerInfo(DBServerInfo):
     'customized for MySQLdb SSCursor support via new_cursor()'
+    _serverType = 'mysql'
     def _start_connection(self):
         self._connection,self._cursor = mysql_connect(*self.args, **self.kwargs)
     def new_cursor(self, arraysize=None):
@@ -1849,11 +1849,13 @@ class MySQLServerInfo(DBServerInfo):
                                    map_f=map_f, fetch_f=block_generator)
 
 class CursorCloser(object):
-    'container for ensuring cursor.close() is called, when this obj deleted'
+    """container for ensuring cursor.close() is called, when this obj deleted.
+    For Python 2.5+, we could replace this with a try... finally clause
+    in a generator function such as generic_iterator(); see PEP 342 or
+    What's New in Python 2.5.  """
     def __init__(self, cursor):
         self.cursor = cursor
     def __del__(self):
-        print 'cursor.close() !!'
         self.cursor.close()
 
 class BlockGenerator(CursorCloser):
@@ -1863,8 +1865,16 @@ class BlockGenerator(CursorCloser):
         self.serverInfo = serverInfo
         self.cursor = cursor
         self.kwargs = kwargs
-        self.blockSize = 10000
         self.whereClause = ''
+        if kwargs['orderBy']: # use iterSQL/iterColumns for WHERE / SELECT
+            self.whereSQL = db.iterSQL
+            if kwargs['selectCols'] == db.primary_key: # extract iterColumns
+                self.whereColumns = ','.join(db.iterColumns) # required!!
+            else: # extracting all columns
+                self.whereParams = [db.data[col] for col in db.iterColumns]
+        else: # just use primary key
+            self.whereSQL = 'WHERE %s>%%s' % self.db.primary_key
+            self.whereParams = (db.data['id'],)
         self.params = ()
         self.done = False
         
@@ -1872,26 +1882,31 @@ class BlockGenerator(CursorCloser):
         'get the next block of data'
         if self.done:
             return ()
-        print 'SELECT ... %s LIMIT %s' % (self.whereClause, self.blockSize)
         self.db._select(self.whereClause, self.params, cursor=self.cursor, 
-                        limit='LIMIT %s' % self.blockSize, **(self.kwargs))
+                        limit='LIMIT %s' % self.cursor.arraysize, **(self.kwargs))
         rows = self.cursor.fetchall()
-        if len(rows) < self.blockSize: # iteration complete
+        if len(rows) < self.cursor.arraysize: # iteration complete
             self.done = True
             return rows
-        lastrow = rows[-1]
-        if len(lastrow) > 1: # extract the last ID value in this block
-            stop = lastrow[self.db.data['id']]
+        lastrow = rows[-1] # extract params from the last row in this block
+        if len(lastrow) > 1:
+            self.params = [lastrow[icol] for icol in self.whereParams]
         else:
-            stop = lastrow[0]
-        self.whereClause = 'WHERE %s>%%s' % self.db.primary_key
-        self.params = (stop,)
+            try: # get whereColumns values for last row
+                self.db._select('WHERE %s=%%s' % self.db.primary_key,
+                                lastrow, self.whereColumns, self.cursor)
+            except AttributeError:
+                self.params = lastrow
+            else:
+                self.params = self.cursor.fetchall()[0]
+        self.whereClause = self.whereSQL
         return rows
             
     
 
 class SQLiteServerInfo(DBServerInfo):
     """picklable reference to a sqlite database"""
+    _serverType = 'sqlite'
     def __init__(self, database, *args, **kwargs):
         """Takes same arguments as sqlite3.connect()"""
         DBServerInfo.__init__(self, 'sqlite',
