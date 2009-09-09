@@ -594,11 +594,11 @@ class SQLTableBase(object, UserDict.DictMixin):
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
     def _select(self, whereClause='', params=(), selectCols='t1.*',
-                cursor=None, orderBy=''):
+                cursor=None, orderBy='', limit=''):
         'execute the specified query but do not fetch'
-        sql,params = self._format_query('select %s from %s t1 %s %s'
-                            % (selectCols, self.name, whereClause, orderBy),
-                                        params)
+        sql,params = self._format_query('select %s from %s t1 %s %s %s'
+                            % (selectCols, self.name, whereClause, orderBy,
+                               limit), params)
         if cursor is None:
             self.cursor.execute(sql, params)
         else:
@@ -1823,6 +1823,58 @@ class MySQLServerInfo(DBServerInfo):
             del self._conn_sscursor
         except AttributeError:
             pass
+    def iter_keys(self, db, selectCols=None, orderBy='', map_f=iter,
+                  cache_f=lambda x:[t[0] for t in x], get_f=None, **kwargs):
+        cursor = self.new_cursor()
+        block_generator = BlockGenerator(db, self, cursor, selectCols=None,
+                                         orderBy='', **kwargs)
+        return db.generic_iterator(cursor=cursor, cache_f=cache_f,
+                                   map_f=map_f, fetch_f=block_generator)
+
+
+class BlockGenerator(object):
+    def __init__(self, db, serverInfo, cursor, whereClause='', **kwargs):
+        self.db = db
+        self.serverInfo = serverInfo
+        self.cursor = cursor
+        self.kwargs = kwargs
+        self.blockSize = 10000
+        self.whereClause = ''
+        #self.__iter__() # start me up!
+
+    ## def __iter__(self):
+    ##     'initialize this iterator'
+    ##     self.db._select(cursor=cursor, selectCols='min(%s),max(%s),count(*)'
+    ##                     % (self.db.name, self.db.name))
+    ##     l = self.cursor.fetchall()
+    ##     self.minID, self.maxID, self.count = l[0]
+    ##     self.start = self.minID - 1 # only works for int
+    ##     return self
+
+    ## def next(self):
+    ##     'get the next start position'
+    ##     if self.start >= self.maxID:
+    ##         raise StopIteration
+    ##     return start
+        
+    def __call__(self):
+        'get the next block of data'
+        ## try:
+        ##     start = self.next()
+        ## except StopIteration:
+        ##     return ()
+        self.db._select(cursor=self.cursor, whereClause=self.whereClause,
+                        limit='LIMIT %s' % self.blockSize, **kwargs)
+        rows = self.cursor.fetchall()
+        lastrow = rows[-1]
+        if len(lastrow) > 1: # extract the last ID value in this block
+            start = lastrow[self.db.data['id']]
+        else:
+            start = lastrow[0]
+        self.whereClause = '%s>%s' %(self.db.primary_key,start)
+        return rows
+            
+    
 
 class SQLiteServerInfo(DBServerInfo):
     """picklable reference to a sqlite database"""
