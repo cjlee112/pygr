@@ -775,7 +775,7 @@ def iter_keys(self, selectCols=None, orderBy='', map_f=iter,
     cursor = self.get_new_cursor()
     if cursor: # got our own cursor, guaranteeing query isolation
         try:
-            iter_f = self.db.serverInfo.iter_keysAXAFDAA
+            iter_f = self.serverInfo.iter_keys
         except AttributeError:
             self._select(cursor=cursor, selectCols=selectCols,
                          orderBy=orderBy, **kwargs)
@@ -1854,39 +1854,25 @@ class BlockGenerator(object):
         self.kwargs = kwargs
         self.blockSize = 10000
         self.whereClause = ''
-        #self.__iter__() # start me up!
-
-    ## def __iter__(self):
-    ##     'initialize this iterator'
-    ##     self.db._select(cursor=cursor, selectCols='min(%s),max(%s),count(*)'
-    ##                     % (self.db.name, self.db.name))
-    ##     l = self.cursor.fetchall()
-    ##     self.minID, self.maxID, self.count = l[0]
-    ##     self.start = self.minID - 1 # only works for int
-    ##     return self
-
-    ## def next(self):
-    ##     'get the next start position'
-    ##     if self.start >= self.maxID:
-    ##         raise StopIteration
-    ##     return start
+        self.done = False
         
     def __call__(self):
         'get the next block of data'
-        ## try:
-        ##     start = self.next()
-        ## except StopIteration:
-        ##     return ()
+        if self.done:
+            return ()
         print 'SELECT ... %s LIMIT %s' % (self.whereClause, self.blockSize)
         self.db._select(cursor=self.cursor, whereClause=self.whereClause,
-                        limit='LIMIT %s' % self.blockSize, **kwargs)
+                        limit='LIMIT %s' % self.blockSize, **(self.kwargs))
         rows = self.cursor.fetchall()
+        if len(rows) < self.blockSize: # iteration complete
+            self.done = True
+            return rows
         lastrow = rows[-1]
         if len(lastrow) > 1: # extract the last ID value in this block
-            start = lastrow[self.db.data['id']]
+            stop = lastrow[self.db.data['id']]
         else:
-            start = lastrow[0]
-        self.whereClause = 'WHERE %s>%s' %(self.db.primary_key,start)
+            stop = lastrow[0]
+        self.whereClause = 'WHERE %s>%s' %(self.db.primary_key,stop)
         return rows
             
     
