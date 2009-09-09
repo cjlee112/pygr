@@ -673,7 +673,7 @@ class SQLTableBase(object, UserDict.DictMixin):
         try:
             new_cursor = self.serverInfo.new_cursor
         except AttributeError:
-            return None,None
+            return None
         return new_cursor(self.arraysize)
     
     def generic_iterator(self, cursor=None, fetch_f=None, cache_f=None,
