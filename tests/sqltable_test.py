@@ -174,7 +174,7 @@ class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
         'test orderBy in SQLTable'
 
         byNumber = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
-                                   orderBy='number')
+                                   orderBy='ORDER BY number')
         bv = [ ]
         for val in byNumber.values():
             bv.append(val.number)
@@ -183,7 +183,7 @@ class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
         assert sortedBV == bv
 
         byLetter = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
-                                   orderBy='letter')
+                                   orderBy='ORDER BY letter')
         bl = [ ]
         for val in byLetter.values():
             bl.append(val.letter)
