@@ -4,13 +4,20 @@ from pygr.sqlgraph import SQLTable, SQLTableNoCache,\
      MapView, GraphView, DBServerInfo, import_sqlite
 from pygr import logger
 
+
+def catch_iterator(self, *args, **kwargs):
+    try:
+        assert not self.catchIter, 'this should not iterate!'
+    except AttributeError:
+        pass
+    return SQLTable.generic_iterator(self, *args, **kwargs)
+
+
 class SQLTableCatcher(SQLTable):
-    def generic_iterator(self, *args, **kwargs):
-        try:
-            assert not self.catchIter, 'this should not iterate!'
-        except AttributeError:
-            pass
-        return SQLTable.generic_iterator(self, *args, **kwargs)
+    generic_iterator = catch_iterator
+
+class SQLTableNoCacheCatcher(SQLTableNoCache):
+    generic_iterator = catch_iterator
 
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTableCatcher
@@ -70,16 +77,20 @@ class SQLTable_Test(SQLTable_Setup):
         k.sort()
         assert k == [1, 2]
     def test_len(self):
+        self.db.catchIter = True
         assert len(self.db) == len(self.db.keys())
     def test_contains(self):
+        self.db.catchIter = True
         assert 1 in self.db
         assert 2 in self.db
         assert 'foo' not in self.db
     def test_has_key(self):
+        self.db.catchIter = True
         assert self.db.has_key(1)
         assert self.db.has_key(2)
         assert not self.db.has_key('foo')
     def test_get(self):
+        self.db.catchIter = True
         assert self.db.get('foo') is None
         assert self.db.get(1) == self.db[1]
         assert self.db.get(2) == self.db[2]
@@ -122,6 +133,7 @@ class SQLTable_Test(SQLTable_Setup):
         assert ki == ii
     def test_readonly(self):
         'test error handling of write attempts to read-only DB'
+        self.db.catchIter = True # no iter expected in this test!
         try:
             self.db.new(seq_id='freddy', start=3000, stop=4500)
             raise AssertionError('failed to trap attempt to write to db')
@@ -142,6 +154,7 @@ class SQLTable_Test(SQLTable_Setup):
     ### @CTB need to test write access
     def test_mapview(self):
         'test MapView of SQL join'
+        self.sourceDB.catchIter = self.targetDB.catchIter = True
         m = MapView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -162,6 +175,7 @@ class SQLTable_Test(SQLTable_Setup):
         self.sourceDB.cursor.execute("INSERT INTO %s VALUES (5,'seq78')"
                                      % self.sourceDB.name)
         assert len(self.sourceDB) == 4
+        self.sourceDB.catchIter = False # next step will cause iteration
         assert len(m) == 2
         l = m.keys()
         l.sort()
@@ -195,6 +209,7 @@ class SQLTable_Test(SQLTable_Setup):
             pass
     def test_graphview(self):
         'test GraphView of SQL join'
+        self.sourceDB.catchIter = self.targetDB.catchIter = True
         m = GraphView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -207,6 +222,7 @@ class SQLTable_Test(SQLTable_Setup):
         self.sourceDB.cursor.execute("INSERT INTO %s VALUES (5,'seq78')"
                                      % self.sourceDB.name)
         assert len(self.sourceDB) == 4
+        self.sourceDB.catchIter = False # next step will cause iteration
         assert len(m) == 3
         l = m.keys()
         l.sort()
@@ -216,6 +232,7 @@ class SQLTable_Test(SQLTable_Setup):
 
     def test_graphview_inverse(self):
         'test inverse GraphView of SQL join'
+        self.sourceDB.catchIter = self.targetDB.catchIter = True
         m = GraphView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -271,37 +288,44 @@ class SQLTableRW_Test(SQLTable_Setup):
     writeable = True
     def test_new(self):
         'test row creation with auto inc ID'
+        self.db.catchIter = True # no iter expected in this test
         n = len(self.db)
         o = self.db.new(seq_id='freddy', start=3000, stop=4500)
         assert len(self.db) == n + 1
         t = self.tableClass(self.tableName,
                             serverInfo=self.serverInfo) # requery the db
+        t.catchIter = True # no iter expected in this test
         result = t[o.id]
         assert result.seq_id == 'freddy' and result.start==3000 \
                and result.stop==4500
     def test_new2(self):
         'check row creation with specified ID'
+        self.db.catchIter = True # no iter expected in this test
         n = len(self.db)
         o = self.db.new(id=99, seq_id='jeff', start=3000, stop=4500)
         assert len(self.db) == n + 1
         assert o.id == 99
         t = self.tableClass(self.tableName, 
                             serverInfo=self.serverInfo) # requery the db
+        t.catchIter = True # no iter expected in this test
         result = t[99]
         assert result.seq_id == 'jeff' and result.start==3000 \
                and result.stop==4500
     def test_attr(self):
         'test changing an attr value'
+        self.db.catchIter = True # no iter expected in this test
         o = self.db[2]
         assert o.seq_id == 'seq2'
         o.seq_id = 'newval' # overwrite this attribute
         assert o.seq_id == 'newval' # check cached value
         t = self.tableClass(self.tableName, 
                             serverInfo=self.serverInfo) # requery the db
+        t.catchIter = True # no iter expected in this test
         result = t[2]
         assert result.seq_id == 'newval'
     def test_delitem(self):
         'test deletion of a row'
+        self.db.catchIter = True # no iter expected in this test
         n = len(self.db)
         del self.db[1]
         assert len(self.db) == n - 1
@@ -312,6 +336,7 @@ class SQLTableRW_Test(SQLTable_Setup):
             pass
     def test_setitem(self):
         'test assigning new ID to existing object'
+        self.db.catchIter = True # no iter expected in this test
         o = self.db.new(id=17, seq_id='bob', start=2000, stop=2500)
         self.db[13] = o
         assert o.id == 13
@@ -322,6 +347,7 @@ class SQLTableRW_Test(SQLTable_Setup):
             pass
         t = self.tableClass(self.tableName, 
                             serverInfo=self.serverInfo) # requery the db
+        t.catchIter = True # no iter expected in this test
         result = t[13]
         assert result.seq_id == 'bob' and result.start==2000 \
                and result.stop==2500
