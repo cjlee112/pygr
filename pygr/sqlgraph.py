@@ -969,7 +969,7 @@ class SQLTableNoCache(SQLTableBase):
         if not self.writeable:
             raise ValueError('this database is read only!')
         try:
-            if v.db != self:
+            if v.db is not self:
                 raise AttributeError
         except AttributeError:
             raise ValueError('object not bound to itemClass for this db!')
@@ -1086,7 +1086,8 @@ class SQLEdgeDict(object):
                                                self.table.pack_edge(edge)))
         self.table.cursor.execute(sql, params)
         if not hasattr(self.table,'sourceDB') or \
-           (hasattr(self.table,'targetDB') and self.table.sourceDB==self.table.targetDB):
+           (hasattr(self.table,'targetDB') and
+            self.table.sourceDB is self.table.targetDB):
             self.table += target # ADD AS NODE TO GRAPH
     def __iadd__(self,target):
         self[target] = None
@@ -1524,7 +1525,7 @@ class ForeignKeyInverse(object):
     def check_obj(self,obj):
         'raise KeyError if obj not from this db'
         try:
-            if obj.db != self.g.targetDB:
+            if obj.db is not self.g.targetDB:
                 raise AttributeError
         except AttributeError:
             raise KeyError('key is not from targetDB of this graph!')
@@ -1566,7 +1567,7 @@ Adds or deletes edges by setting foreign key values in the table'''
         for v in g.targetDB.select('where %s=%%s' % g.keyColumn,(k.id,)): # SEARCH THE DB
             dict.__setitem__(self,v,None) # SAVE IN CACHE
     def __setitem__(self,dest,v):
-        if not hasattr(dest,'db') or dest.db != self.g.targetDB:
+        if not hasattr(dest,'db') or dest.db is not self.g.targetDB:
             raise KeyError('dest is not in the targetDB bound to this graph!')
         if v is not None:
             raise ValueError('sorry,this graph cannot store edge information!')
@@ -1606,7 +1607,7 @@ keyColumn is the foreign key column name in targetDB for looking up sourceDB IDs
         'provide custom schema rule for inverting this graph... just use keyColumn!'
         return dict(invert=True,uniqueMapping=True)
     def __getitem__(self,k):
-        if not hasattr(k,'db') or k.db != self.sourceDB:
+        if not hasattr(k,'db') or k.db is not self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this graph!')
         try:
             return self._weakValueDict[k.id] # get from cache
