@@ -1865,6 +1865,7 @@ class BlockGenerator(CursorCloser):
         self.kwargs = kwargs
         self.blockSize = 10000
         self.whereClause = ''
+        self.params = ()
         self.done = False
         
     def __call__(self):
@@ -1872,7 +1873,7 @@ class BlockGenerator(CursorCloser):
         if self.done:
             return ()
         print 'SELECT ... %s LIMIT %s' % (self.whereClause, self.blockSize)
-        self.db._select(cursor=self.cursor, whereClause=self.whereClause,
+        self.db._select(self.whereClause, self.params, cursor=self.cursor, 
                         limit='LIMIT %s' % self.blockSize, **(self.kwargs))
         rows = self.cursor.fetchall()
         if len(rows) < self.blockSize: # iteration complete
@@ -1883,7 +1884,8 @@ class BlockGenerator(CursorCloser):
             stop = lastrow[self.db.data['id']]
         else:
             stop = lastrow[0]
-        self.whereClause = 'WHERE %s>%s' %(self.db.primary_key,stop)
+        self.whereClause = 'WHERE %s>%%s' % self.db.primary_key
+        self.params = (stop,)
         return rows
             
     
