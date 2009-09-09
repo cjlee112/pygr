@@ -673,12 +673,15 @@ class SQLTableBase(object, UserDict.DictMixin):
         try:
             new_cursor = self.serverInfo.new_cursor
         except AttributeError:
-            return None
+            return None,None
         return new_cursor(self.arraysize)
     
     def generic_iterator(self, cursor=None, fetch_f=None, cache_f=None,
-                         map_f=iter):
-        'generic iterator that runs fetch, cache and map functions'
+                         map_f=iter, cursorHolder=None):
+        """generic iterator that runs fetch, cache and map functions.
+        cursorHolder is used only to keep a ref in this function's locals,
+        so that if it is prematurely terminated (by deleting its
+        iterator), cursorHolder.__del__() will close the cursor."""
         if fetch_f is None: # JUST USE CURSOR'S PREFERRED CHUNK SIZE
             if cursor is None:
                 fetch_f = self.cursor.fetchmany
@@ -694,8 +697,6 @@ class SQLTableBase(object, UserDict.DictMixin):
                 break
             for v in map_f(cache_f(rows)): # CACHE AND GENERATE RESULTS
                 yield v
-        if cursor is not None: # close iterator now that we're done
-            cursor.close()
     def tuple_from_dict(self, d):
         'transform kwarg dict into tuple for storing in database'
         l = [None]*len(self.description) # DEFAULT COLUMN VALUES ARE NULL
@@ -780,11 +781,11 @@ def iter_keys(self, selectCols=None, orderBy='', map_f=iter,
             self._select(cursor=cursor, selectCols=selectCols,
                          orderBy=orderBy, **kwargs)
             return self.generic_iterator(cursor=cursor, cache_f=cache_f,
-                                         map_f=map_f)
+                                         map_f=map_f,
+                                         cursorHolder=CursorCloser(cursor))
         else: # use custom iter_keys() method from serverInfo
-            return iter_f(self, cursor, selectCols=selectCols,
-                             orderBy=orderBy, map_f=map_f, cache_f=cache_f,
-                             **kwargs)
+            return iter_f(self, cursor, selectCols=selectCols, map_f=map_f,
+                          orderBy=orderBy, cache_f=cache_f, **kwargs)
     else: # must pre-fetch all keys to ensure query isolation
         if get_f is not None:
             return iter(get_f())
@@ -919,13 +920,15 @@ class SQLTableClustered(SQLTable):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
         cursor = self.get_new_cursor()
         self._select('order by %s' %self.clusterKey, cursor=cursor)
-        return self.generic_iterator(cursor, self.fetch_cluster)
+        return self.generic_iterator(cursor, self.fetch_cluster,
+                                     cursorHolder=CursorHolder(cursor))
     def iteritems(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
         cursor = self.get_new_cursor()
         self._select('order by %s' %self.clusterKey, cursor=cursor)
         return self.generic_iterator(cursor, self.fetch_cluster,
-                                     map_f=generate_items)
+                                     map_f=generate_items,
+                                     cursorHolder=CursorHolder(cursor))
         
 class SQLForeignRelation(object):
     'mapping based on matching a foreign key in an SQL table'
@@ -1845,8 +1848,16 @@ class MySQLServerInfo(DBServerInfo):
         return db.generic_iterator(cursor=cursor, cache_f=cache_f,
                                    map_f=map_f, fetch_f=block_generator)
 
+class CursorCloser(object):
+    'container for ensuring cursor.close() is called, when this obj deleted'
+    def __init__(self, cursor):
+        self.cursor = cursor
+    def __del__(self):
+        print 'cursor.close() !!'
+        self.cursor.close()
 
-class BlockGenerator(object):
+class BlockGenerator(CursorCloser):
+    'workaround for MySQLdb iteration horrible performance'
     def __init__(self, db, serverInfo, cursor, whereClause='', **kwargs):
         self.db = db
         self.serverInfo = serverInfo
