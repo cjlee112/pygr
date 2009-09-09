@@ -594,10 +594,11 @@ class SQLTableBase(object, UserDict.DictMixin):
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
     def _select(self, whereClause='', params=(), selectCols='t1.*',
-                cursor=None):
+                cursor=None, orderBy=''):
         'execute the specified query but do not fetch'
-        sql,params = self._format_query('select %s from %s t1 %s'
-                            % (selectCols,self.name,whereClause), params)
+        sql,params = self._format_query('select %s from %s t1 %s %s'
+                            % (selectCols, self.name, whereClause, orderBy),
+                                        params)
         if cursor is None:
             self.cursor.execute(sql, params)
         else:
@@ -757,17 +758,23 @@ def getKeys(self,queryOption='', selectCols=None):
                         %(selectCols,self.name,queryOption))
     return [t[0] for t in self.cursor.fetchall()] # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
 
-def iter_keys(self, selectCols=None):
+def iter_keys(self, selectCols=None, orderBy='', map_f=iter,
+              cache_f=lambda x:[t[0] for t in x], get_f=None, **kwargs):
     'guarantee correct iteration insulated from other queries'
     if selectCols is None:
         selectCols=self.primary_key
+    if orderBy=='' and self.orderBy is not None:
+        orderBy = self.orderBy # apply default ordering
     cursor = self.get_new_cursor()
     if cursor: # got our own cursor, guaranteeing query isolation
-        self._select(cursor=cursor, selectCols=selectCols)
-        return self.generic_iterator(cursor=cursor,
-                                     cache_f=lambda x:[t[0] for t in x])
+        self._select(cursor=cursor, selectCols=selectCols, orderBy=orderBy,
+                     **kwargs)
+        return self.generic_iterator(cursor=cursor, cache_f=cache_f, map_f=map_f)
     else: # must pre-fetch all keys to ensure query isolation
-        return iter(self.keys())
+        if get_f is not None:
+            return iter(get_f())
+        else:
+            return iter(self.keys())
 
 class SQLTable(SQLTableBase):
     "Provide on-the-fly access to rows in the database, caching the results in dict"
