@@ -683,6 +683,7 @@ class SQLTableBase(object, UserDict.DictMixin):
         while True:
             self.limit_cache()
             rows = fetch_f() # FETCH THE NEXT SET OF ROWS
+            print 'fetch_f rows:', len(rows)
             if len(rows)==0: # NO MORE DATA SO ALL DONE
                 break
             for v in map_f(cache_f(rows)): # CACHE AND GENERATE RESULTS
@@ -767,9 +768,17 @@ def iter_keys(self, selectCols=None, orderBy='', map_f=iter,
         orderBy = self.orderBy # apply default ordering
     cursor = self.get_new_cursor()
     if cursor: # got our own cursor, guaranteeing query isolation
-        self._select(cursor=cursor, selectCols=selectCols, orderBy=orderBy,
-                     **kwargs)
-        return self.generic_iterator(cursor=cursor, cache_f=cache_f, map_f=map_f)
+        try:
+            iter_f = self.db.serverInfo.iter_keysAXAFDAA
+        except AttributeError:
+            self._select(cursor=cursor, selectCols=selectCols,
+                         orderBy=orderBy, **kwargs)
+            return self.generic_iterator(cursor=cursor, cache_f=cache_f,
+                                         map_f=map_f)
+        else: # use custom iter_keys() method from serverInfo
+            return iter_f(self, cursor, selectCols=selectCols,
+                             orderBy=orderBy, map_f=map_f, cache_f=cache_f,
+                             **kwargs)
     else: # must pre-fetch all keys to ensure query isolation
         if get_f is not None:
             return iter(get_f())
@@ -1823,11 +1832,9 @@ class MySQLServerInfo(DBServerInfo):
             del self._conn_sscursor
         except AttributeError:
             pass
-    def iter_keys(self, db, selectCols=None, orderBy='', map_f=iter,
-                  cache_f=lambda x:[t[0] for t in x], get_f=None, **kwargs):
-        cursor = self.new_cursor()
-        block_generator = BlockGenerator(db, self, cursor, selectCols=None,
-                                         orderBy='', **kwargs)
+    def iter_keys(self, db, cursor, map_f=iter,
+                  cache_f=lambda x:[t[0] for t in x], **kwargs):
+        block_generator = BlockGenerator(db, self, cursor, **kwargs)
         return db.generic_iterator(cursor=cursor, cache_f=cache_f,
                                    map_f=map_f, fetch_f=block_generator)
 
@@ -1863,6 +1870,7 @@ class BlockGenerator(object):
         ##     start = self.next()
         ## except StopIteration:
         ##     return ()
+        print 'SELECT ... %s LIMIT %s' % (self.whereClause, self.blockSize)
         self.db._select(cursor=self.cursor, whereClause=self.whereClause,
                         limit='LIMIT %s' % self.blockSize, **kwargs)
         rows = self.cursor.fetchall()
@@ -1871,7 +1879,7 @@ class BlockGenerator(object):
             start = lastrow[self.db.data['id']]
         else:
             start = lastrow[0]
-        self.whereClause = '%s>%s' %(self.db.primary_key,start)
+        self.whereClause = 'WHERE %s>%s' %(self.db.primary_key,start)
         return rows
             
     
@@ -1992,7 +2000,7 @@ class GraphViewEdgeDict(UserDict.DictMixin):
     def __getitem__(self, o, exitIfFound=False):
         'for the specified target object, return its associated edge object'
         try:
-            if o.db is not self.g.targetDB:
+            if o.db != self.g.targetDB:
                 raise KeyError('key is not part of targetDB!')
             edgeID = self.targetDict[o.id]
         except AttributeError:
@@ -2020,7 +2028,7 @@ class GraphView(MapView):
         self.edgeDB = edgeDB
         MapView.__init__(self, sourceDB, targetDB, viewSQL, cursor, **kwargs)
     def __getitem__(self, k):
-        if not hasattr(k,'db') or k.db != self.sourceDB:
+        if not hasattr(k,'db') or k.db is not self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this map!')
         return GraphViewEdgeDict(self, k)
     _pickleAttrs = MapView._pickleAttrs.copy()
