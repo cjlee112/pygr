@@ -4,8 +4,16 @@ from pygr.sqlgraph import SQLTable, SQLTableNoCache,\
      MapView, GraphView, DBServerInfo, import_sqlite
 from pygr import logger
 
+class SQLTableCatcher(SQLTable):
+    def generic_iterator(self, *args, **kwargs):
+        try:
+            assert not self.catchIter, 'this should not iterate!'
+        except AttributeError:
+            pass
+        return SQLTable.generic_iterator(self, *args, **kwargs)
+
 class SQLTable_Setup(unittest.TestCase):
-    tableClass = SQLTable
+    tableClass = SQLTableCatcher
     def __init__(self, *args, **kwargs):
         unittest.TestCase.__init__(self, *args, **kwargs)
         self.serverInfo = DBServerInfo() # share conn for all tests
@@ -97,12 +105,15 @@ class SQLTable_Test(SQLTable_Setup):
         for i in range(40000): # insert 40000 rows
             self.db.cursor.execute(sql)
         iv = []
+        print 'begin itervalues()'
         for o in self.db.itervalues():
             status = 99 in self.db # make it do a query inside iterator loop
             iv.append(o.id)
+        print 'begin values()'
         kv = [o.id for o in self.db.values()]
         assert len(kv) == len(iv)
         assert kv == iv
+        print 'done'
     def test_iteritems(self):
         ki = self.db.items()
         ki.sort()
@@ -159,6 +170,7 @@ class SQLTable_Test(SQLTable_Setup):
         assert l == correct
     def test_mapview_inverse(self):
         'test inverse MapView of SQL join'
+        self.sourceDB.catchIter = self.targetDB.catchIter = True
         m = MapView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -338,8 +350,9 @@ class Ensembl_Test(unittest.TestCase):
         conn = DBServerInfo(host='ensembldb.ensembl.org', user='anonymous',
                             passwd='')
         try:
-            translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
+            translationDB = SQLTableCatcher('homo_sapiens_core_47_36i.translation',
                                      serverInfo=conn)
+            translationDB.catchIter = True # should not iter in this test! 
             exonDB = SQLTable('homo_sapiens_core_47_36i.exon', serverInfo=conn)
         except ImportError,e:
             raise SkipTest(e)
@@ -354,14 +367,18 @@ t2.transcript_id AND t2.transcript_id = t3.transcript_id AND t1.exon_id =
 tr.start_exon_id AND t2.exon_id = tr.end_exon_id AND t3.rank >= t1.rank AND
 t3.rank <= t2.rank ORDER BY t3.rank
             '''
+        print 'creating GraphView...'
         self.translationExons = GraphView(translationDB, exonDB,
                                           sql_statement, serverInfo=conn)
+        print 'getting translation...'
         self.translation = translationDB[15121]
     
     def test_orderBy(self):
         "Ensemble access, test order by"
         'test issue 53: ensure that the ORDER BY results are correct'
+        print 'do mapping'
         exons = self.translationExons[self.translation] # do the query
+        print 'done'
         result = [e.id for e in exons]
         correct = [95160,95020,95035,95050,95059,95069,95081,95088,95101,
                    95110,95172]
