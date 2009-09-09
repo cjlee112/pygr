@@ -150,6 +150,36 @@ class SQLTable_Test(SQLTable_Setup):
             raise AssertionError('failed to trap attempt to write to db')
         except ValueError:
             pass
+    def test_orderBy(self):
+        'test iterator with orderBy, iterSQL, iterColumns'
+        self.targetDB.catchIter = True # should not iterate
+        self.targetDB.arraysize = 2 # force it to use multiple queries to finish
+        result = self.targetDB.keys()
+        assert result == [6, 7, 8, 99]
+        self.targetDB.catchIter = False # next statement will iterate
+        assert result == list(iter(self.targetDB))
+        self.targetDB.catchIter = True # should not iterate
+        self.targetDB.orderBy = 'ORDER BY other_id'
+        result = self.targetDB.keys()
+        assert result == [7, 99, 6, 8]
+        self.targetDB.catchIter = False # next statement will iterate
+        if self.serverInfo._serverType == 'mysql': # only test this for mysql
+            try:
+                assert result == list(iter(self.targetDB))
+                raise AssertionError('failed to trap missing iterSQL attr')
+            except AttributeError:
+                pass
+        self.targetDB.iterSQL = 'WHERE other_id>%s' # tell it how to slice
+        self.targetDB.iterColumns = ['other_id']
+        assert result == list(iter(self.targetDB))
+        result = self.targetDB.values()
+        assert result == [self.targetDB[7], self.targetDB[99],
+                          self.targetDB[6], self.targetDB[8]]
+        assert result == list(self.targetDB.itervalues())
+        result = self.targetDB.items()
+        assert result == [(7, self.targetDB[7]), (99, self.targetDB[99]),
+                          (6, self.targetDB[6]), (8, self.targetDB[8])]
+        assert result == list(self.targetDB.iteritems())
 
     ### @CTB need to test write access
     def test_mapview(self):
