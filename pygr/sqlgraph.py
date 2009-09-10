@@ -451,13 +451,19 @@ class SQLTableBase(object, UserDict.DictMixin):
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
                  serverInfo=None, autoGC=True, orderBy=None,
-                 writeable=False, **kwargs):
+                 writeable=False, iterSQL=None, iterColumns=None, **kwargs):
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = RecentValueDictionary(autoGC) # object cache
         else:
             self._weakValueDict = {}
         self.autoGC = autoGC
         self.orderBy = orderBy
+        if orderBy and serverInfo and serverInfo._serverType == 'mysql':
+            if iterSQL and iterColumns: # both required for mysql!
+                self.iterSQL, self.iterColumns = iterSQL, iterColumns
+            else:
+                raise ValueError('For MySQL tables with orderBy, you MUST specify iterSQL and iterColumns as well!')
+            
         self.writeable = writeable
         if cursor is None:
             if serverInfo is not None: # get cursor from serverInfo
@@ -517,7 +523,7 @@ class SQLTableBase(object, UserDict.DictMixin):
             return cmp(id(self), id(other))
     _pickleAttrs = dict(name=0, clusterKey=0, maxCache=0, arraysize=0,
                         attrAlias=0, serverInfo=0, autoGC=0, orderBy=0,
-                        writeable=0)
+                        writeable=0, iterSQL=0, iterColumns=0)
     __getstate__ = standard_getstate
     def __setstate__(self,state):
         # default cursor provisioning by worldbase is deprecated!
@@ -774,17 +780,18 @@ def iter_keys(self, selectCols=None, orderBy='', map_f=iter,
         orderBy = self.orderBy # apply default ordering
     cursor = self.get_new_cursor()
     if cursor: # got our own cursor, guaranteeing query isolation
-        try:
-            iter_f = self.serverInfo.iter_keys
-        except AttributeError:
+        if hasattr(self.serverInfo, 'iter_keys') \
+           and self.serverInfo.custom_iter_keys:
+            # use custom iter_keys() method from serverInfo
+            return self.serverInfo.iter_keys(self, cursor, selectCols=selectCols,
+                                             map_f=map_f, orderBy=orderBy,
+                                             cache_f=cache_f, **kwargs)
+        else:
             self._select(cursor=cursor, selectCols=selectCols,
                          orderBy=orderBy, **kwargs)
             return self.generic_iterator(cursor=cursor, cache_f=cache_f,
                                          map_f=map_f,
                                          cursorHolder=CursorCloser(cursor))
-        else: # use custom iter_keys() method from serverInfo
-            return iter_f(self, cursor, selectCols=selectCols, map_f=map_f,
-                          orderBy=orderBy, cache_f=cache_f, **kwargs)
     else: # must pre-fetch all keys to ensure query isolation
         if get_f is not None:
             return iter(get_f())
@@ -1778,15 +1785,20 @@ def sqlite_connect(*args, **kwargs):
 
 class DBServerInfo(object):
     'picklable reference to a database server'
-    def __init__(self, moduleName='MySQLdb', *args, **kwargs):
+    def __init__(self, moduleName='MySQLdb', serverSideCursors=True,
+                 blockIterators=True, *args, **kwargs):
         try:
             self.__class__ = _DBServerModuleDict[moduleName]
         except KeyError:
             raise ValueError('Module name not found in _DBServerModuleDict: '\
                              + moduleName)
         self.moduleName = moduleName
-        self.args = args
-        self.kwargs = kwargs # connection arguments
+        self.args = args  # connection arguments
+        self.kwargs = kwargs
+        self.serverSideCursors = serverSideCursors
+        self.custom_iter_keys = blockIterators
+        if self.serverSideCursors and not self.custom_iter_keys:
+            raise ValueError('serverSideCursors=True requires blockIterators=True!')
 
     def cursor(self):
         """returns cursor associated with the DB server info (reused)"""
@@ -1815,7 +1827,14 @@ class DBServerInfo(object):
     def __getstate__(self):
         """return all picklable arguments"""
         return dict(args=self.args, kwargs=self.kwargs,
-                    moduleName=self.moduleName)
+                    moduleName=self.moduleName,
+                    serverSideCursors=self.serverSideCursors,
+                    blockIterators=self.custom_iter_keys)
+
+    def __setstate__(self, moduleName, serverSideCursors, blockIterators,
+                     args, kwargs):
+        self.__init__(moduleName, serverSideCursors=serverSideCursors,
+                      blockIterators=blockIterators, *args, **kwargs)
 
 
 class MySQLServerInfo(DBServerInfo):
@@ -1825,6 +1844,8 @@ class MySQLServerInfo(DBServerInfo):
         self._connection,self._cursor = mysql_connect(*self.args, **self.kwargs)
     def new_cursor(self, arraysize=None):
         'provide streaming cursor support'
+        if not self.serverSideCursors: # use regular MySQLdb cursor
+            return DBServerInfo.new_cursor(self, arraysize)
         try:
             conn = self._conn_sscursor
         except AttributeError:
@@ -1909,8 +1930,8 @@ class SQLiteServerInfo(DBServerInfo):
     _serverType = 'sqlite'
     def __init__(self, database, *args, **kwargs):
         """Takes same arguments as sqlite3.connect()"""
-        DBServerInfo.__init__(self, 'sqlite',
-                              SourceFileName(database), # save abs path!
+        DBServerInfo.__init__(self, 'sqlite',  # save abs path!
+                              database=SourceFileName(database),
                               *args, **kwargs)
     def _start_connection(self):
         self._connection,self._cursor = sqlite_connect(*self.args, **self.kwargs)
