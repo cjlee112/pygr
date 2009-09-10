@@ -1829,12 +1829,7 @@ class DBServerInfo(object):
         return dict(args=self.args, kwargs=self.kwargs,
                     moduleName=self.moduleName,
                     serverSideCursors=self.serverSideCursors,
-                    blockIterators=self.custom_iter_keys)
-
-    def __setstate__(self, moduleName, serverSideCursors, blockIterators,
-                     args, kwargs):
-        self.__init__(moduleName, serverSideCursors=serverSideCursors,
-                      blockIterators=blockIterators, *args, **kwargs)
+                    custom_iter_keys=self.custom_iter_keys)
 
 
 class MySQLServerInfo(DBServerInfo):
@@ -1936,7 +1931,8 @@ class SQLiteServerInfo(DBServerInfo):
     def _start_connection(self):
         self._connection,self._cursor = sqlite_connect(*self.args, **self.kwargs)
     def __getstate__(self):
-        if self.args[0] == ':memory:':
+        database = self.kwargs.get('database', False) or self.args[0]
+        if database == ':memory:':
             raise ValueError('SQLite in-memory database is not picklable!')
         return DBServerInfo.__getstate__(self)
         

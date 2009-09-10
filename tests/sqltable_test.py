@@ -115,15 +115,21 @@ class SQLTable_Test(SQLTable_Setup):
         assert i == [1, 2]
     def test_iterkeys(self):
         kk = self.db.keys()
-        kk.sort()
         ik = list(self.db.iterkeys())
-        ik.sort()
         assert kk == ik
+    def test_pickle(self):
+        kk = self.db.keys()
+        import pickle
+        s = pickle.dumps(self.db)
+        db = pickle.loads(s)
+        try:
+            ik = list(db.iterkeys())
+            assert kk == ik
+        finally:
+            db.serverInfo.close() # close extra DB connection
     def test_itervalues(self):
         kv = self.db.values()
-        kv.sort()
         iv = list(self.db.itervalues())
-        iv.sort()
         assert kv == iv
     def test_itervalues_long(self):
         """test iterator isolation from queries run inside iterator loop """
@@ -139,9 +145,7 @@ class SQLTable_Test(SQLTable_Setup):
         assert kv == iv
     def test_iteritems(self):
         ki = self.db.items()
-        ki.sort()
         ii = list(self.db.iteritems())
-        ii.sort()
         assert ki == ii
     def test_readonly(self):
         'test error handling of write attempts to read-only DB'
