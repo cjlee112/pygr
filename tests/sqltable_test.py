@@ -1,6 +1,6 @@
 import os, random, string, unittest
 from testlib import testutil, PygrTestProgram, SkipTest
-from pygr.sqlgraph import SQLTable, SQLTableNoCache,\
+from pygr.sqlgraph import SQLTable, SQLTableNoCache,SQLTableClustered,\
      MapView, GraphView, DBServerInfo, import_sqlite
 from pygr import logger
 
@@ -19,19 +19,24 @@ class SQLTableCatcher(SQLTable):
 class SQLTableNoCacheCatcher(SQLTableNoCache):
     generic_iterator = catch_iterator
 
+class SQLTableClusteredCatcher(SQLTableClustered):
+    generic_iterator = catch_iterator
+
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTableCatcher
     serverArgs = {}
+    loadArgs = {}
     def __init__(self, *args, **kwargs):
         unittest.TestCase.__init__(self, *args, **kwargs)
         # share conn for all tests
         self.serverInfo = DBServerInfo(** self.serverArgs) 
     def setUp(self):
         try:
-            self.load_data(writeable=self.writeable)
+            self.load_data(writeable=self.writeable, ** self.loadArgs)
         except ImportError:
             raise SkipTest('missing MySQLdb module?')
-    def load_data(self, tableName='test.sqltable_test', writeable=False):
+    def load_data(self, tableName='test.sqltable_test', writeable=False,
+                  dbargs={},sourceDBargs={},targetDBargs={}):
         'create 3 tables and load 9 rows for our tests'
         self.tableName = tableName
         self.joinTable1 = joinTable1 = tableName + '1'
@@ -42,17 +47,17 @@ class SQLTable_Setup(unittest.TestCase):
         self.db = self.tableClass(tableName, dropIfExists=True,
                                   serverInfo=self.serverInfo,
                                   createTable=createTable,
-                                  writeable=writeable)
+                                  writeable=writeable, **dbargs)
         self.sourceDB = self.tableClass(joinTable1, serverInfo=self.serverInfo,
                                         dropIfExists=True, createTable="""\
         CREATE TABLE %s (my_id INTEGER PRIMARY KEY,
               other_id VARCHAR(16))
-        """ % joinTable1)
+        """ % joinTable1, **sourceDBargs)
         self.targetDB = self.tableClass(joinTable2, serverInfo=self.serverInfo,
                                         dropIfExists=True, createTable="""\
         CREATE TABLE %s (third_id INTEGER PRIMARY KEY,
               other_id VARCHAR(16))
-        """ % joinTable2)
+        """ % joinTable2, **targetDBargs)
         sql = """
             INSERT INTO %s (seq_id, start, stop) VALUES ('seq1', 0, 10)
             INSERT INTO %s (seq_id, start, stop) VALUES ('seq2', 5, 15)
@@ -373,7 +378,17 @@ class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
 ##                                         serverInfo=self.serverInfo)
 
 class SQLTable_NoCache_Test(SQLTable_Test):
-    tableClass = SQLTableNoCache
+    tableClass = SQLTableNoCacheCatcher
+
+class SQLTableClustered_Test(SQLTable_Test):
+    tableClass = SQLTableClusteredCatcher
+    loadArgs = dict(dbargs=dict(clusterKey='seq_id', arraysize=2),
+                    sourceDBargs=dict(clusterKey='other_id', arraysize=2),
+                    targetDBargs=dict(clusterKey='other_id', arraysize=2))
+    def test_orderBy(self): # neither of these tests useful in this context
+        pass
+    def test_orderby_random(self):
+        pass
 
 class SQLiteTable_NoCache_Test(SQLiteTable_Test):
     tableClass = SQLTableNoCache

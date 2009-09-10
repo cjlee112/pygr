@@ -879,8 +879,13 @@ class SQLTableClustered(SQLTable):
         kwargs = kwargs.copy() # get a copy we can alter
         kwargs['autoGC'] = False # don't use WeakValueDictionary
         SQLTable.__init__(self, *args, **kwargs)
-    def keys(self):
-        return getKeys(self,'order by %s' %self.clusterKey)
+        if not self.orderBy: # add default ordering by clusterKey
+            self.orderBy = 'ORDER BY %s,%s' % (self.clusterKey,
+                                               self.primary_key)
+            self.iterColumns = (self.clusterKey, self.clusterKey,
+                                self.primary_key)
+            self.iterSQL = 'WHERE %s>%%s or (%s=%%s and %s>%%s)' \
+                           % self.iterColumns
     def clusterkeys(self):
         return getClusterKeys(self, 'order by %s' %self.clusterKey)
     def __getitem__(self,k):
@@ -900,41 +905,6 @@ class SQLTableClustered(SQLTable):
         'iterate over all items from the specified cluster'
         self.limit_cache()
         return self.select('where %s=%%s'%self.clusterKey,(cluster_id,))
-    def fetch_cluster(self):
-        'use self.cursor.fetchmany to obtain all rows for next cluster'
-        icol = self._attrSQL(self.clusterKey,columnNumber=True)
-        result = []
-        try:
-            rows = self._fetch_cluster_cache # USE SAVED ROWS FROM PREVIOUS CALL
-            del self._fetch_cluster_cache
-        except AttributeError:
-            rows = self.cursor.fetchmany()
-        try:
-            cluster_id = rows[0][icol]
-        except IndexError:
-            return result
-        while len(rows)>0:
-            for i,t in enumerate(rows): # CHECK THAT ALL ROWS FROM THIS CLUSTER
-                if cluster_id != t[icol]: # START OF A NEW CLUSTER
-                    result += rows[:i] # RETURN ROWS OF CURRENT CLUSTER
-                    self._fetch_cluster_cache = rows[i:] # SAVE NEXT CLUSTER
-                    return result
-            result += rows
-            rows = self.cursor.fetchmany() # GET NEXT SET OF ROWS
-        return result
-    def itervalues(self):
-        'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        cursor = self.get_new_cursor()
-        self._select('order by %s' %self.clusterKey, cursor=cursor)
-        return self.generic_iterator(cursor, self.fetch_cluster,
-                                     cursorHolder=CursorHolder(cursor))
-    def iteritems(self):
-        'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        cursor = self.get_new_cursor()
-        self._select('order by %s' %self.clusterKey, cursor=cursor)
-        return self.generic_iterator(cursor, self.fetch_cluster,
-                                     map_f=generate_items,
-                                     cursorHolder=CursorHolder(cursor))
         
 class SQLForeignRelation(object):
     'mapping based on matching a foreign key in an SQL table'
