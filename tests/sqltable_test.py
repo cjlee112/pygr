@@ -194,6 +194,37 @@ class SQLTable_Test(SQLTable_Setup):
                           (6, self.targetDB[6]), (8, self.targetDB[8])]
         assert result == list(self.targetDB.iteritems())
 
+    def test_orderby_random(self):
+        'test orderBy in SQLTable'
+        if self.serverInfo._serverType == 'mysql':
+            try:
+                byNumber = self.tableClass(self.orderTable, arraysize=2,
+                                           serverInfo=self.serverInfo,
+                                           orderBy='ORDER BY number')
+                raise AssertionError('failed to trap orderBy without iterSQL!')
+            except ValueError:
+                pass
+        byNumber = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
+                                   arraysize=2, orderBy='ORDER BY number,id',
+                          iterSQL='WHERE number>%s or (number=%s and id>%s)',
+                                   iterColumns=('number','number','id'))
+        bv = [val.number for val in byNumber.values()]
+        sortedBV = bv[:]
+        sortedBV.sort()
+        assert sortedBV == bv
+        bv = [val.number for val in byNumber.itervalues()]
+        assert sortedBV == bv
+
+        byLetter = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
+                                   arraysize=2, orderBy='ORDER BY letter,id',
+                            iterSQL='WHERE letter>%s or (letter=%s and id>%s)',
+                                   iterColumns=('letter','letter','id'))
+        bl = [val.letter for val in byLetter.values()]
+        sortedBL = bl[:]
+        assert sortedBL == bl
+        bl = [val.letter for val in byLetter.itervalues()]
+        assert sortedBL == bl
+
     ### @CTB need to test write access
     def test_mapview(self):
         'test MapView of SQL join'
@@ -303,25 +334,7 @@ class SQLiteBase(testutil.SQLite_Mixin):
         self.load_data('sqltable_test', writeable=self.writeable)
 
 class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
-    def test_orderby(self):
-        'test orderBy in SQLTable'
-
-        byNumber = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
-                                   orderBy='ORDER BY number')
-        bv = [ ]
-        for val in byNumber.values():
-            bv.append(val.number)
-        sortedBV = bv[:]
-        sortedBV.sort()
-        assert sortedBV == bv
-
-        byLetter = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
-                                   orderBy='ORDER BY letter')
-        bl = [ ]
-        for val in byLetter.values():
-            bl.append(val.letter)
-        sortedBL = bl[:]
-        assert sortedBL == bl
+    pass
 
 ## class SQLitePickle_Test(SQLiteTable_Test):
 ##     def setUp(self):
