@@ -89,8 +89,8 @@ will start your XMLRPC server::
     # create a XMLRPC server.
     # metabase path for this server is http://localhost:5000/
     server = metabase.ResourceServer(mdb, 'worldbase-server.log', withIndex=True, host='')
-    # start a XMLRPC server, running as a daemon, non-interactive Python process
-    server.serve_forever()
+    # start a XMLRPC server
+    server.serve_forever(daemonize=True)
 
 The example above launches an XMLRPC server as a daemon: it detaches
 itself from the Python interpreter shortly after start-up and will
@@ -98,15 +98,13 @@ continue running after you exit the interpreter. Should you for some
 reason prefer to interact with a running server, you can launch it in
 the foreground::
 
-    server.serve_forever(demonize=False)
+    server.serve_forever(daemonize=False)
 
 Of course running in this mode means the server will die with the
-Python interpreter that's spawned it (in particular, if you launched
-it from a non-interactive Python session it will terminate *right
-after start-up* @CTB sure?). To keep it running long-term, use an
-external terminal manager such as :data:`screen`.
+Python interpreter that's spawned it.  To keep it running long-term,
+use an external terminal manager such as :data:`screen`.
 
-You can have more information in `XMLRPC Resource Server (FIXME: ReST
+You can find more information in `XMLRPC Resource Server (FIXME: ReST
 link!)
 <http://www.doe-mbi.ucla.edu/~leec/newpygrdocs/reference/metabase.html#xmlrpc-resource-server>`_.
 
