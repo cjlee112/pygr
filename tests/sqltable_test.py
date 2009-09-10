@@ -5,6 +5,7 @@ from pygr.sqlgraph import SQLTable, SQLTableNoCache,SQLTableClustered,\
 from pygr import logger
 
 def entrap(klass):
+    'return a function to intercept any calls to generic_iterator() method'
     def catch_iterator(self, *args, **kwargs):
         try:
             assert not self.catchIter, 'this should not iterate!'
