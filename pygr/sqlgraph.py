@@ -1003,11 +1003,18 @@ class SQLTableMultiNoCache(SQLTableBase):
     "Trivial on-the-fly access for table with key that returns multiple rows"
     itemClass = TupleO # default itemClass; constructor can override
     _distinct_key='id' # DEFAULT COLUMN TO USE AS KEY
+    def __init__(self, *args, **kwargs):
+        SQLTableBase.__init__(self, *args, **kwargs)
+        self.distinct_key = self._attrSQL(self._distinct_key)
+        if not self.orderBy:
+            self.orderBy = 'GROUP BY %s ORDER BY %s' % (self.distinct_key,
+                                                        self.distinct_key)
+            self.iterSQL = 'WHERE %s>%%s' % self.distinct_key
+            self.iterColumns = (self.distinct_key,)
     def keys(self):
-        return getKeys(self, selectCols='distinct(%s)'
-                       % self._attrSQL(self._distinct_key))
+        return getKeys(self, selectCols=self.distinct_key)
     def __iter__(self):
-        return iter_keys(self, 'distinct(%s)' % self._attrSQL(self._distinct_key))
+        return iter_keys(self, selectCols=self.distinct_key)
     def __getitem__(self,id):
         sql,params = self._format_query('select * from %s where %s=%%s'
                            %(self.name,self._attrSQL(self._distinct_key)),(id,))
