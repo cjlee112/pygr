@@ -33,10 +33,9 @@ class SQLTable_Setup(unittest.TestCase):
         # share conn for all tests
         self.serverInfo = DBServerInfo(** self.serverArgs) 
     def setUp(self):
-        try:
-            self.load_data(writeable=self.writeable, ** self.loadArgs)
-        except ImportError:
-            raise SkipTest('missing MySQLdb module?')
+        if not testutil.mysql_enabled():
+            raise SkipTest, "no MySQL installed"
+        self.load_data(writeable=self.writeable, ** self.loadArgs)
     def load_data(self, tableName='test.sqltable_test', writeable=False,
                   dbargs={},sourceDBargs={},targetDBargs={}):
         'create 3 tables and load 9 rows for our tests'
