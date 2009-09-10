@@ -279,6 +279,8 @@ class Blast_Test(BlastBase):
 
     def test_seq_without_db(self):
         "Check that sequences without associated DBs work as query strings"
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
         blastmap = blast.BlastMapping(self.prot, verbose=False)
 
         seq = self.prot['HBB1_XENLA']
@@ -405,6 +407,8 @@ class Blastx_Test(BlastBase):
         Test that the NLMSA in a BlastxMapping properly picks up the
         translationDB from the query sequence dict.
         """
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
         results = blastmap(queryDB=self.dna)
 
@@ -416,6 +420,8 @@ class Blastx_Test(BlastBase):
         Test that the NLMSA in a BlastxMapping properly picks up the
         translationDB from a single input sequence.
         """
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
@@ -429,6 +435,8 @@ class Blastx_Test(BlastBase):
         Only NLMSASlices for the query sequence should show up in
         BlastxMapping.__getitem__, right?
         """
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
@@ -441,6 +449,8 @@ class Blastx_Test(BlastBase):
             assert slice.seq.id in annodb, '%s not in annodb!' % slice.seq.id
 
     def test_non_consumable_results(self):
+        if not testutil.blast_enabled():
+            raise SkipTest, "no BLAST installed"
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
