@@ -246,7 +246,7 @@ def get_name_cursor(name=None, **kwargs):
     serverInfo = DBServerInfo(**kwargs)
     return name,serverInfo.cursor(),serverInfo
 
-def mysql_connect(connect=None, configFile=None, **args):
+def mysql_connect(connect=None, configFile=None, useStreaming=False, **args):
     """return connection and cursor objects, using .my.cnf if necessary"""
     kwargs = args.copy() # a copy we can modify
     if 'user' not in kwargs and configFile is None: #Find where config file is
@@ -280,6 +280,12 @@ def mysql_connect(connect=None, configFile=None, **args):
         import MySQLdb
         connect = MySQLdb.connect
         kwargs['compress'] = True
+    if useStreaming:  # use server side cursors for scalable result sets
+        try:
+            from MySQLdb import cursors
+            kwargs['cursorclass'] = cursors.SSCursor
+        except (ImportError, AttributeError):
+            pass
     conn = connect(**kwargs)
     cursor = conn.cursor()
     return conn,cursor
@@ -445,13 +451,19 @@ class SQLTableBase(object, UserDict.DictMixin):
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
                  serverInfo=None, autoGC=True, orderBy=None,
-                 writeable=False, **kwargs):
+                 writeable=False, iterSQL=None, iterColumns=None, **kwargs):
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = RecentValueDictionary(autoGC) # object cache
         else:
             self._weakValueDict = {}
         self.autoGC = autoGC
         self.orderBy = orderBy
+        if orderBy and serverInfo and serverInfo._serverType == 'mysql':
+            if iterSQL and iterColumns: # both required for mysql!
+                self.iterSQL, self.iterColumns = iterSQL, iterColumns
+            else:
+                raise ValueError('For MySQL tables with orderBy, you MUST specify iterSQL and iterColumns as well!')
+            
         self.writeable = writeable
         if cursor is None:
             if serverInfo is not None: # get cursor from serverInfo
@@ -503,9 +515,15 @@ class SQLTableBase(object, UserDict.DictMixin):
         return self.cursor.fetchone()[0]
     def __hash__(self):
         return id(self)
+    def __cmp__(self, other):
+        'only match self and no other!'
+        if self is other:
+            return 0
+        else:
+            return cmp(id(self), id(other))
     _pickleAttrs = dict(name=0, clusterKey=0, maxCache=0, arraysize=0,
                         attrAlias=0, serverInfo=0, autoGC=0, orderBy=0,
-                        writeable=0)
+                        writeable=0, iterSQL=0, iterColumns=0)
     __getstate__ = standard_getstate
     def __setstate__(self,state):
         # default cursor provisioning by worldbase is deprecated!
@@ -588,10 +606,11 @@ class SQLTableBase(object, UserDict.DictMixin):
         if hasattr(oclass,'_tableclass') and not isinstance(self,oclass._tableclass):
             self.__class__=oclass._tableclass # ROW CLASS CAN OVERRIDE OUR CURRENT TABLE CLASS
     def _select(self, whereClause='', params=(), selectCols='t1.*',
-                cursor=None):
+                cursor=None, orderBy='', limit=''):
         'execute the specified query but do not fetch'
-        sql,params = self._format_query('select %s from %s t1 %s'
-                            % (selectCols,self.name,whereClause), params)
+        sql,params = self._format_query('select %s from %s t1 %s %s %s'
+                            % (selectCols, self.name, whereClause, orderBy,
+                               limit), params)
         if cursor is None:
             self.cursor.execute(sql, params)
         else:
@@ -664,8 +683,11 @@ class SQLTableBase(object, UserDict.DictMixin):
         return new_cursor(self.arraysize)
     
     def generic_iterator(self, cursor=None, fetch_f=None, cache_f=None,
-                         map_f=iter):
-        'generic iterator that runs fetch, cache and map functions'
+                         map_f=iter, cursorHolder=None):
+        """generic iterator that runs fetch, cache and map functions.
+        cursorHolder is used only to keep a ref in this function's locals,
+        so that if it is prematurely terminated (by deleting its
+        iterator), cursorHolder.__del__() will close the cursor."""
         if fetch_f is None: # JUST USE CURSOR'S PREFERRED CHUNK SIZE
             if cursor is None:
                 fetch_f = self.cursor.fetchmany
@@ -680,8 +702,6 @@ class SQLTableBase(object, UserDict.DictMixin):
                 break
             for v in map_f(cache_f(rows)): # CACHE AND GENERATE RESULTS
                 yield v
-        if cursor is not None: # close iterator now that we're done
-            cursor.close()
     def tuple_from_dict(self, d):
         'transform kwarg dict into tuple for storing in database'
         l = [None]*len(self.description) # DEFAULT COLUMN VALUES ARE NULL
@@ -751,17 +771,32 @@ def getKeys(self,queryOption='', selectCols=None):
                         %(selectCols,self.name,queryOption))
     return [t[0] for t in self.cursor.fetchall()] # GET ALL AT ONCE, SINCE OTHER CALLS MAY REUSE THIS CURSOR...
 
-def iter_keys(self, selectCols=None):
+def iter_keys(self, selectCols=None, orderBy='', map_f=iter,
+              cache_f=lambda x:[t[0] for t in x], get_f=None, **kwargs):
     'guarantee correct iteration insulated from other queries'
     if selectCols is None:
         selectCols=self.primary_key
+    if orderBy=='' and self.orderBy is not None:
+        orderBy = self.orderBy # apply default ordering
     cursor = self.get_new_cursor()
     if cursor: # got our own cursor, guaranteeing query isolation
-        self._select(cursor=cursor, selectCols=selectCols)
-        return self.generic_iterator(cursor=cursor,
-                                     cache_f=lambda x:[t[0] for t in x])
+        if hasattr(self.serverInfo, 'iter_keys') \
+           and self.serverInfo.custom_iter_keys:
+            # use custom iter_keys() method from serverInfo
+            return self.serverInfo.iter_keys(self, cursor, selectCols=selectCols,
+                                             map_f=map_f, orderBy=orderBy,
+                                             cache_f=cache_f, **kwargs)
+        else:
+            self._select(cursor=cursor, selectCols=selectCols,
+                         orderBy=orderBy, **kwargs)
+            return self.generic_iterator(cursor=cursor, cache_f=cache_f,
+                                         map_f=map_f,
+                                         cursorHolder=CursorCloser(cursor))
     else: # must pre-fetch all keys to ensure query isolation
-        return iter(self.keys())
+        if get_f is not None:
+            return iter(get_f())
+        else:
+            return iter(self.keys())
 
 class SQLTable(SQLTableBase):
     "Provide on-the-fly access to rows in the database, caching the results in dict"
@@ -799,7 +834,7 @@ class SQLTable(SQLTableBase):
         if not self.writeable:
             raise ValueError('this database is read only!')
         try:
-            if v.db != self:
+            if v.db is not self:
                 raise AttributeError
         except AttributeError:
             raise ValueError('object not bound to itemClass for this db!')
@@ -817,21 +852,18 @@ class SQLTable(SQLTableBase):
     def items(self):
         'forces load of entire table into memory'
         self.load()
-        return self._weakValueDict.items()
+        return [(k,self[k]) for k in self] # apply orderBy rules...
     def iteritems(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        cursor = self.get_new_cursor()
-        self._select(cursor=cursor)
-        return self.generic_iterator(cursor=cursor, map_f=generate_items)
+        return iter_keys(self, selectCols='*', cache_f=None,
+                         map_f=generate_items, get_f=self.items)
     def values(self):
         'forces load of entire table into memory'
         self.load()
-        return self._weakValueDict.values()
+        return [self[k] for k in self] # apply orderBy rules...
     def itervalues(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        cursor = self.get_new_cursor()
-        self._select(cursor=cursor)
-        return self.generic_iterator(cursor=cursor)
+        return iter_keys(self, selectCols='*', cache_f=None, get_f=self.values)
 
 def getClusterKeys(self,queryOption=''):
     'uses db select; does not force load'
@@ -847,8 +879,13 @@ class SQLTableClustered(SQLTable):
         kwargs = kwargs.copy() # get a copy we can alter
         kwargs['autoGC'] = False # don't use WeakValueDictionary
         SQLTable.__init__(self, *args, **kwargs)
-    def keys(self):
-        return getKeys(self,'order by %s' %self.clusterKey)
+        if not self.orderBy: # add default ordering by clusterKey
+            self.orderBy = 'ORDER BY %s,%s' % (self.clusterKey,
+                                               self.primary_key)
+            self.iterColumns = (self.clusterKey, self.clusterKey,
+                                self.primary_key)
+            self.iterSQL = 'WHERE %s>%%s or (%s=%%s and %s>%%s)' \
+                           % self.iterColumns
     def clusterkeys(self):
         return getClusterKeys(self, 'order by %s' %self.clusterKey)
     def __getitem__(self,k):
@@ -868,39 +905,6 @@ class SQLTableClustered(SQLTable):
         'iterate over all items from the specified cluster'
         self.limit_cache()
         return self.select('where %s=%%s'%self.clusterKey,(cluster_id,))
-    def fetch_cluster(self):
-        'use self.cursor.fetchmany to obtain all rows for next cluster'
-        icol = self._attrSQL(self.clusterKey,columnNumber=True)
-        result = []
-        try:
-            rows = self._fetch_cluster_cache # USE SAVED ROWS FROM PREVIOUS CALL
-            del self._fetch_cluster_cache
-        except AttributeError:
-            rows = self.cursor.fetchmany()
-        try:
-            cluster_id = rows[0][icol]
-        except IndexError:
-            return result
-        while len(rows)>0:
-            for i,t in enumerate(rows): # CHECK THAT ALL ROWS FROM THIS CLUSTER
-                if cluster_id != t[icol]: # START OF A NEW CLUSTER
-                    result += rows[:i] # RETURN ROWS OF CURRENT CLUSTER
-                    self._fetch_cluster_cache = rows[i:] # SAVE NEXT CLUSTER
-                    return result
-            result += rows
-            rows = self.cursor.fetchmany() # GET NEXT SET OF ROWS
-        return result
-    def itervalues(self):
-        'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        cursor = self.get_new_cursor()
-        self._select('order by %s' %self.clusterKey, cursor=cursor)
-        return self.generic_iterator(cursor, self.fetch_cluster)
-    def iteritems(self):
-        'uses arraysize / maxCache and fetchmany() to manage data transfer'
-        cursor = self.get_new_cursor()
-        self._select('order by %s' %self.clusterKey, cursor=cursor)
-        return self.generic_iterator(cursor, self.fetch_cluster,
-                                     map_f=generate_items)
         
 class SQLForeignRelation(object):
     'mapping based on matching a foreign key in an SQL table'
@@ -944,7 +948,7 @@ class SQLTableNoCache(SQLTableBase):
         if not self.writeable:
             raise ValueError('this database is read only!')
         try:
-            if v.db != self:
+            if v.db is not self:
                 raise AttributeError
         except AttributeError:
             raise ValueError('object not bound to itemClass for this db!')
@@ -969,11 +973,18 @@ class SQLTableMultiNoCache(SQLTableBase):
     "Trivial on-the-fly access for table with key that returns multiple rows"
     itemClass = TupleO # default itemClass; constructor can override
     _distinct_key='id' # DEFAULT COLUMN TO USE AS KEY
+    def __init__(self, *args, **kwargs):
+        SQLTableBase.__init__(self, *args, **kwargs)
+        self.distinct_key = self._attrSQL(self._distinct_key)
+        if not self.orderBy:
+            self.orderBy = 'GROUP BY %s ORDER BY %s' % (self.distinct_key,
+                                                        self.distinct_key)
+            self.iterSQL = 'WHERE %s>%%s' % self.distinct_key
+            self.iterColumns = (self.distinct_key,)
     def keys(self):
-        return getKeys(self, selectCols='distinct(%s)'
-                       % self._attrSQL(self._distinct_key))
+        return getKeys(self, selectCols=self.distinct_key)
     def __iter__(self):
-        return iter_keys(self, 'distinct(%s)' % self._attrSQL(self._distinct_key))
+        return iter_keys(self, selectCols=self.distinct_key)
     def __getitem__(self,id):
         sql,params = self._format_query('select * from %s where %s=%%s'
                            %(self.name,self._attrSQL(self._distinct_key)),(id,))
@@ -1061,7 +1072,8 @@ class SQLEdgeDict(object):
                                                self.table.pack_edge(edge)))
         self.table.cursor.execute(sql, params)
         if not hasattr(self.table,'sourceDB') or \
-           (hasattr(self.table,'targetDB') and self.table.sourceDB==self.table.targetDB):
+           (hasattr(self.table,'targetDB') and
+            self.table.sourceDB is self.table.targetDB):
             self.table += target # ADD AS NODE TO GRAPH
     def __iadd__(self,target):
         self[target] = None
@@ -1499,7 +1511,7 @@ class ForeignKeyInverse(object):
     def check_obj(self,obj):
         'raise KeyError if obj not from this db'
         try:
-            if obj.db != self.g.targetDB:
+            if obj.db is not self.g.targetDB:
                 raise AttributeError
         except AttributeError:
             raise KeyError('key is not from targetDB of this graph!')
@@ -1541,7 +1553,7 @@ Adds or deletes edges by setting foreign key values in the table'''
         for v in g.targetDB.select('where %s=%%s' % g.keyColumn,(k.id,)): # SEARCH THE DB
             dict.__setitem__(self,v,None) # SAVE IN CACHE
     def __setitem__(self,dest,v):
-        if not hasattr(dest,'db') or dest.db != self.g.targetDB:
+        if not hasattr(dest,'db') or dest.db is not self.g.targetDB:
             raise KeyError('dest is not in the targetDB bound to this graph!')
         if v is not None:
             raise ValueError('sorry,this graph cannot store edge information!')
@@ -1581,7 +1593,7 @@ keyColumn is the foreign key column name in targetDB for looking up sourceDB IDs
         'provide custom schema rule for inverting this graph... just use keyColumn!'
         return dict(invert=True,uniqueMapping=True)
     def __getitem__(self,k):
-        if not hasattr(k,'db') or k.db != self.sourceDB:
+        if not hasattr(k,'db') or k.db is not self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this graph!')
         try:
             return self._weakValueDict[k.id] # get from cache
@@ -1748,19 +1760,22 @@ def sqlite_connect(*args, **kwargs):
     cursor = connection.cursor()
     return connection, cursor
 
-# list of database connection functions DBServerInfo knows how to use
-_DBServerModuleDict = dict(MySQLdb=mysql_connect, sqlite=sqlite_connect)
-
-
 class DBServerInfo(object):
     'picklable reference to a database server'
-    def __init__(self, moduleName='MySQLdb', *args, **kwargs):
-        if moduleName not in _DBServerModuleDict:
+    def __init__(self, moduleName='MySQLdb', serverSideCursors=True,
+                 blockIterators=True, *args, **kwargs):
+        try:
+            self.__class__ = _DBServerModuleDict[moduleName]
+        except KeyError:
             raise ValueError('Module name not found in _DBServerModuleDict: '\
                              + moduleName)
         self.moduleName = moduleName
-        self.args = args
-        self.kwargs = kwargs # connection arguments
+        self.args = args  # connection arguments
+        self.kwargs = kwargs
+        self.serverSideCursors = serverSideCursors
+        self.custom_iter_keys = blockIterators
+        if self.serverSideCursors and not self.custom_iter_keys:
+            raise ValueError('serverSideCursors=True requires blockIterators=True!')
 
     def cursor(self):
         """returns cursor associated with the DB server info (reused)"""
@@ -1779,14 +1794,6 @@ class DBServerInfo(object):
             cursor.arraysize = arraysize
         return cursor
 
-    def _start_connection(self):
-        try:
-            moduleName = self.moduleName
-        except AttributeError:
-            moduleName = 'MySQLdb'
-        connect = _DBServerModuleDict[moduleName]
-        self._connection,self._cursor = connect(*self.args, **self.kwargs)
-
     def close(self):
         """Close file containing this database"""
         self._cursor.close()
@@ -1797,21 +1804,126 @@ class DBServerInfo(object):
     def __getstate__(self):
         """return all picklable arguments"""
         return dict(args=self.args, kwargs=self.kwargs,
-                    moduleName=self.moduleName)
+                    moduleName=self.moduleName,
+                    serverSideCursors=self.serverSideCursors,
+                    custom_iter_keys=self.custom_iter_keys)
 
+
+class MySQLServerInfo(DBServerInfo):
+    'customized for MySQLdb SSCursor support via new_cursor()'
+    _serverType = 'mysql'
+    def _start_connection(self):
+        self._connection,self._cursor = mysql_connect(*self.args, **self.kwargs)
+    def new_cursor(self, arraysize=None):
+        'provide streaming cursor support'
+        if not self.serverSideCursors: # use regular MySQLdb cursor
+            return DBServerInfo.new_cursor(self, arraysize)
+        try:
+            conn = self._conn_sscursor
+        except AttributeError:
+            self._conn_sscursor,cursor = mysql_connect(useStreaming=True,
+                                                       *self.args, **self.kwargs)
+        else:
+            cursor = self._conn_sscursor.cursor()
+        if arraysize is not None:
+            cursor.arraysize = arraysize
+        return cursor
+    def close(self):
+        DBServerInfo.close(self)
+        try:
+            self._conn_sscursor.close()
+            del self._conn_sscursor
+        except AttributeError:
+            pass
+    def iter_keys(self, db, cursor, map_f=iter,
+                  cache_f=lambda x:[t[0] for t in x], **kwargs):
+        block_generator = BlockGenerator(db, cursor, **kwargs)
+        try:
+            cache_f = block_generator.cache_f
+        except AttributeError:
+            pass
+        return db.generic_iterator(cursor=cursor, cache_f=cache_f,
+                                   map_f=map_f, fetch_f=block_generator)
+
+class CursorCloser(object):
+    """container for ensuring cursor.close() is called, when this obj deleted.
+    For Python 2.5+, we could replace this with a try... finally clause
+    in a generator function such as generic_iterator(); see PEP 342 or
+    What's New in Python 2.5.  """
+    def __init__(self, cursor):
+        self.cursor = cursor
+    def __del__(self):
+        self.cursor.close()
+
+class BlockGenerator(CursorCloser):
+    'workaround for MySQLdb iteration horrible performance'
+    def __init__(self, db, cursor, selectCols, whereClause='', **kwargs):
+        self.db = db
+        self.cursor = cursor
+        self.selectCols = selectCols
+        self.kwargs = kwargs
+        self.whereClause = ''
+        if kwargs['orderBy']: # use iterSQL/iterColumns for WHERE / SELECT
+            self.whereSQL = db.iterSQL
+            if selectCols == '*': # extracting all columns
+                self.whereParams = [db.data[col] for col in db.iterColumns]
+            else: # selectCols is single column
+                iterColumns = list(db.iterColumns)
+                try: # if selectCols in db.iterColumns, just use that
+                    i = iterColumns.index(selectCols)
+                except ValueError: # have to append selectCols
+                    i = len(db.iterColumns)
+                    iterColumns += [selectCols]
+                self.selectCols = ','.join(iterColumns)
+                self.whereParams = range(len(db.iterColumns))
+                if i > 0: # need to extract desired column
+                    self.cache_f = lambda x:[t[i] for t in x]
+        else: # just use primary key
+            self.whereSQL = 'WHERE %s>%%s' % self.db.primary_key
+            self.whereParams = (db.data['id'],)
+        self.params = ()
+        self.done = False
+        
+    def __call__(self):
+        'get the next block of data'
+        if self.done:
+            return ()
+        self.db._select(self.whereClause, self.params, cursor=self.cursor, 
+                        limit='LIMIT %s' % self.cursor.arraysize,
+                        selectCols=self.selectCols, **(self.kwargs))
+        rows = self.cursor.fetchall()
+        if len(rows) < self.cursor.arraysize: # iteration complete
+            self.done = True
+            return rows
+        lastrow = rows[-1] # extract params from the last row in this block
+        if len(lastrow) > 1:
+            self.params = [lastrow[icol] for icol in self.whereParams]
+        else:
+            self.params = lastrow
+        self.whereClause = self.whereSQL
+        return rows
+            
+    
 
 class SQLiteServerInfo(DBServerInfo):
     """picklable reference to a sqlite database"""
+    _serverType = 'sqlite'
     def __init__(self, database, *args, **kwargs):
         """Takes same arguments as sqlite3.connect()"""
-        DBServerInfo.__init__(self, 'sqlite',
-                              SourceFileName(database), # save abs path!
+        DBServerInfo.__init__(self, 'sqlite',  # save abs path!
+                              database=SourceFileName(database),
                               *args, **kwargs)
+    def _start_connection(self):
+        self._connection,self._cursor = sqlite_connect(*self.args, **self.kwargs)
     def __getstate__(self):
-        if self.args[0] == ':memory:':
+        database = self.kwargs.get('database', False) or self.args[0]
+        if database == ':memory:':
             raise ValueError('SQLite in-memory database is not picklable!')
         return DBServerInfo.__getstate__(self)
         
+# list of DBServerInfo subclasses for different modules
+_DBServerModuleDict = dict(MySQLdb=MySQLServerInfo, sqlite=SQLiteServerInfo)
+
             
 class MapView(object, UserDict.DictMixin):
     'general purpose 1:1 mapping defined by any SQL query'
@@ -1837,7 +1949,7 @@ class MapView(object, UserDict.DictMixin):
     _schemaModuleDict = _schemaModuleDict # default module list
     get_sql_format = get_table_schema
     def __getitem__(self, k):
-        if not hasattr(k,'db') or k.db != self.sourceDB:
+        if not hasattr(k,'db') or k.db is not self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this map!')
         sql,params = self._format_query(self.viewSQL, (k.id,))
         self.cursor.execute(sql, params) # formatted for this db interface
@@ -1939,7 +2051,7 @@ class GraphView(MapView):
         self.edgeDB = edgeDB
         MapView.__init__(self, sourceDB, targetDB, viewSQL, cursor, **kwargs)
     def __getitem__(self, k):
-        if not hasattr(k,'db') or k.db != self.sourceDB:
+        if not hasattr(k,'db') or k.db is not self.sourceDB:
             raise KeyError('object is not in the sourceDB bound to this map!')
         return GraphViewEdgeDict(self, k)
     _pickleAttrs = MapView._pickleAttrs.copy()

@@ -1,20 +1,43 @@
-import os, unittest
+import os, random, string, unittest
 from testlib import testutil, PygrTestProgram, SkipTest
-from pygr.sqlgraph import SQLTable, SQLTableNoCache,\
+from pygr.sqlgraph import SQLTable, SQLTableNoCache,SQLTableClustered,\
      MapView, GraphView, DBServerInfo, import_sqlite
 from pygr import logger
 
+def entrap(klass):
+    'return a function to intercept any calls to generic_iterator() method'
+    def catch_iterator(self, *args, **kwargs):
+        try:
+            assert not self.catchIter, 'this should not iterate!'
+        except AttributeError:
+            pass
+        return klass.generic_iterator(self, *args, **kwargs)
+    return catch_iterator
+
+
+class SQLTableCatcher(SQLTable):
+    generic_iterator = entrap(SQLTable)
+
+class SQLTableNoCacheCatcher(SQLTableNoCache):
+    generic_iterator = entrap(SQLTableNoCache)
+
+class SQLTableClusteredCatcher(SQLTableClustered):
+    generic_iterator = entrap(SQLTableClustered)
+
 class SQLTable_Setup(unittest.TestCase):
-    tableClass = SQLTable
+    tableClass = SQLTableCatcher
+    serverArgs = {}
+    loadArgs = {}
     def __init__(self, *args, **kwargs):
         unittest.TestCase.__init__(self, *args, **kwargs)
-        self.serverInfo = DBServerInfo() # share conn for all tests
+        # share conn for all tests
+        self.serverInfo = DBServerInfo(** self.serverArgs) 
     def setUp(self):
-        try:
-            self.load_data(writeable=self.writeable)
-        except ImportError:
-            raise SkipTest('missing MySQLdb module?')
-    def load_data(self, tableName='test.sqltable_test', writeable=False):
+        if not testutil.mysql_enabled():
+            raise SkipTest, "no MySQL installed"
+        self.load_data(writeable=self.writeable, ** self.loadArgs)
+    def load_data(self, tableName='test.sqltable_test', writeable=False,
+                  dbargs={},sourceDBargs={},targetDBargs={}):
         'create 3 tables and load 9 rows for our tests'
         self.tableName = tableName
         self.joinTable1 = joinTable1 = tableName + '1'
@@ -25,17 +48,17 @@ class SQLTable_Setup(unittest.TestCase):
         self.db = self.tableClass(tableName, dropIfExists=True,
                                   serverInfo=self.serverInfo,
                                   createTable=createTable,
-                                  writeable=writeable)
+                                  writeable=writeable, **dbargs)
         self.sourceDB = self.tableClass(joinTable1, serverInfo=self.serverInfo,
                                         dropIfExists=True, createTable="""\
         CREATE TABLE %s (my_id INTEGER PRIMARY KEY,
               other_id VARCHAR(16))
-        """ % joinTable1)
+        """ % joinTable1, **sourceDBargs)
         self.targetDB = self.tableClass(joinTable2, serverInfo=self.serverInfo,
                                         dropIfExists=True, createTable="""\
         CREATE TABLE %s (third_id INTEGER PRIMARY KEY,
               other_id VARCHAR(16))
-        """ % joinTable2)
+        """ % joinTable2, **targetDBargs)
         sql = """
             INSERT INTO %s (seq_id, start, stop) VALUES ('seq1', 0, 10)
             INSERT INTO %s (seq_id, start, stop) VALUES ('seq2', 5, 15)
@@ -49,10 +72,23 @@ class SQLTable_Setup(unittest.TestCase):
         """ % tuple(([tableName]*2) + ([joinTable1]*3) + ([joinTable2]*4))
         for line in sql.strip().splitlines(): # insert our test data
             self.db.cursor.execute(line.strip())
+
+        # Another table, for the "ORDER BY" test
+        self.orderTable = tableName + '_orderBy'
+        self.db.cursor.execute("""\
+        CREATE TABLE %s (id INTEGER PRIMARY KEY, number INTEGER, letter VARCHAR(1))
+        """ % self.orderTable)
+        for row in range(0, 10):
+            self.db.cursor.execute('INSERT INTO %s VALUES (%d, %d, \'%s\')' %
+                                   (self.orderTable, row, random.randint(0, 99), 
+                                    string.lowercase[random.randint(0,
+                                                                    len(string.lowercase)
+                                                                    - 1)]))
     def tearDown(self):
         self.db.cursor.execute('drop table if exists %s' % self.tableName)
         self.db.cursor.execute('drop table if exists %s' % self.joinTable1)
         self.db.cursor.execute('drop table if exists %s' % self.joinTable2)
+        self.db.cursor.execute('drop table if exists %s' % self.orderTable)
         self.serverInfo.close()
 
 class SQLTable_Test(SQLTable_Setup):
@@ -62,16 +98,20 @@ class SQLTable_Test(SQLTable_Setup):
         k.sort()
         assert k == [1, 2]
     def test_len(self):
+        self.db.catchIter = True
         assert len(self.db) == len(self.db.keys())
     def test_contains(self):
+        self.db.catchIter = True
         assert 1 in self.db
         assert 2 in self.db
         assert 'foo' not in self.db
     def test_has_key(self):
+        self.db.catchIter = True
         assert self.db.has_key(1)
         assert self.db.has_key(2)
         assert not self.db.has_key('foo')
     def test_get(self):
+        self.db.catchIter = True
         assert self.db.get('foo') is None
         assert self.db.get(1) == self.db[1]
         assert self.db.get(2) == self.db[2]
@@ -81,15 +121,21 @@ class SQLTable_Test(SQLTable_Setup):
         assert i == [1, 2]
     def test_iterkeys(self):
         kk = self.db.keys()
-        kk.sort()
         ik = list(self.db.iterkeys())
-        ik.sort()
         assert kk == ik
+    def test_pickle(self):
+        kk = self.db.keys()
+        import pickle
+        s = pickle.dumps(self.db)
+        db = pickle.loads(s)
+        try:
+            ik = list(db.iterkeys())
+            assert kk == ik
+        finally:
+            db.serverInfo.close() # close extra DB connection
     def test_itervalues(self):
         kv = self.db.values()
-        kv.sort()
         iv = list(self.db.itervalues())
-        iv.sort()
         assert kv == iv
     def test_itervalues_long(self):
         """test iterator isolation from queries run inside iterator loop """
@@ -105,12 +151,11 @@ class SQLTable_Test(SQLTable_Setup):
         assert kv == iv
     def test_iteritems(self):
         ki = self.db.items()
-        ki.sort()
         ii = list(self.db.iteritems())
-        ii.sort()
         assert ki == ii
     def test_readonly(self):
         'test error handling of write attempts to read-only DB'
+        self.db.catchIter = True # no iter expected in this test!
         try:
             self.db.new(seq_id='freddy', start=3000, stop=4500)
             raise AssertionError('failed to trap attempt to write to db')
@@ -127,10 +172,83 @@ class SQLTable_Test(SQLTable_Setup):
             raise AssertionError('failed to trap attempt to write to db')
         except ValueError:
             pass
+    def test_orderBy(self):
+        'test iterator with orderBy, iterSQL, iterColumns'
+        self.targetDB.catchIter = True # should not iterate
+        self.targetDB.arraysize = 2 # force it to use multiple queries to finish
+        result = self.targetDB.keys()
+        assert result == [6, 7, 8, 99]
+        self.targetDB.catchIter = False # next statement will iterate
+        assert result == list(iter(self.targetDB))
+        self.targetDB.catchIter = True # should not iterate
+        self.targetDB.orderBy = 'ORDER BY other_id'
+        result = self.targetDB.keys()
+        assert result == [7, 99, 6, 8]
+        self.targetDB.catchIter = False # next statement will iterate
+        if self.serverInfo._serverType == 'mysql' \
+               and self.serverInfo.custom_iter_keys: # only test this for mysql
+            try:
+                assert result == list(iter(self.targetDB))
+                raise AssertionError('failed to trap missing iterSQL attr')
+            except AttributeError:
+                pass
+        self.targetDB.iterSQL = 'WHERE other_id>%s' # tell it how to slice
+        self.targetDB.iterColumns = ['other_id']
+        assert result == list(iter(self.targetDB))
+        result = self.targetDB.values()
+        assert result == [self.targetDB[7], self.targetDB[99],
+                          self.targetDB[6], self.targetDB[8]]
+        assert result == list(self.targetDB.itervalues())
+        result = self.targetDB.items()
+        assert result == [(7, self.targetDB[7]), (99, self.targetDB[99]),
+                          (6, self.targetDB[6]), (8, self.targetDB[8])]
+        assert result == list(self.targetDB.iteritems())
+        import pickle
+        s = pickle.dumps(self.targetDB) # test pickling & unpickling
+        db = pickle.loads(s)
+        try:
+            correct = self.targetDB.keys()
+            result = list(iter(db))
+            assert result == correct
+        finally:
+            db.serverInfo.close() # close extra DB connection
+
+    def test_orderby_random(self):
+        'test orderBy in SQLTable'
+        if self.serverInfo._serverType == 'mysql' \
+               and self.serverInfo.custom_iter_keys:
+            try:
+                byNumber = self.tableClass(self.orderTable, arraysize=2,
+                                           serverInfo=self.serverInfo,
+                                           orderBy='ORDER BY number')
+                raise AssertionError('failed to trap orderBy without iterSQL!')
+            except ValueError:
+                pass
+        byNumber = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
+                                   arraysize=2, orderBy='ORDER BY number,id',
+                          iterSQL='WHERE number>%s or (number=%s and id>%s)',
+                                   iterColumns=('number','number','id'))
+        bv = [val.number for val in byNumber.values()]
+        sortedBV = bv[:]
+        sortedBV.sort()
+        assert sortedBV == bv
+        bv = [val.number for val in byNumber.itervalues()]
+        assert sortedBV == bv
+
+        byLetter = self.tableClass(self.orderTable, serverInfo=self.serverInfo,
+                                   arraysize=2, orderBy='ORDER BY letter,id',
+                            iterSQL='WHERE letter>%s or (letter=%s and id>%s)',
+                                   iterColumns=('letter','letter','id'))
+        bl = [val.letter for val in byLetter.values()]
+        sortedBL = bl[:]
+        assert sortedBL == bl
+        bl = [val.letter for val in byLetter.itervalues()]
+        assert sortedBL == bl
 
     ### @CTB need to test write access
     def test_mapview(self):
         'test MapView of SQL join'
+        self.sourceDB.catchIter = self.targetDB.catchIter = True
         m = MapView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -151,6 +269,7 @@ class SQLTable_Test(SQLTable_Setup):
         self.sourceDB.cursor.execute("INSERT INTO %s VALUES (5,'seq78')"
                                      % self.sourceDB.name)
         assert len(self.sourceDB) == 4
+        self.sourceDB.catchIter = False # next step will cause iteration
         assert len(m) == 2
         l = m.keys()
         l.sort()
@@ -159,6 +278,7 @@ class SQLTable_Test(SQLTable_Setup):
         assert l == correct
     def test_mapview_inverse(self):
         'test inverse MapView of SQL join'
+        self.sourceDB.catchIter = self.targetDB.catchIter = True
         m = MapView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -183,6 +303,7 @@ class SQLTable_Test(SQLTable_Setup):
             pass
     def test_graphview(self):
         'test GraphView of SQL join'
+        self.sourceDB.catchIter = self.targetDB.catchIter = True
         m = GraphView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -195,6 +316,7 @@ class SQLTable_Test(SQLTable_Setup):
         self.sourceDB.cursor.execute("INSERT INTO %s VALUES (5,'seq78')"
                                      % self.sourceDB.name)
         assert len(self.sourceDB) == 4
+        self.sourceDB.catchIter = False # next step will cause iteration
         assert len(m) == 3
         l = m.keys()
         l.sort()
@@ -204,6 +326,7 @@ class SQLTable_Test(SQLTable_Setup):
 
     def test_graphview_inverse(self):
         'test inverse GraphView of SQL join'
+        self.sourceDB.catchIter = self.targetDB.catchIter = True
         m = GraphView(self.sourceDB, self.targetDB,"""\
         SELECT t2.third_id FROM %s t1, %s t2
            WHERE t1.my_id=%%s and t1.other_id=t2.other_id
@@ -225,6 +348,13 @@ class SQLTable_Test(SQLTable_Setup):
         assert len(d) == 2
         assert self.targetDB[6] in d and self.targetDB[8] in d
         assert self.sourceDB[2] in m
+
+class SQLTable_No_SSCursor_Test(SQLTable_Test):
+    serverArgs = dict(serverSideCursors=False)
+
+class SQLTable_OldIter_Test(SQLTable_Test):
+    serverArgs = dict(serverSideCursors=False,
+                      blockIterators=False)
 
 class SQLiteBase(testutil.SQLite_Mixin):
     def sqlite_load(self):
@@ -249,7 +379,17 @@ class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
 ##                                         serverInfo=self.serverInfo)
 
 class SQLTable_NoCache_Test(SQLTable_Test):
-    tableClass = SQLTableNoCache
+    tableClass = SQLTableNoCacheCatcher
+
+class SQLTableClustered_Test(SQLTable_Test):
+    tableClass = SQLTableClusteredCatcher
+    loadArgs = dict(dbargs=dict(clusterKey='seq_id', arraysize=2),
+                    sourceDBargs=dict(clusterKey='other_id', arraysize=2),
+                    targetDBargs=dict(clusterKey='other_id', arraysize=2))
+    def test_orderBy(self): # neither of these tests useful in this context
+        pass
+    def test_orderby_random(self):
+        pass
 
 class SQLiteTable_NoCache_Test(SQLiteTable_Test):
     tableClass = SQLTableNoCache
@@ -259,37 +399,44 @@ class SQLTableRW_Test(SQLTable_Setup):
     writeable = True
     def test_new(self):
         'test row creation with auto inc ID'
+        self.db.catchIter = True # no iter expected in this test
         n = len(self.db)
         o = self.db.new(seq_id='freddy', start=3000, stop=4500)
         assert len(self.db) == n + 1
         t = self.tableClass(self.tableName,
                             serverInfo=self.serverInfo) # requery the db
+        t.catchIter = True # no iter expected in this test
         result = t[o.id]
         assert result.seq_id == 'freddy' and result.start==3000 \
                and result.stop==4500
     def test_new2(self):
         'check row creation with specified ID'
+        self.db.catchIter = True # no iter expected in this test
         n = len(self.db)
         o = self.db.new(id=99, seq_id='jeff', start=3000, stop=4500)
         assert len(self.db) == n + 1
         assert o.id == 99
         t = self.tableClass(self.tableName, 
                             serverInfo=self.serverInfo) # requery the db
+        t.catchIter = True # no iter expected in this test
         result = t[99]
         assert result.seq_id == 'jeff' and result.start==3000 \
                and result.stop==4500
     def test_attr(self):
         'test changing an attr value'
+        self.db.catchIter = True # no iter expected in this test
         o = self.db[2]
         assert o.seq_id == 'seq2'
         o.seq_id = 'newval' # overwrite this attribute
         assert o.seq_id == 'newval' # check cached value
         t = self.tableClass(self.tableName, 
                             serverInfo=self.serverInfo) # requery the db
+        t.catchIter = True # no iter expected in this test
         result = t[2]
         assert result.seq_id == 'newval'
     def test_delitem(self):
         'test deletion of a row'
+        self.db.catchIter = True # no iter expected in this test
         n = len(self.db)
         del self.db[1]
         assert len(self.db) == n - 1
@@ -300,6 +447,7 @@ class SQLTableRW_Test(SQLTable_Setup):
             pass
     def test_setitem(self):
         'test assigning new ID to existing object'
+        self.db.catchIter = True # no iter expected in this test
         o = self.db.new(id=17, seq_id='bob', start=2000, stop=2500)
         self.db[13] = o
         assert o.id == 13
@@ -310,6 +458,7 @@ class SQLTableRW_Test(SQLTable_Setup):
             pass
         t = self.tableClass(self.tableName, 
                             serverInfo=self.serverInfo) # requery the db
+        t.catchIter = True # no iter expected in this test
         result = t[13]
         assert result.seq_id == 'bob' and result.start==2000 \
                and result.stop==2500
@@ -338,8 +487,9 @@ class Ensembl_Test(unittest.TestCase):
         conn = DBServerInfo(host='ensembldb.ensembl.org', user='anonymous',
                             passwd='')
         try:
-            translationDB = SQLTable('homo_sapiens_core_47_36i.translation',
+            translationDB = SQLTableCatcher('homo_sapiens_core_47_36i.translation',
                                      serverInfo=conn)
+            translationDB.catchIter = True # should not iter in this test! 
             exonDB = SQLTable('homo_sapiens_core_47_36i.exon', serverInfo=conn)
         except ImportError,e:
             raise SkipTest(e)
