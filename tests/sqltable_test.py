@@ -21,9 +21,11 @@ class SQLTableNoCacheCatcher(SQLTableNoCache):
 
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTableCatcher
+    serverArgs = {}
     def __init__(self, *args, **kwargs):
         unittest.TestCase.__init__(self, *args, **kwargs)
-        self.serverInfo = DBServerInfo() # share conn for all tests
+        # share conn for all tests
+        self.serverInfo = DBServerInfo(** self.serverArgs) 
     def setUp(self):
         try:
             self.load_data(writeable=self.writeable)
@@ -129,15 +131,12 @@ class SQLTable_Test(SQLTable_Setup):
         for i in range(40000): # insert 40000 rows
             self.db.cursor.execute(sql)
         iv = []
-        print 'begin itervalues()'
         for o in self.db.itervalues():
             status = 99 in self.db # make it do a query inside iterator loop
             iv.append(o.id)
-        print 'begin values()'
         kv = [o.id for o in self.db.values()]
         assert len(kv) == len(iv)
         assert kv == iv
-        print 'done'
     def test_iteritems(self):
         ki = self.db.items()
         ki.sort()
@@ -176,7 +175,8 @@ class SQLTable_Test(SQLTable_Setup):
         result = self.targetDB.keys()
         assert result == [7, 99, 6, 8]
         self.targetDB.catchIter = False # next statement will iterate
-        if self.serverInfo._serverType == 'mysql': # only test this for mysql
+        if self.serverInfo._serverType == 'mysql' \
+               and self.serverInfo.custom_iter_keys: # only test this for mysql
             try:
                 assert result == list(iter(self.targetDB))
                 raise AssertionError('failed to trap missing iterSQL attr')
@@ -196,7 +196,8 @@ class SQLTable_Test(SQLTable_Setup):
 
     def test_orderby_random(self):
         'test orderBy in SQLTable'
-        if self.serverInfo._serverType == 'mysql':
+        if self.serverInfo._serverType == 'mysql' \
+               and self.serverInfo.custom_iter_keys:
             try:
                 byNumber = self.tableClass(self.orderTable, arraysize=2,
                                            serverInfo=self.serverInfo,
@@ -328,6 +329,13 @@ class SQLTable_Test(SQLTable_Setup):
         assert len(d) == 2
         assert self.targetDB[6] in d and self.targetDB[8] in d
         assert self.sourceDB[2] in m
+
+class SQLTable_No_SSCursor_Test(SQLTable_Test):
+    serverArgs = dict(serverSideCursors=False)
+
+class SQLTable_OldIter_Test(SQLTable_Test):
+    serverArgs = dict(serverSideCursors=False,
+                      blockIterators=False)
 
 class SQLiteBase(testutil.SQLite_Mixin):
     def sqlite_load(self):
@@ -467,18 +475,14 @@ t2.transcript_id AND t2.transcript_id = t3.transcript_id AND t1.exon_id =
 tr.start_exon_id AND t2.exon_id = tr.end_exon_id AND t3.rank >= t1.rank AND
 t3.rank <= t2.rank ORDER BY t3.rank
             '''
-        print 'creating GraphView...'
         self.translationExons = GraphView(translationDB, exonDB,
                                           sql_statement, serverInfo=conn)
-        print 'getting translation...'
         self.translation = translationDB[15121]
     
     def test_orderBy(self):
         "Ensemble access, test order by"
         'test issue 53: ensure that the ORDER BY results are correct'
-        print 'do mapping'
         exons = self.translationExons[self.translation] # do the query
-        print 'done'
         result = [e.id for e in exons]
         correct = [95160,95020,95035,95050,95059,95069,95081,95088,95101,
                    95110,95172]
