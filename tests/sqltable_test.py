@@ -4,23 +4,24 @@ from pygr.sqlgraph import SQLTable, SQLTableNoCache,SQLTableClustered,\
      MapView, GraphView, DBServerInfo, import_sqlite
 from pygr import logger
 
-
-def catch_iterator(self, *args, **kwargs):
-    try:
-        assert not self.catchIter, 'this should not iterate!'
-    except AttributeError:
-        pass
-    return SQLTable.generic_iterator(self, *args, **kwargs)
+def entrap(klass):
+    def catch_iterator(self, *args, **kwargs):
+        try:
+            assert not self.catchIter, 'this should not iterate!'
+        except AttributeError:
+            pass
+        return klass.generic_iterator(self, *args, **kwargs)
+    return catch_iterator
 
 
 class SQLTableCatcher(SQLTable):
-    generic_iterator = catch_iterator
+    generic_iterator = entrap(SQLTable)
 
 class SQLTableNoCacheCatcher(SQLTableNoCache):
-    generic_iterator = catch_iterator
+    generic_iterator = entrap(SQLTableNoCache)
 
 class SQLTableClusteredCatcher(SQLTableClustered):
-    generic_iterator = catch_iterator
+    generic_iterator = entrap(SQLTableClustered)
 
 class SQLTable_Setup(unittest.TestCase):
     tableClass = SQLTableCatcher
