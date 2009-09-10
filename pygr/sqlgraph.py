@@ -1867,7 +1867,11 @@ class MySQLServerInfo(DBServerInfo):
             pass
     def iter_keys(self, db, cursor, map_f=iter,
                   cache_f=lambda x:[t[0] for t in x], **kwargs):
-        block_generator = BlockGenerator(db, self, cursor, **kwargs)
+        block_generator = BlockGenerator(db, cursor, **kwargs)
+        try:
+            cache_f = block_generator.cache_f
+        except AttributeError:
+            pass
         return db.generic_iterator(cursor=cursor, cache_f=cache_f,
                                    map_f=map_f, fetch_f=block_generator)
 
@@ -1883,18 +1887,27 @@ class CursorCloser(object):
 
 class BlockGenerator(CursorCloser):
     'workaround for MySQLdb iteration horrible performance'
-    def __init__(self, db, serverInfo, cursor, whereClause='', **kwargs):
+    def __init__(self, db, cursor, selectCols, whereClause='', **kwargs):
         self.db = db
-        self.serverInfo = serverInfo
         self.cursor = cursor
+        self.selectCols = selectCols
         self.kwargs = kwargs
         self.whereClause = ''
         if kwargs['orderBy']: # use iterSQL/iterColumns for WHERE / SELECT
             self.whereSQL = db.iterSQL
-            if kwargs['selectCols'] == db.primary_key: # extract iterColumns
-                self.whereColumns = ','.join(db.iterColumns) # required!!
-            else: # extracting all columns
+            if selectCols == '*': # extracting all columns
                 self.whereParams = [db.data[col] for col in db.iterColumns]
+            else: # selectCols is single column
+                iterColumns = list(db.iterColumns)
+                try: # if selectCols in db.iterColumns, just use that
+                    i = iterColumns.index(selectCols)
+                except ValueError: # have to append selectCols
+                    i = len(db.iterColumns)
+                    iterColumns += [selectCols]
+                self.selectCols = ','.join(iterColumns)
+                self.whereParams = range(len(db.iterColumns))
+                if i > 0: # need to extract desired column
+                    self.cache_f = lambda x:[t[i] for t in x]
         else: # just use primary key
             self.whereSQL = 'WHERE %s>%%s' % self.db.primary_key
             self.whereParams = (db.data['id'],)
@@ -1906,7 +1919,8 @@ class BlockGenerator(CursorCloser):
         if self.done:
             return ()
         self.db._select(self.whereClause, self.params, cursor=self.cursor, 
-                        limit='LIMIT %s' % self.cursor.arraysize, **(self.kwargs))
+                        limit='LIMIT %s' % self.cursor.arraysize,
+                        selectCols=self.selectCols, **(self.kwargs))
         rows = self.cursor.fetchall()
         if len(rows) < self.cursor.arraysize: # iteration complete
             self.done = True
@@ -1915,13 +1929,7 @@ class BlockGenerator(CursorCloser):
         if len(lastrow) > 1:
             self.params = [lastrow[icol] for icol in self.whereParams]
         else:
-            try: # get whereColumns values for last row
-                self.db._select('WHERE %s=%%s' % self.db.primary_key,
-                                lastrow, self.whereColumns, self.cursor)
-            except AttributeError:
-                self.params = lastrow
-            else:
-                self.params = self.cursor.fetchall()[0]
+            self.params = lastrow
         self.whereClause = self.whereSQL
         return rows
             
