@@ -197,6 +197,15 @@ class SQLTable_Test(SQLTable_Setup):
         assert result == [(7, self.targetDB[7]), (99, self.targetDB[99]),
                           (6, self.targetDB[6]), (8, self.targetDB[8])]
         assert result == list(self.targetDB.iteritems())
+        import pickle
+        s = pickle.dumps(self.targetDB) # test pickling & unpickling
+        db = pickle.loads(s)
+        try:
+            correct = self.targetDB.keys()
+            result = list(iter(db))
+            assert result == correct
+        finally:
+            db.serverInfo.close() # close extra DB connection
 
     def test_orderby_random(self):
         'test orderBy in SQLTable'
