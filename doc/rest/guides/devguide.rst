@@ -1,6 +1,14 @@
 Pygr Developer's Guide
 ======================
 
+Working With Pygr
+-----------------
+
+Please see our developer tutorial, :doc:`../tutorials/develop`.
+
+
+Some Pygr Philosophy
+--------------------
 
 Pygr attempts to provide a highly Pythonic interface to bioinformatics datatypes
 such as sequence, alignments and databases.  This document explains the interfaces

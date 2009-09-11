@@ -24,6 +24,7 @@ Tutorials
     tutorials/gene
     tutorials/graphquery
     tutorials/annotating-yeast
+    tutorials/develop
 
 Recipes
 -------
@@ -42,7 +43,7 @@ Guides
     guides/devguide
     guides/testing
     guides/libnclist
-    manual
+    
 
     
 Indices and tables
