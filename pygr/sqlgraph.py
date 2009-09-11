@@ -1837,13 +1837,13 @@ class MySQLServerInfo(DBServerInfo):
             pass
     def iter_keys(self, db, cursor, map_f=iter,
                   cache_f=lambda x:[t[0] for t in x], **kwargs):
-        block_generator = BlockGenerator(db, cursor, **kwargs)
+        block_iterator = BlockIterator(db, cursor, **kwargs)
         try:
-            cache_f = block_generator.cache_f
+            cache_f = block_iterator.cache_f
         except AttributeError:
             pass
         return db.generic_iterator(cursor=cursor, cache_f=cache_f,
-                                   map_f=map_f, fetch_f=block_generator)
+                                   map_f=map_f, fetch_f=block_iterator)
 
 class CursorCloser(object):
     """container for ensuring cursor.close() is called, when this obj deleted.
@@ -1855,7 +1855,7 @@ class CursorCloser(object):
     def __del__(self):
         self.cursor.close()
 
-class BlockGenerator(CursorCloser):
+class BlockIterator(CursorCloser):
     'workaround for MySQLdb iteration horrible performance'
     def __init__(self, db, cursor, selectCols, whereClause='', **kwargs):
         self.db = db
