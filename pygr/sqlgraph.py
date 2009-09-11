@@ -1910,7 +1910,7 @@ class SQLiteServerInfo(DBServerInfo):
     _serverType = 'sqlite'
     def __init__(self, database, *args, **kwargs):
         """Takes same arguments as sqlite3.connect()"""
-        DBServerInfo.__init__(self, 'sqlite',  # save abs path!
+        DBServerInfo.__init__(self, 'sqlite3',  # save abs path!
                               database=SourceFileName(database),
                               *args, **kwargs)
     def _start_connection(self):
@@ -1922,7 +1922,8 @@ class SQLiteServerInfo(DBServerInfo):
         return DBServerInfo.__getstate__(self)
         
 # list of DBServerInfo subclasses for different modules
-_DBServerModuleDict = dict(MySQLdb=MySQLServerInfo, sqlite=SQLiteServerInfo)
+_DBServerModuleDict = dict(MySQLdb=MySQLServerInfo,
+                           sqlite3=SQLiteServerInfo)
 
             
 class MapView(object, UserDict.DictMixin):
