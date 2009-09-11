@@ -1762,7 +1762,7 @@ def sqlite_connect(*args, **kwargs):
 
 class DBServerInfo(object):
     'picklable reference to a database server'
-    def __init__(self, moduleName='MySQLdb', serverSideCursors=True,
+    def __init__(self, moduleName='MySQLdb', serverSideCursors=False,
                  blockIterators=True, *args, **kwargs):
         try:
             self.__class__ = _DBServerModuleDict[moduleName]
