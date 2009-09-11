@@ -31,7 +31,7 @@ load the entire set of keys into memory to protect against the possibility
 that the user would issue another query during the lifetime of 
 that iterator.
 
-.. class:: DBServerInfo(moduleName='MySQLdb', serverSideCursors=True, blockIterators=True, *args, **kwargs)
+.. class:: DBServerInfo(moduleName='MySQLdb', serverSideCursors=False, blockIterators=True, *args, **kwargs)
 
    Base class for accessing different types of database servers.
 
@@ -620,13 +620,15 @@ provides three alternative iteration protocols:
   server-side cursors to minimize memory usage.  Since
   blockIterators always fetchs all rows requested from
   its ``SELECT``, the server-side cursor problem described
-  above does not occur.
-
-  This is the default iteration protocol for use with ``MySQLdb``.
+  above does not occur.  This appears to have problems
+  on Windows, and is not recommended, simply because
+  ``MySQLdb`` server side cursors are not widely used
+  in the community and may not be reliable.
 
 * ``serverSideCursors=False, blockIterators=True``: 
   this again uses the blockIterator algorithm, but with a 
   regular ``MySQLdb`` cursor.
+  This is the default iteration protocol for use with ``MySQLdb``.
 
 * ``serverSideCursors=False, blockIterators=False``: 
   this reverts to a simple, standard approach (``SELECT``
