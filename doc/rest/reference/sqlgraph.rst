@@ -8,6 +8,53 @@
 
 This module provides back-end database access.
 
+DBServerInfo
+------------
+
+This class provides a general, picklable object for connecting to 
+a database server.  You instantiate it with the necessary arguments
+for accessing a database server, then pass it as the *serverInfo* 
+argument to any datbase table class.  You can then save these
+database table classes to :mod:`worldbase`, and when retrieved
+they will automatically reconnect to the database server.  Indeed,
+you can save the :class:`DBServerInfo` object itself to :mod:`worldbase`
+as a standard name (e.g. referring to UCSC's MySQL server).
+Then any database table refering to this standard name could
+automatically re-connect to a *local* copy of that server
+when retrieved from :mod:`worldbase`.
+
+A second advantage of :class:`DBServerInfo` over regular cursor
+objects, is that it can create temporary cursor objects automatically when
+needed.  This is crucial for guaranteeing query isolation for
+long-lived iterator objects; otherwise Pygr is forced to 
+load the entire set of keys into memory to protect against the possibility
+that the user would issue another query during the lifetime of 
+that iterator.
+
+.. class:: DBServerInfo(moduleName='MySQLdb', serverSideCursors=True, blockIterators=True, *args, **kwargs)
+
+   Base class for accessing different types of database servers.
+
+   *moduleName* must be the name of a Python DB API 2.0 module.
+   Currently only ``"MySQLdb"`` and ``"sqlite3"`` are supported.
+
+   *args* and *kwargs* are simply passed to the module's ``connect()``
+   function.
+
+   *serverSideCursors*, *blockIterators*: for details, see
+   `MySQLdb Large Table Performance`_.
+
+.. class:: MySQLServerInfo(moduleName='MySQLdb', serverSideCursors=True, blockIterators=True, *args, **kwargs)
+
+   Subclass of :class:`DBServerInfo` for accessing MySQL.
+
+.. class:: SQLiteServerInfo(moduleName='MySQLdb', serverSideCursors=True, blockIterators=True, *args, **kwargs)
+
+   Subclass of :class:`DBServerInfo` for accessing sqlite.
+   This will work with the Python standard library module ``sqlite3``
+   or external package ``pysqlite2``.
+
+
 SQLTableBase
 ------------
 The base class for :class:`SQLTable` and other variants below.
@@ -28,12 +75,12 @@ This class assumes that the database table has a primary key,
 which is used as the key value for the dictionary.  For tables
 with no primary key see other variants below.
 
-.. class:: SQLTable(name, cursor=None, itemClass=None, attrAlias=None, clusterKey=None,createTable=None,graph=None,maxCache=None, arraysize=1024, itemSliceClass=None, dropIfExists=False,serverInfo=None, autoGC=True, orderBy=None,writeable=False)
+.. class:: SQLTable(name, cursor=None, itemClass=None, attrAlias=None, clusterKey=None, createTable=None, graph=None, maxCache=None, arraysize=1024, itemSliceClass=None, dropIfExists=False, serverInfo=None, autoGC=True, orderBy=None, writeable=False, iterSQL=None, iterColumns=None, **kwargs)
 
    Open a connection to an SQL table specified by *name*.
 
    You should provide a *serverInfo* argument that provides a connection
-   to the server.  See :class:`sqlgraph.DBServerInfo` for details.
+   to the server.  See :class:`DBServerInfo` for details.
 
    DEPRECATED: You can supply a Python DB API *cursor* providing a connection
    to the database server.  If *cursor* is None, it will attempt
@@ -70,8 +117,26 @@ with no primary key see other variants below.
    to implement a weakref-based cache, in which items are automatically
    flushed from the cache when no longer referenced by the user.
 
-   *orderBy* if not None, must be an SQL ORDER BY clause to be used
-   for determining the iteration order of keys from the database.
+   *orderBy* if not None, must be an SQL ``ORDER BY`` clause to be used
+   for determining the iteration order of keys from the database.  
+   For example ``orderBy="ORDER BY seq_id"``.  You can also include
+   ``GROUP BY`` clauses if you want iteration to eliminate redundant
+   rows from the iteration, e.g. ``orderBy="GROUP BY source_id"``.
+
+   For use with MySQL, if you provide *orderBy*, you must also
+   provide *iterSQL* and *iterColumns*.  These parameters are required
+   for a workaround that solves serious performance problems in
+   the ``MySQLdb`` Python DB API 2.0 module for accessing MySQL.
+   For details, see `MySQLdb Large Table Performance`_.
+
+   *iterSQL* must provide the ``WHERE`` clause for the above algorithm.
+   For example, if you were iterating on ``orderBy="ORDER BY seq_id"``,
+   you would specify ``iterSQL="WHERE seq_id>%s"`` since ``seq_id``
+   is the column on which the iteration results will be ordered.
+
+   *iterColumns* must be a list of the column names to be filled into
+   your *iterSQL* ``WHERE`` clause as its ``%s`` fields.  For the 
+   example above, ``iterColumns=["seq_id"]``.
 
    *maxCache*, if not None, specifies the maximum number of database
    objects to keep in the cache.  For large databases, this is an important
@@ -80,36 +145,73 @@ with no primary key see other variants below.
    in the database).
 
    *arraysize*: specifies the number of rows to be transfered from the
-   database server in each cursor.fetchmany() operation.  This can be important
+   database server in each ``cursor.fetchmany()`` operation.
+   This can be important
    for speeding up data transfer from the database server.
 
-.. method:: SQLTable.new(**columnSettings)
+   Additional *kwargs* are passed to :func:`get_name_cursor()` for
+   obtaining a *serverInfo* if neither *serverInfo* or *cursor* are
+   provided.
 
-   creates a new row in the database, using the keyword arguments as column
-   name-value pairs to save to that row.  Returns the new row object.
 
+Memory-efficient Iteration
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This class and its variants follow a simple rule for controlling
-how data is loaded into memory.  For the most common usage,
+:class:`SQLTable` and its variants follow a simple rule for controlling
+how data is loaded into memory:
+
+* :meth:`SQLTable.iteritems()` and :meth:`SQLTable.itervalues()`
+  iterate over the row objects while keeping only a small number of them
+  in memory at any time (controlled by *maxCache* and *arraysize*)
+
+* :meth:`SQLTable.items()` and :meth:`SQLTable.values()`
+  iterate over the row objects by first loading the entire table into 
+  memory, in a single operation.
+
+* :meth:`SQLTable.__iter__()` and :meth:`SQLTable.keys()` do not
+  load any rows into memory.
+
+For the most common usage,
 iterating over the objects in the database, you should use the
-iterator methods :meth:`iteritems()` (which yields tuples of (*id,obj*)),
-or :meth:`itervalues()` (which just yields each object).  These methods
+iterator methods :meth:`SQLTable.iteritems()` 
+(which yields tuples of (*id,obj*)), or :meth:`SQLTable.itervalues()` 
+(which just yields each object).  These methods
 use the parameters *maxCache* and *arraysize* to control the
 size of caching and data transfer from the database server (see details above).
 This allows you to keep tight control over the total memory usage of :class:`SQLTable`
 when iterating over all the items in a very large database, and also to ensure
 efficient data transfer using the Python DB API 2.0 :meth:`fetchmany()` method.
 
-
 .. method:: SQLTable.iteritems()
 
 
 .. method:: SQLTable.itervalues()
 
+Iteration over Keys
+^^^^^^^^^^^^^^^^^^^
 
+If you iterate over IDs using :meth:`__iter__()` or :meth:`keys()`
+(i.e. ``for id in mytable``), row objects are not pre-loaded into memory;
+each object will be fetched individually when you try to access it
+(e.g. ``obj=mytable[id]``).
+
+.. method:: SQLTable.__iter__()
+
+   Iterate over all IDs (primary key values) in the table,
+   without loading the entire table into memory.
+
+.. method:: SQLTable.keys()
+
+   Obtain a list of all keys for the table (in a single query),
+   without loading the entire table of row objects into memory.
+
+
+
+Single-Pass Iteration
+^^^^^^^^^^^^^^^^^^^^^
 
 By contrast, if you call the table's
-:meth:`items()` or :meth:`values()` method, it will load data for the entire table into
+:meth:`SQLTable.items()` or :meth:`SQLTable.values()` method, it will load data for the entire table into
 memory, since these methods actually require creating a list object
 containing every object in the database.
 These methods ensure very efficient data transfer from the database server
@@ -126,17 +228,19 @@ memory limited only by the size of your database!
    return a list of all obj representing each row in the table,
    after first loading the entire table into memory.
 
+You can also force loading of the entire database directly:
 
-Finally, if you iterate over IDs using :meth:`__iter__()` or :meth:`keys()`
-(i.e. ``for id in mytable``), data is not pre-loaded into memory;
-each object will be fetched individually when you try to access it
-(e.g. ``obj=mytable[id]``).
+.. method:: SQLTable.load(oclass=None)
 
-.. method:: SQLTable.__iter__()
+   Load all data from the table, using *oclass* as the row object
+   class if specified (otherwise use the oclass for this table).
+   All rows are loaded from the database and saved as row objects
+   in the Python dictionary of this class.
 
-   Iterate over all IDs (primary key values) in the table,
-   without loading the entire table into memory.
 
+
+Obtaining or Creating Row Objects
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Accessing individual objects by *id* also obeys the *maxCache*
 caching limits:
@@ -149,15 +253,10 @@ caching limits:
    For non-caching versions of :class:`SQLTable`, see below.
 
 
-You can also force loading of the entire database directly:
+.. method:: SQLTable.new(**columnSettings)
 
-.. method:: SQLTable.load(oclass=None)
-
-   Load all data from the table, using *oclass* as the row object
-   class if specified (otherwise use the oclass for this table).
-   All rows are loaded from the database and saved as row objects
-   in the Python dictionary of this class.
-
+   creates a new row in the database, using the keyword arguments as column
+   name-value pairs to save to that row.  Returns the new row object.
 
 .. method:: SQLTable.objclass(itemClass)
 
@@ -203,6 +302,9 @@ this can speed up performance considerably.  If the clustering
 closely mirrors how users are likely to access the data, this
 performance gain will have relatively little cost in terms
 of memory wasted on loading rows that the user will not need.
+
+Note that iteration will by default be ordered by *clusterKey*.
+You may override this by specifying your own *orderBy* argument.
 
 Also provides a few convenience methods:
 
@@ -294,38 +396,66 @@ dictionary to the constructor, e.g.::
 For good performance, the columns storing the source_id, target_id,
 and edge_id should each be indexed.
 
-.. class:: SQLGraph(name,cursor=None,itemClass=None,attrAlias=None,sourceDB=None,targetDB=None,edgeDB=None,simpleKeys=False,unpack_edge=None,**kwargs)
+.. class:: SQLGraph(name, cursor=None, itemClass=None, ...SQLTable args..., attrAlias=None, sourceDB=None, targetDB=None, edgeDB=None, simpleKeys=False, unpack_edge=None, defaultColumnType=int, columnAttrs=('source','target','edge'), createTable=None, edgeDictClass=None, graph=None, *args, **kwargs)
 
    *name* provides the name of the database table to use.
 
-   *cursor*, if provided, should be a Python DB API 2.0 compliant cursor
-   for connecting to the database.  If not provided, the constructor will attempt
-   to connect automatically to the database using the MySQLdb module and
-   your .my.cnf configuration file.
+   You should provide a *serverInfo* argument that provides a connection
+   to the server.  See :class:`DBServerInfo` for details.
+
+   You can also specify any :class:`SQLTable` arguments to 
+   customize the table storage.
 
    *attrAlias*, if provided, must be a dictionary that maps desired
    attribute names to actual column names in the SQL database.
+   By default, :class:`SQLGraph` looks for ``source_id``, ``target_id``,
+   and ``edge_id`` columns; you can remap these using *attrAlias*, 
+   e.g. ``attrAlias=dict(source_id="mrna_id", target_id="exon_id", edge_id="exon_order")``
 
    *simpleKeys*, if True, indicates that the nodes and edge objects saved to
    the graph by the user should themselves be used as the internal representation
    to store in the SQL database table.  This usually makes sense only for strings
    and integers, which can be directly stored as columns in a relational database,
    whereas complex Python objects generally cannot be.  To use complex Python objects
-   as nodes / edges for a SQLGraph, use the *sourceDB,targetDB,edgeDB* options below.
+   as nodes / edges for a :class:`SQLGraph`,
+   use ``simpleKeys=False`` and the *sourceDB,targetDB,edgeDB* options below.
 
    *sourceDB*, if provided, must be a database container (dictionary interface) whose
    keys are source node IDs, and whose values are the associated node objects.
-   If no *sourceDB* is provided, that implies *simpleKeys*=True.
+   If no *sourceDB* is provided, that implies *simpleKeys* = True.
 
    *targetDB*, if provided, must be a database container (dictionary interface) whose
    keys are target node IDs, and whose values are the associated node objects.
 
    *edgeDB*, if provided, must be a database container (dictionary interface) whose
    keys are edge IDs, and whose values are the associated edge objects.
+   If None, then any value that you later attempt to save as an edge will be
+   saved directly to the database, and must therefore match the
+   data type of the corresponding column in your SQL table.
+
+   *createTable* if not None, must be a dictionary supplying the SQL
+   data type to use for each *columnAttrs* attribute (by
+   default, ``source_id``, ``target_id``, and ``edge_id``).  Supplying
+   *createTable* instructs :class:`SQLGraph` create a new table
+   on the SQL server.
+
+   *defaultColumnType* supplies the SQL data type to use for attributes
+   not found in the *createTable* dictionary.
+
+   *columnAttrs* supplies the list of attributes to store in each row.
+   You need at least ``source`` and ``target``.
 
    *unpack_edge*, if not None, must be a callable function that takes a "packed"
    edge value and returns the corresponding edge object.
 
+   DEPRECATED: *cursor*, if provided, should be a Python DB API 2.0 compliant cursor
+   for connecting to the database.  If not provided, the constructor will attempt
+   to connect automatically to the database using the MySQLdb module and
+   your .my.cnf configuration file.
+
+:class:`SQLGraph` follows a standard dictionary interface.  In addition
+to standard dictionary methods, here are some additional method behaviors
+specific to :class:`SQLGraph`.
 
 .. method:: __iadd__(node)
 
@@ -343,11 +473,29 @@ and edge_id should each be indexed.
 
    Test whether *id* exists as a source node in this graph.
 
+.. method:: __cmp__(graph)
+
+   Test whether *graph* matches this graph, by a node vs. node
+   and edge vs. edge comparison.
 
 .. method:: __invert__()
 
    Return an :class:`SQLGraph` instance representing the reverse
    directed graph (i.e. swap target nodes for source nodes).
+
+.. method:: __len__()
+
+   Get the number of source nodes in the graph.
+
+.. method:: edges()
+
+   Iterate over all edges in the graph, generating each as a tuple:
+   *(sourcenode, targetnode, edge)*.  
+
+.. method:: update(graph)
+
+   add the nodes and edges of *graph* to this :class:`SQLGraph`.
+   Analogous to Python ``dict.update()``.
 
 
 SQLGraphClustered
@@ -420,3 +568,71 @@ will be mapped to SELECT of the appropriate column, but data is not cached
 on this object.  Constructor takes two arguments: a database table
 object, and an identifier for this row.  Actual data requests will
 be relayed by :class:`SQLRow` to the database table object.
+
+MySQLdb Large Table Performance
+-------------------------------
+
+Our testing has encountered serious performance problems in
+the ``MySQLdb`` Python DB API 2.0 module for accessing MySQL.
+Specifically, when using ``MySQLdb``, iteration over very
+large numbers of rows uses huge amounts of memory and
+can be very slow. 
+
+* Using default ``MySQLdb`` cursors, the
+  initial ``cursor.execute("SELECT...")`` will actually copy
+  all the rows into Python's memory, even though you have not
+  yet instructed it to ``fetch`` a single row!  This can consume
+  vast amounts of memory and crash Python. 
+
+* Using ``MySQLdb`` 
+  server side cursors, the initial ``SELECT`` and ``fetch`` of
+  a small number of rows are fast, but any attempt to 
+  ``cursor.close()`` or ``cursor.nextset()`` before fetching all
+  the rows (e.g. if the user consumes only part of the iterator),
+  causes the process to hang, consuming huger and huger amounts
+  of memory.  (We don't know why).
+
+Pygr uses a workaround that enables iteration over very large
+table sizes with little memory usage and good performance.
+We will refer to this work-around as the ``blockIterators`` 
+algorithm:
+
+* on the initial query , use ``SELECT ... LIMIT 1024`` to retrieve
+  only a block of results (in this example, 1024 rows).  Record
+  the value(s) from the last row retrieved.
+
+* on subsequent queries, use
+  ``SELECT ... WHERE some_id>last_value LIMIT 1024`` to get
+  the next block of results.
+
+* Lather, rinse, repeat until all rows exhausted or the user
+  deletes the iterator.  As long as ``some_id`` is indexed,
+  i.e. the ``WHERE`` can be executed in *O(log N)* time, 
+  the total iteration will take *O(N log N)* time, and will
+  take no more memory than is required to hold a small number of
+  rows at a time (1024 in this example).
+
+This workaround is used by default with ``MySQLdb``.  Pygr
+provides three alternative iteration protocols:
+
+* ``serverSideCursors=True, blockIterators=True``: this
+  combines the blockIterators workaround with ``MySQLdb``
+  server-side cursors to minimize memory usage.  Since
+  blockIterators always fetchs all rows requested from
+  its ``SELECT``, the server-side cursor problem described
+  above does not occur.
+
+  This is the default iteration protocol for use with ``MySQLdb``.
+
+* ``serverSideCursors=False, blockIterators=True``: 
+  this again uses the blockIterator algorithm, but with a 
+  regular ``MySQLdb`` cursor.
+
+* ``serverSideCursors=False, blockIterators=False``: 
+  this reverts to a simple, standard approach (``SELECT``
+  all rows, then repeatedly call ``fetchmany()``).
+  This works fine for small tables, but will allocate
+  huge amounts of RAM for large tables, even if you do
+  not actually fetch any rows!  I.e. even just ``iter()``
+  on ID values will use up huge amounts of memory!
+
