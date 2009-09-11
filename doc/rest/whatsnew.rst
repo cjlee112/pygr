@@ -45,8 +45,8 @@ quite different pieces:
   We now use the term "metabase" (i.e. "a metadata database") instead of
   "resource database".
 
-* the importable object ``worldbase`` provides the default interface
-  for a virtual namespace for scientific data.  ``worldbase`` acts as
+* the importable object :mod:`worldbase` provides the default interface
+  for a virtual namespace for scientific data.  :mod:`worldbase` acts as
   an interface to whatever list of metabases you defined via the
   environment variable ``WORLDBASEPATH``.
 
@@ -324,6 +324,16 @@ sqlgraph
   provide one-to-one mapping (dictionary interface) and many-to-many
   mapping (graph interface) objects that use a back-end SQL storage.
 
+* :class:`sqlgraph.SQLTable` now by default provides a workaround for
+  serious performance problems that our testing revealed in
+  the ``MySQLdb`` Python DB API 2.0 module for accessing MySQL.
+  Specifically, when using ``MySQLdb``, iteration over very
+  large numbers of rows uses huge amounts of memory and
+  can be very slow.  :class:`sqlgraph.SQLTable`
+  uses a workaround that enables iteration over very large
+  table sizes with little memory usage and good performance.
+
+
 classutil
 ^^^^^^^^^
 
@@ -394,4 +404,6 @@ Documentation
 * converted the Pygr docs to Restructured Text and construction of
   multiple target formats using Sphinx.  In this regard, we are
   just following the lead of Python itself...
+
+* many new tutorials!
 
