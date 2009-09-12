@@ -75,6 +75,7 @@ class SQLTable_Setup(unittest.TestCase):
 
         # Another table, for the "ORDER BY" test
         self.orderTable = tableName + '_orderBy'
+        self.db.cursor.execute('DROP TABLE IF EXISTS %s' % self.orderTable)
         self.db.cursor.execute("""\
         CREATE TABLE %s (id INTEGER PRIMARY KEY, number INTEGER, letter VARCHAR(1))
         """ % self.orderTable)
