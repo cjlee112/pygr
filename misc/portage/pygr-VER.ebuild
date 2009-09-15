@@ -16,7 +16,7 @@ KEYWORDS="~amd64 ~x86"
 IUSE="doc mysql sqlite"
 
 DEPEND="doc? ( dev-python/sphinx )"
-RDEPEND="mysql? ( dev-python/mysql-python )
+RDEPEND="mysql? ( dev-python/epydoc dev-python/mysql-python )
 	sqlite? ( || ( dev-python/pysqlite >=dev-lang/python-2.5 ) )"
 
 src_install() {
@@ -26,6 +26,7 @@ src_install() {
 	if use doc; then
 		cd doc
 		emake
+		emake epydocs
 		dohtml -r html_new/*
 	fi
 }
