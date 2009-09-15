@@ -1,0 +1,11 @@
+include MANIFEST.in setup.cfg setup.py *.txt
+recursive-include pygr *.c *.h *.py *.pyx *.pxd
+include doc/Makefile
+graft doc/rest
+graft misc
+recursive-include tests *.py
+include tests/README.txt
+graft tests/data
+graft tests/tools
+global-exclude .gitignore
+global-exclude *.py[co]

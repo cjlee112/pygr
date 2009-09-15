@@ -1762,7 +1762,7 @@ def sqlite_connect(*args, **kwargs):
 
 class DBServerInfo(object):
     'picklable reference to a database server'
-    def __init__(self, moduleName='MySQLdb', serverSideCursors=True,
+    def __init__(self, moduleName='MySQLdb', serverSideCursors=False,
                  blockIterators=True, *args, **kwargs):
         try:
             self.__class__ = _DBServerModuleDict[moduleName]
@@ -1837,13 +1837,13 @@ class MySQLServerInfo(DBServerInfo):
             pass
     def iter_keys(self, db, cursor, map_f=iter,
                   cache_f=lambda x:[t[0] for t in x], **kwargs):
-        block_generator = BlockGenerator(db, cursor, **kwargs)
+        block_iterator = BlockIterator(db, cursor, **kwargs)
         try:
-            cache_f = block_generator.cache_f
+            cache_f = block_iterator.cache_f
         except AttributeError:
             pass
         return db.generic_iterator(cursor=cursor, cache_f=cache_f,
-                                   map_f=map_f, fetch_f=block_generator)
+                                   map_f=map_f, fetch_f=block_iterator)
 
 class CursorCloser(object):
     """container for ensuring cursor.close() is called, when this obj deleted.
@@ -1855,7 +1855,7 @@ class CursorCloser(object):
     def __del__(self):
         self.cursor.close()
 
-class BlockGenerator(CursorCloser):
+class BlockIterator(CursorCloser):
     'workaround for MySQLdb iteration horrible performance'
     def __init__(self, db, cursor, selectCols, whereClause='', **kwargs):
         self.db = db
@@ -1910,7 +1910,7 @@ class SQLiteServerInfo(DBServerInfo):
     _serverType = 'sqlite'
     def __init__(self, database, *args, **kwargs):
         """Takes same arguments as sqlite3.connect()"""
-        DBServerInfo.__init__(self, 'sqlite',  # save abs path!
+        DBServerInfo.__init__(self, 'sqlite3',  # save abs path!
                               database=SourceFileName(database),
                               *args, **kwargs)
     def _start_connection(self):
@@ -1922,7 +1922,8 @@ class SQLiteServerInfo(DBServerInfo):
         return DBServerInfo.__getstate__(self)
         
 # list of DBServerInfo subclasses for different modules
-_DBServerModuleDict = dict(MySQLdb=MySQLServerInfo, sqlite=SQLiteServerInfo)
+_DBServerModuleDict = dict(MySQLdb=MySQLServerInfo,
+                           sqlite3=SQLiteServerInfo)
 
             
 class MapView(object, UserDict.DictMixin):
