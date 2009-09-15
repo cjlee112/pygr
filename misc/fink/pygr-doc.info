@@ -1,14 +1,14 @@
 Info2: <<
 
 Package: pygr-doc
-Version: 0.8.0.beta1
+Version: 0.8.0
 Revision: 1
 Description: Pygr documentation
 License: BSD
 Maintainer: Christopher Lee <leec@chem.ucla.edu>
 BuildDepends: sphinx-py23 | sphinx-py24 | sphinx-py25 | sphinx-py26
 Source: http://pygr.googlecode.com/files/pygr-%v.tar.gz
-Source-MD5: 66c52f52834d4b02ff0d02b63b4ac09f
+Source-MD5: 30d406761fdd6b6b9c4badefb7ad56e2
 CompileScript: <<
  ( cd doc && make )
 <<
