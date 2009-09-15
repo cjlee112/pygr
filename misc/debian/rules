@@ -52,7 +52,7 @@ binary-indep:
 
 # Build architecture-dependent files here.
 binary-arch: install
-	dh_installdocs -A README.txt
+	dh_installdocs -A README.txt misc/pygrrc.example
 #	dh_installchangelogs ChangeLog
 	dh_strip
 	dh_compress
