@@ -24,10 +24,10 @@ RDEPEND="mysql? ( dev-python/mysql-python )
 src_install() {
 	distutils_src_install
 
-	dodoc README COPYING pygrrc.example
+	dodoc README.txt LICENSE.txt misc/pygrrc.example
 	if use doc; then
 		cd doc
-		emake newdoc
+		emake
 		dohtml -r html_new/*
 	fi
 }
