@@ -6,11 +6,11 @@ Revision: 1
 Description: Pygr documentation
 License: BSD
 Maintainer: Christopher Lee <leec@chem.ucla.edu>
-BuildDepends: sphinx-py23 | sphinx-py24 | sphinx-py25 | sphinx-py26
+BuildDepends: sphinx-py23 | sphinx-py24 | sphinx-py25 | sphinx-py26, epydoc-py25 | epydoc-py26
 Source: http://pygr.googlecode.com/files/pygr-%v.tar.gz
 Source-MD5: 30d406761fdd6b6b9c4badefb7ad56e2
 CompileScript: <<
- ( cd doc && make )
+ ( cd doc && make && make epydocs )
 <<
 InstallScript: <<
  mkdir -p %i/share/doc/pygr/html
