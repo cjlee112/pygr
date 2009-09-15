@@ -16,7 +16,7 @@ build-stamp:
 		$$PYTHON setup.py build; \
 	done
 
-	( cd doc && make )
+	( cd doc && make && make epydocs )
 
 	touch build-stamp
 
