@@ -16,7 +16,7 @@ CompileScript: <<
 InstallScript: <<
  %p/bin/python%type_raw[python] setup.py install -O1 --root %d
 <<
-DocFiles: README.txt LICENSE.txt
+DocFiles: README.txt LICENSE.txt misc/pygrrc.example
 Description: Python graph-database toolkit
 DescDetail: <<
  Pygr is an open source software project used to develop graph database
