@@ -231,7 +231,7 @@ cannot create annotation object %s; sequence database %s may not be correct'''
             pass                        # ok if no orientation is specified.
 
         if start >= stop:
-            raise IndexError('annotation %s has zero or negative length
+            raise IndexError('annotation %s has zero or negative length \
                              [%s:%s]!' % (k, start, stop))
         seq_id = self.getSliceAttr(sliceInfo, 'id')
         seq = self.seqDB[seq_id]
@@ -412,8 +412,8 @@ class AnnotationServer(AnnotationDB):
         start = int(self.getSliceAttr(sliceInfo, 'start'))
         stop = int(self.getSliceAttr(sliceInfo, 'stop'))
         try:
-            if int(self.getSliceAttr(sliceInfo, 'orientation')) < 0
-            and start >= 0:
+            if int(self.getSliceAttr(sliceInfo, 'orientation')) < 0 \
+               and start >= 0:
                 start, stop = (-stop, -start) # Negative-orientation coords
         except AttributeError:
             pass

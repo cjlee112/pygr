@@ -142,8 +142,8 @@ except ImportError:
             self._close_file('stdin')
             self._rewind_for_reading(self.stdout)
             self._rewind_for_reading(self.stderr)
-            if badExecutableCode is not None
-            and badExecutableCode == returncode:
+            if badExecutableCode is not None \
+               and badExecutableCode == returncode:
                 raise OSError('no such command: %s' % str(self.args[0]))
             return returncode
     PIPE = id(FilePopen) # an arbitrary code for identifying this code

@@ -81,7 +81,7 @@ class UnkSequence(SeqPath):
         if isinstance(k, types.SliceType):
             (start, stop, step) = (k.start, k.stop, k.step)
             if k.step == None:
-                step a= 1
+                step = 1
         elif isinstance(k, types.IntType):
             start = k
             stop = k + 1
