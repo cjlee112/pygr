@@ -2,7 +2,7 @@
 import os, pickle, sys, re, datetime, UserDict
 from StringIO import StringIO
 from mapping import Collection,Mapping,Graph
-from classutil import standard_invert,get_bound_subclass,SourceFileName
+from classutil import open_shelve, standard_invert, get_bound_subclass, SourceFileName
 from coordinator import XMLRPCServerBase
 import dbfile
 
@@ -474,7 +474,7 @@ class ShelveMetabase(object):
         self.writeable = True # can write to this storage
         self.zoneName = None
         try: # OPEN DATABASE FOR READING
-            self.db = dbfile.shelve_open(self.dbpath, mode)
+            self.db = open_shelve(self.dbpath, mode)
             try:
                 mdb.save_root_names(self.db['0root'])
             except KeyError:
@@ -484,7 +484,7 @@ class ShelveMetabase(object):
             except KeyError:
                 pass
         except anydbm.error: # CREATE NEW FILE IF NEEDED
-            self.db = dbfile.shelve_open(self.dbpath, 'c')
+            self.db = open_shelve(self.dbpath, 'c')
             self.db['0version'] = self._pygr_data_version # SAVE VERSION STAMP
             self.db['0root'] = {}
             if newZone is not None:
@@ -492,7 +492,7 @@ class ShelveMetabase(object):
                 self.zoneName = newZone
     def reopen(self, mode):
         self.db.close()
-        self.db = dbfile.shelve_open(self.dbpath, mode)
+        self.db = open_shelve(self.dbpath, mode)
     def find_resource(self, resID, download=False):
         'get an item from this resource database'
         objdata = self.db[resID] # RAISES KeyError IF NOT PRESENT
