@@ -127,7 +127,7 @@ class BetterShelf(shelve.Shelf):
             self.dict = _ClosedDict() # raises sensible error msg if accessed
 
 def shelve_open(filename, flag='c', protocol=None, writeback=False,
-                useHash=True, mode=0666, *args, **kwargs):
+                useHash=False, mode=0666, *args, **kwargs):
     """improved implementation of shelve.open() that won't generate
 bogus __del__ warning messages like Python's version does."""
     d = open_index(filename, flag, useHash, mode) # construct Shelf only if OK
