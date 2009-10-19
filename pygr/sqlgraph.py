@@ -1879,8 +1879,8 @@ class BlockIterator(CursorCloser):
                 if i > 0: # need to extract desired column
                     self.cache_f = lambda x:[t[i] for t in x]
         else: # just use primary key
-            self.whereSQL = 'WHERE %s>%%s' % self.db.primary_key
-            self.whereParams = (db.data['id'],)
+            self.whereSQL = 'WHERE %s>%%s' % db.primary_key
+            self.whereParams = (db.data[db.primary_key],)
         self.params = ()
         self.done = False
         
