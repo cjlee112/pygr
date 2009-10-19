@@ -451,7 +451,8 @@ class SQLTableBase(object, UserDict.DictMixin):
                  clusterKey=None,createTable=None,graph=None,maxCache=None,
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
                  serverInfo=None, autoGC=True, orderBy=None,
-                 writeable=False, iterSQL=None, iterColumns=None, **kwargs):
+                 writeable=False, iterSQL=None, iterColumns=None,
+                 primaryKey=None, **kwargs):
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = RecentValueDictionary(autoGC) # object cache
         else:
@@ -509,6 +510,9 @@ class SQLTableBase(object, UserDict.DictMixin):
             self.clusterKey=clusterKey
         if serverInfo is not None:
             self.serverInfo = serverInfo
+        if primaryKey is not None:
+            self.primary_key = primaryKey
+            self.primaryKey = primaryKey
 
     def __len__(self):
         self._select(selectCols='count(*)')
@@ -523,7 +527,7 @@ class SQLTableBase(object, UserDict.DictMixin):
             return cmp(id(self), id(other))
     _pickleAttrs = dict(name=0, clusterKey=0, maxCache=0, arraysize=0,
                         attrAlias=0, serverInfo=0, autoGC=0, orderBy=0,
-                        writeable=0, iterSQL=0, iterColumns=0)
+                        writeable=0, iterSQL=0, iterColumns=0, primaryKey=0)
     __getstate__ = standard_getstate
     def __setstate__(self,state):
         # default cursor provisioning by worldbase is deprecated!
