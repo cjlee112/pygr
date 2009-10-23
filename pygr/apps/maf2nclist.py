@@ -44,9 +44,11 @@ def storeMAFrecord(align, seqs, fh):
         for ival in s[6].split('-'):
             if len(ival) > 0:
                 if (rev):
-                    align[-(lpoStart + len(ival)):-lpoStart] = seq[seqStart:seqStart + len(ival)]
+                    align[-(lpoStart + len(ival)):-lpoStart] = \
+                            seq[seqStart:seqStart + len(ival)]
                 else:
-                    align[lpoStart:lpoStart + len(ival)] = seq[seqStart:seqStart + len(ival)]
+                    align[lpoStart:lpoStart + len(ival)] = \
+                            seq[seqStart:seqStart + len(ival)]
             seqStart += len(ival)
             lpoStart += len(ival) + 1
         s = fh.readline().split()

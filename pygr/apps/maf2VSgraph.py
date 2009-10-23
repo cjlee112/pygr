@@ -80,8 +80,10 @@ class MafParser:
                                                ns.start, ns.stop)
 
             for inter in refIntervals(s[6]):
-                self.mAlign[vseq[inter[0]:inter[1]]][ns[inter[2]:inter[3]]] = (inter[4])
-                self.mAlign[ns[inter[2]:inter[3]]][vseq[inter[0]:inter[1]]] = (inter[4])
+                self.mAlign[vseq[inter[0]:inter[1]]][ns[inter[2]:inter[3]]] = \
+                        (inter[4])
+                self.mAlign[ns[inter[2]:inter[3]]][vseq[inter[0]:inter[1]]] = \
+                        (inter[4])
 
             s = fh.readline().split()
 
