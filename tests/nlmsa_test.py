@@ -249,5 +249,76 @@ class NLMSA_BuildWithAlignedIntervals_Test(unittest.TestCase):
         n.add_aligned_intervals(cti(ivals))
         n.build()
 
+class NLMSASeqDict_Test(unittest.TestCase):
+
+    def setUp(self):
+        seqdb_name = testutil.datafile('alignments.fa')
+        self.db = seqdb.SequenceFileDB(seqdb_name)
+
+    def _add_seqs(self, n):
+        # CTB: note, force hard references for weakref checking behavior
+        self.a = a = self.db['a']
+        self.b = b = self.db['b']
+        self.c = c = self.db['c']
+
+        pairs = ((a[0:8], b[0:8]),
+                 (a[12:20], c[0:8]))
+        
+        n += a
+        for src, dest in pairs:
+            n[src] += dest
+
+    def test_cache_size0(self):
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True,
+                              maxSequenceCacheSize=0)
+        self._add_seqs(n)
+
+        # should be zero elements: cachesize of 0
+        assert len(n.seqs._cache) == 0
+        
+    def test_cache_size1(self):
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True,
+                              maxSequenceCacheSize=1)
+        self._add_seqs(n)
+
+        # should be 1 elements: cachesize of 1
+        assert len(n.seqs._cache) == 1
+
+    def test_cache_size1(self):
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True,
+                              maxSequenceCacheSize=1)
+        self._add_seqs(n)
+
+        # should be 1 element: cachesize of 1
+        assert len(n.seqs._cache) == 1
+
+    def test_cache_size2(self):
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True,
+                              maxSequenceCacheSize=2)
+        self._add_seqs(n)
+
+        # should be 2 elements: cachesize of 2
+        assert len(n.seqs._cache) == 2
+
+    def test_cache_size4(self):
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True,
+                              maxSequenceCacheSize=4)
+        self._add_seqs(n)
+
+        # should be 3 elements: cachesize of 4, but only three sequences
+        assert len(n.seqs._cache) == 3, len(n.seqs._cache)
+        
+    def test_cache_flush(self):
+        n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True,
+                              maxSequenceCacheSize=4)
+        self._add_seqs(n)
+
+        # should be 3 elements: cachesize of 4, but only three sequences
+        assert len(n.seqs._cache) == 3, len(n.seqs._cache)
+
+        # now flush
+        n.seqs.flush_cache()
+        assert len(n.seqs._cache) == 0, len(n.seqs._cache)
+
 if __name__ == '__main__':
     PygrTestProgram(verbosity=2)

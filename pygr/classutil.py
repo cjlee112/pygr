@@ -142,7 +142,7 @@ except ImportError:
             self._close_file('stdin')
             self._rewind_for_reading(self.stdout)
             self._rewind_for_reading(self.stderr)
-            if badExecutableCode is not None
+            if badExecutableCode is not None \
             and badExecutableCode == returncode:
                 raise OSError('no such command: %s' % str(self.args[0]))
             return returncode
@@ -563,7 +563,11 @@ class RecentValueDictionary(WeakValueDictionary):
         return v
 
     def keep_this(self, v):
-        'add v as our most recent ref; drop oldest ref if over size limit'
+        '''add v as our most recent ref; drop oldest ref if over size limit.
+
+        @CTB Isn't this really inefficient for large n?
+        
+        '''
         self._keepDict[v] = self.i # mark as most recent request
         self.i += 1
         if len(self._keepDict)>self.n: # delete oldest entry
@@ -583,6 +587,10 @@ class RecentValueDictionary(WeakValueDictionary):
     def clear(self):
         self._keepDict.clear()
         WeakValueDictionary.clear(self)
+
+    def __repr__(self):
+        return '<RecentValueDictionary object: %d members, cachesize %d>' %\
+               (len(self._keepDict), self.n)
 
 
 def make_attribute_interface(d):

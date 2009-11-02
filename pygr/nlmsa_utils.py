@@ -125,12 +125,18 @@ class _NLMSASeqDict_ValueWrapper(object):
     def __getitem__(self, n):
         return self.v[n]
 
-
+_DEFAULT_SEQUENCE_CACHE_SIZE=100
 class NLMSASeqDict(object, DictMixin):
-    'index sequences by pathForward, and use list to keep reverse mapping'
+    """Index sequences by pathForward, and use list to keep reverse mapping.
 
-    def __init__(self, nlmsa, filename, mode, idDictClass=None):
-        self._cache = classutil.RecentValueDictionary(50)
+    Keeps a cache of n most recently accessed sequences, up to
+    maxSequenceCacheSize (defaults to 100).
+    
+    """
+
+    def __init__(self, nlmsa, filename, mode, idDictClass=None,
+                 maxSequenceCacheSize=_DEFAULT_SEQUENCE_CACHE_SIZE):
+        self._cache = classutil.RecentValueDictionary(maxSequenceCacheSize)
         self.seqlist = NLMSASeqList(self)
         self.nlmsa = nlmsa
         self.filename = filename
@@ -240,6 +246,10 @@ class NLMSASeqDict(object, DictMixin):
             return ns, slice(start - offset, stop - offset) # use union coords
         else: # forward orientation
             return ns, slice(start + offset, stop + offset) # use union coords
+
+    def flush_cache(self):
+        'Clear the cache of saved sequences.'
+        self._cache.clear()
 
 
 def splitLPOintervals(lpoList, ival, targetIval=None):
