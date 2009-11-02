@@ -4,7 +4,6 @@ import classutil
 import logger
 from UserDict import DictMixin
 
-
 class NLMSASeqList(list):
 
     def __init__(self, nlmsaSeqDict):
@@ -105,11 +104,33 @@ class EmptySlice:
         return []
 
 
+class _NLMSASeqDict_ValueWrapper(object):
+    """A wrapper class for NLMSASeqDict to use to store 3-tuples in its cache.
+
+    NLMSASeqDict has a most-recent-values cache containing (id,
+    seqlist, offset) tuples for each referenced pathForward.  However,
+    tuples cannot be stored in a weakref dictionary.  This class provides
+    a tuple-like wrapper object that *can* be stored in a weakref dict.
+    
+    """
+    def __init__(self, nlmsaID, seqlist, offset):
+        self.v = (nlmsaID, seqlist, offset)
+
+    def __hash__(self):
+        return hash(self.v)
+
+    def __len__(self):
+        return 3
+
+    def __getitem__(self, n):
+        return self.v[n]
+
+
 class NLMSASeqDict(object, DictMixin):
     'index sequences by pathForward, and use list to keep reverse mapping'
 
     def __init__(self, nlmsa, filename, mode, maxID=1000000, idDictClass=None):
-        self._cache = {}
+        self._cache = classutil.RecentValueDictionary(50)
         self.seqlist = NLMSASeqList(self)
         self.maxID = maxID
         self.nlmsa = nlmsa
@@ -165,7 +186,7 @@ class NLMSASeqDict(object, DictMixin):
             raise KeyError('seq not found in this alignment')
         v = nlmsaID, self.seqlist[nsID], offset
         if not hasattr(seq, 'annotationType'): # don't cache annotations
-            self._cache[seq.pathForward] = v
+            self._cache[seq.pathForward] = _NLMSASeqDict_ValueWrapper(*v)
         return v
 
     def __iter__(self):
