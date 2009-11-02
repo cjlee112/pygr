@@ -129,10 +129,9 @@ class _NLMSASeqDict_ValueWrapper(object):
 class NLMSASeqDict(object, DictMixin):
     'index sequences by pathForward, and use list to keep reverse mapping'
 
-    def __init__(self, nlmsa, filename, mode, maxID=1000000, idDictClass=None):
+    def __init__(self, nlmsa, filename, mode, idDictClass=None):
         self._cache = classutil.RecentValueDictionary(50)
         self.seqlist = NLMSASeqList(self)
-        self.maxID = maxID
         self.nlmsa = nlmsa
         self.filename = filename
         if mode == 'memory': # just use python dictionary
