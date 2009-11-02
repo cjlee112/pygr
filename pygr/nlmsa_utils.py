@@ -2,6 +2,7 @@ import os
 import types
 import classutil
 import logger
+from UserDict import DictMixin
 
 
 class NLMSASeqList(list):
@@ -104,11 +105,11 @@ class EmptySlice:
         return []
 
 
-class NLMSASeqDict(dict):
+class NLMSASeqDict(object, DictMixin):
     'index sequences by pathForward, and use list to keep reverse mapping'
 
     def __init__(self, nlmsa, filename, mode, maxID=1000000, idDictClass=None):
-        dict.__init__(self)
+        self._cache = {}
         self.seqlist = NLMSASeqList(self)
         self.maxID = maxID
         self.nlmsa = nlmsa
@@ -152,7 +153,7 @@ class NLMSASeqDict(dict):
         'return nlmsaID,NLMSASequence,offset for a given seq'
         if not hasattr(seq, 'annotationType'): # don't cache annotations
             try: # look in our sequence cache
-                return dict.__getitem__(self, seq.pathForward)
+                return self._cache[seq.pathForward]
             except AttributeError:
                 raise KeyError('key must be a sequence interval!')
             except KeyError:
@@ -164,7 +165,7 @@ class NLMSASeqDict(dict):
             raise KeyError('seq not found in this alignment')
         v = nlmsaID, self.seqlist[nsID], offset
         if not hasattr(seq, 'annotationType'): # don't cache annotations
-            dict.__setitem__(self, seq.pathForward, v) # cache this result
+            self._cache[seq.pathForward] = v
         return v
 
     def __iter__(self):
@@ -181,9 +182,9 @@ class NLMSASeqDict(dict):
         self.seqlist.append(ns)
         if isinstance(k, types.StringType):
             # Allow build with a string object.
-            dict.__setitem__(self, k, (ns.id, ns, 0))
+            self._cache[k] = (ns.id, ns, 0)
         elif k is not None:
-            dict.__setitem__(self, k.pathForward, (ns.id, ns, 0))
+            self._cache[k.pathForward] = (ns.id, ns, 0)
 
     def __iadd__(self, ns):
         'add coord system ns to the alignment'
