@@ -1,9 +1,12 @@
 """
 Run all of the doctests in the doc/*.rest files.
 """
-import os, os.path
+import os.path
+import doctest
+import unittest
+
 from testlib import testutil
-import unittest, doctest
+
 
 def codetest():
     "Test the code here before adding to doctest @CTB"
@@ -11,12 +14,13 @@ def codetest():
     from pygr.seqdb import SequenceFileDB
     db = SequenceFileDB(os.path.join('data', 'partial-yeast.fasta'))
     chr02 = db['chr02']
-    start, stop = (87787, 86719) 
+    start, stop = (87787, 86719)
     x = chr02[start:stop]
+
 
 def get_suite():
     suite = unittest.TestSuite()
-    
+
     names = [
 #        'contents.rst',
 #        'sequences.rst',
@@ -27,7 +31,7 @@ def get_suite():
 
     # needs relative paths for some reason
     doctestpath = os.path.join('..', 'doc', 'rest')
-    paths = [ os.path.join(doctestpath, name) for name in names ]
+    paths = [os.path.join(doctestpath, name) for name in names]
 
     for path in paths:
         docsuite = doctest.DocFileSuite(path)
@@ -35,8 +39,9 @@ def get_suite():
 
     return suite
 
+
 if __name__ == '__main__':
     #codetest()
-    suite  = get_suite()
+    suite = get_suite()
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
