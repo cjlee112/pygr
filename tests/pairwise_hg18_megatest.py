@@ -88,7 +88,7 @@ class PygrBuildNLMSAMegabase(unittest.TestCase):
         return newname
 
     def tearDown(self):
-        'delete the temporary directory and files'
+        'delete the temporary directory and files, restore pygr.Data path'
         # Delete them bottom-up for obvious reasons.
         for dirpath, subdirs, files in os.walk(self.path, topdown=False):
             # Note: this part may not work in directories on NFS due to
@@ -164,10 +164,10 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     continue
                 dotindex = (~msa.seqDict)[src].index('.')
                 srcspecies, src1 = (~msa.seqDict)[src][:dotindex], \
-                        (~msa.seqDict)[src][dotindex+1:]
+                        (~msa.seqDict)[src][dotindex + 1:]
                 dotindex = (~msa.seqDict)[dest].index('.')
                 destspecies, dest1 = (~msa.seqDict)[dest][:dotindex], \
-                        (~msa.seqDict)[dest][dotindex+1:]
+                        (~msa.seqDict)[dest][dotindex + 1:]
                 wlist = str(src), srcspecies, src1, src.start, src.stop, \
                         str(dest), destspecies, dest1, dest.start, dest.stop
                 saveList.append('\t'.join(map(str, wlist)) + '\n')
@@ -176,10 +176,10 @@ class Build_Test(PygrBuildNLMSAMegabase):
                     continue
                 dotindex = (~msa.seqDict)[src].index('.')
                 srcspecies, src1 = (~msa.seqDict)[src][:dotindex], \
-                        (~msa.seqDict)[src][dotindex+1:]
+                        (~msa.seqDict)[src][dotindex + 1:]
                 dotindex = (~msa.seqDict)[dest].index('.')
                 destspecies, dest1 = (~msa.seqDict)[dest][:dotindex], \
-                        (~msa.seqDict)[dest][dotindex+1:]
+                        (~msa.seqDict)[dest][dotindex + 1:]
                 wlist = str(src), srcspecies, src1, src.start, src.stop, \
                         str(dest), destspecies, dest1, dest.start, dest.stop
                 saveList.append('\t'.join(map(str, wlist)) + '\n')
