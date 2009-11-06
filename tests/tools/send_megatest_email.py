@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
-import ConfigParser, os, smtplib, time
+import ConfigParser
+import os
+import smtplib
+import time
 try:
     from email.mime.text import MIMEText
 except ImportError:
@@ -8,7 +11,7 @@ except ImportError:
 
 
 def extract_errors(text):
-    errors = [ ]
+    errors = []
     start_line = -1
     for idx, line in enumerate(text):
         if line[:6] == 'ERROR:':
@@ -21,8 +24,12 @@ def extract_errors(text):
     return errors
 
 
-config = ConfigParser.ConfigParser({'expectedRunningTime' : '-1', 'mailServer' : '', 'runningTimeAllowedDelay' : '0'})
-config.read([ os.path.join(os.path.expanduser('~'), '.pygrrc'), os.path.join(os.path.expanduser('~'), 'pygr.cfg'), '.pygrrc', 'pygr.cfg' ])
+config = ConfigParser.ConfigParser({'expectedRunningTime': '-1',
+                                    'mailServer': '',
+                                    'runningTimeAllowedDelay': '0'})
+config.read([os.path.join(os.path.expanduser('~'), '.pygrrc'),
+             os.path.join(os.path.expanduser('~'), 'pygr.cfg'),
+             '.pygrrc', 'pygr.cfg'])
 expectedRunningTime = config.get('megatests', 'expectedRunningTime')
 logdir = config.get('megatests', 'logDir')
 mailsender = config.get('megatests', 'mailFrom')
@@ -39,9 +46,14 @@ os.chdir(logdir)
 sendStr = 'MEGATEST report, generated ' + timeStr + '\n\n'
 sendStr += 'Test started: ' + open('tmp1_megatest.log', 'r').readlines()[0]
 sendStr += 'PYTHONPATH = ' + open('tmp3_megatest.log', 'r').read() + '\n'
-sendStr += 'Output of standard tests:\n' + ''.join(open('tmp2_megatest.log', 'r').readlines()[-5:]) + '\n\n'
-sendStr += 'Output of megatests:\n' + ''.join(open('tmp4_megatest.log', 'r').readlines()[-5:]) + '\n\n'
-sendStr += 'Test finished: ' + open('tmp5_megatest.log', 'r').readlines()[0] + '\n'
+sendStr += 'Output of standard tests:\n' + ''.join(open('tmp2_megatest.log',
+                                                       'r').readlines()[-5:]) \
+        + '\n\n'
+sendStr += 'Output of megatests:\n' + ''.join(open('tmp4_megatest.log',
+                                                   'r').readlines()[-5:]) \
+        + '\n\n'
+sendStr += 'Test finished: ' + open('tmp5_megatest.log', 'r').readlines()[0] \
+        + '\n'
 
 # Try to determine whether the test has failed or not
 nError = 0
@@ -55,28 +67,36 @@ abnormalStop = 0
 abnormalStop += 1
 expectedRunningTime = float(expectedRunningTime)
 if expectedRunningTime >= 0.:
-    startTime = int(open('tmp1_megatest.log', 'r').readlines()[1].split(':')[1].strip())
-    endTime = int(open('tmp5_megatest.log', 'r').readlines()[1].split(':')[1].strip())
+    startTime = int(open('tmp1_megatest.log',
+                         'r').readlines()[1].split(':')[1].strip())
+    endTime = int(open('tmp5_megatest.log',
+                       'r').readlines()[1].split(':')[1].strip())
     if runningTimeAllowedDelay[-1] == '%':
-        maxRunningTime = expectedRunningTime * (1 + float(runningTimeAllowedDelay[:-1]) / 100.)
+        maxRunningTime = expectedRunningTime * \
+                (1 + float(runningTimeAllowedDelay[:-1]) / 100.)
     else:
         maxRunningTime = expectedRunningTime + float(runningTimeAllowedDelay)
     runMinutes = (endTime - startTime) / 60.
     if runMinutes > maxRunningTime:
-        sendStr += '\n#####################################################################\n'
-        sendStr += ('ERROR: megatests took %s minutes to complete, expected %s minutes' % (runMinutes, expectedRunningTime))
-        sendStr += '\n#####################################################################\n'
+        sendStr += '\n' + '#' * 69 + '\n'
+        sendStr += \
+          'ERROR: megatests took %s minutes to complete, expected %s minutes' \
+                % (runMinutes, expectedRunningTime)
+        sendStr += '\n' + '#' * 69 + '\n'
         abnormalStop -= 1
 
 for lines in sendStr.splitlines():
-    if lines[:4] == 'INFO' and 'passed' in lines and 'failed' in lines and 'skipped' in lines:
+    if lines[:4] == 'INFO' and 'passed' in lines and 'failed' in lines and \
+       'skipped' in lines:
         nError += int(lines[18:].split(',')[1].strip().split(' ')[0])
         abnormalStop += 1
 
 if nError > 0:
     sendStr += '\nThe following errors have been detected:\n'
-    sendStr += ''.join(extract_errors(open('tmp2_megatest.log', 'r').readlines()))
-    sendStr += ''.join(extract_errors(open('tmp4_megatest.log', 'r').readlines()))
+    sendStr += ''.join(extract_errors(open('tmp2_megatest.log',
+                                           'r').readlines()))
+    sendStr += ''.join(extract_errors(open('tmp4_megatest.log',
+                                           'r').readlines()))
 
 if nError == 0 and abnormalStop == 3:
     maillist = maillist_pass
@@ -92,4 +112,3 @@ s = smtplib.SMTP(mailserver)
 s.connect()
 s.sendmail(mailsender, maillist.replace(',', ' ').split(), msg.as_string())
 s.close()
-
