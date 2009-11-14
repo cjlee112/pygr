@@ -568,16 +568,13 @@ class RecentValueDictionary(WeakValueDictionary):
             self._keepDict[previous][1] = after
         if after is not None:
             self._keepDict[after][0] = previous
-        else: # previous is end of queue!
+        elif previous is not None: # previous is end of queue!
             self._tail = previous
         if after is self._head:
             self._head = previous
             
     def keep_this(self, v):
         """add v as our most recent ref; drop oldest ref if over size limit.
-
-        @CTB Isn't this really inefficient for large n?
-
         """
         if v is self._head:
             return # already at head of queue, so nothing to do
@@ -599,6 +596,7 @@ class RecentValueDictionary(WeakValueDictionary):
         self.keep_this(v)
 
     def clear(self):
+        self._head = self._tail = None
         self._keepDict.clear()
         WeakValueDictionary.clear(self)
 
