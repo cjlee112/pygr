@@ -308,7 +308,7 @@ class NLMSASeqDict_Test(unittest.TestCase):
         # should be 3 elements: cachesize of 4, but only three sequences
         assert len(n.seqs._cache) == 3, len(n.seqs._cache)
         
-    def test_cache_flush(self):
+    def test_clear_cache(self):
         n = cnestedlist.NLMSA('test', mode='memory', pairwiseMode=True,
                               maxSequenceCacheSize=4)
         self._add_seqs(n)
@@ -316,8 +316,8 @@ class NLMSASeqDict_Test(unittest.TestCase):
         # should be 3 elements: cachesize of 4, but only three sequences
         assert len(n.seqs._cache) == 3, len(n.seqs._cache)
 
-        # now flush
-        n.seqs.flush_cache()
+        # now clear the cache
+        n.seqs.clear_cache()
         assert len(n.seqs._cache) == 0, len(n.seqs._cache)
 
 if __name__ == '__main__':

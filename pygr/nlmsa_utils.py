@@ -247,7 +247,7 @@ class NLMSASeqDict(object, DictMixin):
         else: # forward orientation
             return ns, slice(start + offset, stop + offset) # use union coords
 
-    def flush_cache(self):
+    def clear_cache(self):
         'Clear the cache of saved sequences.'
         self._cache.clear()
 
