@@ -4,7 +4,6 @@ from StringIO import StringIO
 from mapping import Collection,Mapping,Graph
 from classutil import open_shelve, standard_invert, get_bound_subclass, SourceFileName
 from coordinator import XMLRPCServerBase
-import dbfile
 
 try:
     nonPortableClasses
@@ -187,7 +186,7 @@ class MetabaseServer(object):
             self.read_download_db(downloadDB)
     def read_download_db(self,filename,location='default'):
         'add the designated resource DB shelve to our downloadable resources'
-        d = dbfile.shelve_open(filename,'r')
+        d = open_shelve(filename, 'r')
         for k,v in d.items():
             if k.startswith('__doc__.'): # SAVE DOC INFO FOR THIS ID
                 self.downloadDocs[k[8:]] = v
