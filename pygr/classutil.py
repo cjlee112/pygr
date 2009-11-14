@@ -554,7 +554,7 @@ class RecentValueDictionary(WeakValueDictionary):
             self.n = n # size limit
         else:
             self.n = 50
-        self.i = 0 # counter
+        self._head = self._tail = None
         self._keepDict = {} # most recent queue
 
     def __getitem__(self, k):
@@ -562,23 +562,37 @@ class RecentValueDictionary(WeakValueDictionary):
         self.keep_this(v)
         return v
 
+    def _splice(self, previous, after):
+        'link previous <--> after in queue, setting head & tail if needed'
+        if previous is not None:
+            self._keepDict[previous][1] = after
+        if after is not None:
+            self._keepDict[after][0] = previous
+        else: # previous is end of queue!
+            self._tail = previous
+        if after is self._head:
+            self._head = previous
+            
     def keep_this(self, v):
-        '''add v as our most recent ref; drop oldest ref if over size limit.
+        """add v as our most recent ref; drop oldest ref if over size limit.
 
         @CTB Isn't this really inefficient for large n?
-        
-        '''
-        self._keepDict[v] = self.i # mark as most recent request
-        self.i += 1
-        if len(self._keepDict)>self.n: # delete oldest entry
-            l = self._keepDict.items()
-            imin = l[0][1]
-            vmin = l[0][0]
-            for v, i in l[1:]:
-                if i<imin:
-                    imin = i
-                    vmin = v
-            del self._keepDict[vmin]
+
+        """
+        if v is self._head:
+            return # already at head of queue, so nothing to do
+        try: # check if already in _keepDict
+            previous, after = self._keepDict[v]
+        except KeyError:
+            self._keepDict[v] = [None, None]
+        else: # remove from current position
+            self._splice(previous, after)
+            self._keepDict[v][0] = None
+        self._splice(v, self._head) # place at head of queue
+        if len(self._keepDict) > self.n: # delete oldest entry
+            vdel = self._tail # get current tail
+            self._splice(self._keepDict[vdel][0], None) # set new tail
+            del self._keepDict[vdel]
 
     def __setitem__(self, k, v):
         WeakValueDictionary.__setitem__(self, k, v)
