@@ -19,6 +19,14 @@ def open_anydbm(*args, **kwargs):
     'trap anydbm.error message and transform to our consistent exception types'
     try:
         return anydbm.open(*args, **kwargs)
+    except ImportError, e:
+        if str(e).endswith('bsddb') and bsddb:
+            # This almost certainly means dbhash tried to import bsddb
+            # on a system with only bsddb3 working correctly. In that case,
+            # simply do ourselves what anydbm would have done.
+            # FIXME: explicitly check if dbhash raised this exception?
+            return bsddb.hashopen(*args, **kwargs)
+        raise
     except anydbm.error, e:
         msg = str(e)
         if msg.endswith('new db'):
@@ -127,7 +135,7 @@ class BetterShelf(shelve.Shelf):
             self.dict = _ClosedDict() # raises sensible error msg if accessed
 
 def shelve_open(filename, flag='c', protocol=None, writeback=False,
-                useHash=True, mode=0666, *args, **kwargs):
+                useHash=False, mode=0666, *args, **kwargs):
     """improved implementation of shelve.open() that won't generate
 bogus __del__ warning messages like Python's version does."""
     d = open_index(filename, flag, useHash, mode) # construct Shelf only if OK
