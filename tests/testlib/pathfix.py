@@ -129,6 +129,7 @@ if use_pathfix:
     
     for mod in [ pygr, cnestedlist ]:
         # test that the imported python modules have the required prefix
-        if not mod.__file__.startswith(required_prefix):
+        if not os.path.realpath(mod.__file__).startswith(os.path.realpath(
+           required_prefix)):
             stop ("module %s imported from invalid path: %s" % \
                   (mod.__name__, mod.__file__))
