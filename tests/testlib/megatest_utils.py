@@ -1,6 +1,8 @@
 import BaseHTTPServer
+import errno
 import os
 import mimetypes
+import socket
 import sys
 import threading
 
@@ -41,7 +43,13 @@ class MinimalistHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         statinfo = os.stat(self.server.allowed_file)
         self.send_header('Content-Length', statinfo.st_size)
         self.end_headers()
-        self.wfile.write(fout.read())
+        try:
+            self.wfile.write(fout.read())
+        except socket.error, e:
+            # EPIPE likely means the client's closed the connection,
+            # it's nothing of concern so suppress the error message.
+            if errno.errorcode[e[0]] == 'EPIPE':
+                pass
 
         fout.close()
         return
