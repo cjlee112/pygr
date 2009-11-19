@@ -1,5 +1,5 @@
 import BaseHTTPServer
-import os.path
+import os
 import mimetypes
 import sys
 import threading
@@ -38,6 +38,8 @@ class MinimalistHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.send_header('Content-Type', mime_guess[0])
         if mime_guess[1] is not None:
             self.send_header('Content-Encoding', mime_guess[1])
+        statinfo = os.stat(self.server.allowed_file)
+        self.send_header('Content-Length', statinfo.st_size)
         self.end_headers()
         self.wfile.write(fout.read())
 
