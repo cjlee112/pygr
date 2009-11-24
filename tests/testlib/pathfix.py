@@ -68,6 +68,8 @@ if use_pathfix:
         path_errmsg = "Importing pygr from source directory %s" % base_dir
         sys.path = [ base_dir  ] + sys.path
         required_prefix = pygr_source_dir
+    # For the sake of non-ambiguity
+    required_prefix = os.path.realpath(required_prefix)
 else:
     path_errmsg = "Importing pygr from default path"
 
@@ -129,7 +131,6 @@ if use_pathfix:
     
     for mod in [ pygr, cnestedlist ]:
         # test that the imported python modules have the required prefix
-        if not os.path.realpath(mod.__file__).startswith(os.path.realpath(
-           required_prefix)):
+        if not os.path.realpath(mod.__file__).startswith(required_prefix):
             stop ("module %s imported from invalid path: %s" % \
-                  (mod.__name__, mod.__file__))
+                  (mod.__name__, os.path.realpath(mod.__file__)))
