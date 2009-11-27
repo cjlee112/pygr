@@ -16,7 +16,7 @@ class SchemaDict(dict):
         dict.__init__(self)
         # COMBINE SCHEMAS FROM PARENTS WITH NEW SCHEMA LIST
         for b in baselist:
-            if hasattr(b, '__clss_schema__'):
+            if hasattr(b, '__class_schema__'):
                 self.update(b.__class_schema__)
                 self.attrs.update(b.__class_schema__.attrs)
         for i in newlist: # newlist OVERRIDES OLD DEFS FROM baselist
