@@ -397,7 +397,7 @@ verbose=False option.''' % (filename, mode, mode)
             self.d[k] = v
         except TypeError:
             raise TypeError('to allow int keys, you must pass intKeys=True \
-                            to constructor!')
+to constructor!')
 
     def reopen(self, mode='r'):
         're-open shelve in the specified mode, and save mode on self'
@@ -639,7 +639,7 @@ class Mapping(object):
             yield self.getTarget(vID)
 
     def values(self):
-        return [v for v in self]
+        return [v for v in self.itervalues()]
 
     def iteritems(self):
         for kID, vID in self.d.iteritems():
