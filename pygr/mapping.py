@@ -864,7 +864,7 @@ def graph_setitem(self, node, target):
     except AttributeError:
         pass
     raise ValueError('Incorrect usage. Add edges using g[n]+=o or \
-                     g[n][o]=edge.')
+g[n][o]=edge.')
 
 
 class Graph(object):
