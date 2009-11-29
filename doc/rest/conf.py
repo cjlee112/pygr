@@ -3,20 +3,23 @@
 # Pygr documentation build configuration file, created by
 # sphinx-quickstart on Mon Jan 19 09:36:56 2009.
 #
-# This file is execfile()d with the current directory set to its containing dir.
+# This file is execfile()d with the current directory set
+# to its containing dir.
 #
-# The contents of this file are pickled, so don't put values in the namespace
-# that aren't pickleable (module imports are okay, they're removed automatically).
+# The contents of this file are pickled, so don't put values
+# in the namespace that aren't pickleable (module imports are okay,
+# they're removed automatically).
 #
 # All configuration values have a default value; values that are commented out
 # serve to show the default value.
 
-import sys, os
+import os
+import sys
 
 # need to insert the source pygr directory if we want to access modules
-curr_dir = os.path.dirname( __file__ )
-pygr_root_dir = os.path.join( curr_dir, '..', '..')
-sys.path.insert( 0, pygr_root_dir )
+curr_dir = os.path.dirname(__file__)
+pygr_root_dir = os.path.join(curr_dir, '..', '..')
+sys.path.insert(0, pygr_root_dir)
 
 # If your extensions are in another directory, add it here. If the directory
 # is relative to the documentation root, use os.path.abspath to make it
@@ -26,10 +29,10 @@ sys.path.insert( 0, pygr_root_dir )
 # General configuration
 # ---------------------
 
-# Add any Sphinx extension module names here, as strings. They can be extensions
-# coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
+# Add any Sphinx extension module names here, as strings. They can be
+# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 
-extensions = [ 'sphinx.ext.doctest', 'sphinx.ext.autodoc' ]
+extensions = ['sphinx.ext.doctest', 'sphinx.ext.autodoc']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['templates']
@@ -109,7 +112,7 @@ html_index = 'index.html'
 
 # Custom sidebar templates, maps document names to template names.
 #html_sidebars = {}
-html_sidebars = { 'index': 'indexsidebar.html'}
+html_sidebars = {'index': 'indexsidebar.html'}
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.
@@ -142,7 +145,8 @@ htmlhelp_basename = 'Pygrdoc'
 #latex_font_size = '10pt'
 
 # Grouping the document tree into LaTeX files. List of tuples
-# (source start file, target name, title, author, document class [howto/manual]).
+# (source start file, target name, title, author, document class
+# [howto/manual]).
 latex_documents = [
   ('contents', 'Pygr.tex', 'Pygr Documentation', 'Chris Lee', 'manual'),
 ]

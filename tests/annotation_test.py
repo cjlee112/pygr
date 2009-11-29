@@ -4,17 +4,21 @@ from pygr import sequence, seqdb, sequtil, annotation
 from pygr.sequence import Sequence
 from pygr.annotation import AnnotationDB
 
+
 class AnnotationSeq_Test(unittest.TestCase):
+
     def setUp(self):
+
         class Annotation(object):
+
             def __init__(self, **kwargs):
                 self.__dict__.update(kwargs)
-                
+
         slicedb = dict(X=Annotation(id='seq', start=0, stop=10),
                        Y=Annotation(id='seq', start=0, stop=10),
                        Z=Annotation(id='seq2', start=0, stop=10))
-        
-        sequence_dict = dict(seq = Sequence('ATGGGGCCGATTG', 'seq',),
+
+        sequence_dict = dict(seq = Sequence('ATGGGGCCGATTG', 'seq', ),
                              seq2 = Sequence('ATGGGGCCGATTG', 'seq2'))
 
         self.db = AnnotationDB(slicedb, sequence_dict)
@@ -40,7 +44,7 @@ class AnnotationSeq_Test(unittest.TestCase):
 
         # different annotations, even though they point at the same sequence
         assert cmp(self.annot, self.db['Y']) == -1
-        
+
         # different sequences, even though they point at the same actual seq
         assert cmp(self.annot, self.db['Z']) == -1
 
@@ -66,14 +70,19 @@ class AnnotationSeq_Test(unittest.TestCase):
     def test_slice(self):
         assert repr(self.annot[1:2].sequence) == 'seq[1:2]'
 
+
 class AnnotationDB_Test(unittest.TestCase):
     """
     Test for all of the basic dictionary functions on 'AnnotationDB'.
     """
+
     def setUp(self):
+
         class Annotation(object):
+
             def __init__(self, **kwargs):
                 self.__dict__.update(kwargs)
+
         slicedb = dict(annot1=Annotation(id='seq', start=0, stop=10),
                        annot2=Annotation(id='seq', start=5, stop=9))
         sequence_dict = dict(seq = Sequence('ATGGGGCCGATTG', 'seq'))
@@ -104,9 +113,9 @@ class AnnotationDB_Test(unittest.TestCase):
 
     def test_has_key(self):
         "AnnotationDB has key"
-        assert self.db.has_key('annot1')
-        assert self.db.has_key('annot2')
-        assert not self.db.has_key('foo')
+        assert 'annot1' in self.db
+        assert 'annot2' in self.db
+        assert 'foo' not in self.db
 
     def test_get(self):
         "AnnotationDB get"
@@ -115,13 +124,13 @@ class AnnotationDB_Test(unittest.TestCase):
         assert str(self.db.get('annot1').sequence).startswith('ATGGGGC')
         assert self.db.get('annot2') is not None
         assert str(self.db.get('annot2').sequence).startswith('GCCG')
-    
+
     def test_items(self):
         "AnnotationDB items"
-        i = [ k for (k,v) in self.db.items() ]
+        i = [k for (k, v) in self.db.items()]
         i.sort()
         assert i == ['annot1', 'annot2']
-    
+
     def test_iterkeys(self):
         "AnnotationDB iterkeys"
         kk = self.db.keys()
@@ -129,7 +138,7 @@ class AnnotationDB_Test(unittest.TestCase):
         ik = list(self.db.iterkeys())
         ik.sort()
         assert kk == ik
-    
+
     def test_itervalues(self):
         "AnnotationDB itervalues"
         kv = self.db.values()
@@ -138,7 +147,7 @@ class AnnotationDB_Test(unittest.TestCase):
         iv.sort()
         assert kv[0] == iv[0]
         assert kv == iv, (kv, iv)
-    
+
     def test_iteritems(self):
         "AnnotationDB iteritems"
         ki = self.db.items()
@@ -146,7 +155,7 @@ class AnnotationDB_Test(unittest.TestCase):
         ii = list(self.db.iteritems())
         ii.sort()
         assert ki == ii, (ki, ii)
-    
+
     def test_readonly(self):
         "AnnotationDB readonly"
         try:
@@ -179,7 +188,7 @@ class AnnotationDB_Test(unittest.TestCase):
             assert 0, 'this method should raise NotImplementedError'
         except NotImplementedError:
             pass
-    
+
     def test_equality(self):
         "AnnotationDB equality"
         # Check that separately generated annotation objects test equal"
@@ -188,12 +197,15 @@ class AnnotationDB_Test(unittest.TestCase):
         x = db.sliceAnnotation(key, db.sliceDB[key])
         y = db.sliceAnnotation(key, db.sliceDB[key])
         assert x == y
-    
+
     def test_bad_seqdict(self):
         "AnnotationDB bad seqdict"
+
         class Annotation(object):
+
             def __init__(self, **kwargs):
                 self.__dict__.update(kwargs)
+
         slicedb = dict(annot1=Annotation(id='seq', start=0, stop=10),
                        annot2=Annotation(id='seq', start=5, stop=9))
         foo_dict = dict(foo=Sequence('ATGGGGCCGATTG', 'foo'))
@@ -203,12 +215,14 @@ class AnnotationDB_Test(unittest.TestCase):
         except KeyError:
             pass
 
+
 class Translation_Test(unittest.TestCase):
+
     def setUp(self):
         self.M = sequence.Sequence('ATG', 'methionine')
         self.FLIM = sequence.Sequence('TTTCTAATTATG', 'flim')
         self.db = dict(methionine=self.M, flim=self.FLIM)
-        
+
     def test_simple_translate(self):
         db = self.db
 
@@ -248,7 +262,7 @@ class Translation_Test(unittest.TestCase):
         f1 = aa_db.new_annotation('f1', (self.FLIM.id, 0, 12))
         assert str(f1) == 'FLIM'
         assert f1.frame == +1
-        
+
         f2 = aa_db.new_annotation('f2', (self.FLIM.id, 1, 10))
         assert str(f2) == 'F*L'
         assert f2.frame == +2
@@ -267,7 +281,7 @@ class Translation_Test(unittest.TestCase):
         f1 = aa_db.new_annotation('f1', (self.FLIM.id, 0, 12, -1))
         assert str(f1) == 'HN*K'
         assert f1.frame == -2
-        
+
         f2 = aa_db.new_annotation('f2', (self.FLIM.id, 1, 10, -1))
         assert str(f2) == '*LE'
         assert f2.frame == -1

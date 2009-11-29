@@ -3,6 +3,7 @@ DNA_SEQTYPE=0
 RNA_SEQTYPE=1
 PROTEIN_SEQTYPE=2
 
+
 def guess_seqtype(s):
     dna_letters='AaTtUuGgCcNn'
     ndna=0
@@ -24,14 +25,17 @@ def guess_seqtype(s):
     else:
         return PROTEIN_SEQTYPE
 
+
 seq_id_counter=0
+
+
 def new_seq_id():
     global seq_id_counter
     seq_id_counter += 1
     return str(seq_id_counter-1)
 
 
-def write_fasta(ofile,s,chunk=60,id=None,reformatter=None):
+def write_fasta(ofile, s, chunk=60, id=None, reformatter=None):
     "Trivial FASTA output"
     if id is None:
         try:
@@ -52,6 +56,7 @@ def write_fasta(ofile,s,chunk=60,id=None,reformatter=None):
             break
     return id # IN CASE CALLER WANTS TEMP ID WE MAY HAVE ASSIGNED
 
+
 def read_fasta(ifile):
     "iterate over id,title,seq from stream ifile"
     id = None
@@ -59,7 +64,7 @@ def read_fasta(ifile):
     for line in ifile:
         if '>' == line[0]:
             if id is not None and len(seq) > 0:
-                yield id,title,seq
+                yield id, title, seq
                 isEmpty = False
             id = line[1:].split()[0]
             title = line[len(id)+2:]
@@ -68,9 +73,10 @@ def read_fasta(ifile):
             for word in line.split(): # GET RID OF WHITESPACE
                 seq += word
     if id is not None and len(seq) > 0:
-        yield id,title,seq
+        yield id, title, seq
     elif isEmpty:
         raise IOError('no readable sequence in FASTA file!')
+
 
 def read_fasta_one_line(ifile): # @CTB deprecated; remove
     "read a single sequence line, return id,title,seq"
@@ -86,9 +92,10 @@ def read_fasta_one_line(ifile): # @CTB deprecated; remove
         elif id is not None: # READ SEQUENCE
             for word in line.split(): # GET RID OF WHITESPACE
                 seq += word
-            if len(seq)>0:
-                return id,title,seq
+            if len(seq) > 0:
+                return id, title, seq
     raise IOError('no readable sequence in FASTA file!')
+
 
 def read_fasta_lengths(ifile):
     "Generate sequence ID,length from stream ifile"
@@ -98,7 +105,7 @@ def read_fasta_lengths(ifile):
     for line in ifile:
         if '>' == line[0]:
             if id is not None and seqLength > 0:
-                yield id,seqLength
+                yield id, seqLength
                 isEmpty = False
             id = line[1:].split()[0]
             seqLength = 0
@@ -106,9 +113,10 @@ def read_fasta_lengths(ifile):
             for word in line.split(): # GET RID OF WHITESPACE
                 seqLength += len(word)
     if id is not None and seqLength > 0:
-        yield id,seqLength
+        yield id, seqLength
     elif isEmpty:
         raise IOError('no readable sequence in FASTA file!')
+
 
 class AATranslation(object):
     'customizable translation class'
@@ -118,10 +126,11 @@ class AATranslation(object):
                        AGY='S', AGR='R',
                        GTN='V', GCN='A', GAY='D', GAR='E', GGN='G',
                        TAR='*', TGA='*')
+
     def __init__(self):
         'initialize our translation dictionary by applying N,Y,R codes'
         geneticCode = self.geneticCode.copy()
-        for codon,aa in self.geneticCode.items():
+        for codon, aa in self.geneticCode.items():
             if codon[2] == 'N':
                 geneticCode[codon[:2]+'A'] = aa
                 geneticCode[codon[:2]+'T'] = aa
@@ -134,6 +143,7 @@ class AATranslation(object):
                 geneticCode[codon[:2]+'A'] = aa
                 geneticCode[codon[:2]+'G'] = aa
         self.geneticCode = geneticCode
+
     def __call__(self, s):
         'translate nucleotide string s to amino acid string'
         s = s.upper()
@@ -147,6 +157,3 @@ class AATranslation(object):
         return ''.join(l)
 
 translate_orf = AATranslation() # default translation function
-
-                       
-    

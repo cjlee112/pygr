@@ -4,6 +4,7 @@ import classutil
 import logger
 from UserDict import DictMixin
 
+
 class NLMSASeqList(list):
 
     def __init__(self, nlmsaSeqDict):
