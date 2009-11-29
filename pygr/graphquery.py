@@ -187,10 +187,10 @@ class GraphQueryCompiler(object):
         return self # iadd MUST RETURN self!!
     _def_code = """
 def %(name)s(self, dataGraph, dataMatch=None, queryMatch=None):
-    if dataMatch is None: dataMatch={}
-    self.dataMatch = dataMatch
-    dataEdge = %(n)d * [None]
-    self.dataEdge = dataEdge
+\tif dataMatch is None: dataMatch={}
+\tself.dataMatch = dataMatch
+\tdataEdge = %(n)d * [None]
+\tself.dataEdge = dataEdge
 """
     _yield_code = 'yield self.queryMatch\n'
     _end_code = ''
@@ -325,44 +325,44 @@ class GraphQueryPyrex(GraphQueryCompiler):
 cimport cdict
 cdef c_%(name)s(cdict.CGraphDict cgd, cdict.IntTupleArray ita,
                     %(dataCounterArgs)s):
-    cdef cdict.CGraph *dataGraph
-    cdef cdict.CDict %(dataDictDefs)s
-    cdef cdict.CDictEntry %(dataPtrDefs)s
-    cdef cdict.CDictEntry *pd_temp
-    cdef cdict.CGraphEntry %(dataPtrContDefs)s
-    cdef cdict.CGraphEntry *p_temp
-    #cdef int %(dataCounterDefs)s
-    cdef int %(dataNodeDefs)s
-    cdef int %(dataEdgeDefs)s
-    cdef int *p_ita
-    dataGraph = cgd.d
-    p_ita = ita.data
+\tcdef cdict.CGraph *dataGraph
+\tcdef cdict.CDict %(dataDictDefs)s
+\tcdef cdict.CDictEntry %(dataPtrDefs)s
+\tcdef cdict.CDictEntry *pd_temp
+\tcdef cdict.CGraphEntry %(dataPtrContDefs)s
+\tcdef cdict.CGraphEntry *p_temp
+\t#cdef int %(dataCounterDefs)s
+\tcdef int %(dataNodeDefs)s
+\tcdef int %(dataEdgeDefs)s
+\tcdef int *p_ita
+\tdataGraph = cgd.d
+\tp_ita = ita.data
 """
     _yield_code = """
 %(itaTuple)s = %(resultTuple)s
 p_ita = p_ita + 2 * %(nEdges)d
 ita.n = ita.n + 1
 if ita.n >= ita.n_alloc:
-    ita.set_vector((%(dataCounterDefs)s), 1)
-    return
+\tita.set_vector((%(dataCounterDefs)s), 1)
+\treturn
 """
     #results.append((%(resultTuples)s))\n
     _end_code = """
-    ita.isDone = 1 # COMPLETED THIS QUERY
+\tita.isDone = 1 # COMPLETED THIS QUERY
 
 from pygr import cdict
 def %(name)s(self, g, int maxhit=1000, cdict.IntTupleArray ita=None, qml=None):
-    if not isinstance(g, cdict.CGraphDict):
-        g = cdict.CGraphDict(g, cdict.KeyIndex())
-    if ita is None:
-        ita = cdict.IntTupleArray(maxhit, %(nEdges)d, 2, %(lastGenerator)d)
-    ita.n = 0
-    c_%(name)s(g, ita, %(itaVector)s) # RUN THE QUERY
-    if qml is not None:
-        qml.matches = ita
-        return qml
-    else:
-        return cdict.QueryMatchList(self, ita, g, %(name)s)
+\tif not isinstance(g, cdict.CGraphDict):
+\t\tg = cdict.CGraphDict(g, cdict.KeyIndex())
+\tif ita is None:
+\t\tita = cdict.IntTupleArray(maxhit, %(nEdges)d, 2, %(lastGenerator)d)
+\tita.n = 0
+\tc_%(name)s(g, ita, %(itaVector)s) # RUN THE QUERY
+\tif qml is not None:
+\t\tqml.matches = ita
+\t\treturn qml
+\telse:
+\t\treturn cdict.QueryMatchList(self, ita, g, %(name)s)
 """
 
     def compile(self):
@@ -483,23 +483,23 @@ class GraphQueryIterator(object):
 
     _generator_code = """
 try: # GENERATOR
-    it%(level)d = %(dataGraph)s[%(fromDataNode)s]
+\tit%(level)d = %(dataGraph)s[%(fromDataNode)s]
 except KeyError:
-    continue
+\tcontinue
 for %(toDataNode)s, %(toDataEdge)s in it%(level)d.items():"""
 
     _index_code = """
 if %(toDataNode)s in dataMatch:
-    continue
+\tcontinue
 else:
-    dataMatch[%(toDataNode)s] = %(toQueryNode)s
-    #queryMatch[%(toQueryNode)s] = %(toDataNode)s
-    #queryMatch[%(fromQueryNode)s, %(toQueryNode)s] = %(toDataEdge)s
+\tdataMatch[%(toDataNode)s] = %(toQueryNode)s
+\t#queryMatch[%(toQueryNode)s] = %(toDataNode)s
+\t#queryMatch[%(fromQueryNode)s, %(toQueryNode)s] = %(toDataEdge)s
 # THIS LINE PREVENTS COMPILER FROM PUSHING EXTRA INDENTATION LAYER"""
 
     _filter_code = """
-if self.gqi[%(level)d].filter(toNode=%(toDataNode)s, fromNode=%(fromDataNode)s,
-                              edge=%(toDataEdge)s, queryMatch=self.queryMatch,
+if self.gqi[%(level)d].filter(toNode=%(toDataNode)s, fromNode=%(fromDataNode)s, \
+                              edge=%(toDataEdge)s, queryMatch=self.queryMatch, \
                               gqi=self.gqi[%(level)d]):"""
 
     _unmark_code = """
@@ -509,11 +509,11 @@ del dataMatch[%(toDataNode)s]
 
     _closure_code = """
 try: # CLOSURE
-    %(toDataEdge)s = %(dataGraph)s[%(fromDataNode)s][%(toDataNode)s]
+\t%(toDataEdge)s = %(dataGraph)s[%(fromDataNode)s][%(toDataNode)s]
 except KeyError:
-    pass
+\tpass
 else:
-    #queryMatch[%(fromQueryNode)s, %(toQueryNode)s] = %(toDataEdge)s"""
+\t#queryMatch[%(fromQueryNode)s, %(toQueryNode)s] = %(toDataEdge)s"""
 
     _unmark_closure_code = """
 #del queryMatch[%(fromQueryNode)s, %(toQueryNode)s]"""
@@ -522,11 +522,11 @@ else:
     _pyrex_generator_code = """
 p_temp = cdict.cgraph_getitem(%(dataGraph)s, %(fromDataNode)s)
 if p_temp != NULL:
-    %(fromDataDict)s = p_temp[0].v
-    %(toDataPtr)s = %(fromDataDict)s[0].dict
-    while %(toDataCounter)s < %(fromDataDict)s[0].n:
-        %(toDataNode)s = %(toDataPtr)s[%(toDataCounter)s].k
-        %(toDataEdge)s = %(toDataPtr)s[%(toDataCounter)s].v
+\t%(fromDataDict)s = p_temp[0].v
+\t%(toDataPtr)s = %(fromDataDict)s[0].dict
+\twhile %(toDataCounter)s < %(fromDataDict)s[0].n:
+\t\t%(toDataNode)s = %(toDataPtr)s[%(toDataCounter)s].k
+\t\t%(toDataEdge)s = %(toDataPtr)s[%(toDataCounter)s].v
 """
     #for %(toDataCounter)s from 0 <= %(toDataCounter)s < %(fromDataDict)s[0].n:
 
@@ -542,10 +542,10 @@ if p_temp != NULL:
     _pyrex_closure_code = """
 p_temp = cdict.cgraph_getitem(%(dataGraph)s, %(fromDataNode)s)
 if p_temp != NULL:
-    %(fromDataDict)s = p_temp[0].v
-    pd_temp = cdict.cdict_getitem(%(fromDataDict)s, %(toDataNode)s)
-    if pd_temp != NULL:
-        %(toDataEdge)s = pd_temp[0].v
+\t%(fromDataDict)s = p_temp[0].v
+\tpd_temp = cdict.cdict_getitem(%(fromDataDict)s, %(toDataNode)s)
+\tif pd_temp != NULL:
+\t\t%(toDataEdge)s = pd_temp[0].v
 """
 
     _pyrex_unmark_closure_code = '# COMPILER NEEDS AT LEAST ONE LINE, \
@@ -603,8 +603,8 @@ for %(toDataNode)s in dataGraph:"""
     _pyrex_generator_code="""
 %(toDataPtrCont)s = %(dataGraph)s[0].dict
 for %(toDataCounter)s from 0 <= %(toDataCounter)s < %(dataGraph)s[0].n:
-    %(toDataNode)s = %(toDataPtrCont)s[%(toDataCounter)s].k
-    %(toDataEdge)s = -1 # NO EDGE INFO
+\t%(toDataNode)s = %(toDataPtrCont)s[%(toDataCounter)s].k
+\t%(toDataEdge)s = -1 # NO EDGE INFO
 """
 
 
@@ -616,7 +616,7 @@ class AttributeGQI(GraphQueryIterator):
             yield i, e
 
     _generator_code = """
-for %(toDataNode)s, %(toDataEdge)s in getattr(%(fromDataNode)s,
+for %(toDataNode)s, %(toDataEdge)s in getattr(%(fromDataNode)s, \
                                               '%(attr)s').items():"""
 
 
@@ -641,7 +641,7 @@ class CallableGQI(GraphQueryIterator):
             yield i, e
 
     _generator_code = """
-for %(toDataNode)s, %(toDataEdge)s in self.gqi[%(level)d].f(%(fromDataNode)s,
+for %(toDataNode)s, %(toDataEdge)s in self.gqi[%(level)d].f(%(fromDataNode)s, \
                                             dataGraph, self.gqi[%(level)d]):"""
 
 
@@ -654,7 +654,7 @@ class CallableContainerGQI(GraphQueryIterator):
 
     _generator_code = """
 %(toDataEdge)s = None
-for %(toDataNode)s in self.gqi[%(level)d].fN(%(fromDataNode)s, dataGraph,
+for %(toDataNode)s in self.gqi[%(level)d].fN(%(fromDataNode)s, dataGraph, \
                                              self.gqi[%(level)d]):"""
 
 
