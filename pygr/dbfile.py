@@ -73,7 +73,7 @@ def open_bsddb(filename, flag='r', useHash=False, mode=0666):
             except IOError:
                 # Hmm, not even readable. Raise a generic permission error.
                 raise PermissionsError('insufficient permissions \
-                                       to open file: ' + filename)
+to open file: ' + filename)
             ifile.close()
             # We can read the file, so raise a ReadOnlyError.
             raise ReadOnlyError('file is read-only: '+ filename)
@@ -90,7 +90,7 @@ def open_bsddb(filename, flag='r', useHash=False, mode=0666):
             return open_anydbm(filename, flag)
         except bsddb.db.DBInvalidArgError:
             raise WrongFormatError('file does not match expected \
-                                   shelve format: ' + filename)
+shelve format: ' + filename)
 
 
 def open_index(filename, flag='r', useHash=False, mode=0666):
