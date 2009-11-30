@@ -3,7 +3,9 @@ import unittest
 from testlib import testutil, PygrTestProgram
 from pygr import translationDB, seqdb
 
+
 class TranslationDB_Test(unittest.TestCase):
+
     def setUp(self):
         hbb1_mouse = testutil.datafile('hbb1_mouse.fa')
         self.dna = seqdb.SequenceFileDB(hbb1_mouse)
