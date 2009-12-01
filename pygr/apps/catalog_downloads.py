@@ -1,6 +1,6 @@
 
 
-def catalog_downloads(url,fileFilter,fileNamer,fileDocumenter,klass):
+def catalog_downloads(url, fileFilter, fileNamer, fileDocumenter, klass):
     '''returns dict of resources for downloading target data:
     url: URL to a directory that gives links to the desired data
     fileFilter: function that returns True for a desired file name
@@ -15,7 +15,9 @@ def catalog_downloads(url,fileFilter,fileNamer,fileDocumenter,klass):
                           lambda x: "Bio.MSA.UCSC."+x[:-3],
                           SourceURL)
     '''
-    import urllib,htmllib,formatter
+    import formatter
+    import htmllib
+    import urllib
     #from BeautifulSoup import BeautifulSoup
     ifile = urllib.urlopen(url)
     try:
@@ -31,24 +33,26 @@ def catalog_downloads(url,fileFilter,fileNamer,fileDocumenter,klass):
         url += '/'
     for s in l: # find all anchors in the document
         if fileFilter(s): # save it
-            o = klass(urllib.basejoin(url,s))
+            o = klass(urllib.basejoin(url, s))
             o.__doc__ = fileDocumenter(s)
             d[fileNamer(s)] = o
     return d
 
+
 def save_NLMSA_downloaders(url, fileFilter=lambda x: x.endswith(".txt.gz"),
                            resourceStem='Bio.MSA.UCSC.',
                            fileDocumenter=None, fileNamer=None):
-    'save NLMSA downloader / builder objects for a set of downloadable textdump files'
+    'save NLMSA downloader / builder objects for a set
+    of downloadable textdump files'
     if fileDocumenter is None:
-        fileDocumenter = lambda x: 'NLMSA alignment '+x
+        fileDocumenter = lambda x: 'NLMSA alignment ' + x
     if fileNamer is None: # a default resource naming function
-        fileNamer = lambda x:resourceStem+x[:-3] # remove .gz suffix
+        fileNamer = lambda x: resourceStem + x[:-3] # remove .gz suffix
     from pygr.nlmsa_utils import NLMSABuilder
     from pygr.downloader import SourceURL
     d = catalog_downloads(url, fileFilter, fileNamer,
                           fileDocumenter, SourceURL)
-    for resID,o in d.items():
+    for resID, o in d.items():
         nlmsa = NLMSABuilder(o)
         nlmsa.__doc__ = fileDocumenter(resID)
         d[resID[:-4]] = nlmsa # remove .txt suffix
@@ -56,4 +60,3 @@ def save_NLMSA_downloaders(url, fileFilter=lambda x: x.endswith(".txt.gz"),
     worldbase.add_resource(d)
     worldbase.commit()
     return d # just in case the user wants to see what was saved
-

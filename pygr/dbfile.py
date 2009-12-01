@@ -1,19 +1,30 @@
 
-import shelve, anydbm, sys, UserDict
+import anydbm
+import shelve
+import sys
+import UserDict
 import logger
+
 
 class WrongFormatError(IOError):
     'attempted to open db with the wrong format e.g. btree vs. hash'
     pass
+
+
 class NoSuchFileError(IOError):
     'file does not exist!'
     pass
+
+
 class PermissionsError(IOError):
     'inadequate permissions for requested file'
     pass
+
+
 class ReadOnlyError(PermissionsError):
     'attempted to open a file for writing, but no write permission'
     pass
+
 
 def open_anydbm(*args, **kwargs):
     'trap anydbm.error message and transform to our consistent exception types'
@@ -35,6 +46,7 @@ def open_anydbm(*args, **kwargs):
             raise WrongFormatError(msg)
         raise
 
+
 try: # detect whether bsddb module available and working...
     import bsddb
     try:
@@ -52,6 +64,7 @@ except ImportError:
     except ImportError: # ...nope
         bsddb = None
 
+
 def open_bsddb(filename, flag='r', useHash=False, mode=0666):
     """open bsddb index instead of hash by default.
     useHash=True forces it to use anydbm default (i.e. hash) instead.
@@ -65,16 +78,18 @@ def open_bsddb(filename, flag='r', useHash=False, mode=0666):
         if flag=='c' or flag=='w': # TRY OPENING READ-ONLY
             try:
                 ifile = file(filename)
-            except IOError: # HMM, NOT EVEN READABLE. RAISE GENERIC PERMISSIONS ERROR
-                raise PermissionsError('insufficient permissions to open file: '
-                                       +filename)
-            ifile.close() # OK, WE CAN READ THE FILE, SO RAISE EXCEPTION WITH
-            raise ReadOnlyError('file is read-only: '+filename) # VERY SPECIFIC MEANING!
+            except IOError:
+                # Hmm, not even readable. Raise a generic permission error.
+                raise PermissionsError('insufficient permissions \
+to open file: ' + filename)
+            ifile.close()
+            # We can read the file, so raise a ReadOnlyError.
+            raise ReadOnlyError('file is read-only: '+ filename)
         else: # r OR n FLAG: JUST RAISE EXCEPTION
             raise PermissionsError('insufficient permissions to open file: '
-                                   +filename)
+                                   + filename)
     except bsddb.db.DBNoSuchFileError:
-        raise NoSuchFileError('no file named: '+filename)
+        raise NoSuchFileError('no file named: ' + filename)
     except bsddb.db.DBInvalidArgError: # NOT A BTREE FILE...
         try:
             if useHash: # NO POINT IN TRYING HASH YET AGAIN...
@@ -82,7 +97,9 @@ def open_bsddb(filename, flag='r', useHash=False, mode=0666):
             # fallback to using default: hash file
             return open_anydbm(filename, flag)
         except bsddb.db.DBInvalidArgError:
-            raise WrongFormatError('file does not match expected shelve format: '+filename)
+            raise WrongFormatError('file does not match expected \
+shelve format: ' + filename)
+
 
 def open_index(filename, flag='r', useHash=False, mode=0666):
     if bsddb is None:
@@ -92,6 +109,7 @@ def open_index(filename, flag='r', useHash=False, mode=0666):
         return d
     return open_bsddb(filename, flag, useHash, mode)
 
+
 def iter_gdbm(db):
     'iterator for gdbm objects'
     k = db.firstkey()
@@ -99,9 +117,11 @@ def iter_gdbm(db):
         yield k
         k = db.nextkey(k)
 
+
 class _ClosedDict(UserDict.DictMixin):
     """This dummy class exists solely to raise a clear error msg if accessed.
     Copied from the Python 2.6 shelve.py """
+
     def closed(self, *args):
         raise ValueError('invalid operation on closed shelf')
     __getitem__ = __setitem__ = __delitem__ = keys = closed
@@ -110,10 +130,10 @@ class _ClosedDict(UserDict.DictMixin):
         return '<Closed Dictionary>'
 
 
-
 class BetterShelf(shelve.Shelf):
     """Shelf subclass that fixes its horrible iter implementation.
     """
+
     def __iter__(self):
         'avoid using iter provided by shelve/DictMixin, which loads all keys!'
         try:
@@ -123,16 +143,22 @@ class BetterShelf(shelve.Shelf):
             try:
                 self.dict.firstkey
             except AttributeError: # evidently not a gdbm dict
-                raise exc_value, None, exc_traceback # re-raise original error
+                raise TypeError('''cannot iterate over this dictionary.
+This means that you do not have bsddb, bsddb3, or gdbm available for use by
+the 'shelve' module in this Python install.  Please fix this!
+
+Original error message was: %s''' % str(exc_value))
             else: # iterate using gdbm-specific method
                 return iter_gdbm(self.dict)
 
     if sys.version_info < (2, 6): # Python finally added good err msg in 2.6
+
         def close(self):
             if isinstance(self.dict, _ClosedDict):
                 return # if already closed, nothing further to do...
             shelve.Shelf.close(self) # close Shelf as usual
             self.dict = _ClosedDict() # raises sensible error msg if accessed
+
 
 def shelve_open(filename, flag='c', protocol=None, writeback=False,
                 useHash=False, mode=0666, *args, **kwargs):

@@ -9,6 +9,7 @@ except NameError:
     worldbase = mdb.Data
 
 if sys.version_info < (2, 6):
+
     def dir(obj):
         """provide Python 2.6+ style __dir__ support """
         try:
@@ -19,5 +20,5 @@ if sys.version_info < (2, 6):
             return get_dir()
 else: # Python 2.6 or later, just use the builtin dir()
     dir = __builtins__['dir']
-    
+
 __all__ = ('__version__', 'worldbase', 'dir')

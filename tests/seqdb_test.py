@@ -17,35 +17,43 @@ from pygr.annotation import AnnotationDB, AnnotationSeq, AnnotationSlice, \
 # utility classes for the SequenceDB tests
 
 _fake_seq = "ATCGAGAGCCAGAATGACGGGACCATTAG"
+
+
 class _SimpleFakeSequence(Sequence):
+
     def __init__(self, db, id):
         assert id == "foo"
         Sequence.__init__(self, _fake_seq, "foo")
-        
+
     def __len__(self):
         return len(self.seq)
-    
+
     def strslice(self, start, end):
         return self.seq[start:end]
-    
+
+
 class _SimpleFakeInfoObj(object):
+
     def __init__(self, length):
         self.length = length
-        
+
+
 class _SimpleFakeSeqDB(SequenceDB):
+
     def __init__(self, *args, **kwargs):
         self.seqInfoDict = dict(foo=_SimpleFakeInfoObj(len(_fake_seq)))
         SequenceDB.__init__(self, *args, **kwargs)
 
 ###
-        
+
 class SequenceDB_Test(unittest.TestCase):
+
     def test_repr(self):
         "test the __repr__ function."
-    
+
         db = _SimpleFakeSeqDB(itemClass=_SimpleFakeSequence)
         repr(db)
-            
+
     def test_create_no_itemclass(self):
         # must supply an itemclass to SequenceDB!
         try:
@@ -54,16 +62,18 @@ class SequenceDB_Test(unittest.TestCase):
         except TypeError:
             pass
 
+
 class SequenceFileDB_Test(unittest.TestCase):
     """
     Test for all of the basic dictionary functions on 'SequenceFileDB',
     among other things.
     """
+
     def setUp(self):
         "Test setup"
         dnaseq = testutil.datafile('dnaseq.fasta')
         self.db = SequenceFileDB(dnaseq) # contains 'seq1', 'seq2'
-        
+
         self.db._weakValueDict.clear()   # clear the cache
 
     def tearDown(self):
@@ -92,7 +102,7 @@ class SequenceFileDB_Test(unittest.TestCase):
         "SequenceDB cache test"
         assert len(self.db._weakValueDict) == 0
         seq1 = self.db['seq1']
-        
+
         # cache populated?
         assert len(self.db._weakValueDict) == 1
         assert 'seq1' in self.db._weakValueDict
@@ -105,7 +115,7 @@ class SequenceFileDB_Test(unittest.TestCase):
         "SequenceDB clear_cache test"
         assert len(self.db._weakValueDict) == 0
         seq1 = self.db['seq1']
-        
+
         # cache populated?
         assert len(self.db._weakValueDict) == 1
         assert 'seq1' in self.db._weakValueDict
@@ -114,7 +124,7 @@ class SequenceFileDB_Test(unittest.TestCase):
         self.db.clear_cache()
         seq1_try3 = self.db['seq1']
         assert seq1 is not seq1_try3
-        
+
     def test_keys(self):
         "SequenceFileDB keys"
         k = self.db.keys()
@@ -146,13 +156,13 @@ class SequenceFileDB_Test(unittest.TestCase):
         assert 'seq1' in self.db.seqInfoDict
         assert 'seq2' in self.db.seqInfoDict
         assert 'foo' not in self.db.seqInfoDict
-    
+
     def test_has_key(self):
         "SequenceFileDB has key"
-        assert self.db.has_key('seq1')
-        assert self.db.has_key('seq2')
-        assert not self.db.has_key('foo')
-    
+        assert 'seq1' in self.db
+        assert 'seq2' in self.db
+        assert 'foo' not in self.db
+
     def test_get(self):
         "SequenceFileDB get"
         assert self.db.get('foo') is None
@@ -160,13 +170,13 @@ class SequenceFileDB_Test(unittest.TestCase):
         assert str(self.db.get('seq1')).startswith('atggtgtca')
         assert self.db.get('seq2') is not None
         assert str(self.db.get('seq2')).startswith('GTGTTGAA')
-    
+
     def test_items(self):
         "SequenceFileDB items"
-        i = [ k for (k,v) in self.db.items() ]
+        i = [k for (k, v) in self.db.items()]
         i.sort()
         assert i == ['seq1', 'seq2']
-    
+
     def test_iterkeys(self):
         "SequenceFileDB iterkeys"
         kk = self.db.keys()
@@ -223,7 +233,7 @@ class SequenceFileDB_Test(unittest.TestCase):
             assert 0, 'this method should raise NotImplementedError'
         except NotImplementedError:
             pass
-            
+
     # test some things other than dict behavior
     def test_keyerror(self):
         """SequenceFileDB keyerror.
@@ -249,11 +259,13 @@ class SequenceFileDB_Test(unittest.TestCase):
         except ValueError:
             pass
 
+
 class SequenceFileDB_Creation_Test(unittest.TestCase):
     """
     Test some of the nastier / more polluting creation code in an
     isolated (and slower...) class that cleans up after itself.
     """
+
     def trash_intermediate_files(self):
         seqlen = testutil.datafile('dnaseq.fasta.seqlen')
         pureseq = testutil.datafile('dnaseq.fasta.pureseq')
@@ -262,7 +274,7 @@ class SequenceFileDB_Creation_Test(unittest.TestCase):
             os.unlink(pureseq)
         except OSError:
             pass
-        
+
     def setUp(self):
         "Test setup"
         self.trash_intermediate_files()
@@ -283,6 +295,7 @@ class SequenceFileDB_Creation_Test(unittest.TestCase):
         "Test that building things works properly when specifying a reader."
 
         class InfoBag(object):
+
             def __init__(self, **kw):
                 self.__dict__.update(kw)
 
@@ -316,6 +329,7 @@ class SequenceFileDB_Creation_Test(unittest.TestCase):
         "Test that building things fails properly with a bad reader."
 
         class InfoBag(object):
+
             def __init__(self, **kw):
                 self.__dict__.update(kw)
 
@@ -345,6 +359,7 @@ class SequenceFileDB_Creation_Test(unittest.TestCase):
         except ValueError:
             pass                        # ValueError is expected
 
+
 def close_pud_dicts(pud):
     """Close all seq dbs indexed in a PrefixUnionDict """
     for db in pud.dicts:
@@ -355,6 +370,7 @@ class PrefixUnionDict_Creation_Test(unittest.TestCase):
     """
     Test PUD creation options.
     """
+
     def setUp(self):
         self.dbfile = testutil.datafile('dnaseq.fasta')
 
@@ -377,13 +393,14 @@ class PrefixUnionDict_Creation_Test(unittest.TestCase):
         try:
             header = testutil.datafile('prefixUnionDict-1.txt')
             try:
-                db = PrefixUnionDict(filename=header, prefixDict={ 'foo' : subdb })
+                db = PrefixUnionDict(filename=header,
+                                     prefixDict={'foo': subdb})
                 assert 0, "should not get here"
             except TypeError:
                 pass
         finally:
             subdb.close()
-            
+
     def test_multiline_headerfile_create(self):
         header = testutil.datafile('prefixUnionDict-2.txt')
         db = PrefixUnionDict(filename=header)
@@ -426,7 +443,7 @@ class PrefixUnionDict_Creation_Test(unittest.TestCase):
             db.writeHeaderFile(output)
         finally:
             close_pud_dicts(db)
-            
+
         db2 = PrefixUnionDict(filename=output,
                                trypath=[os.path.dirname(header)])
         try:
@@ -440,7 +457,7 @@ class PrefixUnionDict_Creation_Test(unittest.TestCase):
         subdb = SequenceFileDB(self.dbfile)
         try:
             del subdb.filepath  # remove 'filepath' attribute for test
-            db = PrefixUnionDict({ 'prefix' : subdb })
+            db = PrefixUnionDict({'prefix': subdb})
 
             assert len(db) == 2
             assert 'prefix.seq1' in db
@@ -453,18 +470,20 @@ class PrefixUnionDict_Creation_Test(unittest.TestCase):
         finally:
             subdb.close() # closes both db and subdb
 
+
 class PrefixUnionDict_Test(unittest.TestCase):
     """
     Test for all of the basic dictionary functions on 'PrefixUnionDict'.
     """
+
     def setUp(self):
         dnaseq = testutil.datafile('dnaseq.fasta')
         seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
-        self.db = PrefixUnionDict({ 'prefix' : seqdb })
+        self.db = PrefixUnionDict({'prefix': seqdb})
 
     def tearDown(self):
         close_pud_dicts(self.db)
-        
+
     def test_keys(self):
         "PrefixUnionDict keys"
         k = self.db.keys()
@@ -503,7 +522,7 @@ class PrefixUnionDict_Test(unittest.TestCase):
         dnaseq = testutil.datafile('funnyseq.fasta')
         seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
         try:
-            pudb = PrefixUnionDict({ 'prefix' : seqdb })
+            pudb = PrefixUnionDict({'prefix': seqdb})
             seq = pudb['prefix.seq.1.more']
         finally:
             seqdb.close()
@@ -513,17 +532,17 @@ class PrefixUnionDict_Test(unittest.TestCase):
         dnaseq = testutil.datafile('funnyseq.fasta')
         seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
         try:
-            pudb = PrefixUnionDict({ 'prefix' : seqdb })
+            pudb = PrefixUnionDict({'prefix': seqdb})
             seq = pudb['prefix.seq.2.even.longer']
         finally:
             seqdb.close()
 
     def test_has_key(self):
         "PrefixUnionDict has key"
-        assert self.db.has_key('prefix.seq1')
-        assert self.db.has_key('prefix.seq2')
-        assert not self.db.has_key('prefix.foo')
-        assert not self.db.has_key('foo')
+        assert 'prefix.seq1' in self.db
+        assert 'prefix.seq2' in self.db
+        assert 'prefix.foo' not in self.db
+        assert 'foo' not in self.db
 
     def test_get(self):
         "PrefixUnionDict get"
@@ -550,7 +569,7 @@ class PrefixUnionDict_Test(unittest.TestCase):
 
     def test_items(self):
         "PrefixUnionDict items"
-        i = [ k for (k,v) in self.db.items() ]
+        i = [k for (k, v) in self.db.items()]
         i.sort()
         assert i == ['prefix.seq1', 'prefix.seq2']
 
@@ -641,7 +660,7 @@ class PrefixUnionDict_Test(unittest.TestCase):
         ((n1, i1), (n2, i2)) = itemlist
 
         ii1, ii2 = list(seqInfoDict.itervalues())
-        
+
         s1i = seqInfoDict['prefix.seq1']
         s2i = seqInfoDict['prefix.seq2']
 
@@ -652,13 +671,15 @@ class PrefixUnionDict_Test(unittest.TestCase):
         assert (i2.id, i2.db) == (s2i.id, s2i.db)
         assert (ii2.id, ii2.db) == (s2i.id, s2i.db)
 
-        assert seqInfoDict.has_key('prefix.seq1')
+        assert 'prefix.seq1' in seqInfoDict
+
 
 class PrefixUnionMemberDict_Test(unittest.TestCase):
+
     def setUp(self):
         dnaseq = testutil.datafile('dnaseq.fasta')
         seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
-        self.db = PrefixUnionDict({ 'prefix' : seqdb })
+        self.db = PrefixUnionDict({'prefix': seqdb})
         self.mdb = self.db.newMemberDict()
 
     def tearDown(self):
@@ -700,14 +721,16 @@ class PrefixUnionMemberDict_Test(unittest.TestCase):
         except KeyError:
             pass
 
+
 class SeqPrefixUnionDict_Test(unittest.TestCase):
     """
     Test SeqPrefixUnionDict.
     """
+
     def setUp(self):
         dnaseq = testutil.datafile('dnaseq.fasta')
         self.seqdb = SequenceFileDB(dnaseq)     # contains 'seq1', 'seq2'
-        self.db = SeqPrefixUnionDict({ 'prefix' : self.seqdb })
+        self.db = SeqPrefixUnionDict({'prefix': self.seqdb})
 
     def tearDown(self):
         self.seqdb.close()
@@ -717,7 +740,7 @@ class SeqPrefixUnionDict_Test(unittest.TestCase):
         seqdb = SequenceFileDB(dnaseq)
         try:
             new_seq = seqdb['seq1']
-        
+
             self.db += new_seq
 
             assert new_seq in self.db
@@ -728,7 +751,8 @@ class SeqPrefixUnionDict_Test(unittest.TestCase):
 
             seqdb2 = SequenceFileDB(dnaseq)
             try:
-                seqdb2.filepath = 'foo'         # munge the filepath for testing
+                # Munge the filepath for testing.
+                seqdb2.filepath = 'foo'
                 new_seq2 = seqdb2['seq1']
 
                 self.db += new_seq2
@@ -747,10 +771,10 @@ class SeqPrefixUnionDict_Test(unittest.TestCase):
         seqdb = SequenceFileDB(dnaseq)
         try:
             new_seq = seqdb['seq1']
-        
+
             self.db += new_seq
             name1 = (~self.db)[new_seq]
-        
+
             self.db += new_seq              # should do nothing...
             name2 = (~self.db)[new_seq]
             assert name1 == name2           # ...leaving seq with same name.
@@ -760,14 +784,14 @@ class SeqPrefixUnionDict_Test(unittest.TestCase):
     def test_iadd_user_seq(self):
         seq = Sequence('ATGGCAGG', 'foo')
         self.db += seq
-        
+
         name = (~self.db)[seq]
         assert name == 'user.foo'       # created a new 'user' db.
 
         # ok, make sure it doesn't wipe out the old 'user' db...
         seq2 = Sequence('ATGGCAGG', 'foo2')
         self.db += seq2
-        
+
         name = (~self.db)[seq2]
         assert name == 'user.foo2'
 
@@ -782,7 +806,7 @@ class SeqPrefixUnionDict_Test(unittest.TestCase):
             try:
                 new_seq = seqdb['seq1']
                 new_seq2 = seqdb2['seq1']
-        
+
                 self.db += new_seq
                 try:
                     self.db += new_seq2
@@ -802,7 +826,7 @@ class SeqPrefixUnionDict_Test(unittest.TestCase):
 
             assert getattr(seqdb, '_persistent_id', None) is None
             del seqdb.filepath
-        
+
             self.db += new_seq
             name = (~self.db)[new_seq]
             assert name == 'noname0.seq1'
@@ -814,7 +838,7 @@ class SeqPrefixUnionDict_Test(unittest.TestCase):
         seqdb = SequenceFileDB(dnaseq)
         try:
             seq = seqdb['seq1']
-        
+
             name = (~self.db)[seq]
         finally:
             seqdb.close() # only need to close if exception occurs
@@ -834,9 +858,10 @@ class SeqPrefixUnionDict_Test(unittest.TestCase):
                 pass
         finally:
             seqdb.close()
-        
+
+
 class SeqDBCache_Test(unittest.TestCase):
-    
+
     def test_cache(self):
         "Sequence slice cache mechanics."
 
@@ -864,7 +889,8 @@ class SeqDBCache_Test(unittest.TestCase):
             cacheHint(cacheDict, owner)
             del cacheDict                   # 'owner' now holds reference
 
-            # peek into _cache and assert that only the ival coordinates are stored
+            # peek into _cache and assert that only the ival coordinates
+            # are stored
             v = db._cache.values()[0]
             assert len(v['seq1']) == 2
             del v
@@ -875,14 +901,14 @@ class SeqDBCache_Test(unittest.TestCase):
             # ...check that we've stored actual string
             assert len(v['seq1']) == 3
 
-            # again force a cache access, this time to the stored sequence string
+            # again force cache access, this time to the stored sequence string
             ival = str(seq1[5:10])
 
             # now, eliminate all references to the cache proxy dict
             del owner
 
-            # trash unused objects - not strictly necessary, because there are no
-            # islands of circular references & so all objects are already
+            # trash unused objects - not strictly necessary, because there are
+            # no islands of circular references & so all objects are already
             # deallocated, but that's implementation dependent.
             gc.collect()
 
@@ -894,7 +920,7 @@ class SeqDBCache_Test(unittest.TestCase):
 
     def test_nlmsaslice_cache(self):
         "NLMSASlice sequence caching & removal"
-        
+
         # set up sequences
         dnaseq = testutil.datafile('dnaseq.fasta')
 
@@ -903,7 +929,8 @@ class SeqDBCache_Test(unittest.TestCase):
             gc.collect()
             assert len(db._weakValueDict)==0, '_weakValueDict should be empty'
             seq1, seq2 = db['seq1'], db['seq2']
-            assert len(db._weakValueDict)==2, '_weakValueDict should have 2 seqs'
+            assert len(db._weakValueDict)==2, \
+                    '_weakValueDict should have 2 seqs'
 
             # build referencing NLMSA
             mymap = NLMSA('test', 'memory', db, pairwiseMode=True)
@@ -922,7 +949,8 @@ class SeqDBCache_Test(unittest.TestCase):
             assert len(db._cache.values()) != 0
 
             n1 = len(db._cache)
-            assert n1 == 1, "should be exactly one cache entry, not %d" % (n1,)
+            assert n1 == 1, "should be exactly one cache entry, not %d" % \
+                    (n1, )
 
             # ok, now trash referencing arguments & make sure of cleanup
             del x
@@ -935,7 +963,8 @@ class SeqDBCache_Test(unittest.TestCase):
             assert n2 == 0, '%d objects remain; cache memory leak!' % n2
             # FAIL because of __dealloc__ error in cnestedlist.NLMSASlice.
 
-            del mymap, ival, seq1, seq2 # drop our references, cache should empty
+            # Drop our references, the cache should empty.
+            del mymap, ival, seq1, seq2
             gc.collect()
             # check that db._weakValueDict cache is empty
             assert len(db._weakValueDict)==0, '_weakValueDict should be empty'

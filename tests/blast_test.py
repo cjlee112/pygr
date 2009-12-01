@@ -6,8 +6,9 @@ import os
 from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import worldbase
 from pygr import sequence, cnestedlist, seqdb, blast, logger, parse_blast
-from pygr.nlmsa_utils import CoordsGroupStart,CoordsGroupEnd
+from pygr.nlmsa_utils import CoordsGroupStart, CoordsGroupEnd
 from pygr import translationDB
+
 
 def check_results(results, correct, formatter, delta=0.01,
                   reformatCorrect=False, reformatResults=True):
@@ -20,7 +21,7 @@ def check_results(results, correct, formatter, delta=0.01,
         correct.sort()
 
     # this is to help troubleshooting the mismatches if there are any
-    mismatch = [ (a, b) for a, b in zip(correct, results) if
+    mismatch = [(a, b) for a, b in zip(correct, results) if
                  testutil.approximate_cmp([a], [b], delta)]
     if mismatch:
         logger.warn('blast mismatches found')
@@ -29,6 +30,7 @@ def check_results(results, correct, formatter, delta=0.01,
 
     # this is the actual test
     assert testutil.approximate_cmp(correct, results, delta) == 0
+
 
 def check_results_relaxed_blastp(results, correct, formatter, delta=0.01,
                                  reformatCorrect=False, allowedLengthDiff=0,
@@ -62,6 +64,7 @@ def check_results_relaxed_blastp(results, correct, formatter, delta=0.01,
             correct_high.append(result)
     assert testutil.approximate_cmp(correct_high, results_high, delta) == 0
 
+
 def check_results_relaxed_blastx(results, correct, formatter, delta=0.01,
                                  reformatCorrect=False, allowedLengthDiff=0,
                                  identityMin=0.6):
@@ -91,6 +94,7 @@ def check_results_relaxed_blastx(results, correct, formatter, delta=0.01,
             correct_high.append(result)
     assert testutil.approximate_cmp(correct_high, results_high, delta) == 0
 
+
 def reformat_results(results, formatter):
     reffed = []
     for result in results:
@@ -99,11 +103,14 @@ def reformat_results(results, formatter):
     reffed.sort()
     return reffed
 
+
 def pair_identity_tuple(t):
     'standard formatter for blast matches'
     return (t[0].id, t[1].id, t[2].pIdentity())
 
+
 class BlastBase(unittest.TestCase):
+
     def setUp(self):
         hbb1_mouse = testutil.datafile('hbb1_mouse.fa')
         hbb1_mouse_rc = testutil.datafile('hbb1_mouse_rc.fa')
@@ -125,15 +132,17 @@ class BlastBase(unittest.TestCase):
 
 _multiblast_results = None
 
+
 class Blast_Test(BlastBase):
     """
     Test basic BLAST stuff (using blastp).
     """
+
     def test_blastp(self):
         "Testing blastp"
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         blastmap = blast.BlastMapping(self.prot, verbose=False)
         results = blastmap[self.prot['HBB1_XENLA']]
 
@@ -144,7 +153,7 @@ class Blast_Test(BlastBase):
     def test_repr(self):
         blastmap = blast.BlastMapping(self.prot, verbose=False)
         assert '<BlastMapping' in repr(blastmap)
-        
+
     def test_no_query(self):
         blastmap = blast.BlastMapping(self.dna, verbose=False)
         try:
@@ -177,7 +186,7 @@ class Blast_Test(BlastBase):
         global _multiblast_results
 
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
+            raise SkipTest("no BLAST installed")
 
         if not _multiblast_results:
             logger.info("running expensive multiblast")
@@ -191,32 +200,32 @@ class Blast_Test(BlastBase):
             results = [al[seq] for seq in self.prot.values()]
             _multiblast_results = reformat_results(results,
                                                    pair_identity_tuple)
-            
+
         return _multiblast_results
 
     def test_multiblast_single(self):
         "Test multi-sequence BLAST results, for BLASTs run one by one."
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         blastmap = blast.BlastMapping(self.prot, verbose=False)
         al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                bidirectional=False)
-        
+
         for seq in self.prot.values():
             blastmap(seq, al) # all vs all, one by one
-            
+
         al.build() # construct the alignment indexes
         results = [al[seq] for seq in self.prot.values()]
         results_multi = self.get_multiblast_results()
         # Strict check must work here even on live BLAST output
         check_results(results, results_multi, pair_identity_tuple)
-        
+
     def test_multiblast_long(self):
         "testing multi sequence blast with long db"
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         longerFile = testutil.datafile('sp_all_hbb')
 
         sp_all_hbb = seqdb.SequenceFileDB(longerFile)
@@ -232,24 +241,24 @@ class Blast_Test(BlastBase):
         is used to clip the end to the mask region.
         """
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         db = self.gapping
         blastmap = blast.BlastMapping(db)
         ungapped = db['ungapped']
         gapped = db['gapped']
         results = blastmap[gapped]
-        
+
         results[ungapped]
 
     def test_no_bidirectional(self):
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         db = self.gapping
         gapped = db['gapped']
         ungapped = db['ungapped']
-        
+
         blastmap = blast.BlastMapping(db)
         al = blastmap(queryDB=db)
         slice = al[gapped]
@@ -280,7 +289,7 @@ class Blast_Test(BlastBase):
     def test_seq_without_db(self):
         "Check that sequences without associated DBs work as query strings"
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
+            raise SkipTest("no BLAST installed")
         blastmap = blast.BlastMapping(self.prot, verbose=False)
 
         seq = self.prot['HBB1_XENLA']
@@ -288,12 +297,14 @@ class Blast_Test(BlastBase):
         slice = blastmap(seq=seq_no_db)[seq_no_db]
         assert len(slice)
 
+
 class Blastx_Test(BlastBase):
+
     def test_blastx(self):
         "Testing blastx"
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         correct = [(143, 143, 429, 0.53146853146853146),
@@ -320,14 +331,14 @@ class Blastx_Test(BlastBase):
 
         results = blastmap[self.dna['gi|171854975|dbj|AB364477.1|']]
         check_results_relaxed_blastx(results, correct,
-                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
-                                t[2].pIdentity()), allowedLengthDiff=2)
+                      lambda t: (len(t[0]), len(t[1]), len(t[0].sequence),
+                                 t[2].pIdentity()), allowedLengthDiff=2)
 
     def test_blastx_rc(self):
         "Testing blastx with negative frames"
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         correct = [(143, 143, 429, 0.53146853146853146),
@@ -354,18 +365,18 @@ class Blastx_Test(BlastBase):
 
         results = blastmap[self.dna_rc['hbb1_mouse_RC']]
         check_results_relaxed_blastx(results, correct,
-                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
-                                t[2].pIdentity()), allowedLengthDiff=2)
-        
+                      lambda t: (len(t[0]), len(t[1]), len(t[0].sequence),
+                                 t[2].pIdentity()), allowedLengthDiff=2)
+
         results = blastmap[self.dna_rc['hbb1_mouse_RC_2']]
         check_results_relaxed_blastx(results, correct,
-                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
-                                t[2].pIdentity()), allowedLengthDiff=2)
-        
+                      lambda t: (len(t[0]), len(t[1]), len(t[0].sequence),
+                                 t[2].pIdentity()), allowedLengthDiff=2)
+
         results = blastmap[self.dna_rc['hbb1_mouse_RC_3']]
         check_results_relaxed_blastx(results, correct,
-                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
-                                t[2].pIdentity()), allowedLengthDiff=2)
+                      lambda t: (len(t[0]), len(t[1]), len(t[0].sequence),
+                                 t[2].pIdentity()), allowedLengthDiff=2)
 
     def test_repr(self):
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
@@ -373,8 +384,8 @@ class Blastx_Test(BlastBase):
 
     def test_blastx_no_blastp(self):
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         try:
@@ -408,7 +419,7 @@ class Blastx_Test(BlastBase):
         translationDB from the query sequence dict.
         """
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
+            raise SkipTest("no BLAST installed")
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
         results = blastmap(queryDB=self.dna)
 
@@ -421,7 +432,7 @@ class Blastx_Test(BlastBase):
         translationDB from a single input sequence.
         """
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
+            raise SkipTest("no BLAST installed")
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
@@ -429,14 +440,14 @@ class Blastx_Test(BlastBase):
 
         tdb = translationDB.get_translation_db(self.dna)
         assert tdb.annodb in results.seqDict.dicts
-        
+
     def test_translated_seqs_in_results(self):
         """
         Only NLMSASlices for the query sequence should show up in
         BlastxMapping.__getitem__, right?
         """
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
+            raise SkipTest("no BLAST installed")
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
@@ -450,7 +461,7 @@ class Blastx_Test(BlastBase):
 
     def test_non_consumable_results(self):
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
+            raise SkipTest("no BLAST installed")
         blastmap = blast.BlastxMapping(self.prot, verbose=False)
 
         query_seq = self.dna['gi|171854975|dbj|AB364477.1|']
@@ -462,24 +473,26 @@ class Blastx_Test(BlastBase):
         assert len(x), x
         assert x == y, "BlastxMapping.__getitem__ should return list"
 
+
 class Tblastn_Test(BlastBase):
+
     def test_tblastn(self):
         "tblastn test"
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         blastmap = blast.BlastMapping(self.dna, verbose=False)
         correct = [(144, 144, 432, 0.451)]
 
         result = blastmap[self.prot['HBB1_XENLA']]
         check_results_relaxed_blastx([result], correct,
-                      lambda t:(len(t[1]), len(t[0]), len(t[1].sequence),
-                                t[2].pIdentity()))
+                      lambda t: (len(t[1]), len(t[0]), len(t[1].sequence),
+                                 t[2].pIdentity()))
 
     def test_tblastn_no_blastx(self):
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         blastmap = blast.BlastMapping(self.prot)
         try:
             results = blastmap[self.dna['gi|171854975|dbj|AB364477.1|']]
@@ -490,8 +503,8 @@ class Tblastn_Test(BlastBase):
     def test_megablast(self):
         '''test megablast'''
         if not testutil.blast_enabled():
-            raise SkipTest, "no BLAST installed"
-        
+            raise SkipTest("no BLAST installed")
+
         blastmap = blast.MegablastMapping(self.dna, verbose=False)
         # must use copy of sequence to get "self matches" from NLMSA...
         query = seqdb.Sequence(str(self.dna['gi|171854975|dbj|AB364477.1|']),
@@ -506,7 +519,7 @@ class Tblastn_Test(BlastBase):
     def test_megablast_repr(self):
         blastmap = blast.MegablastMapping(self.dna, verbose=False)
         assert '<MegablastMapping' in repr(blastmap)
-        
+
     def test_bad_subject(self):
         "Test bad subjects"
 
@@ -514,26 +527,28 @@ class Tblastn_Test(BlastBase):
                          (65, 96, 99661, 99754),
                          (96, 108, 99778, 99814),
                          (108, 181, 99826, 100045))
-        
+
         fp = file(testutil.datafile('bad_tblastn.txt'))
         try:
             p = parse_blast.BlastHitParser()
             it = iter(correctCoords)
             for ival in p.parse_file(fp):
                 if not isinstance(ival, (CoordsGroupStart, CoordsGroupEnd)):
-                    assert (ival.src_start,ival.src_end,
-                            ival.dest_start,ival.dest_end) \
+                    assert (ival.src_start, ival.src_end,
+                            ival.dest_start, ival.dest_end) \
                         == it.next()
         finally:
             fp.close()
 
+
 class BlastParsers_Test(BlastBase):
+
     def test_blastp_parser(self):
         "Testing blastp parser"
         blastp_output = open(testutil.datafile('blastp_output.txt'), 'r')
 
-        seq_dict = { 'HBB1_XENLA' : self.prot['HBB1_XENLA'] }
-        prot_index = blast.BlastIDIndex(self.prot)        
+        seq_dict = {'HBB1_XENLA': self.prot['HBB1_XENLA']}
+        prot_index = blast.BlastIDIndex(self.prot)
         try:
             alignment = blast.read_blast_alignment(blastp_output, seq_dict,
                                                    prot_index)
@@ -547,7 +562,7 @@ class BlastParsers_Test(BlastBase):
         "Testing multiblast parser"
         multiblast_output = open(testutil.datafile('multiblast_output.txt'),
                                  'r')
-        
+
         try:
             al = cnestedlist.NLMSA('blasthits', 'memory', pairwiseMode=True,
                                    bidirectional=False)
@@ -597,8 +612,8 @@ class BlastParsers_Test(BlastBase):
     def test_blastx_parser(self):
         "Testing blastx parser"
         blastx_output = open(testutil.datafile('blastx_output.txt'), 'r')
-        seq_dict =  { 'gi|171854975|dbj|AB364477.1|' :
-                      self.dna['gi|171854975|dbj|AB364477.1|'] }
+        seq_dict = {'gi|171854975|dbj|AB364477.1|':
+                    self.dna['gi|171854975|dbj|AB364477.1|']}
         try:
             results = blast.read_blast_alignment(blastx_output,
                                                  seq_dict,
@@ -629,12 +644,12 @@ class BlastParsers_Test(BlastBase):
                    (146, 146, 438, 0.97945205479452058)]
 
         check_results([results], correct,
-                      lambda t:(len(t[0]), len(t[1]), len(t[0].sequence),
-                                t[2].pIdentity()))
+                      lambda t: (len(t[0]), len(t[1]), len(t[0].sequence),
+                                 t[2].pIdentity()))
 
     def test_tblastn_parser(self):
         "Testing tblastn parser"
-        seq_dict = { 'HBB1_XENLA' : self.prot['HBB1_XENLA'] }
+        seq_dict = {'HBB1_XENLA': self.prot['HBB1_XENLA']}
         dna_db = blast.BlastIDIndex(self.dna)
         tblastn_output = open(testutil.datafile('tblastn_output.txt'), 'r')
         try:
@@ -644,7 +659,7 @@ class BlastParsers_Test(BlastBase):
         finally:
             tblastn_output.close()
         src, dest, edge = iter(result.edges()).next()
-        
+
         self.assertEqual(str(src),
             'LTAHDRQLINSTWGKLCAKTIGQEALGRLLWTYPWTQRYFSSFGNLNSADAVFHNEAVAAHGEK'
             'VVTSIGEAIKHMDDIKGYYAQLSKYHSETLHVDPLNFKRFGGCLSIALARHFHEEYTPELHAAY'
@@ -661,14 +676,14 @@ class BlastParsers_Test(BlastBase):
             'TCAGTGAGCTCCACTGTGACAAGCTCCATGTGGATCCTGAGAACTTCAGGCTCCTGGGCAATAT'
             'GATCGTGATTGTGCTGGGCCACCACCTGGGCAAGGATTTCACCCCCGCTGCACAGGCTGCCTTC'
             'CAGAAGGTGATGGCTGGAGTGGCCACTGCCCTGGCTCACAAGTACCAC')
-        
+
         self.assertAlmostEqual(edge.pIdentity(), 0.451, 3)
 
 
 # not used currently
 def all_vs_all_blast_save():
     """
-    Creates the blast files used during testing. 
+    Creates the blast files used during testing.
     Must be called before running the tests
     """
 
@@ -679,15 +694,16 @@ def all_vs_all_blast_save():
     all_vs_all = testutil.tempdatafile('all_vs_all')
 
     sp = seqdb.BlastDB(sp_hbb1)
-    msa = cnestedlist.NLMSA(all_vs_all ,mode='w', pairwiseMode=True, bidirectional=False)
-    
+    msa = cnestedlist.NLMSA(all_vs_all, mode='w', pairwiseMode=True,
+                            bidirectional=False)
+
     # get strong homologs, save alignment in msa for every sequence
     reader = islice(sp.iteritems(), None)
     for id, s in reader:
-        sp.blast(s, msa, expmax=1e-10, verbose=False) 
+        sp.blast(s, msa, expmax=1e-10, verbose=False)
 
     # done constructing the alignment, so build the alignment db indexes
-    msa.build(saveSeqDict=True) 
+    msa.build(saveSeqDict=True)
 
     db = msa.seqDict.dicts.keys()[0]
     working, result = {}, {}
@@ -695,10 +711,13 @@ def all_vs_all_blast_save():
         edges = msa[k].edges(minAlignSize=12, pIdentityMin=0.5)
         for t in edges:
             assert len(t[0]) >= 12
-        tmpdict = dict(map(lambda x:(x, None), [(str(t[0]), str(t[1]), t[2].pIdentity(trapOverflow=False)) for t in edges]))
+        tmpdict = dict(map(lambda x: (x, None),
+                           [(str(t[0]), str(t[1]),
+                             t[2].pIdentity(trapOverflow=False)) for t in
+                            edges]))
         result[repr(k)] = tmpdict.keys()
         result[repr(k)].sort()
-    
+
     # save it into worldbase
     data = testutil.TestData()
     data.__doc__ = 'sp_allvall'
@@ -726,16 +745,13 @@ blastp_correct_results = \
          ('HBB1_XENLA', 'HBB1_UROHA', 0.3776223776223776),
          ('HBB1_XENLA', 'HBB1_VAREX', 0.5174825174825175),
          ('HBB1_XENLA', 'HBB1_XENBO', 0.96551724137931039),
-         ('HBB1_XENLA', 'HBB1_XENLA', 1.0), 
+         ('HBB1_XENLA', 'HBB1_XENLA', 1.0),
          ('HBB1_XENLA', 'HBB1_XENTR', 0.75),
          ('HBB1_XENLA', 'MYG_DIDMA', 0.32075471698113206),
          ('HBB1_XENLA', 'MYG_ELEMA', 0.26415094339622641),
          ('HBB1_XENLA', 'MYG_ERIEU', 0.32075471698113206),
          ('HBB1_XENLA', 'MYG_ESCGI', 0.28282828282828282),
          ('HBB1_XENLA', 'MYG_GALCR', 0.32075471698113206)]
-
-
-
 
 
 correct_multiblast_results = \
@@ -1156,4 +1172,3 @@ correct_multiblast_results = \
 
 if __name__ == '__main__':
     PygrTestProgram(verbosity=2)
-

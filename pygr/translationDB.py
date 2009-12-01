@@ -1,6 +1,7 @@
 from seqdb import SequenceDB, BasicSeqInfoDict
 from annotation import AnnotationDB, TranslationAnnot, TranslationAnnotSlice
-import classutil, sequence
+import classutil
+import sequence
 import UserDict
 
 
@@ -9,6 +10,7 @@ class SeqTranslator(sequence.SequenceBase):
     Slicing returns TranslationAnnotSlice of the appropriate
     TranslationAnnot representing one of the six possible frames for
     this sequence."""
+
     def __init__(self, db, id, reversePath=None):
         self.id = id
         sequence.SequenceBase.__init__(self)
@@ -28,7 +30,7 @@ class SeqTranslator(sequence.SequenceBase):
         stop = k.stop                   # deal with [start:] slices
         if stop is None:
             stop = self.stop
-            
+
         annoID = self._get_anno_id(start)
         a = self.db.annodb[annoID] # get TranslationAnnot object
         s = a.sequence # corresponding nucleotide region
@@ -70,6 +72,7 @@ class SeqTranslator(sequence.SequenceBase):
     def __repr__(self):
         return 'SeqTranslator(' + sequence.SequenceBase.__repr__(self) + ')'
 
+
 class TranslationDB(SequenceDB):
     """Provides an automatic translation interface for a nucleotide sequence
     database: slicing of top-level sequence objects will return the
@@ -87,22 +90,22 @@ class TranslationDB(SequenceDB):
         self.annodb = AnnotationDB(SixFrameInfo(seqDB), seqDB,
                                    itemClass=TranslationAnnot,
                                    itemSliceClass=TranslationAnnotSlice,
-                                   sliceAttrDict=dict(id=0,start=1,stop=2),
+                                   sliceAttrDict=dict(id=0, start=1, stop=2),
                                    checkFirstID=False)
         SequenceDB.__init__(self, **kwargs)
 
 
-
 class SixFrameInfo(object, UserDict.DictMixin):
     """Dictionary of slice info for all six frames of each seq in seqDB. """
+
     def __init__(self, seqDB):
         self.seqDB = seqDB
 
     def __getitem__(self, k):
         "convert ID of form seqID:frame into slice info tuple"
         i = k.rfind(':')
-        if i<0:
-            raise KeyError('invalid TranslationInfo key: %s' % (k,))
+        if i < 0:
+            raise KeyError('invalid TranslationInfo key: %s' % (k, ))
         seqID = k[:i]
         length = len(self.seqDB[seqID]) # sequence length
         frame = int(k[i+1:])
@@ -125,6 +128,7 @@ class SixFrameInfo(object, UserDict.DictMixin):
     # these methods should not be implemented for read-only database.
     clear = setdefault = pop = popitem = copy = update = \
             classutil.read_only_error
+
 
 def get_translation_db(seqDB):
     """Use cached seqDB.translationDB if already present, or create it """

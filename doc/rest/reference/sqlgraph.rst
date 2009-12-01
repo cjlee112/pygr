@@ -75,7 +75,7 @@ This class assumes that the database table has a primary key,
 which is used as the key value for the dictionary.  For tables
 with no primary key see other variants below.
 
-.. class:: SQLTable(name, cursor=None, itemClass=None, attrAlias=None, clusterKey=None, createTable=None, graph=None, maxCache=None, arraysize=1024, itemSliceClass=None, dropIfExists=False, serverInfo=None, autoGC=True, orderBy=None, writeable=False, iterSQL=None, iterColumns=None, **kwargs)
+.. class:: SQLTable(name, cursor=None, itemClass=None, attrAlias=None, clusterKey=None, createTable=None, graph=None, maxCache=None, arraysize=1024, itemSliceClass=None, dropIfExists=False, serverInfo=None, autoGC=True, orderBy=None, writeable=False, iterSQL=None, iterColumns=None, primaryKey=None, **kwargs)
 
    Open a connection to an SQL table specified by *name*.
 
@@ -137,6 +137,13 @@ with no primary key see other variants below.
    *iterColumns* must be a list of the column names to be filled into
    your *iterSQL* ``WHERE`` clause as its ``%s`` fields.  For the 
    example above, ``iterColumns=["seq_id"]``.
+
+   *primaryKey*, if not None, specifies the column to use as a 
+   primary key for looking up key values passed to this dictionary
+   interface.  This is only needed either if the SQL table lacks
+   a primary key (if it has a primary key, :class:`SQLTable` will
+   discover that automatically), or if you wish to *override* the
+   actual primary key provided by the SQL table.
 
    *maxCache*, if not None, specifies the maximum number of database
    objects to keep in the cache.  For large databases, this is an important

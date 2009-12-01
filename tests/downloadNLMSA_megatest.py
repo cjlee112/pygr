@@ -1,9 +1,12 @@
+import os
+import tempfile
+import time
 import unittest
-from testlib import testutil, PygrTestProgram
 
+from testlib import testutil, PygrTestProgram
 from pygr import nlmsa_utils
 import pygr.Data
-import os, tempfile, time
+
 
 def rm_recursive(top):
     'recursively remove top and everything in it!'
@@ -14,14 +17,18 @@ def rm_recursive(top):
             os.rmdir(os.path.join(root, name))
     os.rmdir(top)
 
+
 #'http://biodb.bioinformatics.ucla.edu/PYGRDATA/dm2_multiz9way.txt.gz',
 class NLMSADownload_Test(unittest.TestCase):
-    '''try to save and build via download catalog auto-constructed from biodb site'''
+    '''try to save and build via download catalog auto-constructed
+    from biodb site'''
+
     def setUp(self, url='http://biodb.bioinformatics.ucla.edu/PYGRDATA/',
                  testDir = tempfile.gettempdir()):
         self.url = url
         import random
-        self.testDir = os.path.join(testDir,'test%d' % random.randint(1,99999))
+        self.testDir = os.path.join(testDir, 'test%d' % random.randint(1,
+                                                                       99999))
         self.pygrdatapath = ','.join([self.testDir,
                                'http://biodb2.bioinformatics.ucla.edu:5000'])
         'create pygr.Data entries for all NLMSAs on biodb/PYGRDATA site'
@@ -29,6 +36,7 @@ class NLMSADownload_Test(unittest.TestCase):
         pygr.Data.update(self.pygrdatapath) # set our desired path
         from pygr.apps.catalog_downloads import save_NLMSA_downloaders
         save_NLMSA_downloaders(self.url)
+
     def test_download(self):
         'Test downloading NLMSA data'
         os.environ['PYGRDATADOWNLOAD'] = self.testDir
@@ -44,6 +52,7 @@ class NLMSADownload_Test(unittest.TestCase):
         chr4 = msa.seqDict['dm2.chr4']
         result = msa[chr4[:10000]]
         assert len(result) == 9
+
     def tearDown(self):
         'clean up our temporary directory, restore pygr.Data path'
         rm_recursive(self.testDir)
@@ -54,4 +63,3 @@ class NLMSADownload_Test(unittest.TestCase):
 
 if __name__ == '__main__':
     PygrTestProgram(verbosity=2)
-

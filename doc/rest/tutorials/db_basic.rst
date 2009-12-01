@@ -156,11 +156,16 @@ object with the desired table name::
    None
 
 As you can see, :class:`sqlgraph.SQLTable` has automatically analyzed
-the table's schema, determining that the table lacks a primary key.
-We can force it to use ``name`` as the default column for looking up
-identifiers, by simply setting the ``primary_key`` attribute::
+the table's schema, determining that UCSC's table lacks a primary key.
+We can force :class:`sqlgraph.SQLTable` to use 
+``name`` as the default column for looking up
+identifiers, by simply passing it the ``primaryKey`` argument::
 
-   >>> genes.primary_key = 'name'
+   >>> genes = sqlgraph.SQLTable('hg18.knownGene', serverInfo=serverInfo,
+   ...                           primaryKey='name')
+   ...
+   >>> genes.primary_key
+   'name'
 
 Now we can look up rows directly; if a given query found more than
 one row, it would raise a ``KeyError``::
@@ -214,9 +219,9 @@ Finally, we just tell :class:`sqlgraph.SQLTable` to use our new
 row class::
 
    >>> txInfo = sqlgraph.SQLTable('hg18.knownGene', serverInfo=serverInfo,
-   ...                             itemClass=UCSCSeqIntervalRow)
+   ...                            itemClass=UCSCSeqIntervalRow,
+   ...                            primaryKey='name')
    ...
-   >>> txInfo.primary_key = 'name'
    >>> tx = txInfo['uc009vjh.1']
    >>> tx.orientation
    1
