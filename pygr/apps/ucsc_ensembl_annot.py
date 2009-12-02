@@ -52,8 +52,14 @@ et.rank=%s''' % (ens_database, ens_database, ens_database, transcript_id,
     return tbl.cursor.fetchall()[0][0]
 
 
+def get_ensembl_db_name(version, prefix='homo_sapiens_core'):
+    global ens_server
+    cursor = ens_server.cursor()
+    cursor.execute("show databases like '%s_%d_%%'" % (prefix, version))
+    return cursor.fetchall()[0][0]
+
+
 hg_version = 18
-ensembl_postfixes = {54: '54_36p', 55: '55_37'} # FIXME: is there a cleaner way?
 
 
 human_seq = worldbase('Bio.Seq.Genome.HUMAN.hg%d' % hg_version)
@@ -80,7 +86,7 @@ ucsc_versions = sqlgraph.SQLTable('hgFixed.trackVersion',
                                   serverInfo=ucsc_server,
                                   primaryKey='db')
 ens_version = int(ucsc_versions['hg%d' % hg_version].version)
-ens_database = 'homo_sapiens_core_%s' % ensembl_postfixes[ens_version]
+ens_database = get_ensembl_db_name(ens_version)
 
 #
 # Transcript annotations
