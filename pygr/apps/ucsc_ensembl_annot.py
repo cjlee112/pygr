@@ -24,11 +24,7 @@ def get_transcript_exons(trans_tuple):
     exon_ends = trans_tuple.exonEnds.split(',')[:exon_count]
     exons = []
     for i in range(0, exon_count):
-        try:
-            ens_ex_id = get_ensembl_exon_id(transcript_id, i + 1)
-        except:
-            print 'Failed to get Ensembl exon ID, using transcript_id:rank'
-            ens_ex_id = transcript_id + ':' + str(i + 1)
+        ens_ex_id = get_ensembl_exon_id(transcript_id, i + 1)
         e = (
             ens_ex_id,
             chromosome,
@@ -44,14 +40,16 @@ def get_ensembl_exon_id(transcript_id, rank):
     data to obtain Ensembl stable exon ID from their database.'''
     global ens_server, ens_database
     ens_table = ens_database + '.exon_stable_id'
+    # FIXME: do all this with GraphView instead?
     tbl = sqlgraph.SQLTable(ens_table, serverInfo=ens_server)
-    # FIXME: at the moment, the line below throws "No database selected"!
-    tbl.cursor.execute('''\
-select exon.stable_id from exon_stable_id exon, transcript_stable_id trans,
-exon_transcript et where exon.exon_id=et.exon_id and
-trans.transcript_id=et.transcript_id and trans.stable_id=%s and et.rank=%s''' \
-                       % (transcript_id, rank))
-    return tbl.cursor.fetchall()
+    query = '''\
+select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
+trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
+trans.transcript_id=et.transcript_id and trans.stable_id='%s' and \
+et.rank=%s''' % (ens_database, ens_database, ens_database, transcript_id,
+                 rank)
+    tbl.cursor.execute(query)
+    return tbl.cursor.fetchall()[0][0]
 
 
 hg_version = 18
@@ -75,7 +73,7 @@ ucsc_ensGene_gene = sqlgraph.SQLTable('hg%d.ensGene' % hg_version,
                                       itemClass=UCSCSeqIntervalRow)
 ucsc_ensGtp = sqlgraph.SQLTable('hg%d.ensGtp' % hg_version,
                                 serverInfo=ucsc_server,
-                                primaryKey='transcript')
+                                primaryKey='protein')
 
 # Obtain version mapping from UCSC
 ucsc_versions = sqlgraph.SQLTable('hgFixed.trackVersion',
@@ -115,10 +113,18 @@ except KeyError:
 #
 # Protein annotation
 #
-# FIXME: in order to get protein annotation we need to map protein ID
-# to transcript ID using ucsc_ensGtp, then get all the necessary information
-# from ucsc_ensGene. This could be done on the server side using a simple
-# SQL join - but how to have SQLTable refer to a join rather than a real table?
+protein_transcripts = sqlgraph.MapView(ucsc_ensGtp, ucsc_ensGene_trans,
+                                       'select transcript from hg%d.ensGtp \
+                                       where protein=%%s' % hg_version,
+                                       inverseSQL='select protein from \
+                                       hg%d.ensGtp where transcript=%%s' % \
+                                       hg_version)
+# FIXME: create a wrapper for trans_db which uses the map
+print '\nExample protein annotation:'
+prot_id = 'ENSP00000372525'
+trans_id = protein_transcripts[ucsc_ensGtp[prot_id]].name
+print prot_id, repr(trans_db[trans_id]), \
+        repr(trans_db[trans_id].sequence)
 
 #
 # Exon annotation
@@ -132,5 +138,5 @@ for tr in ucsc_ensGene_trans:
         exon_db.new_annotation(exon[0], exon)
     break   # FIXME: temporary - saves time during testing
 print '\nExample exon annotation:'
-print 'ENST00000000233:4', repr(exon_db['ENST00000000233:4']), \
-        repr(exon_db['ENST00000000233:4'].sequence)
+print 'ENSE00000720378', repr(exon_db['ENSE00000720378']), \
+        repr(exon_db['ENSE00000720378'].sequence)
