@@ -549,6 +549,9 @@ class SQLTableBase(object, UserDict.DictMixin):
             self.arraysize = arraysize
             cursor.arraysize = arraysize
         self.get_table_schema() # get schema of columns to serve as attrs
+        if primaryKey is not None:
+            self.primary_key = primaryKey
+            self.primaryKey = primaryKey
         self.data = {} # map of all attributes, including aliases
         for icol, field in enumerate(self.columnName):
             self.data[field] = icol # 1st add mappings to columns
@@ -571,9 +574,6 @@ class SQLTableBase(object, UserDict.DictMixin):
             self.clusterKey = clusterKey
         if serverInfo is not None:
             self.serverInfo = serverInfo
-        if primaryKey is not None:
-            self.primary_key = primaryKey
-            self.primaryKey = primaryKey
 
     def __len__(self):
         self._select(selectCols = 'count(*)')
