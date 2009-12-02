@@ -1,24 +1,29 @@
 """
 Pygr XMLRPC server test. Recognized flags:
 
---port=PORT 
+--port=PORT
     the port for the server
 
 --port-file
     the filename to write the port info out to
 
---pygrdatapath=PYGRDATAPATH 
+--pygrdatapath=PYGRDATAPATH
     the pygr.Data directory
 
---resources=RESOURCE1:RESOURCE2:RESOURCE3 
+--resources=RESOURCE1:RESOURCE2:RESOURCE3
     a colon separated list of resource names
 
---downloadDB=DOWNLOADDB 
+--downloadDB=DOWNLOADDB
     the shelve used
 
 """
-import new, sys, os
-import pathfix, testoptions, testutil
+import new
+import os
+import sys
+
+import pathfix
+import testoptions
+import testutil
 from pygr import logger
 from pygr import metabase
 
@@ -32,7 +37,7 @@ if options.pygrdatapath: # load from specified path
     mdb = metabase.MetabaseList(options.pygrdatapath)
 else: # use default PYGRDATAPATH
     mdb = metabase.MetabaseList()
-    
+
 
 # disables debug messages at zero verbosity
 if options.verbosity == 0:
@@ -59,11 +64,13 @@ if options.port_file:
     fp.write("%d" % (xmlrpc.port))
     fp.close()
 
+
 # main loop
 def serve_forever(self):
     self.keepRunning = True
     while self.keepRunning:
         self.handle_request()
+
 
 # exit handler
 def exit_now(self):
@@ -79,4 +86,4 @@ xmlrpc.server.register_function(exit_handler)
 
 # starts the server and never returns...
 print 'running server on %s:%s' % (xmlrpc.host, xmlrpc.port)
-serve_forever(xmlrpc.server) 
+serve_forever(xmlrpc.server)

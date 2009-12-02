@@ -2,7 +2,9 @@ import unittest
 from testlib import testutil, PygrTestProgram
 from pygr import worldbase
 
+
 class RestartIterator_Test(unittest.TestCase):
+
     def setUp(self):
         self.msa = worldbase("Bio.MSA.UCSC.dm3_multiz15way")
         genome = worldbase("Bio.Seq.Genome.DROME.dm3")
@@ -23,4 +25,3 @@ class RestartIterator_Test(unittest.TestCase):
 
 if __name__ == '__main__':
     PygrTestProgram(verbosity=2)
-

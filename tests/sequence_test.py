@@ -2,28 +2,29 @@ import unittest
 from testlib import testutil, PygrTestProgram
 from pygr import sequence
 
+
 class Sequence_Test(unittest.TestCase):
     'basic sequence class tests'
-    
+
     def setUp(self):
-        self.seq = sequence.Sequence('atttgactatgctccag', 'foo')     
-    
+        self.seq = sequence.Sequence('atttgactatgctccag', 'foo')
+
     def test_length(self):
         "Sequence lenght"
         assert len(self.seq) == 17
-    
+
     def test_slice(self):
         "Sequence slice"
         assert str(self.seq[5:10]) == 'actat'
-    
+
     def test_slicerc(self):
         "Sequence slice then reverse complement"
         assert str(-(self.seq[5:10])) == 'atagt'
-    
+
     def test_rcslice(self):
         "Sequence reverse complement then slice"
         assert str((-self.seq)[5:10]) == 'gcata'
-    
+
     def test_truncate(self):
         "Sequence truncate"
         assert str(self.seq[-202020202:5]) == 'atttg'
@@ -47,7 +48,7 @@ class Sequence_Test(unittest.TestCase):
             raise ValueError('failed to trap out of bounds slice')
         except IndexError:
             pass
-    
+
     def test_rctruncate(self):
         "Sequence reverse complement truncate"
         seq= -self.seq
@@ -72,7 +73,7 @@ class Sequence_Test(unittest.TestCase):
             raise ValueError('failed to trap out of bounds slice')
         except IndexError:
             pass
-    
+
     def test_join(self):
         "Sequence join"
         assert str(self.seq[5:15] * self.seq[8:]) == 'atgctcc'
@@ -94,7 +95,7 @@ class Sequence_Test(unittest.TestCase):
 #from pygrdata_test import PygrSwissprotBase
 class Blast_Test(PygrSwissprotBase):
     'test basic blast functionality'
-    @skip_errors(OSError,KeyError)
+    @skip_errors(OSError, KeyError)
     def setup(self):
         PygrSwissprotBase.setup(self)
         import pygr.Data
@@ -106,17 +107,17 @@ class Blast_Test(PygrSwissprotBase):
     def blast(self):
         hbb = self.sp['HBB1_TORMA']
         hits = self.sp.blast(hbb)
-        edges = hits[hbb].edges(maxgap=1,maxinsert=1,
+        edges = hits[hbb].edges(maxgap=1, maxinsert=1,
                                 minAlignSize=14,pIdentityMin=0.5)
         for t in edges:
             assert len(t[0])>=14, 'result shorter than minAlignSize!'
-        result = [(t[0],t[1],t[2].pIdentity()) for t in edges]
+        result = [(t[0], t[1], t[2].pIdentity()) for t in edges]
         store = PygrDataTextFile(os.path.join('results', 'seqdb1.pickle'))
         correct = store['hbb blast 1']
-        assert approximate_cmp(result,correct,.0001) == 0, 'blast results should match'
-        result = [(t[0],t[1],t[2].pIdentity()) for t in hits[hbb].generateSeqEnds()]
+        assert approximate_cmp(result, correct, .0001) == 0, 'blast results should match'
+        result = [(t[0], t[1], t[2].pIdentity()) for t in hits[hbb].generateSeqEnds()]
         correct = store['hbb blast 2']
-        assert approximate_cmp(result,correct,.0001) == 0, 'blast results should match'
+        assert approximate_cmp(result, correct, .0001) == 0, 'blast results should match'
         trypsin = self.sp['PRCA_ANASP']
         try:
             hits[trypsin]
@@ -125,16 +126,16 @@ class Blast_Test(PygrSwissprotBase):
             pass
 class Blast_reindex_untest(Blast_Test):
     'test building blast indexes under a different name'
-    @skip_errors(OSError,KeyError)
+    @skip_errors(OSError, KeyError)
     def setup(self):
         PygrSwissprotBase.setup(self)
         import pygr.Data
         self.sp = pygr.Data.Bio.Seq.Swissprot.sp42()
         import os
-        blastIndexPath = os.path.join(os.path.dirname(self.sp.filepath),'wikiwacky')
+        blastIndexPath = os.path.join(os.path.dirname(self.sp.filepath), 'wikiwacky')
         self.sp.formatdb()
         #self.sp.formatdb(blastIndexPath) # FORCE IT TO STORE INDEX WITH DIFFERENT NAME
-        #print 'blastIndexPath is',self.sp.blastIndexPath
+        #print 'blastIndexPath is', self.sp.blastIndexPath
 
 '''
 
