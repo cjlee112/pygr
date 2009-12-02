@@ -42,8 +42,8 @@ def catalog_downloads(url, fileFilter, fileNamer, fileDocumenter, klass):
 def save_NLMSA_downloaders(url, fileFilter=lambda x: x.endswith(".txt.gz"),
                            resourceStem='Bio.MSA.UCSC.',
                            fileDocumenter=None, fileNamer=None):
-    'save NLMSA downloader / builder objects for a set
-    of downloadable textdump files'
+    '''save NLMSA downloader / builder objects for a set
+    of downloadable textdump files'''
     if fileDocumenter is None:
         fileDocumenter = lambda x: 'NLMSA alignment ' + x
     if fileNamer is None: # a default resource naming function
