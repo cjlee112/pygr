@@ -3,7 +3,7 @@ Section: python
 Priority: optional
 Maintainer: Debian Python Modules Team <python-modules-team@lists.alioth.debian.org>
 Build-Depends: debhelper (>= 5.0.37.2)
-Build-Depends-Indep: python-all-dev, python-central (>= 0.5), python-sphinx
+Build-Depends-Indep: python-all-dev, python-central (>= 0.5), python-epydoc, python-sphinx
 XS-Python-Version: all
 Standards-Version: 3.7.2
 

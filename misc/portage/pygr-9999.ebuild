@@ -17,17 +17,18 @@ KEYWORDS="~amd64 ~x86"
 IUSE="doc mysql sqlite"
 
 DEPEND=">=dev-python/pyrex-0.9.8
-	doc? ( dev-python/sphinx )"
+	doc? ( dev-python/epydoc dev-python/sphinx )"
 RDEPEND="mysql? ( dev-python/mysql-python )
 	sqlite? ( || ( dev-python/pysqlite >=dev-lang/python-2.5 ) )"
 
 src_install() {
 	distutils_src_install
 
-	dodoc README COPYING pygrrc.example
+	dodoc README.txt LICENSE.txt misc/pygrrc.example
 	if use doc; then
 		cd doc
-		emake newdoc
+		emake
+		emake epydocs
 		dohtml -r html_new/*
 	fi
 }

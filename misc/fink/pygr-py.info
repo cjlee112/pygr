@@ -1,7 +1,7 @@
 Info2: <<
 
 Package: pygr-py%type_pkg[python]
-Version: 0.8.0.beta1
+Version: 0.8.0
 Revision: 1
 Distribution: (%type_pkg[python] = 23) 10.3, (%type_pkg[python] = 23) 10.4
 Maintainer: Christopher Lee <leec@chem.ucla.edu>
@@ -9,14 +9,14 @@ Type: python (2.3 2.4 2.5 2.6)
 Depends: python%type_pkg[python] | python%type_pkg[python]-nox
 Suggests: mysql-python-py%type_pkg[python], (%type_pkg[python] << 25) pysqlite2-py%type_pkg[python], ncbitools
 Source: http://pygr.googlecode.com/files/pygr-%v.tar.gz
-Source-MD5: 66c52f52834d4b02ff0d02b63b4ac09f
+Source-MD5: 30d406761fdd6b6b9c4badefb7ad56e2
 CompileScript: <<
  %p/bin/python%type_raw[python] setup.py build
 <<
 InstallScript: <<
  %p/bin/python%type_raw[python] setup.py install -O1 --root %d
 <<
-DocFiles: README.txt LICENSE.txt
+DocFiles: README.txt LICENSE.txt misc/pygrrc.example
 Description: Python graph-database toolkit
 DescDetail: <<
  Pygr is an open source software project used to develop graph database
