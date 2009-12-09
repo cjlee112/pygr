@@ -26,3 +26,6 @@ mafDir = /result/pygr_megatest/maf_data3
 msaDir = /result/pygr_megatest/maf_test3
 seqDir = /result/pygr_megatest/seq_data3
 
+[megatests_download]
+httpdServedFile = /data/pygr/dl/dm2_multiz9way.txt.gz
+
