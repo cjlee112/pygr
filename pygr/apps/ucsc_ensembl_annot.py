@@ -52,6 +52,23 @@ et.rank=%s''' % (ens_database, ens_database, ens_database, transcript_id,
     return tbl.cursor.fetchall()[0][0]
 
 
+def get_ensembl_transcript_id_rank(exon_id):
+    '''Use Ensembl stable exon ID to obtain Ensembl stable transcript
+    ID and rank, which can be used to extract exon information
+    from UCSC data.'''
+    global ens_server, ens_database
+    ens_table = ens_database + '.exon_stable_id'
+    # FIXME: do all this with GraphView instead?
+    tbl = sqlgraph.SQLTable(ens_table, serverInfo=ens_server)
+    query = """\
+select trans.stable_id, et.rank from %s.exon_stable_id exon, \
+%s.transcript_stable_id trans, %s.exon_transcript et where \
+exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
+exon.stable_id='%s'""" % (ens_database, ens_database, ens_database, exon_id)
+    tbl.cursor.execute(query)
+    return tbl.cursor.fetchall()[0]
+
+
 def get_ensembl_db_name(version, prefix='homo_sapiens_core'):
     global ens_server
     cursor = ens_server.cursor()
@@ -135,14 +152,28 @@ print prot_id, repr(trans_db[trans_id]), \
 #
 # Exon annotation
 #
-exon_db = annotation.AnnotationDB({}, human_seq,
-                                  sliceAttrDict=dict(id=1, start=2, stop=3,
-                                                     orientation=4))
-for tr in ucsc_ensGene_trans:
-    transcript_exons = get_transcript_exons(ucsc_ensGene_trans[tr])
-    for exon in transcript_exons:
-        exon_db.new_annotation(exon[0], exon)
-    break   # FIXME: temporary - saves time during testing
+class UCSCEnsemblExonAnnotationDB(object):
+    
+    def __init__(self, seq_data, trans_db):
+        self.local_db = annotation.AnnotationDB({}, human_seq,
+                                                sliceAttrDict=dict(id=1,
+                                                                   start=2,
+                                                                   stop=3,
+                                                                orientation=4))
+        self.trans_db = trans_db
+
+    def __getitem__(self, k):
+        try:
+            return self.local_db[k]
+        except KeyError:
+            tid, rank = get_ensembl_transcript_id_rank(k)
+            transcript_exons = get_transcript_exons(self.trans_db[tid])
+            for exon in transcript_exons:
+                self.local_db.new_annotation(exon[0], exon)
+            return self.local_db[k]
+
+
+exon_db = UCSCEnsemblExonAnnotationDB(human_seq, ucsc_ensGene_trans)
 print '\nExample exon annotation:'
 print 'ENSE00000720378', repr(exon_db['ENSE00000720378']), \
         repr(exon_db['ENSE00000720378'].sequence)
