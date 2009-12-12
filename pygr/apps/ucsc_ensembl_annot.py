@@ -152,28 +152,34 @@ print prot_id, repr(trans_db[trans_id]), \
 #
 # Exon annotation
 #
-class UCSCEnsemblExonAnnotationDB(object):
-    
-    def __init__(self, seq_data, trans_db):
-        self.local_db = annotation.AnnotationDB({}, human_seq,
-                                                sliceAttrDict=dict(id=1,
-                                                                   start=2,
-                                                                   stop=3,
-                                                                orientation=4))
-        self.trans_db = trans_db
+
+# TODO: Clean up exon-related get_ensembl_...() functions:
+#  - simplify lookups?
+#  - use GraphView or MapView?
+
+class EnsemblOnDemandSliceDB(object):
+
+    def __init__(self, transcript_db):
+        self.data = {}
+        self.trans_db = transcript_db
 
     def __getitem__(self, k):
         try:
-            return self.local_db[k]
+            return self.data[k]
         except KeyError:
+            # Not cached yet, extract the exon from transcript data
             tid, rank = get_ensembl_transcript_id_rank(k)
             transcript_exons = get_transcript_exons(self.trans_db[tid])
+            # Cache all exons from that transcript to save time in the future.
             for exon in transcript_exons:
-                self.local_db.new_annotation(exon[0], exon)
-            return self.local_db[k]
+                self.data[exon[0]] = exon
+            return self.data[k]
 
 
-exon_db = UCSCEnsemblExonAnnotationDB(human_seq, ucsc_ensGene_trans)
+exon_slicedb = EnsemblOnDemandSliceDB(ucsc_ensGene_trans)
+exon_db = annotation.AnnotationDB(exon_slicedb, human_seq,
+                                  sliceAttrDict=dict(id=1, start=2, stop=3,
+                                                     orientation=4))
 print '\nExample exon annotation:'
 print 'ENSE00000720378', repr(exon_db['ENSE00000720378']), \
         repr(exon_db['ENSE00000720378'].sequence)
