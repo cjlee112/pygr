@@ -23,10 +23,10 @@ def get_transcript_exons(trans_tuple):
     exon_starts = trans_tuple.exonStarts.split(',')[:exon_count]
     exon_ends = trans_tuple.exonEnds.split(',')[:exon_count]
     exons = []
+    exon_ids = get_ensembl_exon_ids(transcript_id)
     for i in range(0, exon_count):
-        ens_ex_id = get_ensembl_exon_id(transcript_id, i + 1)
         e = (
-            ens_ex_id,
+            exon_ids[i][0],
             chromosome,
             exon_starts[i],
             exon_ends[i],
@@ -35,21 +35,20 @@ def get_transcript_exons(trans_tuple):
     return exons
 
 
-def get_ensembl_exon_id(transcript_id, rank):
-    '''Use Ensembl stable transcript ID and rank extracted from UCSC
-    data to obtain Ensembl stable exon ID from their database.'''
+def get_ensembl_exon_ids(transcript_id):
+    '''Obtain a list of stable IDs of exons associated with the
+    specified transcript, ordered by rank.'''
     global ens_server, ens_database
     ens_table = ens_database + '.exon_stable_id'
     # FIXME: do all this with GraphView instead?
     tbl = sqlgraph.SQLTable(ens_table, serverInfo=ens_server)
-    query = '''\
+    query = """\
 select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
 trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
-trans.transcript_id=et.transcript_id and trans.stable_id='%s' and \
-et.rank=%s''' % (ens_database, ens_database, ens_database, transcript_id,
-                 rank)
+trans.transcript_id=et.transcript_id and trans.stable_id='%s' order by \
+et.rank""" % (ens_database, ens_database, ens_database, transcript_id)
     tbl.cursor.execute(query)
-    return tbl.cursor.fetchall()[0][0]
+    return tbl.cursor.fetchall()
 
 
 def get_ensembl_transcript_id(exon_id):
@@ -57,7 +56,7 @@ def get_ensembl_transcript_id(exon_id):
     ID, which can be used to extract exon information from UCSC data.'''
     global ens_server, ens_database
     ens_table = ens_database + '.exon_stable_id'
-    # FIXME: do all this with GraphView instead?
+    # FIXME: do all this with MapView instead?
     tbl = sqlgraph.SQLTable(ens_table, serverInfo=ens_server)
     query = """\
 select trans.stable_id from %s.exon_stable_id exon, \
