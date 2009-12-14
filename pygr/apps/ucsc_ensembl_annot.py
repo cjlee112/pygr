@@ -39,32 +39,30 @@ def get_ensembl_exon_ids(transcript_id):
     '''Obtain a list of stable IDs of exons associated with the
     specified transcript, ordered by rank.'''
     global ens_server, ens_database
-    ens_table = ens_database + '.exon_stable_id'
     # FIXME: do all this with GraphView instead?
-    tbl = sqlgraph.SQLTable(ens_table, serverInfo=ens_server)
+    cursor = ens_server.cursor()
     query = """\
 select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
 trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
 trans.transcript_id=et.transcript_id and trans.stable_id='%s' order by \
 et.rank""" % (ens_database, ens_database, ens_database, transcript_id)
-    tbl.cursor.execute(query)
-    return tbl.cursor.fetchall()
+    cursor.execute(query)
+    return cursor.fetchall()
 
 
 def get_ensembl_transcript_id(exon_id):
     '''Use Ensembl stable exon ID to obtain Ensembl stable transcript
     ID, which can be used to extract exon information from UCSC data.'''
     global ens_server, ens_database
-    ens_table = ens_database + '.exon_stable_id'
     # FIXME: do all this with MapView instead?
-    tbl = sqlgraph.SQLTable(ens_table, serverInfo=ens_server)
+    cursor = ens_server.cursor()
     query = """\
 select trans.stable_id from %s.exon_stable_id exon, \
 %s.transcript_stable_id trans, %s.exon_transcript et where \
 exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
 exon.stable_id='%s'""" % (ens_database, ens_database, ens_database, exon_id)
-    tbl.cursor.execute(query)
-    return tbl.cursor.fetchall()[0][0]
+    cursor.execute(query)
+    return cursor.fetchall()[0][0]
 
 
 def get_ensembl_db_name(version, prefix='homo_sapiens_core'):
