@@ -52,21 +52,20 @@ et.rank=%s''' % (ens_database, ens_database, ens_database, transcript_id,
     return tbl.cursor.fetchall()[0][0]
 
 
-def get_ensembl_transcript_id_rank(exon_id):
+def get_ensembl_transcript_id(exon_id):
     '''Use Ensembl stable exon ID to obtain Ensembl stable transcript
-    ID and rank, which can be used to extract exon information
-    from UCSC data.'''
+    ID, which can be used to extract exon information from UCSC data.'''
     global ens_server, ens_database
     ens_table = ens_database + '.exon_stable_id'
     # FIXME: do all this with GraphView instead?
     tbl = sqlgraph.SQLTable(ens_table, serverInfo=ens_server)
     query = """\
-select trans.stable_id, et.rank from %s.exon_stable_id exon, \
+select trans.stable_id from %s.exon_stable_id exon, \
 %s.transcript_stable_id trans, %s.exon_transcript et where \
 exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
 exon.stable_id='%s'""" % (ens_database, ens_database, ens_database, exon_id)
     tbl.cursor.execute(query)
-    return tbl.cursor.fetchall()[0]
+    return tbl.cursor.fetchall()[0][0]
 
 
 def get_ensembl_db_name(version, prefix='homo_sapiens_core'):
@@ -168,7 +167,7 @@ class EnsemblOnDemandSliceDB(object):
             return self.data[k]
         except KeyError:
             # Not cached yet, extract the exon from transcript data
-            tid, rank = get_ensembl_transcript_id_rank(k)
+            tid = get_ensembl_transcript_id(k)
             transcript_exons = get_transcript_exons(self.trans_db[tid])
             # Cache all exons from that transcript to save time in the future.
             for exon in transcript_exons:
