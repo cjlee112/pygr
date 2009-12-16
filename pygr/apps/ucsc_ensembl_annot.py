@@ -82,6 +82,13 @@ ucsc_server = sqlgraph.DBServerInfo(host='genome-mysql.cse.ucsc.edu',
 ens_server = sqlgraph.DBServerInfo(host='ensembldb.ensembl.org', port=5306,
                                    user='anonymous')
 
+# Obtain version mapping from UCSC
+ucsc_versions = sqlgraph.SQLTable('hgFixed.trackVersion',
+                                  serverInfo=ucsc_server,
+                                  primaryKey='db')
+ens_version = int(ucsc_versions['hg%d' % hg_version].version)
+ens_database = get_ensembl_db_name(ens_version)
+
 ucsc_ensGene_trans = sqlgraph.SQLTable('hg%d.ensGene' % hg_version,
                                        serverInfo=ucsc_server,
                                        primaryKey='name',
@@ -94,12 +101,9 @@ ucsc_ensGtp = sqlgraph.SQLTable('hg%d.ensGtp' % hg_version,
                                 serverInfo=ucsc_server,
                                 primaryKey='protein')
 
-# Obtain version mapping from UCSC
-ucsc_versions = sqlgraph.SQLTable('hgFixed.trackVersion',
-                                  serverInfo=ucsc_server,
-                                  primaryKey='db')
-ens_version = int(ucsc_versions['hg%d' % hg_version].version)
-ens_database = get_ensembl_db_name(ens_version)
+ens_exon_stable_id = sqlgraph.SQLTable('%s.exon_stable_id' % ens_database,
+                                       serverInfo=ens_server,
+                                       primaryKey='stable_id')
 
 #
 # Transcript annotations
@@ -153,6 +157,14 @@ print prot_id, repr(trans_db[trans_id]), \
 #  - simplify lookups?
 #  - use GraphView or MapView?
 
+ensembl_exon_transcripts = sqlgraph.MapView(ens_exon_stable_id,
+                                            ucsc_ensGene_trans, """\
+select trans.stable_id from %s.exon_stable_id exon, \
+%s.transcript_stable_id trans, %s.exon_transcript et where \
+exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
+exon.stable_id=%%s""" % (ens_database, ens_database, ens_database))
+
+
 class EnsemblOnDemandSliceDB(object):
 
     def __init__(self, transcript_db):
@@ -164,8 +176,11 @@ class EnsemblOnDemandSliceDB(object):
             return self.data[k]
         except KeyError:
             # Not cached yet, extract the exon from transcript data
-            tid = get_ensembl_transcript_id(k)
-            transcript_exons = get_transcript_exons(self.trans_db[tid])
+# FIXME: this doesn't work with checkFirstID=True
+            transcript = ensembl_exon_transcripts[ens_exon_stable_id[k]]
+            transcript_exons = get_transcript_exons(transcript)
+#            tid = get_ensembl_transcript_id(k)
+#            transcript_exons = get_transcript_exons(self.trans_db[tid])
             # Cache all exons from that transcript to save time in the future.
             for exon in transcript_exons:
                 self.data[exon[0]] = exon
@@ -173,7 +188,7 @@ class EnsemblOnDemandSliceDB(object):
 
 
 exon_slicedb = EnsemblOnDemandSliceDB(ucsc_ensGene_trans)
-exon_db = annotation.AnnotationDB(exon_slicedb, human_seq,
+exon_db = annotation.AnnotationDB(exon_slicedb, human_seq, checkFirstID=False,
                                   sliceAttrDict=dict(id=1, start=2, stop=3,
                                                      orientation=4))
 print '\nExample exon annotation:'
