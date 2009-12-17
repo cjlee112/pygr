@@ -28,7 +28,7 @@ def get_transcript_exons(trans_tuple):
     exon_ids = get_ensembl_exon_ids(transcript_id)
     for i in range(0, exon_count):
         e = (
-            exon_ids[i][0],
+            exon_ids[i],
             chromosome,
             exon_starts[i],
             exon_ends[i],
@@ -40,16 +40,14 @@ def get_transcript_exons(trans_tuple):
 def get_ensembl_exon_ids(transcript_id):
     '''Obtain a list of stable IDs of exons associated with the
     specified transcript, ordered by rank.'''
-    global ens_server, ens_database
-    # FIXME: do all this with GraphView instead?
-    cursor = ens_server.cursor()
-    query = """\
-select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
-trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
-trans.transcript_id=et.transcript_id and trans.stable_id='%s' order by \
-et.rank""" % (ens_database, ens_database, ens_database, transcript_id)
-    cursor.execute(query)
-    return cursor.fetchall()
+    global ens_server, ens_database, ens_transcript_stable_id, \
+            ensembl_transcript_exons
+    matching_edges = \
+            ensembl_transcript_exons[ens_transcript_stable_id[transcript_id]]
+    ids = []
+    for exon in matching_edges.keys():  # FIXME: is the order always correct?
+        ids.append(exon.stable_id)
+    return ids
 
 
 def get_ensembl_db_name(version, prefix='homo_sapiens_core'):
@@ -91,6 +89,11 @@ ucsc_ensGtp = sqlgraph.SQLTable('hg%d.ensGtp' % hg_version,
 ens_exon_stable_id = sqlgraph.SQLTable('%s.exon_stable_id' % ens_database,
                                        serverInfo=ens_server,
                                        primaryKey='stable_id')
+
+ens_transcript_stable_id = sqlgraph.SQLTable('%s.transcript_stable_id' %
+                                             ens_database,
+                                             serverInfo=ens_server,
+                                             primaryKey='stable_id')
 
 #
 # Transcript annotations
@@ -139,17 +142,19 @@ print prot_id, repr(trans_db[trans_id]), \
 #
 # Exon annotation
 #
-
-# TODO: Clean up exon-related get_ensembl_...() functions:
-#  - simplify lookups?
-#  - use GraphView or MapView?
-
 ensembl_exon_transcripts = sqlgraph.MapView(ens_exon_stable_id,
                                             ucsc_ensGene_trans, """\
 select trans.stable_id from %s.exon_stable_id exon, \
 %s.transcript_stable_id trans, %s.exon_transcript et where \
 exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
 exon.stable_id=%%s""" % (ens_database, ens_database, ens_database))
+
+ensembl_transcript_exons = sqlgraph.GraphView(ens_transcript_stable_id,
+                                              ens_exon_stable_id, """\
+select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
+trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
+trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
+et.rank""" % (ens_database, ens_database, ens_database))
 
 
 class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
