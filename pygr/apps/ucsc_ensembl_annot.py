@@ -1,3 +1,5 @@
+import UserDict
+
 from pygr import annotation, sqlgraph, worldbase
 
 
@@ -48,21 +50,6 @@ trans.transcript_id=et.transcript_id and trans.stable_id='%s' order by \
 et.rank""" % (ens_database, ens_database, ens_database, transcript_id)
     cursor.execute(query)
     return cursor.fetchall()
-
-
-def get_ensembl_transcript_id(exon_id):
-    '''Use Ensembl stable exon ID to obtain Ensembl stable transcript
-    ID, which can be used to extract exon information from UCSC data.'''
-    global ens_server, ens_database
-    # FIXME: do all this with MapView instead?
-    cursor = ens_server.cursor()
-    query = """\
-select trans.stable_id from %s.exon_stable_id exon, \
-%s.transcript_stable_id trans, %s.exon_transcript et where \
-exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
-exon.stable_id='%s'""" % (ens_database, ens_database, ens_database, exon_id)
-    cursor.execute(query)
-    return cursor.fetchall()[0][0]
 
 
 def get_ensembl_db_name(version, prefix='homo_sapiens_core'):
@@ -165,7 +152,7 @@ exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
 exon.stable_id=%%s""" % (ens_database, ens_database, ens_database))
 
 
-class EnsemblOnDemandSliceDB(object):
+class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
 
     def __init__(self, transcript_db):
         self.data = {}
@@ -176,15 +163,16 @@ class EnsemblOnDemandSliceDB(object):
             return self.data[k]
         except KeyError:
             # Not cached yet, extract the exon from transcript data
-# FIXME: this doesn't work with checkFirstID=True
             transcript = ensembl_exon_transcripts[ens_exon_stable_id[k]]
             transcript_exons = get_transcript_exons(transcript)
-#            tid = get_ensembl_transcript_id(k)
-#            transcript_exons = get_transcript_exons(self.trans_db[tid])
             # Cache all exons from that transcript to save time in the future.
             for exon in transcript_exons:
                 self.data[exon[0]] = exon
             return self.data[k]
+
+    def keys(self):
+        'Returns keys present in the cache. FIXME: add support for SQL ones?'
+        return self.data.keys()
 
 
 exon_slicedb = EnsemblOnDemandSliceDB(ucsc_ensGene_trans)
