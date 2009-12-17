@@ -170,6 +170,16 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
                 self.data[exon[0]] = exon
             return self.data[k]
 
+    def __setitem__(self, k, v):
+        '''Method required by UserDict.DictMixin. Does nothing
+        (read-only sliceDB).'''
+        pass
+
+    def __delitem__(self, k):
+        '''Method required by UserDict.DictMixin. Does nothing
+        (read-only sliceDB).'''
+        pass
+
     def keys(self):
         'Returns keys present in the cache. FIXME: add support for SQL ones?'
         return self.data.keys()
