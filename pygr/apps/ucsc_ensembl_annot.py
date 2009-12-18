@@ -16,160 +16,135 @@ class UCSCSeqIntervalRow(sqlgraph.TupleO):
     orientation = UCSCStrandDescr()
 
 
-def get_transcript_exons(trans_tuple):
-    '''Parse the Ensembl transcript from UCSC provided via trans_tuple,
-    extract exon data from it and return it as a list of tuples.'''
-    transcript_id = trans_tuple.name
-    chromosome = trans_tuple.chrom
-    exon_count = trans_tuple.exonCount
-    exon_starts = trans_tuple.exonStarts.split(',')[:exon_count]
-    exon_ends = trans_tuple.exonEnds.split(',')[:exon_count]
-    exons = []
-    exon_ids = get_ensembl_exon_ids(transcript_id)
-    for i in range(0, exon_count):
-        e = (
-            exon_ids[i],
-            chromosome,
-            exon_starts[i],
-            exon_ends[i],
-            trans_tuple.orientation)
-        exons.append(e)
-    return exons
+class UCSCEnsemblInterface(object):
 
+    def __init__(self, hg_version):
+        '''Set up everything needed to produce UCSC/Ensembl
+        annotation databases.'''
+        # Connect to both servers and prepare database names.
+        self.ucsc_server = sqlgraph.DBServerInfo(
+            host='genome-mysql.cse.ucsc.edu', user='genome')
+        self.ens_server = sqlgraph.DBServerInfo(host='ensembldb.ensembl.org',
+                                                port=5306, user='anonymous')
+        self.ucsc_db = 'hg%d' % hg_version
+        self.ens_db = self.get_ensembl_db_name()
+        # Connect to all the necessary tables.
+        self.ucsc_ensGene_trans = sqlgraph.SQLTable('%s.ensGene' %
+                                                    self.ucsc_db,
+                                                   serverInfo=self.ucsc_server,
+                                                    primaryKey='name',
+                                                  itemClass=UCSCSeqIntervalRow)
+        self.ucsc_ensGene_gene = sqlgraph.SQLTable('%s.ensGene' % self.ucsc_db,
+                                                   serverInfo=self.ucsc_server,
+                                                   primaryKey='name2',
+                                                  itemClass=UCSCSeqIntervalRow)
+        self.ucsc_ensGtp = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
+                                             serverInfo=self.ucsc_server,
+                                             primaryKey='protein')
+        self.ens_exon_stable_id = sqlgraph.SQLTable('%s.exon_stable_id'
+                                                    % self.ens_db,
+                                                    serverInfo=self.ens_server,
+                                                    primaryKey='stable_id')
+        self.ens_transcript_stable_id = sqlgraph.SQLTable(
+            '%s.transcript_stable_id' % self.ens_db,
+            serverInfo=self.ens_server, primaryKey='stable_id')
+        # We will need this too.
+        self.human_seq = worldbase('Bio.Seq.Genome.HUMAN.%s' % self.ucsc_db)
+        # Initialise all cache variables.
+        self.trans_db = None
+        self.gene_db = None
+        self.prot_db = None
+        self.exon_db = None
 
-def get_ensembl_exon_ids(transcript_id):
-    '''Obtain a list of stable IDs of exons associated with the
-    specified transcript, ordered by rank.'''
-    global ens_server, ens_database, ens_transcript_stable_id, \
-            ensembl_transcript_exons
-    matching_edges = \
-            ensembl_transcript_exons[ens_transcript_stable_id[transcript_id]]
-    ids = []
-    for exon in matching_edges.keys():  # FIXME: is the order always correct?
-        ids.append(exon.stable_id)
-    return ids
+    def get_ensembl_db_name(self, ens_prefix='homo_sapiens_core'):
+        '''Used by __init__(), obtains Ensembl database name matching
+        the specified UCSC genome version'''
+        ucsc_versions = sqlgraph.SQLTable('hgFixed.trackVersion',
+                                          serverInfo=self.ucsc_server,
+                                          primaryKey='db')
+        ens_version = ucsc_versions[self.ucsc_db].version
+        cursor = self.ens_server.cursor()
+        cursor.execute("show databases like '%s_%s_%%'" % (ens_prefix,
+                                                           ens_version))
+        return cursor.fetchall()[0][0]
 
+    def transcript_database(self):
+        'Return an AnnotationDB of transcript annotations.'
+        if self.trans_db is None:
+            self.trans_db = annotation.AnnotationDB(self.ucsc_ensGene_trans,
+                                                    self.human_seq,
+                                                    checkFirstID=False,
+                                                    sliceAttrDict=dict(
+                                                        id='chrom',
+                                                        start='txStart',
+                                                        stop='txEnd'))
+        return self.trans_db
 
-def get_ensembl_db_name(version, prefix='homo_sapiens_core'):
-    global ens_server
-    cursor = ens_server.cursor()
-    cursor.execute("show databases like '%s_%d_%%'" % (prefix, version))
-    return cursor.fetchall()[0][0]
+    def gene_database(self):
+        'Return an AnnotationDB of gene annotations.'
+        if self.gene_db is None:
+            self.gene_db = annotation.AnnotationDB(self.ucsc_ensGene_gene,
+                                                   self.human_seq,
+                                                   checkFirstID=False,
+                                                   sliceAttrDict=dict(
+                                                       id='chrom',
+                                                       start='txStart',
+                                                       stop='txEnd'))
+        return self.gene_db
 
+    def protein_database(self):
+        'Return an AnnotationDB of protein annotations.'
 
-hg_version = 18
-
-
-human_seq = worldbase('Bio.Seq.Genome.HUMAN.hg%d' % hg_version)
-
-ucsc_server = sqlgraph.DBServerInfo(host='genome-mysql.cse.ucsc.edu',
-                                    user='genome')
-ens_server = sqlgraph.DBServerInfo(host='ensembldb.ensembl.org', port=5306,
-                                   user='anonymous')
-
-# Obtain version mapping from UCSC
-ucsc_versions = sqlgraph.SQLTable('hgFixed.trackVersion',
-                                  serverInfo=ucsc_server,
-                                  primaryKey='db')
-ens_version = int(ucsc_versions['hg%d' % hg_version].version)
-ens_database = get_ensembl_db_name(ens_version)
-
-ucsc_ensGene_trans = sqlgraph.SQLTable('hg%d.ensGene' % hg_version,
-                                       serverInfo=ucsc_server,
-                                       primaryKey='name',
-                                       itemClass=UCSCSeqIntervalRow)
-ucsc_ensGene_gene = sqlgraph.SQLTable('hg%d.ensGene' % hg_version,
-                                      serverInfo=ucsc_server,
-                                      primaryKey='name2',
-                                      itemClass=UCSCSeqIntervalRow)
-ucsc_ensGtp = sqlgraph.SQLTable('hg%d.ensGtp' % hg_version,
-                                serverInfo=ucsc_server,
-                                primaryKey='protein')
-
-ens_exon_stable_id = sqlgraph.SQLTable('%s.exon_stable_id' % ens_database,
-                                       serverInfo=ens_server,
-                                       primaryKey='stable_id')
-
-ens_transcript_stable_id = sqlgraph.SQLTable('%s.transcript_stable_id' %
-                                             ens_database,
-                                             serverInfo=ens_server,
-                                             primaryKey='stable_id')
-
-#
-# Transcript annotations
-#
-trans_db = annotation.AnnotationDB(ucsc_ensGene_trans, human_seq,
-                                   checkFirstID=False,
-                                   sliceAttrDict=dict(id='chrom',
-                                                      start='txStart',
-                                                      stop='txEnd'))
-print '\nExample transcript annotation:'
-print 'ENST00000000233', repr(trans_db['ENST00000000233']), \
-        repr(trans_db['ENST00000000233'].sequence)
-
-#
-# Gene annotations
-#
-gene_db = annotation.AnnotationDB(ucsc_ensGene_gene, human_seq,
-                                  checkFirstID=False,
-                                  sliceAttrDict=dict(id='chrom',
-                                                     start='txStart',
-                                                     stop='txEnd'))
-print '\nExample gene annotation:'
-print 'ENSG00000000003', repr(gene_db['ENSG00000000003']), \
-        repr(gene_db['ENSG00000000003'].sequence)
-try:
-    print 'ENSG00000238261', repr(gene_db['ENSG00000238261'])
-except KeyError:
-    print 'Querying a multi-transcript gene annotation has failed as expected'
-
-#
-# Protein annotation
-#
-protein_transcripts = sqlgraph.MapView(ucsc_ensGtp, ucsc_ensGene_trans,
-                                       'select transcript from hg%d.ensGtp \
-                                       where protein=%%s' % hg_version,
+        return None
+        # FIXME: this is just dumped here for now. Make it work!
+        protein_transcripts = sqlgraph.MapView(ucsc_ensGtp, ucsc_ensGene_trans,
+                                       'select transcript from %s.ensGtp \
+                                       where protein=%%s' % ucsc_db,
                                        inverseSQL='select protein from \
-                                       hg%d.ensGtp where transcript=%%s' % \
-                                       hg_version)
-# FIXME: create a wrapper for trans_db which uses the map
-print '\nExample protein annotation:'
-prot_id = 'ENSP00000372525'
-trans_id = protein_transcripts[ucsc_ensGtp[prot_id]].name
-print prot_id, repr(trans_db[trans_id]), \
-        repr(trans_db[trans_id].sequence)
+                                       %s.ensGtp where transcript=%%s' %
+                                       ucsc_db)
+        # trans_id = protein_transcripts[ucsc_ensGtp[prot_id]].name
 
-#
-# Exon annotation
-#
-ensembl_exon_transcripts = sqlgraph.MapView(ens_exon_stable_id,
-                                            ucsc_ensGene_trans, """\
+    def exon_database(self):
+        'Return an AnnotationDB of exon annotations.'
+        if self.exon_db is None:
+            self.ens_transcripts_of_exons_map = sqlgraph.MapView(
+                self.ens_exon_stable_id, self.ucsc_ensGene_trans, """\
 select trans.stable_id from %s.exon_stable_id exon, \
 %s.transcript_stable_id trans, %s.exon_transcript et where \
 exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
-exon.stable_id=%%s""" % (ens_database, ens_database, ens_database))
-
-ensembl_transcript_exons = sqlgraph.GraphView(ens_transcript_stable_id,
-                                              ens_exon_stable_id, """\
+exon.stable_id=%%s""" % (self.ens_db, self.ens_db, self.ens_db))
+            self.ens_exons_in_transcripts_map = sqlgraph.GraphView(
+                self.ens_transcript_stable_id, self.ens_exon_stable_id, """\
 select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
 trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
 trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
-et.rank""" % (ens_database, ens_database, ens_database))
+et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
+            exon_slicedb = EnsemblOnDemandSliceDB(self)
+            self.exon_db = annotation.AnnotationDB(exon_slicedb,
+                                                   self.human_seq,
+                                                   checkFirstID=False,
+                                                   sliceAttrDict=dict(id=1,
+                                                                      start=2,
+                                                                      stop=3,
+                                                                orientation=4))
+        return self.exon_db
 
 
 class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
 
-    def __init__(self, transcript_db):
+    def __init__(self, res):
         self.data = {}
-        self.trans_db = transcript_db
+        self.res = res
 
     def __getitem__(self, k):
         try:
             return self.data[k]
         except KeyError:
             # Not cached yet, extract the exon from transcript data
-            transcript = ensembl_exon_transcripts[ens_exon_stable_id[k]]
-            transcript_exons = get_transcript_exons(transcript)
+            transcript = self.res.ens_transcripts_of_exons_map[
+                self.res.ens_exon_stable_id[k]]
+            transcript_exons = self.get_transcript_exons(transcript)
             # Cache all exons from that transcript to save time in the future.
             for exon in transcript_exons:
                 self.data[exon[0]] = exon
@@ -189,11 +164,33 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
         'Returns keys present in the cache. FIXME: add support for SQL ones?'
         return self.data.keys()
 
+    def get_ensembl_exon_ids(self, transcript_id):
+        '''Obtain a list of stable IDs of exons associated with the
+        specified transcript, ordered by rank.'''
+        matching_edges = self.res.ens_exons_in_transcripts_map[
+            self.res.ens_transcript_stable_id[transcript_id]]
+        ids = []
+        for exon in matching_edges.keys():  # FIXME: is the order always correct?
+            ids.append(exon.stable_id)
+        return ids
 
-exon_slicedb = EnsemblOnDemandSliceDB(ucsc_ensGene_trans)
-exon_db = annotation.AnnotationDB(exon_slicedb, human_seq, checkFirstID=False,
-                                  sliceAttrDict=dict(id=1, start=2, stop=3,
-                                                     orientation=4))
-print '\nExample exon annotation:'
-print 'ENSE00000720378', repr(exon_db['ENSE00000720378']), \
-        repr(exon_db['ENSE00000720378'].sequence)
+    def get_transcript_exons(self, trans_tuple):
+        '''Parse the Ensembl transcript from UCSC provided via
+        trans_tuple, extract exon data from it and return it
+        as a list of tuples.'''
+        transcript_id = trans_tuple.name
+        chromosome = trans_tuple.chrom
+        exon_count = trans_tuple.exonCount
+        exon_starts = trans_tuple.exonStarts.split(',')[:exon_count]
+        exon_ends = trans_tuple.exonEnds.split(',')[:exon_count]
+        exons = []
+        exon_ids = self.get_ensembl_exon_ids(transcript_id)
+        for i in range(0, exon_count):
+            e = (
+                exon_ids[i],
+                chromosome,
+                exon_starts[i],
+                exon_ends[i],
+                trans_tuple.orientation)
+            exons.append(e)
+        return exons
