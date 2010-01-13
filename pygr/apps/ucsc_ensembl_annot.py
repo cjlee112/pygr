@@ -94,16 +94,24 @@ class UCSCEnsemblInterface(object):
 
     def protein_database(self):
         'Return an AnnotationDB of protein annotations.'
-
-        return None
-        # FIXME: this is just dumped here for now. Make it work!
-        protein_transcripts = sqlgraph.MapView(ucsc_ensGtp, ucsc_ensGene_trans,
-                                       'select transcript from %s.ensGtp \
-                                       where protein=%%s' % ucsc_db,
-                                       inverseSQL='select protein from \
-                                       %s.ensGtp where transcript=%%s' %
-                                       ucsc_db)
-        # trans_id = protein_transcripts[ucsc_ensGtp[prot_id]].name
+        if self.prot_db is None:
+            self.protein_transcript_id_map = sqlgraph.MapView(self.ucsc_ensGtp,
+                self.ucsc_ensGene_trans, 'select transcript from %s.ensGtp \
+                where protein=%%s' % self.ucsc_db, inverseSQL='select protein \
+                from %s.ensGtp where transcript=%%s' % self.ucsc_db)
+            protein_slicedb = EnsemblProteinSliceDB(self, '%s.ensGene' %
+                                                    self.ucsc_db,
+                                                   serverInfo=self.ucsc_server,
+                                                    primaryKey='name',
+                                                  itemClass=UCSCSeqIntervalRow)
+            self.prot_db = annotation.AnnotationDB(protein_slicedb,
+                                                   self.human_seq,
+                                                   checkFirstID=False,
+                                                   sliceAttrDict=dict(
+                                                       id='chrom',
+                                                       start='txStart',
+                                                       stop='txEnd'))
+            return self.prot_db
 
     def exon_database(self):
         'Return an AnnotationDB of exon annotations.'
@@ -129,6 +137,28 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
                                                                       stop=3,
                                                                 orientation=4))
         return self.exon_db
+
+
+class EnsemblProteinSliceDB(sqlgraph.SQLTable):
+    '''A sliceDB class for protein annotations. Basically, an SQLTable
+    pointing to transcript data along with transparent mapping of keys.'''
+
+    def __init__(self, res, *args, **kwargs):
+        self.res = res
+        sqlgraph.SQLTable.__init__(self, *args, **kwargs)
+
+    def __getitem__(self, k):
+        tid = self.res.protein_transcript_id_map[self.res.ucsc_ensGtp[k]].name
+        return sqlgraph.SQLTable.__getitem__(self, tid)
+
+    def keys(self):
+        prot_keys = []
+        trans_keys = SQLTable.keys(self)
+        for tid in trans_keys:
+            pid = (~self.res.protein_transcript_id_map[
+                self.res.ucsc_ensGene[tid]]).name
+            prot_keys.append(pid)
+        return prot_keys
 
 
 class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
