@@ -200,7 +200,7 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
         matching_edges = self.res.ens_exons_in_transcripts_map[
             self.res.ens_transcript_stable_id[transcript_id]]
         ids = []
-        for exon in matching_edges.keys():  # FIXME: is the order always correct?
+        for exon in matching_edges.keys():
             ids.append(exon.stable_id)
         return ids
 
