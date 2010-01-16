@@ -18,16 +18,18 @@ class UCSCSeqIntervalRow(sqlgraph.TupleO):
 
 class UCSCEnsemblInterface(object):
 
-    def __init__(self, hg_version):
+    def __init__(self, ucsc_genome_name, ens_species=None):
         '''Set up everything needed to produce UCSC/Ensembl
-        annotation databases.'''
+        annotation databases. ucsc_genome_name should follow the worldbase
+        naming convention. If ens_species is not specified, we will try
+        to autodetect it.'''
         # Connect to both servers and prepare database names.
         self.ucsc_server = sqlgraph.DBServerInfo(
             host='genome-mysql.cse.ucsc.edu', user='genome')
         self.ens_server = sqlgraph.DBServerInfo(host='ensembldb.ensembl.org',
                                                 port=5306, user='anonymous')
-        self.ucsc_db = 'hg%d' % hg_version
-        self.ens_db = self.get_ensembl_db_name()
+        self.ucsc_db = ucsc_genome_name.split('.')[-1]
+        self.ens_db = self.get_ensembl_db_name(ens_species)
         # Connect to all the necessary tables.
         self.ucsc_ensGene_trans = sqlgraph.SQLTable('%s.ensGene' %
                                                     self.ucsc_db,
@@ -49,30 +51,35 @@ class UCSCEnsemblInterface(object):
             '%s.transcript_stable_id' % self.ens_db,
             serverInfo=self.ens_server, primaryKey='stable_id')
         # We will need this too.
-        self.human_seq = worldbase('Bio.Seq.Genome.HUMAN.%s' % self.ucsc_db)
+        self.genome_seq = worldbase(ucsc_genome_name)
         # Initialise all cache variables.
         self.trans_db = None
         self.gene_db = None
         self.prot_db = None
         self.exon_db = None
 
-    def get_ensembl_db_name(self, ens_prefix='homo_sapiens_core'):
+    def get_ensembl_db_name(self, ens_prefix):
         '''Used by __init__(), obtains Ensembl database name matching
         the specified UCSC genome version'''
         ucsc_versions = sqlgraph.SQLTable('hgFixed.trackVersion',
                                           serverInfo=self.ucsc_server,
                                           primaryKey='db')
         ens_version = ucsc_versions[self.ucsc_db].version
+        if ens_prefix is None:
+            # Note: this assumes 'source' in hgFixed.trackVersion contains
+            # the URI of the Ensembl data set and that the last path component
+            # of that URI is the species name of that data set.
+            ens_prefix = ucsc_versions[self.ucsc_db].source.split('/')[-2]
         cursor = self.ens_server.cursor()
-        cursor.execute("show databases like '%s_%s_%%'" % (ens_prefix,
-                                                           ens_version))
+        cursor.execute("show databases like '%s_core_%s_%%'" % (ens_prefix,
+                                                                ens_version))
         return cursor.fetchall()[0][0]
 
     def transcript_database(self):
         'Return an AnnotationDB of transcript annotations.'
         if self.trans_db is None:
             self.trans_db = annotation.AnnotationDB(self.ucsc_ensGene_trans,
-                                                    self.human_seq,
+                                                    self.genome_seq,
                                                     checkFirstID=False,
                                                     sliceAttrDict=dict(
                                                         id='chrom',
@@ -84,7 +91,7 @@ class UCSCEnsemblInterface(object):
         'Return an AnnotationDB of gene annotations.'
         if self.gene_db is None:
             self.gene_db = annotation.AnnotationDB(self.ucsc_ensGene_gene,
-                                                   self.human_seq,
+                                                   self.genome_seq,
                                                    checkFirstID=False,
                                                    sliceAttrDict=dict(
                                                        id='chrom',
@@ -105,7 +112,7 @@ class UCSCEnsemblInterface(object):
                                                     primaryKey='name',
                                                   itemClass=UCSCSeqIntervalRow)
             self.prot_db = annotation.AnnotationDB(protein_slicedb,
-                                                   self.human_seq,
+                                                   self.genome_seq,
                                                    checkFirstID=False,
                                                    sliceAttrDict=dict(
                                                        id='chrom',
@@ -130,7 +137,7 @@ trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
 et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
             exon_slicedb = EnsemblOnDemandSliceDB(self)
             self.exon_db = annotation.AnnotationDB(exon_slicedb,
-                                                   self.human_seq,
+                                                   self.genome_seq,
                                                    checkFirstID=False,
                                                    sliceAttrDict=dict(id=1,
                                                                       start=2,
