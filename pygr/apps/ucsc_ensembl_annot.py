@@ -1,6 +1,7 @@
 import UserDict
 
 from pygr import annotation, sqlgraph, worldbase
+from pygr.dbfile import ReadOnlyError
 
 
 class UCSCStrandDescr(object):
@@ -195,14 +196,14 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
             return self.data[k]
 
     def __setitem__(self, k, v):
-        '''Method required by UserDict.DictMixin. Does nothing
+        '''Method required by UserDict.DictMixin. Throws an exception
         (read-only sliceDB).'''
-        pass
+        raise ReadOnlyError('EnsemblOnDemandSliceDB is read-only')
 
     def __delitem__(self, k):
-        '''Method required by UserDict.DictMixin. Does nothing
+        '''Method required by UserDict.DictMixin. Throws an exception
         (read-only sliceDB).'''
-        pass
+        raise ReadOnlyError('EnsemblOnDemandSliceDB is read-only')
 
     def keys(self):
         'Returns keys present in the cache. FIXME: add support for SQL ones?'
