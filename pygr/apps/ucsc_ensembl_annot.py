@@ -193,6 +193,9 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
             # Cache all exons from that transcript to save time in the future.
             for exon in transcript_exons:
                 self.data[exon[0]] = exon
+            self.res.genome_seq.cacheHint({transcript.id: (transcript.txStart,
+                                                           transcript.txEnd)},
+                                          self)
             return self.data[k]
 
     def __setitem__(self, k, v):
