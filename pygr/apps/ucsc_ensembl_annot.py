@@ -18,16 +18,23 @@ class UCSCSeqIntervalRow(sqlgraph.TupleO):
 
 class UCSCEnsemblInterface(object):
 
-    def __init__(self, ucsc_genome_name, ens_species=None):
+    def __init__(self, ucsc_genome_name, ens_species=None, ucsc_serverInfo=None,
+                ens_serverInfo=None):
         '''Set up everything needed to produce UCSC/Ensembl
         annotation databases. ucsc_genome_name should follow the worldbase
         naming convention. If ens_species is not specified, we will try
         to autodetect it.'''
         # Connect to both servers and prepare database names.
-        self.ucsc_server = sqlgraph.DBServerInfo(
-            host='genome-mysql.cse.ucsc.edu', user='genome')
-        self.ens_server = sqlgraph.DBServerInfo(host='ensembldb.ensembl.org',
-                                                port=5306, user='anonymous')
+        if ucsc_serverInfo is not None:
+            self.ucsc_server = ucsc_serverInfo
+        else:
+            self.ucsc_server = sqlgraph.DBServerInfo(
+                host='genome-mysql.cse.ucsc.edu', user='genome')
+        if ens_serverInfo is not None:
+            self.ens_server = ens_serverInfo
+        else:
+            self.ens_server = sqlgraph.DBServerInfo(
+                host='ensembldb.ensembl.org', port=5306, user='anonymous')
         self.ucsc_db = ucsc_genome_name.split('.')[-1]
         self.ens_db = self.get_ensembl_db_name(ens_species)
         # Connect to all the necessary tables.
