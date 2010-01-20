@@ -1,6 +1,6 @@
 import UserDict
 
-from pygr import annotation, sqlgraph, worldbase
+from pygr import annotation, sequence, sqlgraph, worldbase
 from pygr.dbfile import ReadOnlyError
 
 
@@ -92,7 +92,8 @@ class UCSCEnsemblInterface(object):
                                                     sliceAttrDict=dict(
                                                         id='chrom',
                                                         start='txStart',
-                                                        stop='txEnd'))
+                                                        stop='txEnd'),
+                                      itemClass=EnsemblTranscriptAnnotationSeq)
         return self.trans_db
 
     def gene_database(self):
@@ -152,6 +153,29 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
                                                                       stop=3,
                                                                 orientation=4))
         return self.exon_db
+
+
+class EnsemblTranscriptAnnotationSeqDescr(object):
+
+    def __get__(self, obj, objtype):
+        '''Concatenate exon sequences of a transcript to obtain
+        its sequence.'''
+        exon_count = obj.exonCount
+        exon_starts = obj.exonStarts.split(',')[:exon_count]
+        exon_ends = obj.exonEnds.split(',')[:exon_count]
+        trans_seq = sequence.absoluteSlice(obj._anno_seq, int(exon_starts[0]),
+                                           int(exon_ends[0]))
+        for i in range(1, exon_count):
+            trans_seq += sequence.absoluteSlice(obj._anno_seq,
+                                                int(exon_starts[i]),
+                                                int(exon_ends[i]))
+        return trans_seq    # FIXME does this actually do what it's supposed to?
+
+
+class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
+    '''An AnnotationSeq class for transcript annotations, implementing
+    a custom 'sequence' property.'''
+    sequence = EnsemblTranscriptAnnotationSeqDescr()
 
 
 class EnsemblProteinSliceDB(sqlgraph.SQLTable):
