@@ -1,6 +1,6 @@
 import UserDict
 
-from pygr import annotation, sequence, sqlgraph, worldbase
+from pygr import annotation, seqdb, sequence, sqlgraph, worldbase
 from pygr.dbfile import ReadOnlyError
 
 
@@ -15,6 +15,14 @@ class UCSCStrandDescr(object):
 
 class UCSCSeqIntervalRow(sqlgraph.TupleO):
     orientation = UCSCStrandDescr()
+
+
+class UCSCProteinSeq(sqlgraph.ProteinSQLSequence):
+    '''Representation of UCSC protein-sequence tables such as ensGene,
+    which lack the length column.'''
+    
+    def __len__(self):
+        return self._select('length(seq)')
 
 
 class UCSCEnsemblInterface(object):
@@ -51,6 +59,10 @@ class UCSCEnsemblInterface(object):
         self.ucsc_ensGtp = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
                                              serverInfo=self.ucsc_server,
                                              primaryKey='protein')
+        self.ucsc_ensPep = sqlgraph.SQLTable('%s.ensPep' % self.ucsc_db,
+                                             serverInfo=self.ucsc_server,
+                                             itemClass=UCSCProteinSeq,
+                                             itemSliceClass=seqdb.SeqDBSlice)
         self.ens_exon_stable_id = sqlgraph.SQLTable('%s.exon_stable_id'
                                                     % self.ens_db,
                                                     serverInfo=self.ens_server,
