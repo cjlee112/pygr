@@ -175,13 +175,12 @@ class EnsemblTranscriptAnnotationSeqDescr(object):
         exon_count = obj.exonCount
         exon_starts = obj.exonStarts.split(',')[:exon_count]
         exon_ends = obj.exonEnds.split(',')[:exon_count]
-        trans_seq = sequence.absoluteSlice(obj._anno_seq, int(exon_starts[0]),
-                                           int(exon_ends[0]))
-        for i in range(1, exon_count):
-            trans_seq += sequence.absoluteSlice(obj._anno_seq,
-                                                int(exon_starts[i]),
-                                                int(exon_ends[i]))
-        return trans_seq    # FIXME does this actually do what it's supposed to?
+        trans_seq = ''
+        for i in range(0, exon_count):
+            trans_seq += str(sequence.absoluteSlice(obj._anno_seq,
+                                                    int(exon_starts[i]),
+                                                    int(exon_ends[i])))
+        return sequence.Sequence(trans_seq, obj.name)   # FIXME: cache this?
 
 
 class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
