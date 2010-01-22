@@ -80,13 +80,57 @@ class UCSCEnsemblInterface(object):
         self.ens_transcript_stable_id = sqlgraph.SQLTable(
             '%s.transcript_stable_id' % self.ens_db,
             serverInfo=self.ens_server, primaryKey='stable_id')
+        # Mappings.
+        self.protein_transcript_id_map = sqlgraph.MapView(self.ucsc_ensGtp,
+            self.ucsc_ensGene_trans, 'select transcript from %s.ensGtp \
+            where protein=%%s' % self.ucsc_db, inverseSQL='select protein \
+            from %s.ensGtp where transcript=%%s' % self.ucsc_db)
+        self.ens_transcripts_of_exons_map = sqlgraph.GraphView(
+            self.ens_exon_stable_id, self.ucsc_ensGene_trans, """\
+select trans.stable_id from %s.exon_stable_id exon, \
+%s.transcript_stable_id trans, %s.exon_transcript et where \
+exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
+exon.stable_id=%%s""" % (self.ens_db, self.ens_db, self.ens_db))
+        self.ens_exons_in_transcripts_map = sqlgraph.GraphView(
+            self.ens_transcript_stable_id, self.ens_exon_stable_id, """\
+select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
+trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
+trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
+et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
         # We will need this too.
         self.genome_seq = worldbase(ucsc_genome_name)
-        # Initialise all cache variables.
-        self.trans_db = None
-        self.gene_db = None
-        self.prot_db = None
-        self.exon_db = None
+        protein_slicedb = EnsemblProteinSliceDB(self, '%s.ensGene' %
+                                                self.ucsc_db,
+                                                serverInfo=self.ucsc_server,
+                                                primaryKey='name',
+                                                itemClass=UCSCSeqIntervalRow)
+        exon_slicedb = EnsemblOnDemandSliceDB(self)
+        # Finally, initialise all UCSC-Ensembl databases.
+        self.trans_db = annotation.AnnotationDB(self.ucsc_ensGene_trans,
+                                                self.genome_seq,
+                                                checkFirstID=False,
+                                                sliceAttrDict=dict(
+                                                    id='chrom',
+                                                    start='txStart',
+                                                    stop='txEnd'),
+                                      itemClass=EnsemblTranscriptAnnotationSeq)
+        self.gene_db = annotation.AnnotationDB(self.ucsc_ensGene_gene,
+                                               self.genome_seq,
+                                               checkFirstID=False,
+                                               sliceAttrDict=dict(
+                                                   id='chrom',
+                                                   start='txStart',
+                                                   stop='txEnd'))
+        self.prot_db = annotation.AnnotationDB(protein_slicedb,
+                                               self.genome_seq,
+                                               checkFirstID=False,
+                                               sliceAttrDict=dict(
+                                                   id='chrom',
+                                                   start='txStart',
+                                                   stop='txEnd'))
+        self.exon_db = annotation.AnnotationDB(exon_slicedb,
+                                               self.genome_seq,
+                                               checkFirstID=False)
 
     def get_ensembl_db_name(self, ens_prefix):
         '''Used by __init__(), obtains Ensembl database name matching
@@ -107,69 +151,18 @@ class UCSCEnsemblInterface(object):
 
     def transcript_database(self):
         'Return an AnnotationDB of transcript annotations.'
-        if self.trans_db is None:
-            self.trans_db = annotation.AnnotationDB(self.ucsc_ensGene_trans,
-                                                    self.genome_seq,
-                                                    checkFirstID=False,
-                                                    sliceAttrDict=dict(
-                                                        id='chrom',
-                                                        start='txStart',
-                                                        stop='txEnd'),
-                                      itemClass=EnsemblTranscriptAnnotationSeq)
         return self.trans_db
 
     def gene_database(self):
         'Return an AnnotationDB of gene annotations.'
-        if self.gene_db is None:
-            self.gene_db = annotation.AnnotationDB(self.ucsc_ensGene_gene,
-                                                   self.genome_seq,
-                                                   checkFirstID=False,
-                                                   sliceAttrDict=dict(
-                                                       id='chrom',
-                                                       start='txStart',
-                                                       stop='txEnd'))
         return self.gene_db
 
     def protein_database(self):
         'Return an AnnotationDB of protein annotations.'
-        if self.prot_db is None:
-            self.protein_transcript_id_map = sqlgraph.MapView(self.ucsc_ensGtp,
-                self.ucsc_ensGene_trans, 'select transcript from %s.ensGtp \
-                where protein=%%s' % self.ucsc_db, inverseSQL='select protein \
-                from %s.ensGtp where transcript=%%s' % self.ucsc_db)
-            protein_slicedb = EnsemblProteinSliceDB(self, '%s.ensGene' %
-                                                    self.ucsc_db,
-                                                   serverInfo=self.ucsc_server,
-                                                    primaryKey='name',
-                                                  itemClass=UCSCSeqIntervalRow)
-            self.prot_db = annotation.AnnotationDB(protein_slicedb,
-                                                   self.genome_seq,
-                                                   checkFirstID=False,
-                                                   sliceAttrDict=dict(
-                                                       id='chrom',
-                                                       start='txStart',
-                                                       stop='txEnd'))
-            return self.prot_db
+        return self.prot_db
 
     def exon_database(self):
         'Return an AnnotationDB of exon annotations.'
-        if self.exon_db is None:
-            self.ens_transcripts_of_exons_map = sqlgraph.GraphView(
-                self.ens_exon_stable_id, self.ucsc_ensGene_trans, """\
-select trans.stable_id from %s.exon_stable_id exon, \
-%s.transcript_stable_id trans, %s.exon_transcript et where \
-exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
-exon.stable_id=%%s""" % (self.ens_db, self.ens_db, self.ens_db))
-            self.ens_exons_in_transcripts_map = sqlgraph.GraphView(
-                self.ens_transcript_stable_id, self.ens_exon_stable_id, """\
-select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
-trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
-trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
-et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
-            exon_slicedb = EnsemblOnDemandSliceDB(self)
-            self.exon_db = annotation.AnnotationDB(exon_slicedb,
-                                                   self.genome_seq,
-                                                   checkFirstID=False)
         return self.exon_db
 
 
