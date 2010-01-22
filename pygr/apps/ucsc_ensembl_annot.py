@@ -4,16 +4,6 @@ from pygr import annotation, seqdb, sequence, sqlgraph, worldbase
 from pygr.dbfile import ReadOnlyError
 
 
-class EnsemblSliceInfo(object):
-    def __init__(self, id, start, stop, orientation, parents=None, children=None):
-        self.id = id
-        self.start = start
-        self.stop = stop
-        self.orientation = orientation
-        self.parents = parents
-        self.children = children
-
-
 class UCSCStrandDescr(object):
 
     def __get__(self, obj, objtype):
@@ -210,6 +200,16 @@ class EnsemblProteinSliceDB(sqlgraph.SQLTable):
         return prot_keys
 
 
+class EnsemblExonSliceInfo(object):
+    def __init__(self, id, start, stop, orientation, parents=None, children=None):
+        self.id = id
+        self.start = start
+        self.stop = stop
+        self.orientation = orientation
+        self.parents = parents
+        self.children = children
+
+
 class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
 
     def __init__(self, res):
@@ -269,7 +269,7 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
         exons = {}
         exon_ids = self.get_ensembl_exon_ids(transcript.name)
         for i in range(0, exon_count):
-            e = EnsemblSliceInfo(chromosome, exon_starts[i], exon_ends[i],
-                                 transcript.orientation)
+            e = EnsemblExonSliceInfo(chromosome, exon_starts[i], exon_ends[i],
+                                     transcript.orientation)
             exons[exon_ids[i]] = e
         return exons
