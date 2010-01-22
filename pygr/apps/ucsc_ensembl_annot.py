@@ -201,7 +201,9 @@ class EnsemblProteinSliceDB(sqlgraph.SQLTable):
 
 
 class EnsemblExonSliceInfo(object):
-    def __init__(self, id, start, stop, orientation, parents=None, children=None):
+
+    def __init__(self, id, start, stop, orientation, parents=None,
+                 children=None):
         self.id = id
         self.start = start
         self.stop = stop
