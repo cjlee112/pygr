@@ -20,15 +20,15 @@ class UCSCSeqIntervalRow(sqlgraph.TupleO):
 class UCSCProteinSeq(sqlgraph.ProteinSQLSequence):
     '''Representation of UCSC protein-sequence tables such as ensGene,
     which lack the length column.'''
-    
+
     def __len__(self):
         return self._select('length(seq)')
 
 
 class UCSCEnsemblInterface(object):
 
-    def __init__(self, ucsc_genome_name, ens_species=None, ucsc_serverInfo=None,
-                ens_serverInfo=None):
+    def __init__(self, ucsc_genome_name, ens_species=None,
+                 ucsc_serverInfo=None, ens_serverInfo=None):
         '''Set up everything needed to produce UCSC/Ensembl
         annotation databases. ucsc_genome_name should follow the worldbase
         naming convention. If ens_species is not specified, we will try
