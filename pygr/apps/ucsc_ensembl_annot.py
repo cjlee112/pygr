@@ -144,7 +144,7 @@ class UCSCEnsemblInterface(object):
     def exon_database(self):
         'Return an AnnotationDB of exon annotations.'
         if self.exon_db is None:
-            self.ens_transcripts_of_exons_map = sqlgraph.MapView(
+            self.ens_transcripts_of_exons_map = sqlgraph.GraphView(
                 self.ens_exon_stable_id, self.ucsc_ensGene_trans, """\
 select trans.stable_id from %s.exon_stable_id exon, \
 %s.transcript_stable_id trans, %s.exon_transcript et where \
@@ -221,15 +221,16 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
         try:
             return self.data[k]
         except KeyError:
-            # Not cached yet, extract the exon from transcript data
-            transcript = self.res.ens_transcripts_of_exons_map[
-                self.res.ens_exon_stable_id[k]]
-            transcript_exons = self.get_transcript_exons(transcript)
+            # Not cached yet, extract the exon from transcript data.
+            transcripts = self.res.ens_transcripts_of_exons_map[
+                self.res.ens_exon_stable_id[k]].keys()
+            transcript_exons = self.get_transcript_exons(transcripts[0])
             # Cache all exons from that transcript to save time in the future.
             for exon in transcript_exons:
                 self.data[exon[0]] = exon
-            self.res.genome_seq.cacheHint({transcript.id: (transcript.txStart,
-                                                           transcript.txEnd)},
+            self.res.genome_seq.cacheHint({transcripts[0].id:
+                                           (transcripts[0].txStart,
+                                            transcripts[0].txEnd)},
                                           self)
             return self.data[k]
 
