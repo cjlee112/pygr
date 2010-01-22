@@ -266,19 +266,17 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
             ids.append(exon.stable_id)
         return ids
 
-    def get_transcript_exons(self, trans_tuple):
-        '''Parse the Ensembl transcript from UCSC provided via
-        trans_tuple, extract exon data from it and return it
-        as a list of tuples.'''
-        transcript_id = trans_tuple.name
-        chromosome = trans_tuple.chrom
-        exon_count = trans_tuple.exonCount
-        exon_starts = trans_tuple.exonStarts.split(',')[:exon_count]
-        exon_ends = trans_tuple.exonEnds.split(',')[:exon_count]
+    def get_transcript_exons(self, transcript):
+        '''Parse the provided transcript, extract exon data from it
+        and return it as a dictionary of slices.'''
+        chromosome = transcript.chrom
+        exon_count = transcript.exonCount
+        exon_starts = transcript.exonStarts.split(',')[:exon_count]
+        exon_ends = transcript.exonEnds.split(',')[:exon_count]
         exons = {}
-        exon_ids = self.get_ensembl_exon_ids(transcript_id)
+        exon_ids = self.get_ensembl_exon_ids(transcript.name)
         for i in range(0, exon_count):
             e = EnsemblSliceInfo(chromosome, exon_starts[i], exon_ends[i],
-                                 trans_tuple.orientation)
+                                 transcript.orientation)
             exons[exon_ids[i]] = e
         return exons
