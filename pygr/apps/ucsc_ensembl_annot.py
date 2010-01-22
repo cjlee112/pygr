@@ -160,10 +160,10 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
             self.exon_db = annotation.AnnotationDB(exon_slicedb,
                                                    self.genome_seq,
                                                    checkFirstID=False,
-                                                   sliceAttrDict=dict(id=1,
-                                                                      start=2,
-                                                                      stop=3,
-                                                                orientation=4))
+                                                   sliceAttrDict=dict(id=0,
+                                                                      start=1,
+                                                                      stop=2,
+                                                                orientation=3))
         return self.exon_db
 
 
@@ -226,9 +226,9 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
                 self.res.ens_exon_stable_id[k]].keys()
             transcript_exons = self.get_transcript_exons(transcripts[0])
             # Cache all exons from that transcript to save time in the future.
-            for exon in transcript_exons:
-                if exon[0] not in self.data:
-                    self.data[exon[0]] = exon
+            for exon_id in transcript_exons:
+                if exon_id not in self.data:
+                    self.data[exon_id] = transcript_exons[exon_id]
             self.res.genome_seq.cacheHint({transcripts[0].id:
                                            (transcripts[0].txStart,
                                             transcripts[0].txEnd)},
@@ -268,14 +268,13 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
         exon_count = trans_tuple.exonCount
         exon_starts = trans_tuple.exonStarts.split(',')[:exon_count]
         exon_ends = trans_tuple.exonEnds.split(',')[:exon_count]
-        exons = []
+        exons = {}
         exon_ids = self.get_ensembl_exon_ids(transcript_id)
         for i in range(0, exon_count):
             e = (
-                exon_ids[i],
                 chromosome,
                 exon_starts[i],
                 exon_ends[i],
                 trans_tuple.orientation)
-            exons.append(e)
+            exons[exon_ids[i]] = e
         return exons
