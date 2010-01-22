@@ -75,6 +75,9 @@ class UCSCEnsemblInterface(object):
             self.ucsc_ensGene_trans, 'select transcript from %s.ensGtp \
             where protein=%%s' % self.ucsc_db, inverseSQL='select protein \
             from %s.ensGtp where transcript=%%s' % self.ucsc_db)
+        self.transcripts_in_genes_map = sqlgraph.GraphView(
+            self.ucsc_ensGtp, self.ucsc_ensGene_gene,
+            "select transcript from %s.ensGtp where gene=%%s" % self.ucsc_db)
         self.ens_transcripts_of_exons_map = sqlgraph.GraphView(
             self.ens_exon_stable_id, self.ucsc_ensGene_trans, """\
 select trans.stable_id from %s.exon_stable_id exon, \
