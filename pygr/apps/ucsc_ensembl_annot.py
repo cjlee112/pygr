@@ -4,6 +4,16 @@ from pygr import annotation, seqdb, sequence, sqlgraph, worldbase
 from pygr.dbfile import ReadOnlyError
 
 
+class EnsemblSliceInfo(object):
+    def __init__(self, id, start, stop, orientation, parents=None, children=None):
+        self.id = id
+        self.start = start
+        self.stop = stop
+        self.orientation = orientation
+        self.parents = parents
+        self.children = children
+
+
 class UCSCStrandDescr(object):
 
     def __get__(self, obj, objtype):
@@ -159,11 +169,7 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
             exon_slicedb = EnsemblOnDemandSliceDB(self)
             self.exon_db = annotation.AnnotationDB(exon_slicedb,
                                                    self.genome_seq,
-                                                   checkFirstID=False,
-                                                   sliceAttrDict=dict(id=0,
-                                                                      start=1,
-                                                                      stop=2,
-                                                                orientation=3))
+                                                   checkFirstID=False)
         return self.exon_db
 
 
@@ -228,11 +234,12 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
             # Cache all exons from that transcript to save time in the future.
             for exon_id in transcript_exons:
                 if exon_id not in self.data:
+                    transcript_exons[exon_id].parents = transcripts
                     self.data[exon_id] = transcript_exons[exon_id]
             self.res.genome_seq.cacheHint({transcripts[0].id:
                                            (transcripts[0].txStart,
                                             transcripts[0].txEnd)},
-                                          self)
+                                          transcripts[0])
             return self.data[k]
 
     def __setitem__(self, k, v):
@@ -271,10 +278,7 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
         exons = {}
         exon_ids = self.get_ensembl_exon_ids(transcript_id)
         for i in range(0, exon_count):
-            e = (
-                chromosome,
-                exon_starts[i],
-                exon_ends[i],
-                trans_tuple.orientation)
+            e = EnsemblSliceInfo(chromosome, exon_starts[i], exon_ends[i],
+                                 trans_tuple.orientation)
             exons[exon_ids[i]] = e
         return exons
