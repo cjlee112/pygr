@@ -94,7 +94,7 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
                                                 serverInfo=self.ucsc_server,
                                                 primaryKey='name',
                                                 itemClass=UCSCSeqIntervalRow)
-        exon_slicedb = EnsemblOnDemandSliceDB(self)
+        exon_slicedb = EnsemblExonOnDemandSliceDB(self)
         # Finally, initialise all UCSC-Ensembl databases.
         self.trans_db = annotation.AnnotationDB(self.ucsc_ensGene_trans,
                                                 self.genome_seq,
@@ -210,7 +210,7 @@ class EnsemblExonSliceInfo(object):
         self.children = children
 
 
-class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
+class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
 
     def __init__(self, res):
         self.data = {}
@@ -238,12 +238,12 @@ class EnsemblOnDemandSliceDB(object, UserDict.DictMixin):
     def __setitem__(self, k, v):
         '''Method required by UserDict.DictMixin. Throws an exception
         (read-only sliceDB).'''
-        raise ReadOnlyError('EnsemblOnDemandSliceDB is read-only')
+        raise ReadOnlyError('EnsemblExonOnDemandSliceDB is read-only')
 
     def __delitem__(self, k):
         '''Method required by UserDict.DictMixin. Throws an exception
         (read-only sliceDB).'''
-        raise ReadOnlyError('EnsemblOnDemandSliceDB is read-only')
+        raise ReadOnlyError('EnsemblExonOnDemandSliceDB is read-only')
 
     def keys(self):
         'Returns keys present in the cache. FIXME: add support for SQL ones?'
