@@ -142,6 +142,16 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
                                                                 ens_version))
         return cursor.fetchall()[0][0]
 
+    def get_ensembl_exon_ids(self, transcript_id):
+        '''Obtain a list of stable IDs of exons associated with the
+        specified transcript, ordered by rank.'''
+        matching_edges = self.ens_exons_in_transcripts_map[
+            self.ens_transcript_stable_id[transcript_id]]
+        ids = []
+        for exon in matching_edges.keys():
+            ids.append(exon.stable_id)
+        return ids
+
     def transcript_database(self):
         'Return an AnnotationDB of transcript annotations.'
         return self.trans_db
@@ -254,16 +264,6 @@ class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
         'Returns keys present in the cache. FIXME: add support for SQL ones?'
         return self.data.keys()
 
-    def get_ensembl_exon_ids(self, transcript_id):
-        '''Obtain a list of stable IDs of exons associated with the
-        specified transcript, ordered by rank.'''
-        matching_edges = self.res.ens_exons_in_transcripts_map[
-            self.res.ens_transcript_stable_id[transcript_id]]
-        ids = []
-        for exon in matching_edges.keys():
-            ids.append(exon.stable_id)
-        return ids
-
     def get_transcript_exons(self, transcript):
         '''Parse the provided transcript, extract exon data from it
         and return it as a dictionary of slices.'''
@@ -272,7 +272,7 @@ class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
         exon_starts = transcript.exonStarts.split(',')[:exon_count]
         exon_ends = transcript.exonEnds.split(',')[:exon_count]
         exons = {}
-        exon_ids = self.get_ensembl_exon_ids(transcript.name)
+        exon_ids = self.res.get_ensembl_exon_ids(transcript.name)
         for i in range(0, exon_count):
             e = EnsemblExonSliceInfo(chromosome, exon_starts[i], exon_ends[i],
                                      transcript.orientation)
