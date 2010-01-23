@@ -95,12 +95,12 @@ trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
 et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
         # We will need this too.
         self.genome_seq = worldbase(ucsc_genome_name)
-        protein_slicedb = EnsemblProteinSliceDB(self, '%s.ensGene' %
+        protein_slicedb = EnsemblProteinSliceDB('%s.ensGene' %
                                                 self.ucsc_db,
                                                 serverInfo=self.ucsc_server,
                                                 primaryKey='name',
                                                 itemClass=UCSCSeqIntervalRow)
-        exon_slicedb = EnsemblExonOnDemandSliceDB(self)
+        exon_slicedb = EnsemblExonOnDemandSliceDB()
         # Finally, initialise all UCSC-Ensembl databases.
         self.trans_db = annotation.AnnotationDB(self.ucsc_ensGene_trans,
                                                 self.genome_seq,
@@ -209,20 +209,16 @@ class EnsemblProteinSliceDB(sqlgraph.SQLTable):
     '''A sliceDB class for protein annotations. Basically, an SQLTable
     pointing to transcript data along with transparent mapping of keys.'''
 
-    def __init__(self, res, *args, **kwargs):
-        self.res = res
-        sqlgraph.SQLTable.__init__(self, *args, **kwargs)
-
     def __getitem__(self, k):
-        tid = self.res.protein_transcript_id_map[self.res.ucsc_ensGtp[k]].name
+        tid = gRes.protein_transcript_id_map[gRes.ucsc_ensGtp[k]].name
         return sqlgraph.SQLTable.__getitem__(self, tid)
 
     def keys(self):
         prot_keys = []
         trans_keys = SQLTable.keys(self)
         for tid in trans_keys:
-            pid = (~self.res.protein_transcript_id_map[
-                self.res.ucsc_ensGene[tid]]).name
+            pid = (~gRes.protein_transcript_id_map[
+                gRes.ucsc_ensGene[tid]]).name
             prot_keys.append(pid)
         return prot_keys
 
@@ -241,24 +237,23 @@ class EnsemblExonSliceInfo(object):
 
 class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
 
-    def __init__(self, res):
+    def __init__(self):
         self.data = {}
-        self.res = res
 
     def __getitem__(self, k):
         try:
             return self.data[k]
         except KeyError:
             # Not cached yet, extract the exon from transcript data.
-            transcripts = self.res.ens_transcripts_of_exons_map[
-                self.res.ens_exon_stable_id[k]].keys()
+            transcripts = gRes.ens_transcripts_of_exons_map[
+                gRes.ens_exon_stable_id[k]].keys()
             transcript_exons = self.get_transcript_exons(transcripts[0])
             # Cache all exons from that transcript to save time in the future.
             for exon_id in transcript_exons:
                 if exon_id not in self.data:
                     transcript_exons[exon_id].parents = transcripts
                     self.data[exon_id] = transcript_exons[exon_id]
-            self.res.genome_seq.cacheHint({transcripts[0].id:
+            gRes.genome_seq.cacheHint({transcripts[0].id:
                                            (transcripts[0].txStart,
                                             transcripts[0].txEnd)},
                                           transcripts[0])
@@ -286,7 +281,7 @@ class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
         exon_starts = transcript.exonStarts.split(',')[:exon_count]
         exon_ends = transcript.exonEnds.split(',')[:exon_count]
         exons = {}
-        exon_ids = self.res.get_ensembl_exon_ids(transcript.name)
+        exon_ids = gRes.get_ensembl_exon_ids(transcript.name)
         for i in range(0, exon_count):
             e = EnsemblExonSliceInfo(chromosome, exon_starts[i], exon_ends[i],
                                      transcript.orientation)
