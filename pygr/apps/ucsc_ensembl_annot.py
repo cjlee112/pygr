@@ -4,6 +4,9 @@ from pygr import annotation, seqdb, sequence, sqlgraph, worldbase
 from pygr.dbfile import ReadOnlyError
 
 
+gRes = None
+
+
 class UCSCStrandDescr(object):
 
     def __get__(self, obj, objtype):
@@ -124,6 +127,8 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
         self.exon_db = annotation.AnnotationDB(exon_slicedb,
                                                self.genome_seq,
                                                checkFirstID=False)
+        global gRes
+        gRes = self
 
     def get_ensembl_db_name(self, ens_prefix):
         '''Used by __init__(), obtains Ensembl database name matching
@@ -185,10 +190,19 @@ class EnsemblTranscriptAnnotationSeqDescr(object):
         return sequence.Sequence(trans_seq, obj.name)   # FIXME: cache this?
 
 
+class EnsemblTranscriptAnnotationExonDescr(object):
+
+    def __get__(self, obj, objtype):
+        'Return a list of exons contained in this transcript.'
+        exon_ids = gRes.get_ensembl_exon_ids(obj.name)
+        return exon_ids
+
+
 class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
     '''An AnnotationSeq class for transcript annotations, implementing
-    a custom 'sequence' property.'''
+    custom 'sequence' and 'children' properties.'''
     sequence = EnsemblTranscriptAnnotationSeqDescr()
+    children = EnsemblTranscriptAnnotationExonDescr()
 
 
 class EnsemblProteinSliceDB(sqlgraph.SQLTable):
