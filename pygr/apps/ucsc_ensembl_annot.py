@@ -36,6 +36,12 @@ class UCSCEnsemblInterface(object):
         annotation databases. ucsc_genome_name should follow the worldbase
         naming convention. If ens_species is not specified, we will try
         to autodetect it.'''
+        # Only one instance can be active at a time for now.
+        global gRes
+        if gRes is not None:
+            raise ValueError("A UCSCEnsemblInterface object already exists")
+        else:
+            gRes = self
         # Connect to both servers and prepare database names.
         if ucsc_serverInfo is not None:
             self.ucsc_server = ucsc_serverInfo
@@ -127,8 +133,6 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
         self.exon_db = annotation.AnnotationDB(exon_slicedb,
                                                self.genome_seq,
                                                checkFirstID=False)
-        global gRes
-        gRes = self
 
     def get_ensembl_db_name(self, ens_prefix):
         '''Used by __init__(), obtains Ensembl database name matching
