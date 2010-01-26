@@ -25,12 +25,6 @@ class UCSCGeneIntervalRow(sqlgraph.TupleO):
 
     def __init__(self, *args, **kwargs):
         sqlgraph.TupleO.__init__(self, *args, **kwargs)
-        # FIXME: this should be doable with attrAlias...
-        cursor = gRes.ucsc_server.cursor()
-        cursor.execute("select min(txStart) from %s.ensGene where name2='%s'" % (gRes.ucsc_db, self.name2))
-        self.minTxStart = cursor.fetchall()[0][0]
-        cursor.execute("select max(txEnd) from %s.ensGene where name2='%s'" % (gRes.ucsc_db, self.name2))
-        self.maxTxEnd = cursor.fetchall()[0][0]
         self.children = gRes.get_gene_transcript_ids(self.name2)
 
 
@@ -78,7 +72,10 @@ class UCSCEnsemblInterface(object):
         self.ucsc_ensGene_gene = sqlgraph.SQLTable('%s.ensGene' % self.ucsc_db,
                                                    serverInfo=self.ucsc_server,
                                                    primaryKey='name2',
-                                                  itemClass=UCSCGeneIntervalRow)
+                                                  itemClass=UCSCGeneIntervalRow,
+                                                   attrAlias=dict(
+                                                     minTxStart='min(txStart)',
+                                                     maxTxEnd='max(txEnd)'))
         self.ucsc_ensGtp_gene = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
                                              serverInfo=self.ucsc_server,
                                              primaryKey='gene')
