@@ -639,8 +639,8 @@ class SQLTableBase(object, UserDict.DictMixin):
                 try: # CHECK IF field IS ITSELF THE SQL COLUMN NAME
                     return self.data[field] + 0 # ONLY RETURN AN INTEGER
                 except (KeyError, TypeError):
-                    raise ValueError('attribute %s does not map to a SQL \
-                                     column!' % attr)
+                    raise AttributeError('attribute %s does not map to a SQL \
+column!' % attr)
         if isinstance(field, types.StringType):
             # Use aliased expression for database select instead of attr.
             attr = field
