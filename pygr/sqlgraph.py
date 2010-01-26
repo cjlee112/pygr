@@ -562,14 +562,14 @@ class SQLTableBase(object, UserDict.DictMixin):
         if hasattr(self, '_attr_alias'):
             # Apply attribute aliases for this class.
             self.addAttrAlias(False, **self._attr_alias)
+        if attrAlias is not None: # ADD ATTRIBUTE ALIASES
+            self.attrAlias = attrAlias # RECORD FOR PICKLING PURPOSES
+            self.data.update(attrAlias)
         self.objclass(itemClass) # NEED TO SUBCLASS OUR ITEM CLASS
         if itemSliceClass is not None:
             self.itemSliceClass = itemSliceClass
             # Need to subclass itemSliceClass.
             get_bound_subclass(self, 'itemSliceClass', self.name)
-        if attrAlias is not None: # ADD ATTRIBUTE ALIASES
-            self.attrAlias = attrAlias # RECORD FOR PICKLING PURPOSES
-            self.data.update(attrAlias)
         if clusterKey is not None:
             self.clusterKey = clusterKey
         if serverInfo is not None:
