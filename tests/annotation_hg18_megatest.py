@@ -405,8 +405,8 @@ class Build_Test(PygrBuildNLMSAMegabase):
                                                tmpelement.gene_id,
                                                tmpslice2.start,
                                                tmpslice2.stop)
-                            slicestart, sliceend = max(tmp.start, tmp2.start),
-                            min(tmp.stop, tmp2.stop)
+                            slicestart, sliceend = max(tmp.start, tmp2.start),\
+                                    min(tmp.stop, tmp2.stop)
                             if slicestart < 0 or sliceend < 0:
                                 sys.exit('wrong query')
                             tmp1 = msa.seqDict['hg18.' + chrid][slicestart:
