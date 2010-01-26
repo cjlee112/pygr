@@ -20,6 +20,20 @@ class UCSCSeqIntervalRow(sqlgraph.TupleO):
     orientation = UCSCStrandDescr()
 
 
+class UCSCGeneIntervalRow(sqlgraph.TupleO):
+    orientation = UCSCStrandDescr()
+
+    def __init__(self, *args, **kwargs):
+        sqlgraph.TupleO.__init__(self, *args, **kwargs)
+        # FIXME: this should be doable with attrAlias...
+        cursor = gRes.ucsc_server.cursor()
+        cursor.execute("select min(txStart) from %s.ensGene where name2='%s'" % (gRes.ucsc_db, self.name2))
+        self.minTxStart = cursor.fetchall()[0][0]
+        cursor.execute("select max(txEnd) from %s.ensGene where name2='%s'" % (gRes.ucsc_db, self.name2))
+        self.maxTxEnd = cursor.fetchall()[0][0]
+        self.children = gRes.get_gene_transcript_ids(self.name2)
+
+
 class UCSCProteinSeq(sqlgraph.ProteinSQLSequence):
     '''Representation of UCSC protein-sequence tables such as ensGene,
     which lack the length column.'''
@@ -64,8 +78,11 @@ class UCSCEnsemblInterface(object):
         self.ucsc_ensGene_gene = sqlgraph.SQLTable('%s.ensGene' % self.ucsc_db,
                                                    serverInfo=self.ucsc_server,
                                                    primaryKey='name2',
-                                                  itemClass=UCSCSeqIntervalRow)
-        self.ucsc_ensGtp = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
+                                                  itemClass=UCSCGeneIntervalRow)
+        self.ucsc_ensGtp_gene = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
+                                             serverInfo=self.ucsc_server,
+                                             primaryKey='gene')
+        self.ucsc_ensGtp_prot = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
                                              serverInfo=self.ucsc_server,
                                              primaryKey='protein')
         self.ucsc_ensPep = sqlgraph.SQLTable('%s.ensPep' % self.ucsc_db,
@@ -80,12 +97,12 @@ class UCSCEnsemblInterface(object):
             '%s.transcript_stable_id' % self.ens_db,
             serverInfo=self.ens_server, primaryKey='stable_id')
         # Mappings.
-        self.protein_transcript_id_map = sqlgraph.MapView(self.ucsc_ensGtp,
+        self.protein_transcript_id_map = sqlgraph.MapView(self.ucsc_ensGtp_prot,
             self.ucsc_ensGene_trans, 'select transcript from %s.ensGtp \
             where protein=%%s' % self.ucsc_db, inverseSQL='select protein \
             from %s.ensGtp where transcript=%%s' % self.ucsc_db)
         self.transcripts_in_genes_map = sqlgraph.GraphView(
-            self.ucsc_ensGtp, self.ucsc_ensGene_gene,
+            self.ucsc_ensGtp_gene, self.ucsc_ensGene_trans,
             "select transcript from %s.ensGtp where gene=%%s" % self.ucsc_db)
         self.ens_transcripts_of_exons_map = sqlgraph.GraphView(
             self.ens_exon_stable_id, self.ucsc_ensGene_trans, """\
@@ -161,6 +178,16 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
             ids.append(exon.stable_id)
         return ids
 
+    def get_gene_transcript_ids(self, gene_id):
+        '''Obtain a list of stable IDs of transcripts associated
+        with the specified gene.'''
+        matching_edges = self.transcripts_in_genes_map[
+            self.ucsc_ensGtp_gene[gene_id]]
+        ids = []
+        for transcript in matching_edges.keys():
+            ids.append(transcript.name)
+        return ids
+
     def transcript_database(self):
         'Return an AnnotationDB of transcript annotations.'
         return self.trans_db
@@ -214,7 +241,7 @@ class EnsemblProteinSliceDB(sqlgraph.SQLTable):
     pointing to transcript data along with transparent mapping of keys.'''
 
     def __getitem__(self, k):
-        tid = gRes.protein_transcript_id_map[gRes.ucsc_ensGtp[k]].name
+        tid = gRes.protein_transcript_id_map[gRes.ucsc_ensGtp_prot[k]].name
         return sqlgraph.SQLTable.__getitem__(self, tid)
 
     def keys(self):
