@@ -6,6 +6,11 @@ from testlib import testutil, SkipTest, PygrTestProgram
 from pygr import sqlgraph, seqdb, classutil, logger
 
 
+class DNASeqRow(seqdb.DNASQLSequence):
+    def __len__(self): # just speed optimization
+        return self._select('length(sequence)') # SQL SELECT expression
+
+
 class SQLSequence_Test(unittest.TestCase):
     '''Basic SQL sequence class tests
 
@@ -13,6 +18,8 @@ class SQLSequence_Test(unittest.TestCase):
     SQLSequence objects created by a SQLTable object rather than
     instantiating the SQLSequence objects directly.
     '''
+    _dbClass = sqlgraph.SQLTableNoCache
+    _rowClass = DNASeqRow
 
     def setUp(self, serverInfo=None, dbname='test.sqlsequence_test'):
         if not testutil.mysql_enabled():
@@ -21,10 +28,10 @@ class SQLSequence_Test(unittest.TestCase):
         createTable = 'CREATE TABLE %s (primary_id INTEGER PRIMARY KEY \
                 %%(AUTO_INCREMENT)s, sequence TEXT)' % dbname
 
-        self.db = sqlgraph.SQLTableNoCache(dbname, serverInfo=serverInfo,
-                                           dropIfExists=True,
-                                           createTable=createTable,
-                                           attrAlias=dict(seq='sequence'))
+        self.db = self._dbClass(dbname, serverInfo=serverInfo,
+                                itemClass=self._rowClass, dropIfExists=True,
+                                createTable=createTable,
+                                attrAlias=dict(seq='sequence'))
 
         self.db.cursor.execute("""\
 INSERT INTO %s (sequence) VALUES ('\
@@ -35,14 +42,6 @@ CACCCTGCCCCATCTCCCCAGCCTGGCCCCTCGTGTCTCAGAACCCTCGGGGGGAGGCACAGAAGCCTTCGGGG')"""
         INSERT INTO %s (sequence)
               VALUES ('GAAAGAAAGAAAGAAAGAAAGAAAGAGAGAGAGAGAGACAGAAG')
         """ % dbname)
-
-        class DNASeqRow(seqdb.DNASQLSequence):
-
-            def __len__(self): # just speed optimization
-                return self._select('length(sequence)') # SQL SELECT expression
-
-        # force the table object to return DNASeqRow objects
-        self.db.objclass(DNASeqRow)
 
         self.row1 = self.db[1]
         self.row2 = self.db[2]
@@ -68,11 +67,18 @@ CACCCTGCCCCATCTCCCCAGCCTGGCCCCTCGTGTCTCAGAACCCTCGGGGGGAGGCACAGAAGCCTTCGGGG')"""
         "Testing subclassing"
         self.row2._init_subclass(self.db)
 
+class SQLSeqCached_Test(SQLSequence_Test):
+    _dbClass = sqlgraph.SQLTable
+    _rowClass = sqlgraph.DNASQLSequenceCached
+
 
 class SQLiteSequence_Test(testutil.SQLite_Mixin, SQLSequence_Test):
-
     def sqlite_load(self):
         SQLSequence_Test.setUp(self, self.serverInfo, 'sqlsequence_test')
+
+class SQLiteSeqCached_Test(SQLiteSequence_Test):
+    _dbClass = sqlgraph.SQLTable
+    _rowClass = sqlgraph.DNASQLSequenceCached
 
 
 def get_suite():

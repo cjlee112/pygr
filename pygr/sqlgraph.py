@@ -2377,8 +2377,10 @@ class GraphView(MapView):
 
 class SQLSequence(SQLRow, SequenceBase):
     """Transparent access to a DB row representing a sequence.
-
-    Use attrAlias dict to rename 'length' to something else.
+    Does not cache the sequence string in memory -- uses SQL queries to
+    retrieve just the desired slice as needed.
+    By default expects a column named 'length' to provide sequence length;
+    use attrAlias to remap to an SQL expression if needed.
     """
 
     def _init_subclass(cls, db, **kwargs):
@@ -2410,3 +2412,28 @@ class RNASQLSequence(SQLSequence):
 
 class ProteinSQLSequence(SQLSequence):
     _seqtype=PROTEIN_SEQTYPE
+
+class SQLSequenceCached(TupleO, SequenceBase):
+    '''Caches complete sequence string when initially constructed.
+    By default expects it as column "seq"; use attrAlias to remap to another
+    column if needed.'''
+    def _init_subclass(cls, db, **kwargs):
+        db.seqInfoDict = db # db will act as its own seqInfoDict
+        TupleO._init_subclass(db=db, **kwargs)
+    _init_subclass = classmethod(_init_subclass)
+
+    def __init__(self, data):
+        TupleO.__init__(self, data)
+        SequenceBase.__init__(self)
+
+class DNASQLSequenceCached(SQLSequenceCached):
+    _seqtype=DNA_SEQTYPE
+
+
+class RNASQLSequenceCached(SQLSequenceCached):
+    _seqtype=RNA_SEQTYPE
+
+
+class ProteinSQLSequenceCached(SQLSequenceCached):
+    _seqtype=PROTEIN_SEQTYPE
+
