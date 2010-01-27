@@ -140,12 +140,7 @@ class TupleO(object):
     _columnDescriptor = TupleDescriptor
     _idDescriptor = TupleIDDescriptor
     _sqlDescriptor = SQLDescriptor
-
-    def _init_subclass(cls, db):
-        cls._attrcol = db.data # TupleO requires this
-        init_row_subclass(cls, db) # add descriptors for db attributes
-    _init_subclass = classmethod(_init_subclass)
-
+    _init_subclass = classmethod(init_row_subclass)
     _select = select_from_row
     __dir__ = dir_row
 
