@@ -510,7 +510,7 @@ class SQLTableBase(object, UserDict.DictMixin):
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
                  serverInfo=None, autoGC=True, orderBy=None,
                  writeable=False, iterSQL=None, iterColumns=None,
-                 primaryKey=None, **kwargs):
+                 primaryKey=None, allowNonUniqueID=False, **kwargs):
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = RecentValueDictionary(autoGC) # object cache
         else:
@@ -552,6 +552,7 @@ class SQLTableBase(object, UserDict.DictMixin):
         if primaryKey is not None:
             self.primary_key = primaryKey
             self.primaryKey = primaryKey
+        self.allowNonUniqueID = allowNonUniqueID
         self.data = {} # map of all attributes, including aliases
         for icol, field in enumerate(self.columnName):
             self.data[field] = icol # 1st add mappings to columns
@@ -936,9 +937,10 @@ class SQLTable(SQLTableBase):
                                              (k, ))
             self.cursor.execute(sql, params)
             l = self.cursor.fetchmany(2) # get at most 2 rows
-            if len(l) != 1:
-                raise KeyError('%s not found in %s, or not unique'
-                               % (str(k), self.name))
+            if len(l) == 0:
+                raise KeyError('%s not found in %s' % (str(k), self.name))
+            if len(l) > 1 and not self.allowNonUniqueID:
+                raise KeyError('%s not unique in %s' % (str(k), self.name))
             self.limit_cache()
             # Cache it in local dictionary.
             return self.cacheItem(l[0], self.itemClass)
@@ -1072,8 +1074,10 @@ class SQLTableNoCache(SQLTableBase):
             self._select('where %s=%%s' % self.primary_key, (k, ),
                          self.primary_key)
             t = self.cursor.fetchmany(2)
-            if len(t) != 1:
-                raise KeyError('id %s non-existent or not unique' % k)
+            if len(t) == 0:
+                raise KeyError('id %s non-existent' % k)
+            if len(t) > 1 and not self.allowNonUniqueID:
+                raise KeyError('id %s not unique' % k)
             o = self.itemClass(k) # create obj referencing this ID
             self._weakValueDict[k] = o # cache the SQLRow object
             return o

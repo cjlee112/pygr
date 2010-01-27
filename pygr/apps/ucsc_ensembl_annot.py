@@ -72,13 +72,15 @@ class UCSCEnsemblInterface(object):
         self.ucsc_ensGene_gene = sqlgraph.SQLTable('%s.ensGene' % self.ucsc_db,
                                                    serverInfo=self.ucsc_server,
                                                    primaryKey='name2',
+                                                   allowNonUniqueID=True,
                                                   itemClass=UCSCGeneIntervalRow,
                                                    attrAlias=dict(
                                                      minTxStart='min(txStart)',
                                                      maxTxEnd='max(txEnd)'))
         self.ucsc_ensGtp_gene = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
-                                             serverInfo=self.ucsc_server,
-                                             primaryKey='gene')
+                                                  serverInfo=self.ucsc_server,
+                                                  primaryKey='gene',
+                                                  allowNonUniqueID=True)
         self.ucsc_ensGtp_prot = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
                                              serverInfo=self.ucsc_server,
                                              primaryKey='protein')
