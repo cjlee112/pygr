@@ -61,7 +61,7 @@ class SQLTable_Setup(unittest.TestCase):
                                   serverInfo=self.serverInfo,
                                   createTable=createTable,
                                   writeable=writeable,
-                                  attrAlias=dict(sequence_id=1,
+                                  attrAlias=dict(sequence_id='seq_id',
                                                  minStop="min(stop)"),
                                   **dbargs)
         self.sourceDB = self.tableClass(joinTable1, serverInfo=self.serverInfo,
@@ -279,7 +279,7 @@ class SQLTable_Test(SQLTable_Setup):
         assert sortedBL == bl
 
     def test_attraliases(self):
-#        'test aliases defined with attrAlias'
+        'test aliases defined with attrAlias'
         self.db[1].sequence_id
         self.db[1].minStop
 

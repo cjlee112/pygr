@@ -19,7 +19,7 @@ class TupleDescriptor(object):
     'return tuple entry corresponding to named attribute'
 
     def __init__(self, db, attr):
-        self.icol = db.data[attr] # index of this attribute in the tuple
+        self.icol = db._attrSQL(attr, columnNumber=True) # index in the tuple
 
     def __get__(self, obj, klass):
         return obj._data[self.icol]
@@ -100,13 +100,10 @@ def init_row_subclass(cls, db):
         if attr == 'id': # handle ID attribute specially
             setattr(cls, attr, cls._idDescriptor(db, attr))
             continue
-        try: # check if this attr maps to an SQL column
-            db._attrSQL(attr, columnNumber=True)
+        try: # treat as interface to our stored tuple
+            setattr(cls, attr, cls._columnDescriptor(db, attr))
         except AttributeError: # treat as SQL expression
             setattr(cls, attr, cls._sqlDescriptor(db, attr))
-        else: # treat as interface to our stored tuple
-            setattr(cls, attr, cls._columnDescriptor(db, attr))
-
 
 def dir_row(self):
     """get list of column names as our attributes """
