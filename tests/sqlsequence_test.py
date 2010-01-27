@@ -21,10 +21,10 @@ class SQLSequence_Test(unittest.TestCase):
         createTable = 'CREATE TABLE %s (primary_id INTEGER PRIMARY KEY \
                 %%(AUTO_INCREMENT)s, sequence TEXT)' % dbname
 
-        self.db = sqlgraph.SQLTable(dbname, serverInfo=serverInfo,
-                                    dropIfExists=True,
-                                    createTable=createTable,
-                                    attrAlias=dict(seq='sequence'))
+        self.db = sqlgraph.SQLTableNoCache(dbname, serverInfo=serverInfo,
+                                           dropIfExists=True,
+                                           createTable=createTable,
+                                           attrAlias=dict(seq='sequence'))
 
         self.db.cursor.execute("""\
 INSERT INTO %s (sequence) VALUES ('\

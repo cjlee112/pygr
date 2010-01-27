@@ -96,6 +96,14 @@ def select_from_row(row, what):
 
 def init_row_subclass(cls, db):
     'add descriptors for db attributes'
+    try: # check itemClass compatibility with db.__class__
+        if not isinstance(db, cls._tableclass):
+            raise ValueError('''Your itemClass %s is not compatible
+with your database class %s.
+With this itemClass you must use %s as your base class instead.'''
+                             % (cls, db.__class__, cls._tableclass))
+    except AttributeError: # if no _tableclass, no need to do anything
+        pass
     for attr in db.data: # bind all database columns
         if attr == 'id': # handle ID attribute specially
             setattr(cls, attr, cls._idDescriptor(db, attr))
@@ -108,7 +116,6 @@ def init_row_subclass(cls, db):
 def dir_row(self):
     """get list of column names as our attributes """
     return self.db.data.keys()
-
 
 class TupleO(object):
     """Provides attribute interface to a database tuple.
@@ -133,7 +140,12 @@ class TupleO(object):
     _columnDescriptor = TupleDescriptor
     _idDescriptor = TupleIDDescriptor
     _sqlDescriptor = SQLDescriptor
-    _init_subclass = classmethod(init_row_subclass)
+
+    def _init_subclass(cls, db):
+        cls._attrcol = db.data # TupleO requires this
+        init_row_subclass(cls, db) # add descriptors for db attributes
+    _init_subclass = classmethod(_init_subclass)
+
     _select = select_from_row
     __dir__ = dir_row
 
@@ -678,13 +690,6 @@ column!' % attr)
         # Bind itemClass.
         oclass = get_bound_subclass(self, 'itemClass', self.name,
                                     subclassArgs=dict(db=self))
-        if issubclass(oclass, TupleO):
-            # Bind attribute list to tupleo interface.
-            oclass._attrcol = self.data
-        if hasattr(oclass, '_tableclass') and \
-           not isinstance(self, oclass._tableclass):
-            # Row class can override our current table class.
-            self.__class__ = oclass._tableclass
 
     def _select(self, whereClause='', params=(), selectCols='t1.*',
                 cursor=None, orderBy='', limit=''):
