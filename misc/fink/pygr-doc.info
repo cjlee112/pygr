@@ -5,8 +5,8 @@ Version: 0.8.1
 Revision: 1
 Description: Pygr documentation
 License: BSD
-Maintainer: Christopher Lee <leec@chem.ucla.edu>
-BuildDepends: sphinx-py23 | sphinx-py24 | sphinx-py25 | sphinx-py26, epydoc-py25 | epydoc-py26
+Maintainer: Marek Szuba <Marek.Szuba@ucla.edu>
+BuildDepends: sphinx-py26, epydoc-py26
 Source: http://pygr.googlecode.com/files/pygr-%v.tar.gz
 Source-MD5: 826d777d1610117ca5efb5d759321d5f
 CompileScript: <<
