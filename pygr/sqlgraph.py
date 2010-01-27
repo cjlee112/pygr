@@ -40,12 +40,12 @@ class TupleDescriptorRW(TupleDescriptor):
 
     def __init__(self, db, attr):
         self.attr = attr
-        self.icol = db.data[attr] # index of this attribute in the tuple
+        self.icol = db._attrSQL(attr, columnNumber=True) # index in the tuple
         self.attrSQL = db._attrSQL(attr, sqlColumn=True) # SQL column name
 
     def __set__(self, obj, val):
         obj.db._update(obj.id, self.attrSQL, val) # AND UPDATE THE DATABASE
-        obj.save_local(self.attr, val)
+        obj.save_local(self.attr, val, self.icol)
 
 
 class SQLDescriptor(object):
@@ -176,10 +176,9 @@ class TupleORW(TupleO):
         self.insert_and_cache_id(self._data, **kwargs)
 
     def cache_id(self, row_id):
-        self.save_local('id', row_id)
+        self.save_local('id', row_id, self.db._attrSQL('id', columnNumber=True))
 
-    def save_local(self, attr, val):
-        icol = self._attrcol[attr]
+    def save_local(self, attr, val, icol):
         try:
             self._data[icol] = val # FINALLY UPDATE OUR LOCAL CACHE
         except TypeError: # TUPLE CAN'T STORE NEW VALUE, SO USE A LIST
