@@ -25,7 +25,7 @@ class NLMSADownload_Test(unittest.TestCase):
 
     def setUp(self):
         config = ConfigParser.ConfigParser({'testOutputBaseDir': '.',
-                                            'httpdPort': 28145})
+                                            'httpdPort': '28145'})
         config.read([os.path.join(os.path.expanduser('~'), '.pygrrc'),
                      os.path.join(os.path.expanduser('~'), 'pygr.cfg'),
                      '.pygrrc', 'pygr.cfg'])
@@ -35,7 +35,7 @@ class NLMSADownload_Test(unittest.TestCase):
 
         self.resource_name = 'Test.NLMSA'
 
-        server_addr = ('127.0.0.1', httpdPort) # FIXME: randomise the port?
+        server_addr = ('127.0.0.1', int(httpdPort)) # FIXME: randomise the port?
         self.httpd = megatest_utils.HTTPServerLauncher(server_addr,
                                                        httpdServedFile)
         server_thread = threading.Thread(target=self.httpd.run)
