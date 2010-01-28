@@ -117,11 +117,6 @@ trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
 et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
         # We will need this too.
         self.genome_seq = worldbase(ucsc_genome_name)
-        protein_slicedb = EnsemblProteinSliceDB('%s.ensGene' %
-                                                self.ucsc_db,
-                                                serverInfo=self.ucsc_server,
-                                                primaryKey='name',
-                                                itemClass=UCSCSeqIntervalRow)
         exon_slicedb = EnsemblExonOnDemandSliceDB()
         # Finally, initialise all UCSC-Ensembl databases.
         self.trans_db = annotation.AnnotationDB(self.ucsc_ensGene_trans,
@@ -139,13 +134,7 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
                                                    id='chrom',
                                                    start='txStart',
                                                    stop='txEnd'))
-        self.prot_db = annotation.AnnotationDB(protein_slicedb,
-                                               self.genome_seq,
-                                               checkFirstID=False,
-                                               sliceAttrDict=dict(
-                                                   id='chrom',
-                                                   start='txStart',
-                                                   stop='txEnd'))
+        self.prot_db = EnsemblProteinSequenceDB()
         self.exon_db = annotation.AnnotationDB(exon_slicedb,
                                                self.genome_seq,
                                                checkFirstID=False)
@@ -235,17 +224,16 @@ class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
     children = EnsemblTranscriptAnnotationExonDescr()
 
 
-class EnsemblProteinSliceDB(sqlgraph.SQLTable):
-    '''A sliceDB class for protein annotations. Basically, an SQLTable
-    pointing to transcript data along with transparent mapping of keys.'''
+class EnsemblProteinSequenceDB(object, UserDict.DictMixin):
+    'A wrapper around ensPep allowing querying it by protein stable ID.'
 
     def __getitem__(self, k):
         tid = gRes.protein_transcript_id_map[gRes.ucsc_ensGtp_prot[k]].name
-        return sqlgraph.SQLTable.__getitem__(self, tid)
+        return gRes.ucsc_ensPep[tid]
 
     def keys(self):
         prot_keys = []
-        trans_keys = SQLTable.keys(self)
+        trans_keys = gRes.ucsc_ensPep.keys()
         for tid in trans_keys:
             pid = (~gRes.protein_transcript_id_map[
                 gRes.ucsc_ensGene[tid]]).name
