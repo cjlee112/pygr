@@ -23,11 +23,6 @@ class UCSCSeqIntervalRow(sqlgraph.TupleO):
 class UCSCGeneIntervalRow(sqlgraph.TupleO):
     orientation = UCSCStrandDescr()
 
-    def __init__(self, *args, **kwargs):
-        sqlgraph.TupleO.__init__(self, *args, **kwargs)
-        self.children = gRes.get_gene_transcript_ids(self.name2)
-
-
 class UCSCProteinSeq(sqlgraph.ProteinSQLSequence):
     '''Representation of UCSC protein-sequence tables such as ensGene,
     which lack the length column.'''
@@ -123,22 +118,26 @@ class UCSCEnsemblInterface(object):
             self.ucsc_ensGtp_prot, self.trans_db,
             'select transcript from %s.ensGtp \
             where protein=%%s' % self.ucsc_db, inverseSQL='select protein \
-            from %s.ensGtp where transcript=%%s' % self.ucsc_db)
+            from %s.ensGtp where transcript=%%s' % self.ucsc_db,
+            serverInfo=self.ucsc_server)
         self.transcripts_in_genes_map = sqlgraph.GraphView(
             self.gene_db, self.trans_db,
-            "select transcript from %s.ensGtp where gene=%%s" % self.ucsc_db)
+            "select transcript from %s.ensGtp where gene=%%s" % self.ucsc_db,
+            serverInfo=self.ucsc_server)
         self.ens_transcripts_of_exons_map = sqlgraph.GraphView(
             self.exon_db, self.trans_db, """\
 select trans.stable_id from %s.exon_stable_id exon, \
 %s.transcript_stable_id trans, %s.exon_transcript et where \
 exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
-exon.stable_id=%%s""" % (self.ens_db, self.ens_db, self.ens_db))
+exon.stable_id=%%s""" % (self.ens_db, self.ens_db, self.ens_db),
+            serverInfo=self.ucsc_server)
         self.ens_exons_in_transcripts_map = sqlgraph.GraphView(
             self.trans_db, self.exon_db, """\
 select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
 trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
 trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
-et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
+et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
+            serverInfo=self.ucsc_server)
 
     def get_ensembl_db_name(self, ens_prefix):
         '''Used by __init__(), obtains Ensembl database name matching
