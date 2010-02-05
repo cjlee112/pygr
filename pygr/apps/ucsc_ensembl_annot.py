@@ -130,14 +130,28 @@ select trans.stable_id from %s.exon_stable_id exon, \
 %s.transcript_stable_id trans, %s.exon_transcript et where \
 exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
 exon.stable_id=%%s""" % (self.ens_db, self.ens_db, self.ens_db),
-            serverInfo=self.ucsc_server)
+            serverInfo=self.ens_server)
+        self.ens_transcripts_of_exons_map2 = sqlgraph.GraphView(
+            self.ens_exon_stable_id, self.trans_db, """\
+select trans.stable_id from %s.exon_stable_id exon, \
+%s.transcript_stable_id trans, %s.exon_transcript et where \
+exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
+exon.stable_id=%%s""" % (self.ens_db, self.ens_db, self.ens_db),
+            serverInfo=self.ens_server)
         self.ens_exons_in_transcripts_map = sqlgraph.GraphView(
             self.trans_db, self.exon_db, """\
 select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
 trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
 trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
 et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
-            serverInfo=self.ucsc_server)
+            serverInfo=self.ens_server)
+        self.ens_exons_in_transcripts_map2 = sqlgraph.GraphView(
+            self.ens_transcript_stable_id, self.ens_exon_stable_id, """\
+select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
+trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
+trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
+et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
+            serverInfo=self.ens_server)
 
     def get_ensembl_db_name(self, ens_prefix):
         '''Used by __init__(), obtains Ensembl database name matching
@@ -159,7 +173,7 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
     def get_ensembl_exon_ids(self, transcript_id):
         '''Obtain a list of stable IDs of exons associated with the
         specified transcript, ordered by rank.'''
-        matching_edges = self.ens_exons_in_transcripts_map[
+        matching_edges = self.ens_exons_in_transcripts_map2[
             self.ens_transcript_stable_id[transcript_id]]
         ids = []
         for exon in matching_edges.keys():
@@ -263,7 +277,7 @@ class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
             return self.data[k]
         except KeyError:
             # Not cached yet, extract the exon from transcript data.
-            transcripts = gRes.ens_transcripts_of_exons_map[
+            transcripts = gRes.ens_transcripts_of_exons_map2[
                 gRes.ens_exon_stable_id[k]].keys()
             transcript_exons = self.get_transcript_exons(transcripts[0])
             # Cache all exons from that transcript to save time in the future.
