@@ -8,8 +8,9 @@ factory = UCSCEnsemblInterface('Bio.Seq.Genome.HUMAN.hg18')
 #
 trans_db = factory.transcript_database()
 print '\nExample transcript annotation:'
-print 'ENST00000000233', repr(trans_db['ENST00000000233']), \
-        repr(trans_db['ENST00000000233'].sequence)
+mrna = trans_db['ENST00000000233']
+print 'ENST00000000233', repr(mrna), \
+        repr(mrna.sequence), repr(mrna.mrna_sequence)
 
 #
 # Gene annotations

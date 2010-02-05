@@ -208,6 +208,8 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
 
 
 class EnsemblTranscriptAnnotationSeqDescr(object):
+    def __init__(self, attr):
+        self.attr = attr
 
     def __get__(self, obj, objtype):
         '''Concatenate exon sequences of a transcript to obtain
@@ -220,22 +222,14 @@ class EnsemblTranscriptAnnotationSeqDescr(object):
             trans_seq += str(sequence.absoluteSlice(obj._anno_seq,
                                                     int(exon_starts[i]),
                                                     int(exon_ends[i])))
-        return sequence.Sequence(trans_seq, obj.name)   # FIXME: cache this?
-
-
-class EnsemblTranscriptAnnotationExonDescr(object):
-
-    def __get__(self, obj, objtype):
-        'Return a list of exons contained in this transcript.'
-        exon_ids = gRes.get_ensembl_exon_ids(obj.name)
-        return exon_ids
-
+        seq = sequence.Sequence(trans_seq, obj.name)
+        setattr(obj, self.attr, seq) # cache on object
+        return seq
 
 class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
     '''An AnnotationSeq class for transcript annotations, implementing
-    custom 'sequence' and 'children' properties.'''
-    sequence = EnsemblTranscriptAnnotationSeqDescr()
-    children = EnsemblTranscriptAnnotationExonDescr()
+    custom 'mrna_sequence' property.'''
+    mrna_sequence = EnsemblTranscriptAnnotationSeqDescr('mrna_sequence')
 
 
 class EnsemblProteinSequenceDB(object, UserDict.DictMixin):
