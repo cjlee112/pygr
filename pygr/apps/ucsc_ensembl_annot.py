@@ -95,6 +95,8 @@ class UCSCEnsemblInterface(object):
         self.ens_transcript_stable_id = sqlgraph.SQLTable(
             '%s.transcript_stable_id' % self.ens_db,
             serverInfo=self.ens_server, primaryKey='stable_id')
+        # We will need this too.
+        self.genome_seq = worldbase(ucsc_genome_name)
         # Finally, initialise all UCSC-Ensembl databases.
         self.trans_db = annotation.AnnotationDB(self.ucsc_ensGene_trans,
                                                 self.genome_seq,
@@ -112,32 +114,31 @@ class UCSCEnsemblInterface(object):
                                                    start='txStart',
                                                    stop='txEnd'))
         self.prot_db = EnsemblProteinSequenceDB()
+        exon_slicedb = EnsemblExonOnDemandSliceDB()
         self.exon_db = annotation.AnnotationDB(exon_slicedb,
                                                self.genome_seq,
                                                checkFirstID=False)
         # Mappings.
-        self.protein_transcript_id_map = sqlgraph.MapView(self.ucsc_ensGtp_prot,
-            self.ucsc_ensGene_trans, 'select transcript from %s.ensGtp \
+        self.protein_transcript_id_map = sqlgraph.MapView(
+            self.ucsc_ensGtp_prot, self.trans_db,
+            'select transcript from %s.ensGtp \
             where protein=%%s' % self.ucsc_db, inverseSQL='select protein \
             from %s.ensGtp where transcript=%%s' % self.ucsc_db)
         self.transcripts_in_genes_map = sqlgraph.GraphView(
-            self.ucsc_ensGtp_gene, self.ucsc_ensGene_trans,
+            self.gene_db, self.trans_db,
             "select transcript from %s.ensGtp where gene=%%s" % self.ucsc_db)
         self.ens_transcripts_of_exons_map = sqlgraph.GraphView(
-            self.ens_exon_stable_id, self.ucsc_ensGene_trans, """\
+            self.exon_db, self.trans_db, """\
 select trans.stable_id from %s.exon_stable_id exon, \
 %s.transcript_stable_id trans, %s.exon_transcript et where \
 exon.exon_id=et.exon_id and trans.transcript_id=et.transcript_id and \
 exon.stable_id=%%s""" % (self.ens_db, self.ens_db, self.ens_db))
         self.ens_exons_in_transcripts_map = sqlgraph.GraphView(
-            self.ens_transcript_stable_id, self.ens_exon_stable_id, """\
+            self.trans_db, self.exon_db, """\
 select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
 trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
 trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
 et.rank""" % (self.ens_db, self.ens_db, self.ens_db))
-        # We will need this too.
-        self.genome_seq = worldbase(ucsc_genome_name)
-        exon_slicedb = EnsemblExonOnDemandSliceDB()
 
     def get_ensembl_db_name(self, ens_prefix):
         '''Used by __init__(), obtains Ensembl database name matching
