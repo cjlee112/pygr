@@ -4,9 +4,6 @@ from pygr import annotation, seqdb, sequence, sqlgraph, worldbase
 from pygr.dbfile import ReadOnlyError
 
 
-gRes = None
-
-
 class UCSCStrandDescr(object):
 
     def __get__(self, obj, objtype):
@@ -39,12 +36,6 @@ class UCSCEnsemblInterface(object):
         annotation databases. ucsc_genome_name should follow the worldbase
         naming convention. If ens_species is not specified, we will try
         to autodetect it.'''
-        # Only one instance can be active at a time for now.
-        global gRes
-        if gRes is not None:
-            raise ValueError("A UCSCEnsemblInterface object already exists")
-        else:
-            gRes = self
         # Connect to both servers and prepare database names.
         if ucsc_serverInfo is not None:
             self.ucsc_server = ucsc_serverInfo
@@ -108,8 +99,8 @@ class UCSCEnsemblInterface(object):
                                                    id='chrom',
                                                    start='txStart',
                                                    stop='txEnd'))
-        self.prot_db = EnsemblProteinSequenceDB()
-        exon_slicedb = EnsemblExonOnDemandSliceDB()
+        self.prot_db = EnsemblProteinSequenceDB(self)
+        exon_slicedb = EnsemblExonOnDemandSliceDB(self)
         self.exon_db = annotation.AnnotationDB(exon_slicedb,
                                                self.genome_seq,
                                                checkFirstID=False)
@@ -234,17 +225,20 @@ class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
 
 class EnsemblProteinSequenceDB(object, UserDict.DictMixin):
     'A wrapper around ensPep allowing querying it by protein stable ID.'
+    def __init__(self, gRes):
+        self.gRes = gRes
 
     def __getitem__(self, k):
-        tid = gRes.protein_transcript_id_map[gRes.ucsc_ensGtp_prot[k]].name
-        return gRes.ucsc_ensPep[tid]
+        tid = self.gRes.protein_transcript_id_map[
+            self.gRes.ucsc_ensGtp_prot[k]].name
+        return self.gRes.ucsc_ensPep[tid]
 
     def keys(self):
         prot_keys = []
-        trans_keys = gRes.ucsc_ensPep.keys()
+        trans_keys = self.gRes.ucsc_ensPep.keys()
         for tid in trans_keys:
-            pid = (~gRes.protein_transcript_id_map[
-                gRes.ucsc_ensGene[tid]]).name
+            pid = (~self.gRes.protein_transcript_id_map[
+                self.gRes.ucsc_ensGene[tid]]).name
             prot_keys.append(pid)
         return prot_keys
 
@@ -263,26 +257,27 @@ class EnsemblExonSliceInfo(object):
 
 class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
 
-    def __init__(self):
+    def __init__(self, gRes):
         self.data = {}
+        self.gRes = gRes
 
     def __getitem__(self, k):
         try:
             return self.data[k]
         except KeyError:
             # Not cached yet, extract the exon from transcript data.
-            transcripts = gRes.ens_transcripts_of_exons_map2[
-                gRes.ens_exon_stable_id[k]].keys()
+            transcripts = self.gRes.ens_transcripts_of_exons_map2[
+                self.gRes.ens_exon_stable_id[k]].keys()
             transcript_exons = self.get_transcript_exons(transcripts[0])
             # Cache all exons from that transcript to save time in the future.
             for exon_id in transcript_exons:
                 if exon_id not in self.data:
                     transcript_exons[exon_id].parents = transcripts
                     self.data[exon_id] = transcript_exons[exon_id]
-            gRes.genome_seq.cacheHint({transcripts[0].id:
+            self.gRes.genome_seq.cacheHint({transcripts[0].id:
                                            (transcripts[0].txStart,
                                             transcripts[0].txEnd)},
-                                          transcripts[0])
+                                           transcripts[0])
             return self.data[k]
 
     def __setitem__(self, k, v):
@@ -307,7 +302,7 @@ class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
         exon_starts = transcript.exonStarts.split(',')[:exon_count]
         exon_ends = transcript.exonEnds.split(',')[:exon_count]
         exons = {}
-        exon_ids = gRes.get_ensembl_exon_ids(transcript.name)
+        exon_ids = self.gRes.get_ensembl_exon_ids(transcript.name)
         for i in range(0, exon_count):
             e = EnsemblExonSliceInfo(chromosome, exon_starts[i], exon_ends[i],
                                      transcript.orientation)
