@@ -38,12 +38,18 @@ class UCSCEnsemblInterface(object):
         Ensembl version that each genome dataset connects to.'''
         # Connect to both servers and prepare database names.
         if ucsc_serverInfo is not None:
-            self.ucsc_server = ucsc_serverInfo
+            if isinstance(ucsc_serverInfo, str): # treat as worldbase ID
+                self.ucsc_server = worldbase(ucsc_serverInfo)
+            else:
+                self.ucsc_server = ucsc_serverInfo
         else:
             self.ucsc_server = sqlgraph.DBServerInfo(
                 host='genome-mysql.cse.ucsc.edu', user='genome')
         if ens_serverInfo is not None:
-            self.ens_server = ens_serverInfo
+            if isinstance(ens_serverInfo, str): # treat as worldbase ID
+                self.ens_server = worldbase(ens_serverInfo)
+            else:
+                self.ens_server = ens_serverInfo
         else:
             self.ens_server = sqlgraph.DBServerInfo(
                 host='ensembldb.ensembl.org', port=5306, user='anonymous')
