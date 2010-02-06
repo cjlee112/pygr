@@ -60,7 +60,10 @@ class SQLTable_Setup(unittest.TestCase):
         self.db = self.tableClass(tableName, dropIfExists=True,
                                   serverInfo=self.serverInfo,
                                   createTable=createTable,
-                                  writeable=writeable, **dbargs)
+                                  writeable=writeable,
+                                  attrAlias=dict(sequence_id='seq_id',
+                                                 minStop="min(stop)"),
+                                  **dbargs)
         self.sourceDB = self.tableClass(joinTable1, serverInfo=self.serverInfo,
                                         dropIfExists=True, createTable="""\
         CREATE TABLE %s (my_id INTEGER PRIMARY KEY,
@@ -274,6 +277,11 @@ class SQLTable_Test(SQLTable_Setup):
         assert sortedBL == bl
         bl = [val.letter for val in byLetter.itervalues()]
         assert sortedBL == bl
+
+    def test_attraliases(self):
+        'test aliases defined with attrAlias'
+        self.db[1].sequence_id
+        self.db[1].minStop
 
     ### @CTB need to test write access
 

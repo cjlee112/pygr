@@ -19,7 +19,7 @@ class TupleDescriptor(object):
     'return tuple entry corresponding to named attribute'
 
     def __init__(self, db, attr):
-        self.icol = db.data[attr] # index of this attribute in the tuple
+        self.icol = db._attrSQL(attr, columnNumber=True) # index in the tuple
 
     def __get__(self, obj, klass):
         return obj._data[self.icol]
@@ -40,12 +40,12 @@ class TupleDescriptorRW(TupleDescriptor):
 
     def __init__(self, db, attr):
         self.attr = attr
-        self.icol = db.data[attr] # index of this attribute in the tuple
+        self.icol = db._attrSQL(attr, columnNumber=True) # index in the tuple
         self.attrSQL = db._attrSQL(attr, sqlColumn=True) # SQL column name
 
     def __set__(self, obj, val):
         obj.db._update(obj.id, self.attrSQL, val) # AND UPDATE THE DATABASE
-        obj.save_local(self.attr, val)
+        obj.save_local(self.attr, val, self.icol)
 
 
 class SQLDescriptor(object):
@@ -96,22 +96,26 @@ def select_from_row(row, what):
 
 def init_row_subclass(cls, db):
     'add descriptors for db attributes'
+    try: # check itemClass compatibility with db.__class__
+        if not isinstance(db, cls._tableclass):
+            raise ValueError('''Your itemClass %s is not compatible
+with your database class %s.
+With this itemClass you must use %s as your base class instead.'''
+                             % (cls, db.__class__, cls._tableclass))
+    except AttributeError: # if no _tableclass, no need to do anything
+        pass
     for attr in db.data: # bind all database columns
         if attr == 'id': # handle ID attribute specially
             setattr(cls, attr, cls._idDescriptor(db, attr))
             continue
-        try: # check if this attr maps to an SQL column
-            db._attrSQL(attr, columnNumber=True)
+        try: # treat as interface to our stored tuple
+            setattr(cls, attr, cls._columnDescriptor(db, attr))
         except AttributeError: # treat as SQL expression
             setattr(cls, attr, cls._sqlDescriptor(db, attr))
-        else: # treat as interface to our stored tuple
-            setattr(cls, attr, cls._columnDescriptor(db, attr))
-
 
 def dir_row(self):
     """get list of column names as our attributes """
     return self.db.data.keys()
-
 
 class TupleO(object):
     """Provides attribute interface to a database tuple.
@@ -167,10 +171,9 @@ class TupleORW(TupleO):
         self.insert_and_cache_id(self._data, **kwargs)
 
     def cache_id(self, row_id):
-        self.save_local('id', row_id)
+        self.save_local('id', row_id, self.db._attrSQL('id', columnNumber=True))
 
-    def save_local(self, attr, val):
-        icol = self._attrcol[attr]
+    def save_local(self, attr, val, icol):
         try:
             self._data[icol] = val # FINALLY UPDATE OUR LOCAL CACHE
         except TypeError: # TUPLE CAN'T STORE NEW VALUE, SO USE A LIST
@@ -682,13 +685,6 @@ column!' % attr)
         # Bind itemClass.
         oclass = get_bound_subclass(self, 'itemClass', self.name,
                                     subclassArgs=dict(db=self))
-        if issubclass(oclass, TupleO):
-            # Bind attribute list to tupleo interface.
-            oclass._attrcol = self.data
-        if hasattr(oclass, '_tableclass') and \
-           not isinstance(self, oclass._tableclass):
-            # Row class can override our current table class.
-            self.__class__ = oclass._tableclass
 
     def _select(self, whereClause='', params=(), selectCols='t1.*',
                 cursor=None, orderBy='', limit=''):
@@ -2379,8 +2375,10 @@ class GraphView(MapView):
 
 class SQLSequence(SQLRow, SequenceBase):
     """Transparent access to a DB row representing a sequence.
-
-    Use attrAlias dict to rename 'length' to something else.
+    Does not cache the sequence string in memory -- uses SQL queries to
+    retrieve just the desired slice as needed.
+    By default expects a column named 'length' to provide sequence length;
+    use attrAlias to remap to an SQL expression if needed.
     """
 
     def _init_subclass(cls, db, **kwargs):
@@ -2412,3 +2410,28 @@ class RNASQLSequence(SQLSequence):
 
 class ProteinSQLSequence(SQLSequence):
     _seqtype=PROTEIN_SEQTYPE
+
+class SQLSequenceCached(TupleO, SequenceBase):
+    '''Caches complete sequence string when initially constructed.
+    By default expects it as column "seq"; use attrAlias to remap to another
+    column if needed.'''
+    def _init_subclass(cls, db, **kwargs):
+        db.seqInfoDict = db # db will act as its own seqInfoDict
+        TupleO._init_subclass(db=db, **kwargs)
+    _init_subclass = classmethod(_init_subclass)
+
+    def __init__(self, data):
+        TupleO.__init__(self, data)
+        SequenceBase.__init__(self)
+
+class DNASQLSequenceCached(SQLSequenceCached):
+    _seqtype=DNA_SEQTYPE
+
+
+class RNASQLSequenceCached(SQLSequenceCached):
+    _seqtype=RNA_SEQTYPE
+
+
+class ProteinSQLSequenceCached(SQLSequenceCached):
+    _seqtype=PROTEIN_SEQTYPE
+

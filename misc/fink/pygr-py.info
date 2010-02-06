@@ -1,15 +1,14 @@
 Info2: <<
 
 Package: pygr-py%type_pkg[python]
-Version: 0.8.0
+Version: 0.8.1
 Revision: 1
-Distribution: (%type_pkg[python] = 23) 10.3, (%type_pkg[python] = 23) 10.4
-Maintainer: Christopher Lee <leec@chem.ucla.edu>
-Type: python (2.3 2.4 2.5 2.6)
-Depends: python%type_pkg[python] | python%type_pkg[python]-nox
-Suggests: mysql-python-py%type_pkg[python], (%type_pkg[python] << 25) pysqlite2-py%type_pkg[python], ncbitools
+Maintainer: Marek Szuba <Marek.Szuba@ucla.edu>
+Type: python (2.5 2.6)
+Depends: python%type_pkg[python]
+Suggests: mysql-python-py%type_pkg[python], ncbitools
 Source: http://pygr.googlecode.com/files/pygr-%v.tar.gz
-Source-MD5: 30d406761fdd6b6b9c4badefb7ad56e2
+Source-MD5: 826d777d1610117ca5efb5d759321d5f
 CompileScript: <<
  %p/bin/python%type_raw[python] setup.py build
 <<
