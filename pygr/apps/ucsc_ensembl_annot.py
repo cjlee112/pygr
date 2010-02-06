@@ -5,23 +5,17 @@ from pygr.dbfile import ReadOnlyError
 
 
 class UCSCStrandDescr(object):
-
     def __get__(self, obj, objtype):
         if obj.strand == '+':
             return 1
         else:
             return -1
 
-
 class UCSCSeqIntervalRow(sqlgraph.TupleO):
     orientation = UCSCStrandDescr()
 
-
-class UCSCGeneIntervalRow(sqlgraph.TupleO):
-    orientation = UCSCStrandDescr()
-
 class UCSCEnsemblInterface(object):
-
+    'package of gene, transcript, exon, protein interfaces to UCSC/Ensembl'
     def __init__(self, ucsc_genome_name, ens_species=None,
                  ucsc_serverInfo=None, ens_serverInfo=None,
                  ens_db=None, trackVersion='hgFixed.trackVersion'):
@@ -61,38 +55,32 @@ class UCSCEnsemblInterface(object):
             self.ens_db = ens_db
         # Connect to all the necessary tables.
         self.ucsc_ensGene_trans = sqlgraph.SQLTable('%s.ensGene' %
-                                                    self.ucsc_db,
-                                                   serverInfo=self.ucsc_server,
-                                                    primaryKey='name',
-                                                  itemClass=UCSCSeqIntervalRow)
-        self.ucsc_ensGene_gene = sqlgraph.SQLTable('%s.ensGene' % self.ucsc_db,
-                                                   serverInfo=self.ucsc_server,
-                                                   primaryKey='name2',
-                                                   allowNonUniqueID=True,
-                                                  itemClass=UCSCGeneIntervalRow,
-                                                   attrAlias=dict(
-                                                     minTxStart='min(txStart)',
-                                                     maxTxEnd='max(txEnd)'))
-        self.ucsc_ensGtp_gene = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
-                                                  serverInfo=self.ucsc_server,
-                                                  primaryKey='gene',
-                                                  allowNonUniqueID=True)
+                   self.ucsc_db, serverInfo=self.ucsc_server,
+                   primaryKey='name', itemClass=UCSCSeqIntervalRow)
+        self.ucsc_ensGene_gene = sqlgraph.SQLTable('%s.ensGene' %
+                   self.ucsc_db, serverInfo=self.ucsc_server,
+                   primaryKey='name2', allowNonUniqueID=True,
+                   itemClass=UCSCSeqIntervalRow,
+                   attrAlias=dict(minTxStart='min(txStart)',
+                                  maxTxEnd='max(txEnd)'))
+        self.ucsc_ensGtp_gene = sqlgraph.SQLTable('%s.ensGtp' %
+                   self.ucsc_db, serverInfo=self.ucsc_server,
+                   primaryKey='gene', allowNonUniqueID=True)
         self.prot_db = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
                                          serverInfo=self.ucsc_server,
                                          primaryKey='protein',
                                          itemClass=EnsemblProteinRow)
         self.prot_db.gRes = self
         self.ucsc_ensPep = sqlgraph.SQLTable('%s.ensPep' % self.ucsc_db,
-                                             serverInfo=self.ucsc_server,
-                                             itemClass=sqlgraph.ProteinSQLSequenceCached,
-                                             itemSliceClass=seqdb.SeqDBSlice)
-        self.ens_exon_stable_id = sqlgraph.SQLTable('%s.exon_stable_id'
-                                                    % self.ens_db,
-                                                    serverInfo=self.ens_server,
-                                                    primaryKey='stable_id')
+                   serverInfo=self.ucsc_server,
+                   itemClass=sqlgraph.ProteinSQLSequenceCached,
+                   itemSliceClass=seqdb.SeqDBSlice)
+        self.ens_exon_stable_id = sqlgraph.SQLTable('%s.exon_stable_id' %
+                   self.ens_db, serverInfo=self.ens_server,
+                   primaryKey='stable_id')
         self.ens_transcript_stable_id = sqlgraph.SQLTable(
-            '%s.transcript_stable_id' % self.ens_db,
-            serverInfo=self.ens_server, primaryKey='stable_id')
+                   '%s.transcript_stable_id' % self.ens_db,
+                   serverInfo=self.ens_server, primaryKey='stable_id')
         # We will need this too.
         self.genome_seq = worldbase(ucsc_genome_name)
         # Finally, initialise all UCSC-Ensembl databases.
@@ -184,22 +172,6 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
         for transcript in matching_edges.keys():
             ids.append(transcript.name)
         return ids
-
-    def transcript_database(self):
-        'Return an AnnotationDB of transcript annotations.'
-        return self.trans_db
-
-    def gene_database(self):
-        'Return an AnnotationDB of gene annotations.'
-        return self.gene_db
-
-    def protein_database(self):
-        'Return an AnnotationDB of protein annotations.'
-        return self.prot_db
-
-    def exon_database(self):
-        'Return an AnnotationDB of exon annotations.'
-        return self.exon_db
 
 
 class EnsemblTranscriptAnnotationSeqDescr(object):
