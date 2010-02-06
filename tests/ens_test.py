@@ -37,3 +37,4 @@ print '\nExample exon annotation:'
 print 'ENSE00000720378', repr(exon_db['ENSE00000720378']), \
         repr(exon_db['ENSE00000720378'].sequence)
 
+print 'total exons:', len(exon_db)

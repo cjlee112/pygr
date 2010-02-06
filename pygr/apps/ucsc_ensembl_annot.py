@@ -1,7 +1,7 @@
 import UserDict
 
 from pygr import annotation, seqdb, sequence, sqlgraph, worldbase
-from pygr.dbfile import ReadOnlyError
+from pygr.classutil import read_only_error
 
 
 class UCSCStrandDescr(object):
@@ -247,28 +247,22 @@ class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
             # Not cached yet, extract the exon from transcript data.
             transcripts = self.gRes.ens_transcripts_of_exons_map2[
                 self.gRes.ens_exon_stable_id[k]].keys()
-            transcript_exons = transcripts[0].get_exon_slices()
-            # Cache all exons from that transcript to save time in the future.
-            for exon_id in transcript_exons:
-                if exon_id not in self.data:
-                    self.data[exon_id] = transcript_exons[exon_id]
+            self.data.update(transcripts[0].get_exon_slices())
+            # Cache whole transcript interval to speed sequence access
             self.gRes.genome_seq.cacheHint({transcripts[0].id:
                                            (transcripts[0].txStart,
                                             transcripts[0].txEnd)},
                                            transcripts[0])
             return self.data[k]
 
-    def __setitem__(self, k, v):
-        '''Method required by UserDict.DictMixin. Throws an exception
-        (read-only sliceDB).'''
-        raise ReadOnlyError('EnsemblExonOnDemandSliceDB is read-only')
+    __setitem__ = __delitem__ = read_only_error # Throws an exception
 
-    def __delitem__(self, k):
-        '''Method required by UserDict.DictMixin. Throws an exception
-        (read-only sliceDB).'''
-        raise ReadOnlyError('EnsemblExonOnDemandSliceDB is read-only')
+    def keys(self): # mirror iterator methods from exon stable ID table
+        return self.gRes.ens_exon_stable_id.keys()
 
-    def keys(self):
-        'Returns keys present in the cache. FIXME: add support for SQL ones?'
-        return self.data.keys()
+    def __iter__(self):
+        return iter(self.gRes.ens_exon_stable_id)
+
+    def __len__(self):
+        return len(self.gRes.ens_exon_stable_id)
 
