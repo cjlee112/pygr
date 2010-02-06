@@ -173,6 +173,29 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
             ids.append(transcript.name)
         return ids
 
+    def get_annot_db(self, table, primaryKey='name',
+                     sliceAttrDict=dict(id='chrom', start='chromStart',
+                                        stop='chromEnd')):
+        '''generic method to obtain an AnnotationDB for any
+        annotation table in UCSC, e.g. snp130.  If your target table
+        has non-standard name, start, end columns, specify them in
+        the primaryKey and sliceAttrDict args.
+        Saves table as named attribute on this package object.'''
+        try: # return existing db if already cached here
+            return getattr(self, table)
+        except AttributeError:
+            pass
+        sliceDB = sqlgraph.SQLTable(self.ucsc_db + '.' + table,
+                                    primaryKey=primaryKey,
+                                    serverInfo=self.ucsc_server,
+                                    itemClass=UCSCSeqIntervalRow)
+        annoDB = annotation.AnnotationDB(sliceDB, self.genome_seq,
+                                         checkFirstID=False,
+                                         sliceAttrDict=sliceAttrDict)
+        setattr(self, table, annoDB) # cache this db on named attribute
+        return annoDB
+
+
 
 class EnsemblTranscriptAnnotationSeqDescr(object):
     def __init__(self, attr):

@@ -38,3 +38,7 @@ print 'ENSE00000720378', repr(exon_db['ENSE00000720378']), \
         repr(exon_db['ENSE00000720378'].sequence)
 
 print 'total exons:', len(exon_db)
+
+snp130 = factory.get_annot_db('snp130')
+snp = snp130['rs58108140']
+print '\nSNP:',snp.name, repr(snp.sequence), snp.refUCSC, snp.observed
