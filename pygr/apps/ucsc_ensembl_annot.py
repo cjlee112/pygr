@@ -20,14 +20,6 @@ class UCSCSeqIntervalRow(sqlgraph.TupleO):
 class UCSCGeneIntervalRow(sqlgraph.TupleO):
     orientation = UCSCStrandDescr()
 
-class UCSCProteinSeq(sqlgraph.ProteinSQLSequence):
-    '''Representation of UCSC protein-sequence tables such as ensGene,
-    which lack the length column.'''
-
-    def __len__(self):
-        return self._select('length(seq)')
-
-
 class UCSCEnsemblInterface(object):
 
     def __init__(self, ucsc_genome_name, ens_species=None,
@@ -67,12 +59,14 @@ class UCSCEnsemblInterface(object):
                                                   serverInfo=self.ucsc_server,
                                                   primaryKey='gene',
                                                   allowNonUniqueID=True)
-        self.ucsc_ensGtp_prot = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
-                                             serverInfo=self.ucsc_server,
-                                             primaryKey='protein')
+        self.prot_db = sqlgraph.SQLTable('%s.ensGtp' % self.ucsc_db,
+                                         serverInfo=self.ucsc_server,
+                                         primaryKey='protein',
+                                         itemClass=EnsemblProteinRow)
+        self.prot_db.gRes = self
         self.ucsc_ensPep = sqlgraph.SQLTable('%s.ensPep' % self.ucsc_db,
                                              serverInfo=self.ucsc_server,
-                                             itemClass=UCSCProteinSeq,
+                                             itemClass=sqlgraph.ProteinSQLSequenceCached,
                                              itemSliceClass=seqdb.SeqDBSlice)
         self.ens_exon_stable_id = sqlgraph.SQLTable('%s.exon_stable_id'
                                                     % self.ens_db,
@@ -99,7 +93,6 @@ class UCSCEnsemblInterface(object):
                                                    id='chrom',
                                                    start='txStart',
                                                    stop='txEnd'))
-        self.prot_db = EnsemblProteinSequenceDB(self)
         exon_slicedb = EnsemblExonOnDemandSliceDB(self)
         self.exon_db = annotation.AnnotationDB(exon_slicedb,
                                                self.genome_seq,
@@ -108,7 +101,7 @@ class UCSCEnsemblInterface(object):
                                                  start=1, stop=2, orientation=3))
         # Mappings.
         self.protein_transcript_id_map = sqlgraph.MapView(
-            self.ucsc_ensGtp_prot, self.trans_db,
+            self.prot_db, self.trans_db,
             'select transcript from %s.ensGtp \
             where protein=%%s' % self.ucsc_db, inverseSQL='select protein \
             from %s.ensGtp where transcript=%%s' % self.ucsc_db,
@@ -235,29 +228,24 @@ class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
         matching_edges = self.db.exons_map[self]
         return [exon.stable_id for exon in matching_edges.keys()]
 
+class EnsemblProteinSeqDescr(object):
+    def __init__(self, attr):
+        self.attr = attr
 
-class EnsemblProteinSequenceDB(object, UserDict.DictMixin):
-    'A wrapper around ensPep allowing querying it by protein stable ID.'
-    def __init__(self, gRes):
-        self.gRes = gRes
+    def __get__(self, obj, objtype):
+        transcript = obj.db.gRes.protein_transcript_id_map[obj]
+        pep = obj.db.gRes.ucsc_ensPep[transcript.name]
+        seq = sequence.Sequence(str(pep), obj.id)
+        setattr(obj, self.attr, seq) # cache on object
+        return seq
 
-    def __getitem__(self, k):
-        tid = self.gRes.protein_transcript_id_map[
-            self.gRes.ucsc_ensGtp_prot[k]].name
-        return self.gRes.ucsc_ensPep[tid]
-
-    def keys(self):
-        prot_keys = []
-        trans_keys = self.gRes.ucsc_ensPep.keys()
-        for tid in trans_keys:
-            pid = (~self.gRes.protein_transcript_id_map[
-                self.gRes.ucsc_ensGene[tid]]).name
-            prot_keys.append(pid)
-        return prot_keys
-
+class EnsemblProteinRow(sqlgraph.TupleO):
+    sequence = EnsemblProteinSeqDescr('sequence')
+    def __repr__(self):
+        return str(self.id)
 
 class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
-
+    '''Obtains exon info on demand by looking up associated transcript '''
     def __init__(self, gRes):
         self.data = {}
         self.gRes = gRes

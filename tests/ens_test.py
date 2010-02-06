@@ -26,7 +26,8 @@ print 'ENSG00000168958', repr(gene_db['ENSG00000168958'])
 #
 prot_db = factory.protein_database()
 print '\nExample protein annotation:'
-print 'ENSP00000372525', repr(prot_db['ENSP00000372525'])
+prot = prot_db['ENSP00000372525']
+print 'ENSP00000372525', repr(prot), repr(prot.sequence)
 
 #
 # Exon annotations
