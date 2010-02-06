@@ -103,7 +103,9 @@ class UCSCEnsemblInterface(object):
         exon_slicedb = EnsemblExonOnDemandSliceDB(self)
         self.exon_db = annotation.AnnotationDB(exon_slicedb,
                                                self.genome_seq,
-                                               checkFirstID=False)
+                                               checkFirstID=False,
+                                               sliceAttrDict=dict(id=0,
+                                                 start=1, stop=2, orientation=3))
         # Mappings.
         self.protein_transcript_id_map = sqlgraph.MapView(
             self.ucsc_ensGtp_prot, self.trans_db,
@@ -137,12 +139,13 @@ trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
 et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
             serverInfo=self.ens_server)
         self.ens_exons_in_transcripts_map2 = sqlgraph.GraphView(
-            self.ens_transcript_stable_id, self.ens_exon_stable_id, """\
+            self.trans_db, self.ens_exon_stable_id, """\
 select exon.stable_id from %s.exon_stable_id exon, %s.transcript_stable_id \
 trans, %s.exon_transcript et where exon.exon_id=et.exon_id and \
 trans.transcript_id=et.transcript_id and trans.stable_id=%%s order by \
 et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
             serverInfo=self.ens_server)
+        self.trans_db.exons_map = self.ens_exons_in_transcripts_map2
 
     def get_ensembl_db_name(self, ens_prefix):
         '''Used by __init__(), obtains Ensembl database name matching
@@ -160,16 +163,6 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
         cursor.execute("show databases like '%s_core_%s_%%'" % (ens_prefix,
                                                                 ens_version))
         return cursor.fetchall()[0][0]
-
-    def get_ensembl_exon_ids(self, transcript_id):
-        '''Obtain a list of stable IDs of exons associated with the
-        specified transcript, ordered by rank.'''
-        matching_edges = self.ens_exons_in_transcripts_map2[
-            self.ens_transcript_stable_id[transcript_id]]
-        ids = []
-        for exon in matching_edges.keys():
-            ids.append(exon.stable_id)
-        return ids
 
     def get_gene_transcript_ids(self, gene_id):
         '''Obtain a list of stable IDs of transcripts associated
@@ -222,6 +215,26 @@ class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
     custom 'mrna_sequence' property.'''
     mrna_sequence = EnsemblTranscriptAnnotationSeqDescr('mrna_sequence')
 
+    def get_exon_slices(self):
+        '''Parse the provided transcript, extract exon data from it
+        and return it as a dictionary of slices.'''
+        chromosome = self.chrom
+        exon_count = self.exonCount
+        exon_starts = self.exonStarts.split(',')[:exon_count]
+        exon_ends = self.exonEnds.split(',')[:exon_count]
+        exons = {}
+        exon_ids = self.get_ensembl_exon_ids()
+        for i in range(exon_count):
+            exons[exon_ids[i]] = (chromosome, exon_starts[i], exon_ends[i],
+                                  self.orientation)
+        return exons
+
+    def get_ensembl_exon_ids(self):
+        '''Obtain a list of stable IDs of exons associated with the
+        specified transcript, ordered by rank.'''
+        matching_edges = self.db.exons_map[self]
+        return [exon.stable_id for exon in matching_edges.keys()]
+
 
 class EnsemblProteinSequenceDB(object, UserDict.DictMixin):
     'A wrapper around ensPep allowing querying it by protein stable ID.'
@@ -243,18 +256,6 @@ class EnsemblProteinSequenceDB(object, UserDict.DictMixin):
         return prot_keys
 
 
-class EnsemblExonSliceInfo(object):
-
-    def __init__(self, id, start, stop, orientation, parents=None,
-                 children=None):
-        self.id = id
-        self.start = start
-        self.stop = stop
-        self.orientation = orientation
-        self.parents = parents
-        self.children = children
-
-
 class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
 
     def __init__(self, gRes):
@@ -268,11 +269,10 @@ class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
             # Not cached yet, extract the exon from transcript data.
             transcripts = self.gRes.ens_transcripts_of_exons_map2[
                 self.gRes.ens_exon_stable_id[k]].keys()
-            transcript_exons = self.get_transcript_exons(transcripts[0])
+            transcript_exons = transcripts[0].get_exon_slices()
             # Cache all exons from that transcript to save time in the future.
             for exon_id in transcript_exons:
                 if exon_id not in self.data:
-                    transcript_exons[exon_id].parents = transcripts
                     self.data[exon_id] = transcript_exons[exon_id]
             self.gRes.genome_seq.cacheHint({transcripts[0].id:
                                            (transcripts[0].txStart,
@@ -294,17 +294,3 @@ class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
         'Returns keys present in the cache. FIXME: add support for SQL ones?'
         return self.data.keys()
 
-    def get_transcript_exons(self, transcript):
-        '''Parse the provided transcript, extract exon data from it
-        and return it as a dictionary of slices.'''
-        chromosome = transcript.chrom
-        exon_count = transcript.exonCount
-        exon_starts = transcript.exonStarts.split(',')[:exon_count]
-        exon_ends = transcript.exonEnds.split(',')[:exon_count]
-        exons = {}
-        exon_ids = self.gRes.get_ensembl_exon_ids(transcript.name)
-        for i in range(0, exon_count):
-            e = EnsemblExonSliceInfo(chromosome, exon_starts[i], exon_ends[i],
-                                     transcript.orientation)
-            exons[exon_ids[i]] = e
-        return exons
