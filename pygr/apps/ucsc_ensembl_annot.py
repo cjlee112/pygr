@@ -23,11 +23,19 @@ class UCSCGeneIntervalRow(sqlgraph.TupleO):
 class UCSCEnsemblInterface(object):
 
     def __init__(self, ucsc_genome_name, ens_species=None,
-                 ucsc_serverInfo=None, ens_serverInfo=None):
-        '''Set up everything needed to produce UCSC/Ensembl
-        annotation databases. ucsc_genome_name should follow the worldbase
-        naming convention. If ens_species is not specified, we will try
-        to autodetect it.'''
+                 ucsc_serverInfo=None, ens_serverInfo=None,
+                 ens_db=None, trackVersion='hgFixed.trackVersion'):
+        '''Construct interfaces to UCSC/Ensembl annotation databases.
+        ucsc_genome_name must be a worldbase ID specifying a UCSC genome.
+        naming convention.
+        ens_species should be the Ensembl database name (generally
+        the name of the species).  If not specified, we will try
+        to autodetect it based on ucsc_genome_name.
+        The interface uses the standard UCSC and Ensembl mysql servers
+        by default, unless you provide serverInfo argument(s).
+        trackVersion must be the fully qualified MySQL table name
+        of the trackVersion table containing information about the
+        Ensembl version that each genome dataset connects to.'''
         # Connect to both servers and prepare database names.
         if ucsc_serverInfo is not None:
             self.ucsc_server = ucsc_serverInfo
@@ -40,7 +48,11 @@ class UCSCEnsemblInterface(object):
             self.ens_server = sqlgraph.DBServerInfo(
                 host='ensembldb.ensembl.org', port=5306, user='anonymous')
         self.ucsc_db = ucsc_genome_name.split('.')[-1]
-        self.ens_db = self.get_ensembl_db_name(ens_species)
+        if ens_db is None: # auto-set ensembl database name
+            self.ens_db = self.get_ensembl_db_name(ens_species,
+                                                   trackVersion)
+        else:
+            self.ens_db = ens_db
         # Connect to all the necessary tables.
         self.ucsc_ensGene_trans = sqlgraph.SQLTable('%s.ensGene' %
                                                     self.ucsc_db,
@@ -140,10 +152,10 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
             serverInfo=self.ens_server)
         self.trans_db.exons_map = self.ens_exons_in_transcripts_map2
 
-    def get_ensembl_db_name(self, ens_prefix):
+    def get_ensembl_db_name(self, ens_prefix, trackVersion):
         '''Used by __init__(), obtains Ensembl database name matching
         the specified UCSC genome version'''
-        ucsc_versions = sqlgraph.SQLTable('hgFixed.trackVersion',
+        ucsc_versions = sqlgraph.SQLTable(trackVersion,
                                           serverInfo=self.ucsc_server,
                                           primaryKey='db')
         ens_version = ucsc_versions[self.ucsc_db].version
