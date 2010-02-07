@@ -32,6 +32,10 @@ class AnnotationSeq_Test(unittest.TestCase):
         # index error should be caught silently, so this should succeed.
         db.new_annotation('some name', ('seq', 5, 8))
 
+    def test_cache_size(self):
+        'test stupid cache size bug'
+        assert self.db._weakValueDict.n > 20
+
     def test_cmp(self):
         assert cmp(self.annot, None) == -1
         assert cmp(self.annot, self.annot) == 0
