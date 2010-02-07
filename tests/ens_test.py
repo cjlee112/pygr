@@ -40,5 +40,16 @@ print 'ENSE00000720378', repr(exon_db['ENSE00000720378']), \
 print 'total exons:', len(exon_db)
 
 snp130 = factory.get_annot_db('snp130')
-snp = snp130['rs58108140']
-print '\nSNP:',snp.name, repr(snp.sequence), snp.refUCSC, snp.observed
+snp = list(snp130.query('WHERE name=%s', ('rs58108140',)))[0]
+print '\nSNP:',snp.id, repr(snp.sequence), snp.refUCSC, snp.observed
+
+ival = factory.genome_seq['chr1'][10000:11000]
+snps = list(snp130.query_interval(ival))
+print '\nquery:', repr(ival), len(snps), 'snps'
+snp = snps[0]
+print '\nSNP:',snp.id, repr(snp.sequence), snp.refUCSC, snp.observed
+
+it = iter(snp130)
+s = it.next()
+snp = snp130[s]
+print '\nFirst SNP:',snp.id, repr(snp.sequence), snp.refUCSC, snp.observed

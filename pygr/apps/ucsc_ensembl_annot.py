@@ -173,7 +173,7 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
             ids.append(transcript.name)
         return ids
 
-    def get_annot_db(self, table, primaryKey='name',
+    def get_annot_db(self, table, idTuple=('id', 'start', 'name'),
                      sliceAttrDict=dict(id='chrom', start='chromStart',
                                         stop='chromEnd')):
         '''generic method to obtain an AnnotationDB for any
@@ -185,10 +185,12 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
             return getattr(self, table)
         except AttributeError:
             pass
-        sliceDB = sqlgraph.SQLTable(self.ucsc_db + '.' + table,
-                                    primaryKey=primaryKey,
-                                    serverInfo=self.ucsc_server,
-                                    itemClass=UCSCSeqIntervalRow)
+        idTuple = [sliceAttrDict.get(attr, attr) for attr in idTuple]
+        sliceDB = sqlgraph.SQLTableRekeyed(idTuple,
+                                           self.ucsc_db + '.' + table,
+                                           primaryKey='name',
+                                           serverInfo=self.ucsc_server,
+                                           itemClass=UCSCSeqIntervalRow)
         annoDB = annotation.SQLAnnotationDB(sliceDB, self.genome_seq,
                                             checkFirstID=False,
                                             sliceAttrDict=sliceAttrDict)

@@ -106,7 +106,12 @@ With this itemClass you must use %s as your base class instead.'''
         pass
     for attr in db.data: # bind all database columns
         if attr == 'id': # handle ID attribute specially
-            setattr(cls, attr, cls._idDescriptor(db, attr))
+            try:
+                desc = db._idDescriptor
+            except AttributeError:
+                setattr(cls, attr, cls._idDescriptor(db, attr))
+            else:
+                setattr(cls, attr, desc(db))
             continue
         try: # treat as interface to our stored tuple
             setattr(cls, attr, cls._columnDescriptor(db, attr))
@@ -864,27 +869,32 @@ column!' % attr)
             del self._weakValueDict[k]
         except KeyError:
             pass
+        
+    def default_iter_params(self, orderBy='', selectCols=None):
+        if selectCols is None:
+            selectCols = self.primary_key
+        if orderBy == '' and self.orderBy is not None:
+            orderBy = self.orderBy # apply default ordering
+        return selectCols, orderBy
+
+def get_first_values(inputList):
+    'extracts first value from each tuple in input list'
+    return [t[0] for t in inputList]
 
 
-def getKeys(self, queryOption='', selectCols=None):
+def get_keys(self, selectCols=None, orderBy='', cache_f=get_first_values):
     'uses db select; does not force load'
-    if selectCols is None:
-        selectCols=self.primary_key
-    if queryOption=='' and self.orderBy is not None:
-        queryOption = self.orderBy # apply default ordering
+    selectCols, orderBy = self.default_iter_params(orderBy, selectCols)
     self.cursor.execute('select %s from %s %s'
-                        % (selectCols, self.name, queryOption))
+                        % (selectCols, self.name, orderBy))
     # Get all at once, since other calls may reuse this cursor.
-    return [t[0] for t in self.cursor.fetchall()]
+    return cache_f(self.cursor.fetchall())
 
 
 def iter_keys(self, selectCols=None, orderBy='', map_f=iter,
-              cache_f=lambda x: [t[0] for t in x], get_f=None, **kwargs):
+              cache_f=get_first_values, get_f=None, **kwargs):
     'guarantee correct iteration insulated from other queries'
-    if selectCols is None:
-        selectCols = self.primary_key
-    if orderBy == '' and self.orderBy is not None:
-        orderBy = self.orderBy # apply default ordering
+    selectCols, orderBy = self.default_iter_params(orderBy, selectCols)
     cursor = self.get_new_cursor()
     if cursor: # got our own cursor, guaranteeing query isolation
         if hasattr(self.serverInfo, 'iter_keys') \
@@ -911,7 +921,7 @@ class SQLTable(SQLTableBase):
     """Provide on-the-fly access to rows in the database, caching
     the results in dict"""
     itemClass = TupleO # our default itemClass; constructor can override
-    keys = getKeys
+    keys = get_keys
     __iter__ = iter_keys
 
     def load(self, oclass=None):
@@ -983,24 +993,75 @@ class SQLTable(SQLTableBase):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
         return iter_keys(self, selectCols='*', cache_f=None, get_f=self.values)
 
+class RekeyedID(object):
+    def __init__(self, db):
+        self.db = db
+        self.idTuple = db.idTuple
+
+    def __get__(self, obj, objtype):
+        return self.db.separator.join([str(getattr(obj, attr))
+                                       for attr in self.idTuple])
 
 class SQLTableRekeyed(SQLTable):
+    _idDescriptor = RekeyedID
     def __init__(self, idTuple, *args, **kwargs):
+        '''This class is designed to work with tables that lack a
+        usable primary key.
+        idTuple specifies a list of columns to combine as the ID for
+        each row.
+        separator specifies character to use for joining these
+        fields together as a string ID.'''
         self.idTuple = idTuple
         SQLTable.__init__(self, *args, **kwargs)
         self.idIndices = [self.data[col] for col in idTuple]
-        self.separator = '.'
+        self.separator = kwargs.get('separator', '.')
         keyQuery = [(col + '=%s') for col in idTuple]
         self._keyQuery = 'select * from %s where %s limit 2' % \
-                         (self.name, ' '.join(keyQuery))
+                         (self.name, ' and '.join(keyQuery))
+        iterSQL = []
+        iterColumns = []
+        for i in range(len(idTuple)):
+            cols = [idTuple[j] for j in range(i + 1)]
+            whereCols = [(col + '=%s') for col in cols[:-1]]
+            whereCols.append(cols[-1] + '>%s')
+            iterSQL.append('(%s)' % ' and '.join(whereCols))
+            iterColumns += cols
+        self.iterSQL = 'WHERE ' + ' or '.join(iterSQL)
+        self.iterColumns = iterColumns
+        self.orderBy = 'ORDER BY ' + ','.join(idTuple)
+        idTupleType = []
+        for col in idTuple:
+            if 'int' in self.columnType[col].lower():
+                idTupleType.append(int)
+            else:
+                idTupleType.append(str)
+        self.idTupleType = idTupleType
             
-        def getID(self, t):
-            return self.separator.join([t[i] for i in self.idIndices])
+    def getID(self, t):
+        return self.separator.join([str(t[i]) for i in self.idIndices])
 
-        def _format_key_query(self, query, k):
-            return self._format_query(query, tuple(k[0].split(self.separator)))
+    def _format_key_query(self, query, k):
+        l = []
+        keyTuple = k[0].split(self.separator)
+        for i,cls in enumerate(self.idTupleType):
+            l.append(cls(keyTuple[i]))
+        return self._format_query(query, tuple(l))
 
-        # FIXME: iter, keys() etc won't work properly...
+    def __iter__(self):
+        selectCols = ','.join(self.idTuple)
+        return iter_keys(self, selectCols=selectCols,
+                         cache_f=self._convert_tuples_to_id)
+
+    def keys(self):
+        selectCols = ','.join(self.idTuple)
+        return get_keys(self, selectCols=selectCols,
+                        cache_f=self._convert_tuples_to_id)
+
+    def _convert_tuples_to_id(self, rows):
+        result = []
+        for row in rows:
+            result.append(self.separator.join([str(v) for v in row]))
+        return result
 
 
 def getClusterKeys(self, queryOption=''):
@@ -1075,7 +1136,7 @@ class SQLTableNoCache(SQLTableBase):
     values are simply an object interface (SQLRow) to back-end db query.
     Row data are not stored locally, but always accessed by querying the db'''
     itemClass = SQLRow # DEFAULT OBJECT CLASS FOR ROWS...
-    keys = getKeys
+    keys = get_keys
     __iter__ = iter_keys
 
     def getID(self, t):
@@ -1143,7 +1204,7 @@ class SQLTableMultiNoCache(SQLTableBase):
             self.iterColumns = (self.distinct_key, )
 
     def keys(self):
-        return getKeys(self, selectCols=self.distinct_key)
+        return get_keys(self, selectCols=self.distinct_key)
 
     def __iter__(self):
         return iter_keys(self, selectCols=self.distinct_key)
@@ -2143,9 +2204,9 @@ class MySQLServerInfo(DBServerInfo):
         except AttributeError:
             pass
 
-    def iter_keys(self, db, cursor, map_f=iter,
-                  cache_f=lambda x: [t[0] for t in x], **kwargs):
-        block_iterator = BlockIterator(db, cursor, **kwargs)
+    def iter_keys(self, db, cursor, map_f=iter, cache_f=get_first_values,
+                  **kwargs):
+        block_iterator = BlockIterator(db, cursor, cache_f=cache_f, **kwargs)
         try:
             cache_f = block_iterator.cache_f
         except AttributeError:
@@ -2170,7 +2231,8 @@ class CursorCloser(object):
 class BlockIterator(CursorCloser):
     'workaround for MySQLdb iteration horrible performance'
 
-    def __init__(self, db, cursor, selectCols, whereClause='', **kwargs):
+    def __init__(self, db, cursor, selectCols, whereClause='', cache_f=None,
+                 **kwargs):
         self.db = db
         self.cursor = cursor
         self.selectCols = selectCols
@@ -2180,17 +2242,24 @@ class BlockIterator(CursorCloser):
             self.whereSQL = db.iterSQL
             if selectCols == '*': # extracting all columns
                 self.whereParams = [db.data[col] for col in db.iterColumns]
-            else: # selectCols is single column
+            else:
+                selectCols = selectCols.split(',')
                 iterColumns = list(db.iterColumns)
-                try: # if selectCols in db.iterColumns, just use that
-                    i = iterColumns.index(selectCols)
-                except ValueError: # have to append selectCols
-                    i = len(db.iterColumns)
-                    iterColumns += [selectCols]
+                selectIndices = []
+                for col in selectCols:
+                    try: # if col in db.iterColumns, just use that
+                        selectIndices.append(iterColumns.index(col))
+                    except ValueError: # have to append selectCols
+                        selectIndices.append(len(db.iterColumns))
+                        iterColumns.append(col)
                 self.selectCols = ','.join(iterColumns)
                 self.whereParams = range(len(db.iterColumns))
-                if i > 0: # need to extract desired column
-                    self.cache_f = lambda x: [t[i] for t in x]
+                if len(selectIndices) == 1 and cache_f == get_first_values:
+                    if selectIndices[0] > 0: # need to extract desired column
+                        self.cache_f = lambda x: \
+                                       [t[selectIndices[0]] for t in x]
+                else: # save indices for pre-filtering
+                    self.selectIndices = selectIndices
         else: # just use primary key
             self.whereSQL = 'WHERE %s>%%s' % db.primary_key
             self.whereParams = (db.data[db.primary_key],)
@@ -2209,12 +2278,22 @@ class BlockIterator(CursorCloser):
             self.done = True
             return rows
         lastrow = rows[-1] # extract params from the last row in this block
-        if len(lastrow) > 1:
+        if len(lastrow) > 1 and hasattr(self, 'whereParams'):
             self.params = [lastrow[icol] for icol in self.whereParams]
         else:
             self.params = lastrow
         self.whereClause = self.whereSQL
-        return rows
+        try:
+            return self.pre_filter(rows)
+        except AttributeError:
+            return rows
+
+    def pre_filter(self, rows):
+        icols = self.selectIndices # raise AttributeError if not set
+        result = []
+        for row in rows:
+            result.append(tuple([row[i] for i in icols]))
+        return result
 
 
 class SQLiteServerInfo(DBServerInfo):
