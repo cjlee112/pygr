@@ -550,10 +550,10 @@ class RecentValueDictionary(WeakValueDictionary):
         if n<1: # user doesn't want any Most Recent value queue
             self.__class__ = WeakValueDictionary # revert to regular WVD
             return
-        if isinstance(n, int):
-            self.n = n # size limit
-        else:
+        if n is True: # assign default value
             self.n = 50
+        else:
+            self.n = int(n) # size limit
         self._head = self._tail = None
         self._keepDict = {} # most recent queue
 

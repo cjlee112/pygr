@@ -403,7 +403,8 @@ class SQLTable_OldIter_Test(SQLTable_Test):
 class SQLiteBase(testutil.SQLite_Mixin):
 
     def sqlite_load(self):
-        self.load_data('sqltable_test', writeable=self.writeable)
+        self.load_data('sqltable_test', writeable=self.writeable,
+                       ** self.loadArgs)
 
 
 class SQLiteTable_Test(SQLiteBase, SQLTable_Test):
@@ -443,6 +444,8 @@ class SQLTableClustered_Test(SQLTable_Test):
     def test_orderby_random(self):
         pass
 
+class SQLiteClustered_Test(SQLiteBase, SQLTableClustered_Test):
+    pass
 
 class SQLiteTable_NoCache_Test(SQLiteTable_Test):
     tableClass = SQLTableNoCache
