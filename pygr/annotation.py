@@ -396,6 +396,24 @@ for you, when the AnnotationDB was deleted.'''
     def popitem(self):
         raise NotImplementedError("no deletions allowed")
 
+class SQLAnnotationDB(AnnotationDB):
+    def get_slice_attr(self, attr):
+        try:
+            return self.sliceAttrDict[attr]
+        except KeyError:
+            return attr
+    def query(self, whereClause, params):
+        for s in self.sliceDB.select(whereClause, params):
+            try:
+                yield self.sliceAnnotation(s.id, s)
+            except IndexError:
+                print 'skipping zero length annotation...'
+    def query_interval(self, ival):
+        whereClause = 'where %s=%%s and %s<%%s and %s>%%s' % \
+                (self.get_slice_attr('id'), self.get_slice_attr('start'),
+                 self.get_slice_attr('stop'))
+        return self.query(whereClause, (ival.id, ival.stop, ival.start))
+
 
 class AnnotationServer(AnnotationDB):
     'XMLRPC-ready server for AnnotationDB'

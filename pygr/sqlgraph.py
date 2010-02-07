@@ -570,6 +570,12 @@ class SQLTableBase(object, UserDict.DictMixin):
             self.attrAlias = attrAlias # RECORD FOR PICKLING PURPOSES
             self.data.update(attrAlias)
         self.objclass(itemClass) # NEED TO SUBCLASS OUR ITEM CLASS
+        self._keyQuery = 'select * from %s where %s=%%s limit 2' % \
+                         (self.name, self.primary_key)
+        try:
+            self._format_key_query
+        except AttributeError:
+            self._format_key_query = self._format_query
         if itemSliceClass is not None:
             self.itemSliceClass = itemSliceClass
             # Need to subclass itemSliceClass.
@@ -927,10 +933,7 @@ class SQLTable(SQLTableBase):
         try:
             return self._weakValueDict[k] # DIRECTLY RETURN CACHED VALUE
         except KeyError: # NOT FOUND, SO TRY THE DATABASE
-            sql, params = self._format_query('select * from %s where %s=%%s \
-                                             limit 2' % (self.name,
-                                                         self.primary_key),
-                                             (k, ))
+            sql, params = self._format_key_query(self._keyQuery, (k, ))
             self.cursor.execute(sql, params)
             l = self.cursor.fetchmany(2) # get at most 2 rows
             if len(l) == 0:
@@ -979,6 +982,25 @@ class SQLTable(SQLTableBase):
     def itervalues(self):
         'uses arraysize / maxCache and fetchmany() to manage data transfer'
         return iter_keys(self, selectCols='*', cache_f=None, get_f=self.values)
+
+
+class SQLTableRekeyed(SQLTable):
+    def __init__(self, idTuple, *args, **kwargs):
+        self.idTuple = idTuple
+        SQLTable.__init__(self, *args, **kwargs)
+        self.idIndices = [self.data[col] for col in idTuple]
+        self.separator = '.'
+        keyQuery = [(col + '=%s') for col in idTuple]
+        self._keyQuery = 'select * from %s where %s limit 2' % \
+                         (self.name, ' '.join(keyQuery))
+            
+        def getID(self, t):
+            return self.separator.join([t[i] for i in self.idIndices])
+
+        def _format_key_query(self, query, k):
+            return self._format_query(query, tuple(k[0].split(self.separator)))
+
+        # FIXME: iter, keys() etc won't work properly...
 
 
 def getClusterKeys(self, queryOption=''):

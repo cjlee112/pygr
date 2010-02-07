@@ -189,9 +189,9 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
                                     primaryKey=primaryKey,
                                     serverInfo=self.ucsc_server,
                                     itemClass=UCSCSeqIntervalRow)
-        annoDB = annotation.AnnotationDB(sliceDB, self.genome_seq,
-                                         checkFirstID=False,
-                                         sliceAttrDict=sliceAttrDict)
+        annoDB = annotation.SQLAnnotationDB(sliceDB, self.genome_seq,
+                                            checkFirstID=False,
+                                            sliceAttrDict=sliceAttrDict)
         setattr(self, table, annoDB) # cache this db on named attribute
         return annoDB
 
