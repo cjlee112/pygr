@@ -9,6 +9,15 @@ class UCSCEnsembl_Test(unittest.TestCase):
     def setUp(self):
         self.iface = UCSCEnsemblInterface('Bio.Seq.Genome.HUMAN.hg18')
 
+    def test_nonexistent(self):
+        badname = 'Nonexistent.Fake.Bogus'
+        try:
+            badiface = UCSCEnsemblInterface(badname)
+        except KeyError:
+            return
+        raise ValueError("Bad sequence name %s has failed to return an error" %
+                         badname)
+
     def test_transcriptdb(self):
         trans_db = self.iface.trans_db
         print '\nExample transcript annotation:'
