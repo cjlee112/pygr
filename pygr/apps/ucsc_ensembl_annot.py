@@ -14,6 +14,7 @@ class UCSCStrandDescr(object):
 class UCSCSeqIntervalRow(sqlgraph.TupleO):
     orientation = UCSCStrandDescr()
 
+
 class UCSCEnsemblInterface(object):
     'package of gene, transcript, exon, protein interfaces to UCSC/Ensembl'
     def __init__(self, ucsc_genome_name, ens_species=None,
@@ -115,7 +116,8 @@ class UCSCEnsemblInterface(object):
         self.transcripts_in_genes_map = sqlgraph.GraphView(
             self.gene_db, self.trans_db,
             "select transcript from %s.ensGtp where gene=%%s" % self.ucsc_db,
-            serverInfo=self.ucsc_server)
+            inverseSQL="select gene from %s.ensGtp where transcript=%%s" %
+            self.ucsc_db, serverInfo=self.ucsc_server)
         self.ens_transcripts_of_exons_map = sqlgraph.GraphView(
             self.exon_db, self.trans_db, """\
 select trans.stable_id from %s.exon_stable_id exon, \
