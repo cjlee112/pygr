@@ -5,11 +5,13 @@ from pygr.classutil import read_only_error
 
 
 class UCSCStrandDescr(object):
+
     def __get__(self, obj, objtype):
         if obj.strand == '+':
             return 1
         else:
             return -1
+
 
 class UCSCSeqIntervalRow(sqlgraph.TupleO):
     orientation = UCSCStrandDescr()
@@ -17,6 +19,7 @@ class UCSCSeqIntervalRow(sqlgraph.TupleO):
 
 class UCSCEnsemblInterface(object):
     'package of gene, transcript, exon, protein interfaces to UCSC/Ensembl'
+
     def __init__(self, ucsc_genome_name, ens_species=None,
                  ucsc_serverInfo=None, ens_serverInfo=None,
                  ens_db=None, trackVersion='hgFixed.trackVersion'):
@@ -105,7 +108,8 @@ class UCSCEnsemblInterface(object):
                                                self.genome_seq,
                                                checkFirstID=False,
                                                sliceAttrDict=dict(id=0,
-                                                 start=1, stop=2, orientation=3))
+                                                 start=1, stop=2,
+                                                 orientation=3))
         # Mappings.
         self.protein_transcript_id_map = sqlgraph.MapView(
             self.prot_db, self.trans_db,
@@ -198,8 +202,8 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
         return annoDB
 
 
-
 class EnsemblTranscriptAnnotationSeqDescr(object):
+
     def __init__(self, attr):
         self.attr = attr
 
@@ -217,6 +221,7 @@ class EnsemblTranscriptAnnotationSeqDescr(object):
         seq = sequence.Sequence(trans_seq, obj.name)
         setattr(obj, self.attr, seq) # cache on object
         return seq
+
 
 class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
     '''An AnnotationSeq class for transcript annotations, implementing
@@ -243,7 +248,9 @@ class EnsemblTranscriptAnnotationSeq(annotation.AnnotationSeq):
         matching_edges = self.db.exons_map[self]
         return [exon.stable_id for exon in matching_edges.keys()]
 
+
 class EnsemblProteinSeqDescr(object):
+
     def __init__(self, attr):
         self.attr = attr
 
@@ -254,13 +261,17 @@ class EnsemblProteinSeqDescr(object):
         setattr(obj, self.attr, seq) # cache on object
         return seq
 
+
 class EnsemblProteinRow(sqlgraph.TupleO):
     sequence = EnsemblProteinSeqDescr('sequence')
+
     def __repr__(self):
         return str(self.id)
 
+
 class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
     '''Obtains exon info on demand by looking up associated transcript '''
+
     def __init__(self, gRes):
         self.data = {}
         self.gRes = gRes
@@ -290,4 +301,3 @@ class EnsemblExonOnDemandSliceDB(object, UserDict.DictMixin):
 
     def __len__(self):
         return len(self.gRes.ens_exon_stable_id)
-
