@@ -19,30 +19,33 @@ class UCSCEnsembl_Test(unittest.TestCase):
                          badname)
 
     def test_transcriptdb(self):
+        trans_id = 'ENST00000000233'
         trans_db = self.iface.trans_db
         print '\nExample transcript annotation:'
-        mrna = trans_db['ENST00000000233']
-        print 'ENST00000000233', repr(mrna), \
-                repr(mrna.sequence), repr(mrna.mrna_sequence)
+        mrna = trans_db[trans_id]
+        print trans_id, repr(mrna), repr(mrna.sequence), \
+                repr(mrna.mrna_sequence)
 
     def test_genedb(self):
+        gene_id = 'ENSG00000000003'
+        gene_id_multitrans = 'ENSG00000168958'
         gene_db = self.iface.gene_db
         print '\nExample gene annotation:'
-        print 'ENSG00000000003', repr(gene_db['ENSG00000000003']), \
-                repr(gene_db['ENSG00000000003'].sequence)
-        print 'ENSG00000168958', repr(gene_db['ENSG00000168958'])
+        print gene_id, repr(gene_db[gene_id]), repr(gene_db[gene_id].sequence)
+        print gene_id_multitrans, repr(gene_db[gene_id_multitrans])
 
     def test_proteindb(self):
+        prot_id = 'ENSP00000372525'
         prot_db = self.iface.prot_db
         print '\nExample protein sequence:'
-        prot = prot_db['ENSP00000372525']
-        print 'ENSP00000372525', repr(prot), repr(prot.sequence)
+        prot = prot_db[prot_id]
+        print prot_id, repr(prot), repr(prot.sequence)
 
     def test_exondb(self):
+        exon_id = 'ENSE00000720378'
         exon_db = self.iface.exon_db
         print '\nExample exon annotation:'
-        print 'ENSE00000720378', repr(exon_db['ENSE00000720378']), \
-                repr(exon_db['ENSE00000720378'].sequence)
+        print exon_id, repr(exon_db[exon_id]), repr(exon_db[exon_id].sequence)
         print 'total exons:', len(exon_db)
 
     def test_snp(self):
