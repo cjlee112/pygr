@@ -158,7 +158,12 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
         ucsc_versions = sqlgraph.SQLTable(trackVersion,
                                           serverInfo=self.ucsc_server,
                                           primaryKey='db')
-        ens_version = ucsc_versions[self.ucsc_db].version
+        try:
+            ens_version = ucsc_versions[self.ucsc_db].version
+        except KeyError:
+            raise KeyError(
+                "Genome %s doesn't exist or has got no Ensembl data at UCSC" %
+                self.ucsc_db)
         if ens_prefix is None:
             # Note: this assumes 'source' in hgFixed.trackVersion contains
             # the URI of the Ensembl data set and that the last path component
