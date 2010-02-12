@@ -31,7 +31,8 @@ class UCSCEnsembl_Test(unittest.TestCase):
         gene_id_multitrans = 'ENSG00000168958'
         gene_db = self.iface.gene_db
         print '\nExample gene annotation:'
-        print gene_id, repr(gene_db[gene_id]), repr(gene_db[gene_id].sequence)
+        gene = gene_db[gene_id]
+        print gene_id, repr(gene), repr(gene.sequence)
         print gene_id_multitrans, repr(gene_db[gene_id_multitrans])
 
     def test_proteindb(self):
@@ -45,7 +46,8 @@ class UCSCEnsembl_Test(unittest.TestCase):
         exon_id = 'ENSE00000720378'
         exon_db = self.iface.exon_db
         print '\nExample exon annotation:'
-        print exon_id, repr(exon_db[exon_id]), repr(exon_db[exon_id].sequence)
+        exon = exon_db[exon_id]
+        print exon_id, repr(exon), repr(exon.sequence)
         print 'total exons:', len(exon_db)
 
     def test_snp(self):
