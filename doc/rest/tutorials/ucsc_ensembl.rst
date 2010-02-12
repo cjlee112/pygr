@@ -147,7 +147,7 @@ an :class:`sqlgraph.MapView` object:
 >>> trans_of_prot = iface.protein_transcript_id_map[prot]
 >>> trans.of_prot.id
 'ENST00000383052'
->>> prot_of_mrna = (~factory.protein_transcript_id_map)[mrna]
+>>> prot_of_mrna = (~iface.protein_transcript_id_map)[mrna]
 >>> prot_of_mrna.id
 'ENSP00000000233'
 
