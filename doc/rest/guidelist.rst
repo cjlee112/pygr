@@ -25,6 +25,7 @@ Tutorials
     tutorials/graphquery
     tutorials/annotating-yeast
     tutorials/develop
+    tutorials/ucsc_ensembl
 
 Recipes
 -------

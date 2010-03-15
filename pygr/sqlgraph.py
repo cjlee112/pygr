@@ -96,6 +96,14 @@ def select_from_row(row, what):
 
 def init_row_subclass(cls, db):
     'add descriptors for db attributes'
+    try: # check itemClass compatibility with db.__class__
+        if not isinstance(db, cls._tableclass):
+            raise ValueError('''Your itemClass %s is not compatible
+with your database class %s.
+With this itemClass you must use %s as your base class instead.'''
+                             % (cls, db.__class__, cls._tableclass))
+    except AttributeError: # if no _tableclass, no need to do anything
+        pass
     for attr in db.data: # bind all database columns
         if attr == 'id': # handle ID attribute specially
             setattr(cls, attr, cls._idDescriptor(db, attr))
@@ -108,7 +116,6 @@ def init_row_subclass(cls, db):
 def dir_row(self):
     """get list of column names as our attributes """
     return self.db.data.keys()
-
 
 class TupleO(object):
     """Provides attribute interface to a database tuple.
@@ -506,7 +513,7 @@ class SQLTableBase(object, UserDict.DictMixin):
                  arraysize=1024, itemSliceClass=None, dropIfExists=False,
                  serverInfo=None, autoGC=True, orderBy=None,
                  writeable=False, iterSQL=None, iterColumns=None,
-                 primaryKey=None, **kwargs):
+                 primaryKey=None, allowNonUniqueID=False, **kwargs):
         if autoGC: # automatically garbage collect unused objects
             self._weakValueDict = RecentValueDictionary(autoGC) # object cache
         else:
@@ -548,6 +555,7 @@ class SQLTableBase(object, UserDict.DictMixin):
         if primaryKey is not None:
             self.primary_key = primaryKey
             self.primaryKey = primaryKey
+        self.allowNonUniqueID = allowNonUniqueID
         self.data = {} # map of all attributes, including aliases
         for icol, field in enumerate(self.columnName):
             self.data[field] = icol # 1st add mappings to columns
@@ -677,13 +685,6 @@ column!' % attr)
         # Bind itemClass.
         oclass = get_bound_subclass(self, 'itemClass', self.name,
                                     subclassArgs=dict(db=self))
-        if issubclass(oclass, TupleO):
-            # Bind attribute list to tupleo interface.
-            oclass._attrcol = self.data
-        if hasattr(oclass, '_tableclass') and \
-           not isinstance(self, oclass._tableclass):
-            # Row class can override our current table class.
-            self.__class__ = oclass._tableclass
 
     def _select(self, whereClause='', params=(), selectCols='t1.*',
                 cursor=None, orderBy='', limit=''):
@@ -932,9 +933,10 @@ class SQLTable(SQLTableBase):
                                              (k, ))
             self.cursor.execute(sql, params)
             l = self.cursor.fetchmany(2) # get at most 2 rows
-            if len(l) != 1:
-                raise KeyError('%s not found in %s, or not unique'
-                               % (str(k), self.name))
+            if len(l) == 0:
+                raise KeyError('%s not found in %s' % (str(k), self.name))
+            if len(l) > 1 and not self.allowNonUniqueID:
+                raise KeyError('%s not unique in %s' % (str(k), self.name))
             self.limit_cache()
             # Cache it in local dictionary.
             return self.cacheItem(l[0], self.itemClass)
@@ -1068,8 +1070,10 @@ class SQLTableNoCache(SQLTableBase):
             self._select('where %s=%%s' % self.primary_key, (k, ),
                          self.primary_key)
             t = self.cursor.fetchmany(2)
-            if len(t) != 1:
-                raise KeyError('id %s non-existent or not unique' % k)
+            if len(t) == 0:
+                raise KeyError('id %s non-existent' % k)
+            if len(t) > 1 and not self.allowNonUniqueID:
+                raise KeyError('id %s not unique' % k)
             o = self.itemClass(k) # create obj referencing this ID
             self._weakValueDict[k] = o # cache the SQLRow object
             return o
@@ -2371,8 +2375,10 @@ class GraphView(MapView):
 
 class SQLSequence(SQLRow, SequenceBase):
     """Transparent access to a DB row representing a sequence.
-
-    Use attrAlias dict to rename 'length' to something else.
+    Does not cache the sequence string in memory -- uses SQL queries to
+    retrieve just the desired slice as needed.
+    By default expects a column named 'length' to provide sequence length;
+    use attrAlias to remap to an SQL expression if needed.
     """
 
     def _init_subclass(cls, db, **kwargs):
@@ -2404,3 +2410,28 @@ class RNASQLSequence(SQLSequence):
 
 class ProteinSQLSequence(SQLSequence):
     _seqtype=PROTEIN_SEQTYPE
+
+class SQLSequenceCached(TupleO, SequenceBase):
+    '''Caches complete sequence string when initially constructed.
+    By default expects it as column "seq"; use attrAlias to remap to another
+    column if needed.'''
+    def _init_subclass(cls, db, **kwargs):
+        db.seqInfoDict = db # db will act as its own seqInfoDict
+        TupleO._init_subclass(db=db, **kwargs)
+    _init_subclass = classmethod(_init_subclass)
+
+    def __init__(self, data):
+        TupleO.__init__(self, data)
+        SequenceBase.__init__(self)
+
+class DNASQLSequenceCached(SQLSequenceCached):
+    _seqtype=DNA_SEQTYPE
+
+
+class RNASQLSequenceCached(SQLSequenceCached):
+    _seqtype=RNA_SEQTYPE
+
+
+class ProteinSQLSequenceCached(SQLSequenceCached):
+    _seqtype=PROTEIN_SEQTYPE
+
