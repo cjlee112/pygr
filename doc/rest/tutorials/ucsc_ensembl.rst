@@ -12,7 +12,7 @@ Ensembl data at the UCSC genome database.
 Overview
 ^^^^^^^^
 
-The module :mod:`apps.ucsc_ensembl_annot` provides Pygr with an inferface for
+The module :mod:`apps.ucsc_ensembl_annot` provides Pygr with an interface for
 Ensembl data (transcript, gene and exon annotations as well as protein peptide
 sequences) available from the UCSC database. It serves all the data in the form
 of standard Pygr objects and provides mappings between transcripts, genes,
@@ -32,7 +32,7 @@ Getting Started
 ^^^^^^^^^^^^^^^
 
 All the UCSC-Ensembl functionality is contained within the
-:class:`UCSCEnsemblInterface` class of the module. To begin with, initialise
+:class:`UCSCEnsemblInterface` class of the module. To begin with, initialize
 an interface object using the worldbase name of the genome of your choice:
 
 .. doctest::
@@ -57,7 +57,7 @@ To obtain an :class:`annotation.AnnotationDB` of transcripts, call
   >>> trans_db = iface.trans_db
 
 Keys of this database follow the standard Ensembl convention for stable
-transcript idenitifiers, 'ENSTxxxxxxxxxxx'. For instance:
+transcript identifiers, 'ENSTxxxxxxxxxxx'. For instance:
 
 .. doctest::
 
@@ -83,7 +83,7 @@ To obtain an :class:`annotation.AnnotationDB` of genes, call
   >>> gene_db = iface.gene_db
 
 Keys of this database follow the standard Ensembl convention for stable
-gene idenitifiers, 'ENSGxxxxxxxxxxx'. For instance:
+gene identifiers, 'ENSGxxxxxxxxxxx'. For instance:
 
 .. doctest::
 
@@ -103,7 +103,7 @@ To obtain an :class:`annotation.AnnotationDB` of exons, call
   >>> exon_db = iface.exon_db
 
 Keys of this database follow the standard Ensembl convention for stable
-exon idenitifiers, 'ENSExxxxxxxxxxx'. For instance:
+exon identifiers, 'ENSExxxxxxxxxxx'. For instance:
 
 .. doctest::
 
@@ -118,7 +118,7 @@ representing protein peptide sequences, call
   >>> prot_db = iface.prot_db
 
 Keys of this database follow the standard Ensembl convention for stable
-proten idenitifiers, 'ENSPxxxxxxxxxxx'. For instance:
+protein identifiers, 'ENSPxxxxxxxxxxx'. For instance:
 
 .. doctest::
 
