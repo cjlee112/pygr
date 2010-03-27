@@ -124,7 +124,8 @@ protein identifiers, 'ENSPxxxxxxxxxxx'. For instance:
 
   >>> prot = prot_db['ENSP00000372525']
 
-The peptide sequences are then available through the standard sequence attribute
+The peptide sequences are then available through the standard sequence
+attribute
 
 .. doctest::
 
@@ -135,8 +136,8 @@ The peptide sequences are then available through the standard sequence attribute
 Mappings
 ^^^^^^^^
 
-In addition to the databases themselves :class:`UCSCEnsemblInterface` provides mappings
-between their objects.
+In addition to the databases themselves :class:`UCSCEnsemblInterface`
+provides mappings between their objects.
 
 To obtain the transcript associated in Ensembl with a particular protein or
 vice versa, use the map *protein_transcript_id_map*,
