@@ -45,7 +45,7 @@ master_doc = 'contents'
 
 # General substitutions.
 project = 'Pygr DocTest'
-copyright = '2009, Pygr Team'
+copyright = '2009-2010, Pygr Team'
 
 # The default replacements for |version| and |release|, also used in various
 # other places throughout the built documents.
