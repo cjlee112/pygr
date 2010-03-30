@@ -53,7 +53,7 @@ copyright = '2009, Pygr Team'
 # The short X.Y version.
 version = '0.8'
 # The full version, including alpha/beta/rc tags.
-release = '0.8'
+release = '0.8.2'
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
