@@ -10,24 +10,38 @@ on bioinformatics applications ranging from genome-wide analysis of
 alternative splicing patterns, to comparative genomics queries of 
 multi-genome alignment data.
 
+For more information see
+
+http://pygr.org
+
 Latest Release
 --------------
 
-http://www.sourceforge.net/projects/pygr/
+http://code.google.com/p/pygr/downloads/list
 
 Documentation
 -------------
 
-doc/pygr/index.html is a good place to start. 
+This distribution includes the full Pygr documentation source,
+but you will need the Sphinx documentation tool to build the
+formatted docs.  You can get Sphinx via:
 
-You can also check out:
+easy_install -U Sphinx
 
-http://bioinfo.mbi.ucla.edu/pygr/docs/
+To build HTML versions of the docs using Sphinx:
+cd doc
+make html
+
+The docs are also available online:
+
+http://pygr.org/docs/latest-release/
 
 Core Prerequisites
 -----------------
 
-1) Python >= 2.1 
+1) Python >= 2.3 
+
+To build Pygr from source code, you need Pyrex
 
 Apps Prerequiites
 -----------------
@@ -67,6 +81,8 @@ in site-packages.
 
 Using Pygr
 ----------
+Check out the tutorials in the online docs!
+
 Pygr contains several modules imported as follows:
 from pygr import seqdb # IMPORT SEQUENCE DATABASE MODULE
 
@@ -77,32 +93,20 @@ you'd type something like:
 setenv PYTHONPATH PYGRDIR/build/lib.linux-i686-2.3
 where the last directory name depends on your specific architecture.
 
-Pygr has a myriad of applications, however, providing a comprehensive 
-description of its utility is out of the scope of this document (see
-Documentation). 
-
-If you wish to test your install using the provided test scripts, 
-or simply want to give pygr an initial whirl, follow these steps:
-
-1) Flesh out ~/.my.cnf, like so:
-
-------- cut here -------
-[client]
-socket = /var/lib/mysql/mysql.sock
-user = zach
-password = seaurchin007!
------- cut here -------
-
-2) cd pygr/tests/ 
-3) mysql < HUMAN_SPLICE_03
-4) python test.py 
 
 License
 -------
 
-GPL
+New BSD license.
 
 Author
 ------
-Chris Lee <clee@ucla.edu>
+Chris Lee <leec@chem.ucla.edu> and the rest of the Pygr developer team.
+Please see http://code.google.com/p/pygr for a current list
+of the participating developers.
+
+Also see http://github.com/cjlee112/pygr/ for a list of other
+developers who have created their own branches of the Pygr
+git repository.
+
 
