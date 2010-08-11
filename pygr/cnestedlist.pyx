@@ -1028,22 +1028,32 @@ alignment intervals to an NLMSA after calling its build() method.''')
       return result
 
   ############################################## LPO REGION METHODS
+  def _split(self, start, stop):
+    if start == self.start and stop == self.stop:
+      return self # SAME INTERVAL, SO JUST RETURN self
+    else:
+      return NLMSASlice(self.nlmsaSequence, start, stop,
+                        self.id, self.offset, self.seq)
+
   def split(self, minAligned=0, **kwargs):
-    '''Use groupByIntervals() and groupBySequences() methods to
+    '''Use groupByIntervals() to
     divide this slice into subslices using indel rules etc.'''
     seqIntervals = self.groupByIntervals(**kwargs)
-    kwargs['sourceOnly'] = True
-    kwargs['indelCut'] = True
-    ivals = self.groupBySequences(seqIntervals, minAligned=minAligned,
-                                  **kwargs)
+    m = []
+    for v in seqIntervals.values():
+      for ival in v:
+        m.append(ival[:2])
+    m.sort()
+    mstart, mstop = m[0]
     l = []
-    for ival in ivals:
-      if ival.start == self.start and ival.stop == self.stop:
-        l.append(self) # SAME INTERVAL, SO JUST RETURN self
-      else:
-        subslice = NLMSASlice(self.nlmsaSequence, ival.start, ival.stop,
-                            self.id, self.offset, self.seq)
-        l.append(subslice)
+    for start, stop in m[1:]:
+      if start <= mstop: # overlap, so merge
+        if stop > mstop: # extend interval
+          mstop = stop
+      else: # save old interval, start new interval
+        l.append(self._split(mstart, mstop))
+        mstart, mstop = start, stop
+    l.append(self._split(mstart, mstop))
     return l
 
   def regions(self, dummyArg=None, **kwargs):
