@@ -92,7 +92,7 @@ class QueryMatchList(object):
 cdef class CIntDictionary:
     'both keys and values MUST be integers'
 
-    def __new__(self, d):
+    def __cinit__(self, d):
         cdef int i, k, v
         self.d = cdict_alloc(len(d))
         if self.d == NULL: # NO MORE MEMORY??
@@ -157,7 +157,7 @@ cdef CDict *cdict_init(object d, object key_index):
 cdef class CDictionary:
     'general purpose dict in C; key_index supplies mapping to integer indexes'
 
-    def __new__(self, d, key_index):
+    def __cinit__(self, d, key_index):
         self.d = cdict_init(d, key_index)
         self.key_index = key_index
 
@@ -209,7 +209,7 @@ cdef class CDictionary:
 cdef class CDictionaryRef:
     'holds a reference to a CDict'
 
-    def __new__(self, CGraphDict graph, int idict):
+    def __cinit__(self, CGraphDict graph, int idict):
         self.graph = graph # HOLD A REFERENCE TO OUR GRAPH
         self.key_index = graph.key_index
         self.d = graph.d[0].dict[idict].v
@@ -258,7 +258,7 @@ cdef class CDictionaryRef:
 cdef class CGraphDict:
     'general purpose graph in C; key_index supplies mapping to integer indexes'
 
-    def __new__(self, d, key_index):
+    def __cinit__(self, d, key_index):
         cdef int i
         self.d = cgraph_alloc(len(d))
         self.key_index = key_index
@@ -404,7 +404,7 @@ cdef class CGraphIterator:
 cdef class IntTupleArray:
     'holder for array of integer index values'
 
-    def __new__(self, n, vector_len, dim=1, skipIndex=None):
+    def __cinit__(self, n, vector_len, dim=1, skipIndex=None):
         self.n_alloc = n
         self.n = 0
         self.dim = dim
