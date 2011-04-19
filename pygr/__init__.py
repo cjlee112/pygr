@@ -6,7 +6,9 @@ try:
 except NameError:
     import metabase
     mdb = metabase.MetabaseList() # use default WORLDBASEPATH
+    mdb.update() # else dir(worldbase) doesn't work
     worldbase = mdb.Data
+    worldbase.__dict__['__name__'] = 'worldbase' # else help(worldbase) doesn't work
 
 if sys.version_info < (2, 6):
 
