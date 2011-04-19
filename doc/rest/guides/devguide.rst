@@ -285,9 +285,8 @@ do so through the following arguments to the NLMSA constructor or
   If the object has named attributes, provide mappings to the correct
   attribute names, e.g.
   ``alignedIvalsAttrs=dict(id='src_id', start='src_start',
-                                    stop='src_end', ori='src_ori',
-                                    idDest='dest_id', startDest='dest_start',
-                                    stopDest='dest_end', oriDest='dest_ori')``
+  stop='src_end', ori='src_ori', idDest='dest_id', startDest='dest_start',
+  stopDest='dest_end', oriDest='dest_ori')``
   The attribute names used for source vs. destination attributes are
   given different names so that they both be extracted from a single
   object if desired: id, start, stop, ori; idDest, startDest, stopDest, oriDest.

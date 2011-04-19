@@ -491,6 +491,6 @@ The sequence module also provides convenience functions:
    interval on the reverse strand (see Coordinate System, above).
    Note: if *seq* is itself a subinterval, then the *start,stop*
    coordinates are interpreted relative to *seq* itself, i.e.
-   ``seq[start:stop]".
+   ``seq[start:stop]``.
 
 

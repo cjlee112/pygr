@@ -1,5 +1,5 @@
 :mod:`coordinator` --- XMLRPC-based parallel cluster interface
-==================================================
+==============================================================
 
 .. module:: coordinator
    :synopsis: XMLRPC-based parallel cluster interface.
@@ -127,7 +127,7 @@ on the server object).
    and requests for different server objects on the same XMLRPC server will
    share the same :class:`XMLRPCClient` connection.  It is simply used as follows:
    ``get_connection(url,name)``, where ``url`` is the URL of the XMLRPC
-   server, and ``name" is the name of the server object you wish to access.
+   server, and ``name`` is the name of the server object you wish to access.
    For example::
 
       myclient = coordinator.get_connection('http://leelab.mbi.ucla.edu:5000','ucsc17')
@@ -199,7 +199,7 @@ Let's analyze the script line by line:
   
 * if __name__=="__main__": this final clause automatically launches our script as either a Coordinator or Processor depending on the command line options (which are automatically parsed by start_client_or_server()).  All we have to do is pass the client generator function, the server generator function, a list of the resources this job will use, and the name of the script file to be run on client nodes.  Since that is just this script itself, we use the Python builtin symbol __file__ (which just evaluates to the name of the current script).
   
-* Command-line arguments are parsed (GNU-style, ie. --foo=bar) by start_client_or_server() and passed to your client and server functions as Python named parameters.  Because the same list of arguments is passed to your client and server functions, and each of these functions won't necessarily want to get all the named arguments, you should include the **kwargs at the end of the argument list.  Any unmatched arguments will be stored in kwargs as a Python mapping (dictionary).  If you fail to do this, your client or server function will crash if called with any named parameters other than the ones it expects.
+* Command-line arguments are parsed (GNU-style, ie. --foo=bar) by start_client_or_server() and passed to your client and server functions as Python named parameters.  Because the same list of arguments is passed to your client and server functions, and each of these functions won't necessarily want to get all the named arguments, you should include the ``**kwargs`` at the end of the argument list.  Any unmatched arguments will be stored in kwargs as a Python mapping (dictionary).  If you fail to do this, your client or server function will crash if called with any named parameters other than the ones it expects.
 
 
 Log and Error Information
