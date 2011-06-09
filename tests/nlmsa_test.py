@@ -62,6 +62,12 @@ class NLMSA_SimpleTests(unittest.TestCase):
         except nlmsa_utils.EmptyAlignmentError:
             pass
 
+    def test_empty_subheader(self):
+        db = cnestedlist.IntervalDB()
+        ivals = [(i, 2 * (i + 1), 0, 0, 0) for i in range(4)]
+        db.save_tuples(ivals)
+        return db.find_overlap_list(0, 8)
+
     def test_build(self):
         "NLMSA build"
 

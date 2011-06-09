@@ -359,7 +359,7 @@ int find_suboverlap_start(int start,int end,int isub,IntervalMap im[],
 {
   int i;
 
-  if (isub>=0) {
+  if (isub>=0 && isub<nlists) {
     i=find_overlap_start(start,end,im+subheader[isub].start,subheader[isub].len);
     if (i>=0)
       return i+subheader[isub].start;
