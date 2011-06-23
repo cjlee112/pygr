@@ -155,24 +155,30 @@ et.rank""" % (self.ens_db, self.ens_db, self.ens_db),
     def get_ensembl_db_name(self, ens_prefix, trackVersion):
         '''Used by __init__(), obtains Ensembl database name matching
         the specified UCSC genome version'''
-        ucsc_versions = sqlgraph.SQLTable(trackVersion,
-                                          serverInfo=self.ucsc_server,
-                                          primaryKey='db')
-        try:
-            ens_version = ucsc_versions[self.ucsc_db].version
-        except KeyError:
-            raise KeyError(
+        ucsc_versions = sqlgraph.SQLTableMultiNoCache(trackVersion,
+                                               serverInfo=self.ucsc_server)
+        ucsc_versions._distinct_key = 'db'
+        cursor = self.ens_server.cursor()
+        for t in ucsc_versions[self.ucsc_db]: # search rows until success
+            if ens_prefix is None:
+                # Note: this assumes 'source' in hgFixed.trackVersion contains
+                # the URI of the Ensembl data set and that the last path component
+                # of that URI is the species name of that data set.
+                try:
+                    ens_prefix1 = t.source.split('/')[-2]
+                except IndexError:
+                    continue
+            else:
+                ens_prefix1 = ens_prefix
+            cursor.execute("show databases like '%s_core_%s_%%'" 
+                           % (ens_prefix1, t.version))
+            try:
+                return cursor.fetchall()[0][0]
+            except IndexError:
+                pass
+        raise KeyError(
                 "Genome %s doesn't exist or has got no Ensembl data at UCSC" %
                 self.ucsc_db)
-        if ens_prefix is None:
-            # Note: this assumes 'source' in hgFixed.trackVersion contains
-            # the URI of the Ensembl data set and that the last path component
-            # of that URI is the species name of that data set.
-            ens_prefix = ucsc_versions[self.ucsc_db].source.split('/')[-2]
-        cursor = self.ens_server.cursor()
-        cursor.execute("show databases like '%s_core_%s_%%'" % (ens_prefix,
-                                                                ens_version))
-        return cursor.fetchall()[0][0]
 
     def get_gene_transcript_ids(self, gene_id):
         '''Obtain a list of stable IDs of transcripts associated
