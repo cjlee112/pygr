@@ -89,6 +89,8 @@
       (memptr)=(ATYPE *)tmp_realloc_ptrZZ; \
   }
 
+#define MEMSET(memptr, start, end, val, ATYPE) \
+  memset((void *)(memptr + start), val, sizeof(ATYPE) * (end - start))
 
 #else
 /* USE THESE DEFINITIONS FOR BUILDING A C LIBRARY *****************************/
