@@ -67,9 +67,9 @@ cdef extern from "intervaldb.h":
 
   ctypedef struct FilePtrRecord:
     FILE *ifile
-    int left
-    int right
-    int ihead
+    int up
+    int down
+    int nbuild
     char *filename
 
 
@@ -93,6 +93,14 @@ cdef extern from "intervaldb.h":
   int save_text_file(char filestem[],char basestem[],char err_msg[],FILE *ofile)
   int text_file_to_binaries(FILE *infile,char buildpath[],char err_msg[])
   int C_int_max
+  FilePtrRecord *fileptr_alloc(int n)
+  int fileptr_free(FilePtrRecord *fpr, int n)
+  FilePtrRecord *fileptr_realloc(FilePtrRecord *fpr, int newsize, int oldsize)
+  int fileptr_top(FilePtrRecord fpr[], int i, int top)
+  int fileptr_init(FilePtrRecord fpr[], int i, int top, FILE *ifile, char filename[])
+  int fileptr_close(FilePtrRecord fpr[], int i)
+  int fileptr_reopen(FilePtrRecord fpr[], int i, int top)
+  int fileptr_write(FilePtrRecord fpr[], int i, int top, int bottom, IntervalMap im[], int n)
 
 
 

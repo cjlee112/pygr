@@ -1095,3 +1095,114 @@ int text_file_to_binaries(FILE *infile,char buildpath[],char err_msg[])
 }
 
 
+
+
+FilePtrRecord *fileptr_alloc(int n)
+{
+  FilePtrRecord *fpr=NULL;
+  CALLOC(fpr,n,FilePtrRecord); /* initial allocation */
+  return fpr;
+ handle_malloc_failure:
+  return NULL;
+}
+
+int fileptr_free(FilePtrRecord *fpr, int n)
+{
+  int i;
+  for (i=0; i<n; i++) {
+    if (fpr[i].ifile)
+      fclose(fpr[i].ifile);
+    FREE(fpr[i].filename);
+  }
+  FREE(fpr);
+  return 0;
+}
+
+FilePtrRecord *fileptr_realloc(FilePtrRecord *fpr, int newsize, int oldsize)
+{
+  REALLOC(fpr,newsize,FilePtrRecord); /* resized allocation */
+  if (newsize > oldsize) /* erase expanded allocation */
+    MEMSET(fpr, oldsize, newsize, 0, FilePtrRecord);
+  return fpr;
+ handle_malloc_failure:
+  fileptr_free(fpr, oldsize); /* useless unless we can resize it, so free it */
+  return NULL;
+}
+
+/* move fpr i to the top */
+int fileptr_top(FilePtrRecord fpr[], int i, int top)
+{
+  if (fpr[i].up >= 0) /* link neighbors to each other */
+    fpr[fpr[i].up].down = fpr[i].down;
+  if (fpr[i].down >= 0)
+    fpr[fpr[i].down].up = fpr[i].up;
+  if (top >= 0) {
+    if (fpr[top].ifile)
+      fpr[top].up = i; /* old top links to new top */
+    else /* top already removed from queue, so queue is empty */
+      top = -1;
+  }
+  fpr[i].down = top;
+  fpr[i].up = -1;
+  return i; /* return new top */
+}
+
+/* initialize new record i, as top */
+int fileptr_init(FilePtrRecord fpr[], int i, int top, FILE *ifile, 
+		 char filename[])
+{
+  fpr[i].ifile = ifile;
+  fpr[i].filename = strdup(filename);
+  fpr[i].nbuild = 0;
+  fpr[i].up = -1;
+  fpr[i].down = -1;
+  return fileptr_top(fpr, i, top);
+}      
+
+/* close bottom record i, and return new bottom */
+int fileptr_close(FilePtrRecord fpr[], int i)
+{
+  int bottom;
+  /* printf("close: %d\n", i); */
+  bottom = fpr[i].up; /* becomes the new bottom */
+  if (bottom >= 0)
+    fpr[bottom].down = -1;
+  fpr[i].down = -1; /* disconnect */
+  fpr[i].up = -1;
+  fclose(fpr[i].ifile);
+  fpr[i].ifile = NULL;
+  return bottom; /* return new bottom */
+}
+
+/* reopen record i in append mode, move to top of queue */
+int fileptr_reopen(FilePtrRecord fpr[], int i, int top)
+{
+  /* printf("reopen: %d\n", i); */
+  fpr[i].ifile = fopen(fpr[i].filename, "ab"); /* append, binary mode */
+  return fileptr_top(fpr, i, top); /* becomes new top */
+}
+
+/* write to record i, reopening if necessary */
+int fileptr_write(FilePtrRecord fpr[], int i, int top, int bottom,
+		  IntervalMap im[], int n)
+{
+  if (fpr[i].ifile == NULL) { /* reopen for writing */
+    bottom = fileptr_close(fpr, bottom); /* close bottom file */
+    fileptr_reopen(fpr, i, top); /* becomes the new top */
+  }
+  else { /* already open for writing */
+    if (bottom == i) /* pop from bottom */
+      bottom = fpr[i].up;
+    if (i != top)
+      fileptr_top(fpr, i, top); /* becomes the new top */
+  }
+  if (write_padded_binary(im, n, 1, fpr[i].ifile) != n)
+    return -1; /* error occurred */
+  fpr[i].nbuild = fpr[i].nbuild + n;
+  if (bottom < 0) /* save 1st entry in the array */
+    bottom = i;
+  return bottom;
+}
+
+
+
