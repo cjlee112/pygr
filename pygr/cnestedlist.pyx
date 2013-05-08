@@ -1724,11 +1724,11 @@ See the NLMSA documentation for more details.\n''')
 
   def readMAFfiles(self, mafFiles, maxint, maxOpenFiles=1024):
     'read alignment from a set of MAF files'
-    cdef int i, j, nseq0, nseq1, n, nseq, block_len
+    cdef int i, j, nseq0, nseq1, n, nseq, block_len,im_nalloc
     cdef SeqIDMap *seqidmap
     cdef char tmp[32768], *p, a_header[4]
     cdef FILE *ifile
-    cdef IntervalMap im[4096], im_tmp
+    cdef IntervalMap *im, im_tmp
     cdef NLMSASequence ns_lpo, ns # ns IS OUR CURRENT UNION
     cdef FilePtrRecord *build_fpr
     cdef int fpr_nalloc, has_continuation, bottom, top, maxopen, nopen
@@ -1740,6 +1740,8 @@ See the NLMSA documentation for more details.\n''')
     bottom = -1 # pointers to top and bottom of llqueue
     top = -1
     nopen = 1 # count of files currently open, including ns_lpo
+    im = NULL # no memory allocated for IntervalMap buffer
+    im_nalloc = 0
 
     ns_lpo = self.seqlist[self.lpo_id] # OUR INITIAL LPO
     self.pairwiseMode = 0 # WE ARE USING A REAL LPO!
@@ -1777,13 +1779,15 @@ Check the input!''' % (pythonStr, seqInfo.length))
       p = fgets(tmp, 32767, ifile) # READ 1ST DATA LINE OF THE MAF FILE
       while p: # GOT ANOTHER LINE TO PROCESS
         if has_continuation or 0 == strncmp(tmp, a_header, 2): # ALIGNMENT HEADER: READ ALIGNMENT
-          n = readMAFrecord(im, 0, seqidmap, nseq0, ns_lpo.length, # READ ONE MAF BLOCK
-                            &block_len, ifile, 4096, linecode_count, &has_continuation)
+          n = readMAFrecord(&im, &im_nalloc, seqidmap, nseq0, 
+                            ns_lpo.length, &block_len, 
+                            ifile, linecode_count, 
+                            &has_continuation) # READ ONE MAF BLOCK
           if n < 0: # UNRECOVERABLE ERROR OCCURRED...
             self.free_seqidmap(nseq0, seqidmap)
             fileptr_free(build_fpr, fpr_nalloc)
-            raise ValueError('MAF block too long!  Increase max size')
-          elif n == 0:
+            raise MemoryError('Out of memory')
+          elif n == 0: # empty MAF block?
             continue
 
           if self.maxlen - ns_lpo.length <= block_len or \

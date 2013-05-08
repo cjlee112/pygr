@@ -115,8 +115,9 @@ cdef extern from "apps/maf2nclist.h":
     int offset
     int nlmsa_id
 
-  int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
-                    int lpoStart,int *p_block_len,FILE *ifile,int maxseq,
+  int readMAFrecord(IntervalMap **p_im,int *p_nalloc,
+                    SeqIDMap seqidmap[],int nseq,
+                    int lpoStart,int *p_block_len,FILE *ifile,
                     long long linecode_count[],int *p_has_continuation)
   int read_axtnet(IntervalMap im[], SeqIDMap seqidmap[], int nseq,
                   FILE *ifile, int maxseq, int *isrc, char *src_prefix,
