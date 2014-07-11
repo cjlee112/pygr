@@ -16,6 +16,7 @@ Tutorials
     tutorials/sequence
     tutorials/db_basic
     tutorials/alignment
+    tutorials/annotation
     tutorials/annotation2
     tutorials/worldbase
     tutorials/worldbase2
@@ -23,6 +24,7 @@ Tutorials
     tutorials/db
     tutorials/gene
     tutorials/graphquery
+    tutorials/compgenomics
     tutorials/annotating-yeast
     tutorials/develop
     tutorials/ucsc_ensembl

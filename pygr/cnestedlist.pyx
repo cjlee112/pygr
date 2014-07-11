@@ -5,7 +5,7 @@ import logger
 
 cdef class IntervalDBIterator:
 
-  def __new__(self, int start, int end, IntervalDB db not None):
+  def __cinit__(self, int start, int end, IntervalDB db not None):
     self.it = interval_iterator_alloc()
     self.it_alloc = self.it
     self.start = start
@@ -48,7 +48,7 @@ cdef class IntervalDBIterator:
 
 cdef class IntervalDB:
 
-  def __new__(self, filename='noname', nsize=0, **kwargs):
+  def __cinit__(self, filename='noname', nsize=0, **kwargs):
     cdef int i
     cdef FILE *ifile
     self.n = nsize
@@ -164,7 +164,7 @@ cdef class IntervalDB:
 
 cdef class IntervalFileDBIterator:
 
-  def __new__(self, int start, int end, IntervalFileDB db=None,
+  def __cinit__(self, int start, int end, IntervalFileDB db=None,
               NLMSASequence ns=None,
               int nbuffer=1024, rawIvals=None):
     cdef int i
@@ -368,7 +368,7 @@ cdef class IntervalFileDBIterator:
 
 cdef class IntervalFileDB:
 
-  def __new__(self, filestem=None, mode='r'):
+  def __cinit__(self, filestem=None, mode='r'):
     if filestem is not None and mode == 'r':
       self.open(filestem)
 
@@ -421,7 +421,7 @@ cdef class IntervalFileDB:
 cdef class NLMSASliceLetters:
   'graph interface to letter graph within this region'
 
-  def __new__(self, NLMSASlice nlmsaSlice):
+  def __cinit__(self, NLMSASlice nlmsaSlice):
     self.nlmsaSlice = nlmsaSlice
 
   def __iter__(self):
@@ -443,7 +443,7 @@ cdef class NLMSASliceLetters:
 
 cdef class NLMSASlice:
 
-  def __new__(self, NLMSASequence ns not None, int start, int stop,
+  def __cinit__(self, NLMSASequence ns not None, int start, int stop,
               int id=-1, int offset=0, seq=None):
     cdef int i, j, n, start_max, end_min, start2, stop2, nseq, istart, istop, localQuery
     cdef NLMSASequence ns_lpo
@@ -1109,7 +1109,7 @@ def advanceStartStop(int ipos, NLMSASlice nlmsaSlice not None,
 cdef class NLMSASliceIterator:
   'generate letters (nodes) in this LPO slice'
 
-  def __new__(self, NLMSASlice nlmsaSlice not None):
+  def __cinit__(self, NLMSASlice nlmsaSlice not None):
     self.nlmsaSlice = nlmsaSlice
     self.ipos = nlmsaSlice.start - 1
 
@@ -1135,7 +1135,7 @@ cdef class NLMSASliceIterator:
 cdef class NLMSANode:
   'interface to a node in NLMSA storage of LPO alignment'
 
-  def __new__(self, int ipos, NLMSASlice nlmsaSlice not None,
+  def __cinit__(self, int ipos, NLMSASlice nlmsaSlice not None,
               int istart=0, int istop=-1):
     cdef int i, n
     cdef NLMSA nl

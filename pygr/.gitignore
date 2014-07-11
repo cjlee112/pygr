@@ -15,3 +15,5 @@ pygr.seqfmt.pyx
 seqfmt.c
 seqfmt.so
 *.pyd
+intervaldb.o
+libnclist.a
