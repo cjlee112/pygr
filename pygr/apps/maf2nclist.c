@@ -44,13 +44,24 @@ int save_interval(IntervalMap *im,int start,int stop,int iseq,int istart,int ist
 }
 
 
-int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
-		  int lpoStart,int *p_block_len,FILE *ifile,int maxseq,
+int readMAFrecord(IntervalMap **p_im,int *p_nalloc,
+		  SeqIDMap seqidmap[],int nseq,
+		  int lpoStart,int *p_block_len,FILE *ifile,
 		  long long linecode_count[],int *p_has_continuation)
 {
-  int i,start,seqStart,junk,iseq= -1,max_len=0,seqLength,newline=1,l,extend=0;
+  int i,start,seqStart,junk,iseq= -1,max_len=0,seqLength,newline=1,
+    l,extend=0,n=0,maxseq=0;
   unsigned char tmp[32768]; /* MUST USE UNSIGNED ARITHMETIC FOR linecode_count[] INDEXING! */
   char *p,seq[32768],prefix[8],seqName[64],oriFlag[8];
+  IntervalMap *im;
+  im = *p_im;
+  maxseq = *p_nalloc;
+  if (im == NULL) { /* ALLOCATE INITIAL BUFFER */
+    CALLOC(im, 4096, IntervalMap);
+    maxseq = 4096;
+    *p_im = im; /* SAVE BACK TO CALLER */
+    *p_nalloc = maxseq;
+  }
   if (p_has_continuation) /* DEFAULT: NO CONTINUATION */
     *p_has_continuation = 0;
   while ((p=fgets(tmp,32767,ifile))) {
@@ -103,8 +114,12 @@ int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
       if (seq[i]==0) break; /* END OF SEQUENCE */
       for (start=i;seq[i] && seq[i]!='-';i++); /* GET A SEQUENCE INTERVAL */
 /*printf("\t\t%d,%d\n",start,i);  */
-      if (n>=maxseq) 
-	return -1; /* ERROR: RAN OUT OF SPACE!!! */
+      if (n>=maxseq) { /* EXPAND OUR BUFFER */
+        REALLOC(im,2*maxseq,IntervalMap);
+        maxseq = maxseq * 2;
+        *p_im = im; /* SAVE BACK TO CALLER */
+        *p_nalloc = maxseq;
+      }
       save_interval(im+n,lpoStart+extend+start,lpoStart+extend+i,
 		    iseq,seqStart,seqStart+i-start);
 /*printf("%d %d %d %d %d %d\n", n,lpoStart+extend+start,lpoStart+extend+i,iseq,seqStart,seqStart+i-start);*/
@@ -121,6 +136,8 @@ int readMAFrecord(IntervalMap im[],int n,SeqIDMap seqidmap[],int nseq,
   if (p_block_len)
     *p_block_len = max_len;
   return n;
+ handle_malloc_failure:
+  return -1; /* ERROR CODE */
 }
 
 int read_axtnet(IntervalMap im[], SeqIDMap seqidmap[], int nseq,

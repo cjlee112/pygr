@@ -67,9 +67,9 @@ typedef struct IntervalIterator_S {
 
 typedef struct {
   FILE *ifile;
-  int left;
-  int right;
-  int ihead;
+  int up;
+  int down;
+  int nbuild;
   char *filename;
 } FilePtrRecord;
 
@@ -106,6 +106,18 @@ extern int save_text_file(char filestem[],char err_msg[],
 			  char basestem[],FILE *ofile);
 extern int text_file_to_binaries(FILE *infile,char buildpath[],char err_msg[]);
 extern void reorient_intervals(int n,IntervalMap im[],int ori_sign);
+
+extern FilePtrRecord *fileptr_alloc(int n);
+extern int fileptr_free(FilePtrRecord *fpr, int n);
+extern FilePtrRecord *fileptr_realloc(FilePtrRecord *fpr, int newsize, 
+				      int oldsize);
+extern int fileptr_top(FilePtrRecord fpr[], int i, int top);
+extern int fileptr_init(FilePtrRecord fpr[], int i, int top, FILE *ifile, 
+			char filename[]);
+extern int fileptr_close(FilePtrRecord fpr[], int i);
+extern int fileptr_reopen(FilePtrRecord fpr[], int i, int top);
+extern int fileptr_write(FilePtrRecord fpr[], int i, int top, int bottom,
+			 IntervalMap im[], int n);
 
 #define FIND_FILE_MALLOC_ERR -2
 

@@ -1350,10 +1350,9 @@ cdef class NLMSASequence:
   def buildFiles(self, **kwargs):
     'build nested list from saved unsorted alignment data'
     cdef IntervalDB db
-    if self.build_ifile == NULL:
-      raise IOError('not opened in write mode')
-    fclose(self.build_ifile)
-    self.build_ifile = NULL
+    if self.build_ifile: # close open stream
+      fclose(self.build_ifile)
+      self.build_ifile = NULL
     filename = self.filestem + '.build'
     db = IntervalDB() # CREATE EMPTY NL IN MEMORY
     if self.nbuild > 0:
@@ -1456,7 +1455,8 @@ cdef class NLMSA:
                trypath=None, bidirectional=True, pairwiseMode=-1,
                bidirectionalRule=nlmsa_utils.prune_self_mappings,
                use_virtual_lpo=None, maxLPOcoord=None,
-               inverseDB=None, alignedIvals=None, **kwargs):
+               inverseDB=None, alignedIvals=None, maxOpenFiles2=1000,
+               **kwargs):
     try:
       import resource # WE MAY NEED TO OPEN A LOT OF FILES...
       resource.setrlimit(resource.RLIMIT_NOFILE, (maxOpenFiles, -1))
@@ -1505,7 +1505,7 @@ cdef class NLMSA:
       self.lpo_id = 0
       if mafFiles is not None:
         self.newSequence() # CREATE INITIAL LPO
-        self.readMAFfiles(mafFiles, maxint)
+        self.readMAFfiles(mafFiles, maxint, maxOpenFiles2)
       elif axtFiles is not None:
         self.newSequence() # CREATE INITIAL LPO
         self.readAxtNet(axtFiles, bidirectionalRule)
@@ -1722,17 +1722,26 @@ See the NLMSA documentation for more details.\n''')
         ns.nbuild=nbuild[ns.id]  # SAVE INTERVAL COUNTS BACK TO REGULAR SEQUENCES
         #logger.debug('nbuild[%d] = %s' % (i, ns.nbuild))
 
-  def readMAFfiles(self, mafFiles, maxint):
+  def readMAFfiles(self, mafFiles, maxint, maxOpenFiles=1024):
     'read alignment from a set of MAF files'
-    cdef int i, j, nseq0, nseq1, n, nseq, block_len
+    cdef int i, j, nseq0, nseq1, n, nseq, block_len,im_nalloc
     cdef SeqIDMap *seqidmap
     cdef char tmp[32768], *p, a_header[4]
     cdef FILE *ifile
-    cdef IntervalMap im[4096], im_tmp
+    cdef IntervalMap *im, im_tmp
     cdef NLMSASequence ns_lpo, ns # ns IS OUR CURRENT UNION
-    cdef FILE *build_ifile[4096]
-    cdef int nbuild[4096], has_continuation
+    cdef FilePtrRecord *build_fpr
+    cdef int fpr_nalloc, has_continuation, bottom, top, maxopen, nopen
     cdef long long linecode_count[256]
+
+    fpr_nalloc = 4096 # linked-list queue for writing to files
+    build_fpr = fileptr_alloc(fpr_nalloc)
+    maxopen = maxOpenFiles # no more files than this open at once
+    bottom = -1 # pointers to top and bottom of llqueue
+    top = -1
+    nopen = 1 # count of files currently open, including ns_lpo
+    im = NULL # no memory allocated for IntervalMap buffer
+    im_nalloc = 0
 
     ns_lpo = self.seqlist[self.lpo_id] # OUR INITIAL LPO
     self.pairwiseMode = 0 # WE ARE USING A REAL LPO!
@@ -1761,27 +1770,31 @@ Check the input!''' % (pythonStr, seqInfo.length))
       ifile = fopen(filename, 'r') # text file
       if ifile == NULL:
         self.free_seqidmap(nseq0, seqidmap)
-        self.save_nbuild(nbuild)
+        fileptr_free(build_fpr, fpr_nalloc)
         raise IOError('unable to open file %s' % filename)
       if fgets(tmp, 32767, ifile) == NULL or strncmp(tmp, "##maf", 4): # HEADER LINE
         self.free_seqidmap(nseq0, seqidmap)
-        self.save_nbuild(nbuild)
+        fileptr_free(build_fpr, fpr_nalloc)
         raise IOError('%s: not a MAF file? Bad format.' % filename)
       p = fgets(tmp, 32767, ifile) # READ 1ST DATA LINE OF THE MAF FILE
       while p: # GOT ANOTHER LINE TO PROCESS
         if has_continuation or 0 == strncmp(tmp, a_header, 2): # ALIGNMENT HEADER: READ ALIGNMENT
-          n = readMAFrecord(im, 0, seqidmap, nseq0, ns_lpo.length, # READ ONE MAF BLOCK
-                            &block_len, ifile, 4096, linecode_count, &has_continuation)
+          n = readMAFrecord(&im, &im_nalloc, seqidmap, nseq0, 
+                            ns_lpo.length, &block_len, 
+                            ifile, linecode_count, 
+                            &has_continuation) # READ ONE MAF BLOCK
           if n < 0: # UNRECOVERABLE ERROR OCCURRED...
             self.free_seqidmap(nseq0, seqidmap)
-            self.save_nbuild(nbuild)
-            raise ValueError('MAF block too long!  Increase max size')
-          elif n == 0:
+            fileptr_free(build_fpr, fpr_nalloc)
+            raise MemoryError('Out of memory')
+          elif n == 0: # empty MAF block?
             continue
 
           if self.maxlen - ns_lpo.length <= block_len or \
              ns_lpo.nbuild > maxint: # TOO BIG! MUST CREATE A NEW LPO
             j = ns_lpo.length # RECORD THE OLD OFFSET
+            fclose(ns_lpo.build_ifile) # close old lpo stream
+            ns_lpo.build_ifile = NULL
             ns_lpo = self.newSequence() # CREATE A NEW LPO SEQUENCE
             for i from 0 <= i < n: # TRANSLATE THESE INTERVALS BACK TO ZERO OFFSET
               if im[i].start >= 0: # FORWARD INTERVAL
@@ -1796,8 +1809,20 @@ Check the input!''' % (pythonStr, seqInfo.length))
             if seqidmap[j].nlmsa_id <= 0: # NEW SEQUENCE, NEED TO ADD TO UNION
               if ns is None or self.maxlen - ns.length <= seqidmap[j].length:
                 ns = self.newSequence(None, is_union=1) # CREATE NEW UNION TO HOLD IT
-                build_ifile[ns.id] = ns.build_ifile # KEEP PTR SO WE CAN WRITE DIRECTLY!
-                nbuild[ns.id] = 0
+                if ns.id >= fpr_nalloc:
+                  build_fpr = fileptr_realloc(build_fpr, 2 * fpr_nalloc, 
+                                              fpr_nalloc)
+                  fpr_nalloc = 2 * fpr_nalloc
+                if nopen >= maxopen: # need to close bottom fpr
+                  bottom = fileptr_close(build_fpr, bottom)
+                else: # just increment count
+                  nopen = nopen + 1
+                if bottom < 0: # save 1st entry in the array
+                  bottom = ns.id
+                fname = ns.filestem + '.build'
+                top = fileptr_init(build_fpr, ns.id, top, ns.build_ifile,
+                                   fname)
+                ns.build_ifile = NULL
               seqidmap[j].ns_id = ns.id # SET IDs TO ADD THIS SEQ TO THE UNION
               seqidmap[j].nlmsa_id = self.inlmsa
               seqidmap[j].offset = ns.length
@@ -1815,8 +1840,11 @@ Check the input!''' % (pythonStr, seqInfo.length))
             im_tmp.target_start = im[i].start
             im_tmp.target_end = im[i].end
             j=seqidmap[j].ns_id # USE NLMSA ID OF THE UNION
-            ns_lpo.saveInterval(&im_tmp, 1, 0, build_ifile[j]) # SAVE SEQ -> LPO
-            nbuild[j] = nbuild[j] + 1
+            # SAVE SEQ -> LPO
+            bottom = fileptr_write(build_fpr, j, top, bottom, &im_tmp, 1)
+            if bottom < 0:
+              raise IOError('write_padded_binary failed???')
+            top = j # becomes the new top
 
           ns_lpo.saveInterval(im, n, 1, ns_lpo.build_ifile) # SAVE LPO -> SEQ
           ns_lpo.nbuild = ns_lpo.nbuild+n # INCREMENT COUNT OF SAVED INTERVALS
@@ -1833,8 +1861,12 @@ Check the input!''' % (pythonStr, seqInfo.length))
         self.seqs.saveSeq(seqidmap[i].id, seqidmap[i].ns_id, seqidmap[i].offset,
                           seqidmap[i].nlmsa_id)
     self.free_seqidmap(nseq0, seqidmap)
-    self.save_nbuild(nbuild)
-    self.build() # WILL TAKE CARE OF CLOSING ALL build_ifile STREAMS
+    for i from 0 <= i < fpr_nalloc: # copy nbuild counts to seq objects
+      if build_fpr[i].nbuild > 0:
+        ns = self.seqlist[i]
+        ns.nbuild = build_fpr[i].nbuild
+    fileptr_free(build_fpr, fpr_nalloc) # close files & free mallocs
+    self.build()
 
   cdef NLMSASequence add_seqidmap_to_union(self, int j, SeqIDMap seqidmap[],
                                            NLMSASequence ns, FILE *build_ifile[],
