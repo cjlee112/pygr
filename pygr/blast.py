@@ -52,9 +52,14 @@ def read_blast_alignment(ofile, srcDB, destDB, al=None, pipeline=None,
     object.
     """
     p = BlastHitParser()
-    d = dict(id='src_id', start='src_start', stop='src_end', ori='src_ori',
-             idDest='dest_id', startDest='dest_start',
-             stopDest='dest_end', oriDest='dest_ori')
+    d = dict(id='src_id',
+             start='src_start',
+             stop='src_end',
+             ori='src_ori',
+             idDest='dest_id',
+             startDest='dest_start',
+             stopDest='dest_end',
+             oriDest='dest_ori')
     if translateSrc:
         srcDB = translationDB.get_translation_db(srcDB)
     if translateDest:
@@ -96,7 +101,7 @@ def start_blast(cmd, seq, seqString=None, seqDict=None, **kwargs):
     else: # just write one query sequence
         seqID = write_fasta(p.stdin, seqString)
     if p.wait(): # blast returned error code
-        raise OSError('command %s failed' % ' '.join(cmd))
+        raise OSError('command {0} failed'.format(' '.join(cmd)))
     return seqID, p
 
 
@@ -253,7 +258,7 @@ class BlastMapping(object):
         except AttributeError:
             pass
         for m in self.blastIndexDirs: # NOW TRY STANDARD LOCATIONS
-            if m=='FILEPATH':
+            if m == 'FILEPATH':
                 yield self.filepath
                 continue
             elif m == os.path.expanduser:
@@ -277,7 +282,7 @@ class BlastMapping(object):
                 return self.run_formatdb(testpath)
             except (IOError, OSError): # BUILD FAILED
                 pass
-        raise IOError("cannot build BLAST database for %s" % (self.filepath, ))
+        raise IOError("cannot build BLAST database for {0}".format(self.filepath, ))
 
     def raw_fasta_stream(self, ifile=None, idFilter=None):
         '''Return a stream of fasta-formatted sequences.
@@ -303,7 +308,7 @@ class BlastMapping(object):
         try: # apply program transformation if provided
             blastprog = self._blast_prog_dict[blastprog]
             if blastprog.startswith('#'): # not permitted by this class!
-                raise ValueError('Use %s for %s' % (blastprog[1:], oldprog))
+                raise ValueError('Use {0} for {1}'.format(blastprog[1:], oldprog))
         except KeyError:
             pass # no program transformation to apply, so nothing to do...
         return blastprog
@@ -457,15 +462,15 @@ class BlastIDIndex(object):
             for s in unpack_f(id):
                 if s == id:
                     continue # DON'T STORE TRIVIAL MAPPINGS!!
-                s=s.upper() # NCBI FORCES ID TO UPPERCASE?!?!
+                s = s.upper() # NCBI FORCES ID TO UPPERCASE?!?!
                 try:
-                    if t[s]!=id and t[s] is not None:
-                        t[s]=None # s NOT UNIQUE, CAN'T BE AN IDENTIFIER!!
+                    if t[s] != id and t[s] is not None:
+                        t[s] = None # s NOT UNIQUE, CAN'T BE AN IDENTIFIER!!
                 except KeyError:
-                    t[s]=id # s UNIQUE, TRY USING s AS AN IDENTIFIER
+                    t[s] = id # s UNIQUE, TRY USING s AS AN IDENTIFIER
         for id in t.itervalues():
             if id is not None: # OK THERE ARE REAL MAPPINGS STORED, SO USE THIS
-                self._unpacked_dict=t # SAVE THE MAPPING TO REAL IDENTIFIERS
+                self._unpacked_dict = t # SAVE THE MAPPING TO REAL IDENTIFIERS
                 return
         # NO NON-TRIVIAL MAPPINGS, SO JUST SAVE EMPTY MAPPING
         self._unpacked_dict={}
@@ -485,7 +490,7 @@ class BlastIDIndex(object):
             except KeyError:
                 pass # KEEP TRYING...
         # FOUND NO MAPPING, SO RAISE EXCEPTION
-        raise KeyError("no key '%s' in database %s" % (bogusID,
+        raise KeyError("no key '{0}' in database {1}".format(bogusID,
                                                         repr(self.seqDB)))
 
     def __getitem__(self, seqID):
