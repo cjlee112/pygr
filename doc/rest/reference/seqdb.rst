@@ -438,7 +438,7 @@ Let's go through this line by line:
   
 * we create a subclass of ProteinSQLSequence to show how Python makes it easy to create customized behaviors that can make database access more efficient.  Here we've simply added a __len__ method that uses the protein_length attribute obtained directly from the database, courtesy of SQLRow.__getattr__, which knows what columns exist in the database, and provides them transparently as object attributes.  (The ordinary SequenceBase __len__ method calculates it by obtaining the whole sequence string and calculating its length.  Clearly it's more efficient for the database to retrieve this number (stored as a column called protein_length) and return it, rather than making it send us the whole sequence).
   
-* next we call the protein.objclass() method to inform the table object that it should use our new class for instantiating any row objects for this table.  It will call this class with the usual SQLRow contructor arguments (table, id).
+* next we call the protein.objclass() method to inform the table object that it should use our new class for instantiating any row objects for this table.  It will call this class with the usual SQLRow constructor arguments (table, id).
 
 
 BlastDBXMLRPC

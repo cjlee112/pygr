@@ -160,7 +160,7 @@ class NLMSASeqDict(object, DictMixin):
             return # the union added it for us, no need to do anything
         if isinstance(seq, types.StringType):
             id = seq # treat this as fully qualified identifier
-        else: # get the identfier from the seq / database
+        else: # get the identifier from the seq / database
             id = self.getSeqID(seq)
         if nlmsaID is None: # allocate a new unique id
             nlmsaID = self.nlmsa.nextID()

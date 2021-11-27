@@ -19,7 +19,7 @@ database table classes to :mod:`worldbase`, and when retrieved
 they will automatically reconnect to the database server.  Indeed,
 you can save the :class:`DBServerInfo` object itself to :mod:`worldbase`
 as a standard name (e.g. referring to UCSC's MySQL server).
-Then any database table refering to this standard name could
+Then any database table referring to this standard name could
 automatically re-connect to a *local* copy of that server
 when retrieved from :mod:`worldbase`.
 

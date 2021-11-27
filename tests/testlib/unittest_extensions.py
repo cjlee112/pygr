@@ -53,7 +53,7 @@ class PygrTestProgram(unittest.TestProgram):
     def __init__(self, **kwargs):
         verbosity = kwargs.pop('verbosity', 1)
         if verbosity < 1:
-            logger.disable('INFO')  # Should implicity disable DEBUG as well
+            logger.disable('INFO')  # Should implicitly disable DEBUG as well
         elif verbosity < 2:
             logger.disable('DEBUG')
         if kwargs.get('testRunner') is None:
