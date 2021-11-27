@@ -24,7 +24,7 @@ extensively on Windows.  This involved a variety of changes:
   during the object's lifetime.
   Previously, Pygr relied on these files to be closed automatically
   by Python garbage collection (i.e. when the object's refcount goes to zero).
-  However, an open file can cause wierd problems on Windows, e.g. if one
+  However, an open file can cause weird problems on Windows, e.g. if one
   process tries to delete a file while another file still has the file
   open.  Our tests suggested that relying on Python garbage collection
   to close the file automatically was not adequate on Windows.

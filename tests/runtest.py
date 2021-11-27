@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
     # disables debug messages at < 2 verbosity, debug+info at < 1
     if options.verbosity < 1:
-        disable_threshold = 'INFO' # Should implicity disable DEBUG as well
+        disable_threshold = 'INFO' # Should implicitly disable DEBUG as well
     elif options.verbosity < 2:
         disable_threshold = 'DEBUG'
 

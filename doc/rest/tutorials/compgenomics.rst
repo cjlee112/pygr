@@ -6,7 +6,7 @@ Many groups (e.g. David Haussler's group at UC Santa Cruz) have constructed alig
 (``ss1`` and ``ss2``) bracketing a single exon (``exon``).
 We use the alignment database to map each of these splice sites onto all the aligned
 genomes, and to print the percent-identity and percent-aligned for each genome,
-as well as the two nucleotides consituting the splice site itself.
+as well as the two nucleotides constituting the splice site itself.
 It also prints the conservation of the two exonic region (between ``ss1``
 and ``ss2``::
 
